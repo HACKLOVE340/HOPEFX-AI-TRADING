@@ -196,7 +196,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column',
     height: '100%', width: '100%',
     background: '#020408',
-    color: '#f1f5f9',
+    color: 'var(--text-strong)',
     fontFamily: 'monospace, system-ui, sans-serif',
     overflow: 'hidden',
     position: 'relative',
@@ -217,7 +217,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'color 0.3s ease',
   },
   wsNote: {
-    fontSize: 10, color: '#334155', marginLeft: 'auto',
+    fontSize: 10, color: 'var(--text-faint)', marginLeft: 'auto',
   },
   protectedBanner: {
     display: 'flex', alignItems: 'center', gap: 10,

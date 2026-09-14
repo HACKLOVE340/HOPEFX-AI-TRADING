@@ -157,7 +157,7 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
         {/* Simulated branded dashboard */}
-        <div style={{ background: '#0f172a', borderRadius: 10, overflow: 'hidden', border: '1px solid #334155' }}>
+        <div style={{ background: 'var(--surface)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-strong)' }}>
           {/* Nav bar */}
           <div style={{ background: color, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
             {tenant.theme.logo_url
@@ -173,13 +173,13 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
           <div style={{ padding: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginBottom: 16 }}>
               {(['Balance', 'P&L', 'Win Rate'] as const).map((label) => (
-                <div key={label} style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
+                <div key={label} style={{ background: 'var(--raised)', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
                   <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>—</div>
                 </div>
               ))}
             </div>
-            <div style={{ background: '#1e293b', borderRadius: 8, padding: 16, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 13 }}>
+            <div style={{ background: 'var(--raised)', borderRadius: 8, padding: 16, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
               Equity chart — accent colour: <span style={{ color, marginLeft: 6, fontWeight: 700 }}>{color}</span>
             </div>
           </div>
@@ -408,7 +408,7 @@ const WhitelabelAdmin: React.FC = () => {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100vh', background: '#0f172a', color: 'var(--text-strong)',
+    minHeight: '100vh', background: 'var(--surface)', color: 'var(--text-strong)',
     fontFamily: "'Inter', system-ui, sans-serif", padding: '24px',
   },
   header: {
@@ -423,27 +423,27 @@ const s: Record<string, React.CSSProperties> = {
   },
   statsRow: { display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' },
   statCard: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10,
     padding: '14px 20px', cursor: 'pointer', textAlign: 'center', minWidth: 80,
   },
   card: {
-    background: '#1e293b', borderRadius: 12, border: '1px solid #334155',
+    background: 'var(--raised)', borderRadius: 12, border: '1px solid var(--border-strong)',
     overflow: 'hidden', marginBottom: 20,
   },
   tenantRow: {
     display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px',
-    borderBottom: '1px solid #0f172a', flexWrap: 'wrap',
+    borderBottom: '1px solid var(--hairline)', flexWrap: 'wrap',
   },
   statusBadge: {
     fontSize: 11, fontWeight: 700, padding: '2px 8px',
     borderRadius: 4, textTransform: 'capitalize',
   },
   actionBtn: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
+    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
     color: 'var(--text-dim)', padding: '5px 10px', fontSize: 12, cursor: 'pointer',
   },
-  dim:   { color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 },
-  empty: { color: '#475569', fontSize: 14, textAlign: 'center', padding: 48 },
+  dim:   { color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 },
+  empty: { color: 'var(--text-faint)', fontSize: 14, textAlign: 'center', padding: 48 },
   apiKeyBanner: {
     background: 'rgba(74,222,128,0.1)', border: '1px solid var(--gain)', borderRadius: 8,
     padding: '12px 16px', marginBottom: 16, fontSize: 13, color: 'var(--gain)',
@@ -457,8 +457,8 @@ const s: Record<string, React.CSSProperties> = {
     wordBreak: 'break-all',
   },
   infoBanner: {
-    background: '#1e293b', borderRadius: 8, padding: '12px 16px',
-    fontSize: 13, color: 'var(--text-dim)', border: '1px solid #334155',
+    background: 'var(--raised)', borderRadius: 8, padding: '12px 16px',
+    fontSize: 13, color: 'var(--text-dim)', border: '1px solid var(--border-strong)',
   },
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -466,8 +466,8 @@ const s: Record<string, React.CSSProperties> = {
     padding: 16,
   },
   modal: {
-    background: '#1e293b', borderRadius: 16, padding: 28,
-    border: '1px solid #334155', width: '100%', maxWidth: 520,
+    background: 'var(--raised)', borderRadius: 16, padding: 28,
+    border: '1px solid var(--border-strong)', width: '100%', maxWidth: 520,
     maxHeight: '90vh', overflowY: 'auto',
   },
   modalHeader: {
@@ -480,7 +480,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 6, marginTop: 14,
   },
   textInput: {
-    width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+    width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     color: 'var(--text-strong)', padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
   },
   featureGrid: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 },
@@ -493,7 +493,7 @@ const s: Record<string, React.CSSProperties> = {
     color: '#fff', padding: '10px', fontSize: 14, cursor: 'pointer', fontWeight: 600,
   },
   cancelBtn: {
-    flex: 1, background: '#334155', border: 'none', borderRadius: 8,
+    flex: 1, background: 'var(--surface-hover)', border: 'none', borderRadius: 8,
     color: 'var(--text-dim)', padding: '10px', fontSize: 14, cursor: 'pointer',
   },
 };

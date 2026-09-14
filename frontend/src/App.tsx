@@ -162,15 +162,15 @@ const queryClient = new QueryClient({
 const PageFallback: React.FC = () => (
   <div style={{
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    height: '100vh', background: 'var(--bg, #0f172a)',
+    height: '100vh', background: 'var(--bg, var(--surface))',
   }}>
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <div style={{
-        width: 32, height: 32, border: '3px solid #334155',
+        width: 32, height: 32, border: '3px solid var(--border-strong)',
         borderTopColor: '#3b82f6', borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',
       }} />
-      <span style={{ fontSize: 13, color: '#475569' }}>Loading…</span>
+      <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>Loading…</span>
     </div>
   </div>
 );
@@ -260,7 +260,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
           ⚠
         </div>
 
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
           {this.state.isChunk ? 'Updating to the latest version' : 'Something went wrong'}
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24, maxWidth: 420, lineHeight: 1.6 }}>

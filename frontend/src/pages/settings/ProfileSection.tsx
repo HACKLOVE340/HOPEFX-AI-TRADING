@@ -86,7 +86,7 @@ const ProfileSection: React.FC = () => {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading profile…
     </div>
   );
@@ -109,13 +109,13 @@ const ProfileSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <div style={{
-            width: 72, height: 72, borderRadius: '50%', background: '#0f172a',
-            border: '2px solid #334155', overflow: 'hidden', flexShrink: 0,
+            width: 72, height: 72, borderRadius: '50%', background: 'var(--surface)',
+            border: '2px solid var(--border-strong)', overflow: 'hidden', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {avatarPreview
               ? <img src={avatarPreview} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setAvatarPreview('')} />
-              : <span style={{ fontSize: 28, color: '#475569' }}>
+              : <span style={{ fontSize: 28, color: 'var(--text-faint)' }}>
                   {form.username?.[0]?.toUpperCase() ?? '?'}
                 </span>
             }
@@ -162,13 +162,13 @@ const ProfileSection: React.FC = () => {
             rows={3}
             placeholder="Tell other traders about yourself…"
             style={{
-              width: '100%', padding: '10px 12px', background: '#0f172a',
-              border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9',
+              width: '100%', padding: '10px 12px', background: 'var(--surface)',
+              border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)',
               fontSize: 14, boxSizing: 'border-box', outline: 'none', resize: 'vertical',
               fontFamily: 'inherit',
             }}
           />
-          <div style={{ textAlign: 'right', fontSize: 11, color: '#475569', marginTop: 4 }}>
+          <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
             {form.bio.length}/500
           </div>
         </Field>

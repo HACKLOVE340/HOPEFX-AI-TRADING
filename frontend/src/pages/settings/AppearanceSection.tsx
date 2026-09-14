@@ -92,7 +92,7 @@ const AppearanceSection: React.FC = () => {
               style={{
                 flex: 1, padding: '14px 8px', borderRadius: 10, cursor: 'pointer',
                 border: `2px solid ${form.theme === t ? '#3b82f6' : '#334155'}`,
-                background: form.theme === t ? '#0c1a2e' : '#0f172a',
+                background: form.theme === t ? '#0c1a2e' : 'var(--surface)',
                 color: form.theme === t ? 'var(--link)' : 'var(--text-muted)',
                 fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
@@ -133,7 +133,7 @@ const AppearanceSection: React.FC = () => {
               aria-label="Custom accent colour"
               title="Custom color"
               style={{
-                width: 36, height: 36, borderRadius: '50%', border: '2px solid #334155',
+                width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--border-strong)',
                 cursor: 'pointer', background: 'transparent', padding: 0,
               }}
             />

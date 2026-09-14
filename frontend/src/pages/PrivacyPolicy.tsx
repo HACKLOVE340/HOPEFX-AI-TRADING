@@ -187,9 +187,9 @@ const PrivacyPolicy: React.FC = () => {
         {/* Footer links */}
         <div style={s.footerLinks}>
           <Link to="/terms" style={s.footerLink}>Terms of Service</Link>
-          <span style={{ color: '#334155' }}>·</span>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
           <Link to="/risk-disclosure" style={s.footerLink}>Risk Disclosure</Link>
-          <span style={{ color: '#334155' }}>·</span>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
           <a href="mailto:privacy@hopefx.io" style={s.footerLink}>privacy@hopefx.io</a>
         </div>
       </div>
@@ -198,8 +198,8 @@ const PrivacyPolicy: React.FC = () => {
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page:       { minHeight: '100vh', background: '#0f172a', color: 'var(--text)' },
-  header:     { background: '#1e293b', borderBottom: '1px solid #334155', position: 'sticky', top: 0, zIndex: 10 },
+  page:       { minHeight: '100vh', background: 'var(--surface)', color: 'var(--text)' },
+  header:     { background: 'var(--raised)', borderBottom: '1px solid var(--border-strong)', position: 'sticky', top: 0, zIndex: 10 },
   headerInner: {
     maxWidth: 800, margin: '0 auto', padding: '0 24px',
     height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -221,12 +221,12 @@ const s: Record<string, React.CSSProperties> = {
     padding: '4px 12px', borderRadius: 20, marginBottom: 16,
     textTransform: 'uppercase',
   },
-  title:      { fontSize: 36, fontWeight: 800, color: '#f1f5f9', margin: '0 0 8px', letterSpacing: -0.5 },
+  title:      { fontSize: 36, fontWeight: 800, color: 'var(--text-strong)', margin: '0 0 8px', letterSpacing: -0.5 },
   subtitle:   { fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px' },
   intro:      { fontSize: 15, color: 'var(--text-dim)', lineHeight: 1.7, margin: 0 },
   sections:   { display: 'flex', flexDirection: 'column', gap: 32 },
   section:    {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
     padding: '24px 28px',
   },
   sectionHeader: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 },
@@ -236,7 +236,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     color: 'var(--link)', flexShrink: 0,
   },
-  sectionTitle: { fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 },
+  sectionTitle: { fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: 0 },
   sectionBody:  { fontSize: 14, color: 'var(--text-dim)', lineHeight: 1.7 },
   bullet:       { display: 'flex', gap: 8, marginBottom: 6 },
   bulletDot:    { color: '#3b82f6', flexShrink: 0, fontWeight: 700 },

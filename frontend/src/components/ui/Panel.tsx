@@ -60,7 +60,7 @@ export function Panel({
                 title={maximized ? 'Restore' : 'Maximize panel'}
                 style={{
                   background: 'transparent', border: 'none',
-                  color: maximized ? 'var(--link)' : '#334155',
+                  color: maximized ? 'var(--link)' : 'var(--text-faint)',
                   fontSize: 13, cursor: 'pointer', padding: '2px 4px',
                   lineHeight: 1, borderRadius: 4,
                   transition: 'color 0.15s ease',

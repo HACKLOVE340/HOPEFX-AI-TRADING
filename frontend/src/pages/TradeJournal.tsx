@@ -348,7 +348,7 @@ const TradeJournal: React.FC = () => {
                   <span style={{ ...s.sideBadge, background: entry.side === 'long' ? '#14532d' : '#450a0a', color: entry.side === 'long' ? 'var(--gain)' : 'var(--loss)' }}>
                     {entry.side.toUpperCase()}
                   </span>
-                  <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{entry.symbol}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{entry.symbol}</span>
                   {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
                   {!entry.followed_rules && <span style={s.deviationBadge}>⚠ Rule deviation</span>}
                 </div>
@@ -474,7 +474,7 @@ const TradeJournal: React.FC = () => {
                       <span style={{ width: 110, fontSize: 11, color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>
                         {EMOTION_EMOJI[e.tag] ?? ''} {e.tag}
                       </span>
-                      <div style={{ flex: 1, height: 14, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ flex: 1, height: 14, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.4s ease' }} />
                       </div>
                       <span style={{ width: 42, fontSize: 11, color, fontFamily: 'monospace', textAlign: 'right', flexShrink: 0 }}>
@@ -523,7 +523,7 @@ const TradeJournal: React.FC = () => {
                     <div style={s.tradeHeader}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ ...s.sideBadge, background: '#450a0a', color: 'var(--loss)' }}>{entry.side.toUpperCase()}</span>
-                        <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{entry.symbol}</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{entry.symbol}</span>
                         <span style={s.deviationBadge}>⚠ {entry.rule_deviation ?? 'Rule deviation'}</span>
                         {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
                       </div>
@@ -564,15 +564,15 @@ const TradeJournal: React.FC = () => {
 const StatCard: React.FC<{ label: string; value: string; positive?: boolean }> = ({ label, value, positive }) => (
   <div style={s.statCard}>
     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-    <div style={{ fontSize: 20, fontWeight: 700, color: positive === undefined ? '#f1f5f9' : positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
+    <div style={{ fontSize: 20, fontWeight: 700, color: positive === undefined ? 'var(--text-strong)' : positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
   </div>
 );
 
 const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) => (
   <div style={s.tagStatRow}>
-    <span style={{ width: 120, color: '#f1f5f9', fontSize: 13 }}>{emoji ? `${emoji} ` : ''}{stat.tag}</span>
+    <span style={{ width: 120, color: 'var(--text-strong)', fontSize: 13 }}>{emoji ? `${emoji} ` : ''}{stat.tag}</span>
     <span style={{ width: 50, color: 'var(--text-muted)', fontSize: 12 }}>{stat.count}×</span>
-    <div style={{ flex: 1, background: '#0f172a', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+    <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
       <div style={{ width: `${stat.win_rate}%`, height: '100%', background: stat.win_rate >= 50 ? 'var(--gain)' : 'var(--loss)', borderRadius: 4 }} />
     </div>
     <span style={{ width: 50, textAlign: 'right', color: (stat.win_rate ?? 0) >= 50 ? 'var(--gain)' : 'var(--loss)', fontSize: 13, fontWeight: 600 }}>{Number.isFinite(stat.win_rate) ? stat.win_rate : '—'}%</span>
@@ -585,37 +585,37 @@ const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) =
 const s: Record<string, React.CSSProperties> = {
   page:            { padding: 24, maxWidth: 900, margin: '0 auto' },
   header:          { marginBottom: 20 },
-  title:           { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
+  title:           { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px' },
   subtitle:        { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
   tabs:            { display: 'flex', gap: 8, marginBottom: 20 },
-  tab:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
+  tab:             { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
   tabActive:       { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   filterRow:       { marginBottom: 16 },
-  select:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
-  tradeCard:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px', marginBottom: 10 },
+  select:          { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
+  tradeCard:       { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px', marginBottom: 10 },
   tradeHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sideBadge:       { borderRadius: 4, fontSize: 11, fontWeight: 700, padding: '2px 8px' },
   deviationBadge:  { background: '#450a0a', color: 'var(--loss)', fontSize: 11, padding: '2px 8px', borderRadius: 4 },
   priceRow:        { display: 'flex', gap: 16, marginBottom: 8 },
   priceItem:       { fontSize: 13, color: 'var(--text-muted)' },
   tagRow:          { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
-  tag:             { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '2px 8px' },
+  tag:             { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '2px 8px' },
   notes:           { fontSize: 13, color: 'var(--text-dim)', margin: '4px 0 0', lineHeight: 1.5 },
-  editBtn:         { background: '#334155', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
-  editForm:        { borderTop: '1px solid #334155', marginTop: 12, paddingTop: 12 },
+  editBtn:         { background: 'var(--surface-hover)', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
+  editForm:        { borderTop: '1px solid var(--border-strong)', marginTop: 12, paddingTop: 12 },
   label:           { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
-  textarea:        { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
-  input:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13, boxSizing: 'border-box' },
+  textarea:        { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
+  input:           { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 13, boxSizing: 'border-box' },
   tagPicker:       { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
-  tagPickerBtn:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
+  tagPickerBtn:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
   tagPickerBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
   saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: 'var(--loss)', marginTop: 8 },
   statsGrid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 },
-  statCard:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px' },
-  sectionTitle:    { fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '20px 0 10px' },
-  tagStatRow:      { display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid #1e293b' },
-  empty:           { textAlign: 'center', color: '#475569', padding: 40 },
+  statCard:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px' },
+  sectionTitle:    { fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: '20px 0 10px' },
+  tagStatRow:      { display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border)' },
+  empty:           { textAlign: 'center', color: 'var(--text-faint)', padding: 40 },
 };
 
 export default TradeJournal;

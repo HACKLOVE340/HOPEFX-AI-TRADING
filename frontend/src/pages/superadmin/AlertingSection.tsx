@@ -185,7 +185,7 @@ const AlertingSection: React.FC = () => {
       {/* Prometheus status */}
       {promStatus && (
         <div style={{
-          background: '#0f172a', border: `1px solid ${promStatus.available ? '#16a34a' : '#7f1d1d'}`,
+          background: 'var(--surface)', border: `1px solid ${promStatus.available ? '#16a34a' : '#7f1d1d'}`,
           borderRadius: 10, padding: '12px 16px', marginBottom: 16,
           display: 'flex', alignItems: 'center', gap: 12, fontSize: 13,
         }}>
@@ -204,7 +204,7 @@ const AlertingSection: React.FC = () => {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['rules', 'fired'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            background: tab === t ? '#1e293b' : 'transparent',
+            background: tab === t ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
             padding: '7px 16px', fontSize: 13, cursor: 'pointer',
@@ -245,19 +245,19 @@ const AlertingSection: React.FC = () => {
               <thead>
                 <tr>
                   {['Name', 'Condition', 'Severity', 'Channels', 'Last Fired', 'Fires', 'Enabled', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rules.map(rule => (
-                  <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 600 }}>{rule.name}</td>
                     <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-dim)' }}>{rule.condition}</td>
                     <td style={{ padding: '10px 16px' }}><SeverityBadge severity={rule.severity} /></td>
                     <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{rule.channels.join(', ')}</td>
                     <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{fmtDate(rule.last_fired)}</td>
-                    <td style={{ padding: '10px 16px', color: rule.fire_count > 0 ? 'var(--warn)' : '#475569' }}>{rule.fire_count}</td>
+                    <td style={{ padding: '10px 16px', color: rule.fire_count > 0 ? 'var(--warn)' : 'var(--text-faint)' }}>{rule.fire_count}</td>
                     <td style={{ padding: '10px 16px' }}>
                       <Toggle checked={rule.enabled} onChange={() => toggleRule(rule)} disabled={busy === rule.rule_id} />
                     </td>
@@ -278,19 +278,19 @@ const AlertingSection: React.FC = () => {
       {tab === 'fired' && (
         <SectionCard title="Fired Alerts" icon="🚨" accent="#fbbf24" noPad>
           {fired.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No alerts fired recently</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No alerts fired recently</div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
                   {['Rule', 'Severity', 'Message', 'Fired At'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {fired.slice(0, 100).map((a, i) => (
-                  <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 600 }}>{a.name}</td>
                     <td style={{ padding: '10px 16px' }}><SeverityBadge severity={a.severity} /></td>
                     <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{a.message ?? a.value ?? '—'}</td>

@@ -116,7 +116,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
 
   return (
     <div style={{
-      background: '#1e293b', border: '2px solid ' + (isActive ? accent : '#334155'),
+      background: 'var(--raised)', border: '2px solid ' + (isActive ? accent : '#334155'),
       borderRadius: 16, padding: '28px 24px', display: 'flex', flexDirection: 'column',
       position: 'relative', transition: 'border-color 0.2s, transform 0.2s',
       transform: badge ? 'scale(1.03)' : 'scale(1)',
@@ -145,7 +145,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
         </div>
       )}
       <div style={{ marginBottom: 4 }}>
-        <span style={{ fontSize: 36, fontWeight: 800, color: '#f1f5f9' }}>
+        <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--text-strong)' }}>
           {fmtPrice(plan, annual)}
         </span>
         {!isFree && <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 4 }}>/mo</span>}
@@ -191,17 +191,17 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
           ? plan.highlights.map(h => (
               <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                 <span style={{ color: '#22c55e', fontSize: 14, flexShrink: 0 }}>✓</span>
-                <span style={{ color: '#cbd5e1' }}>{h}</span>
+                <span style={{ color: 'var(--text-dim)' }}>{h}</span>
               </div>
             ))
           : ALL_FEATURES.map(f => {
               const included = hasFeature(plan, f);
               return (
                 <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                  <span style={{ color: included ? '#22c55e' : '#334155', fontSize: 14, flexShrink: 0 }}>
+                  <span style={{ color: included ? '#22c55e' : 'var(--text-faint)', fontSize: 14, flexShrink: 0 }}>
                     {included ? '✓' : '✕'}
                   </span>
-                  <span style={{ color: included ? '#cbd5e1' : '#475569' }}>
+                  <span style={{ color: included ? 'var(--text-dim)' : 'var(--text-faint)' }}>
                     {FEATURE_LABELS[f] ?? f}
                   </span>
                 </div>
@@ -230,14 +230,14 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
         <thead>
           <tr>
             <th style={{ width: '20%', textAlign: 'left', padding: '12px 16px',
-              color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #334155' }}>
+              color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border-strong)' }}>
               Feature
             </th>
             {plans.map(p => {
               const accent = PLAN_ACCENTS[p.id] ?? '#475569';
               return (
                 <th key={p.id} style={{ textAlign: 'center', padding: '12px 8px',
-                  color: accent, fontWeight: 700, borderBottom: '1px solid #334155',
+                  color: accent, fontWeight: 700, borderBottom: '1px solid var(--border-strong)',
                   textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.06em' }}>
                   {p.name}
                 </th>
@@ -248,19 +248,19 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
         <tbody>
           <tr>
             <td colSpan={plans.length + 1} style={{ padding: '10px 16px 4px',
-              fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase',
-              letterSpacing: '0.08em', background: '#0f172a' }}>
+              fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+              letterSpacing: '0.08em', background: 'var(--surface)' }}>
               Limits
             </td>
           </tr>
           {LIMIT_ROWS.map(({ label, key }, ri) => (
-            <tr key={key} style={{ background: ri % 2 === 0 ? '#1e293b' : '#0f172a' }}>
-              <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid #1e293b' }}>
+            <tr key={key} style={{ background: ri % 2 === 0 ? 'var(--raised)' : 'var(--surface)' }}>
+              <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
                 {label}
               </td>
               {plans.map(p => (
                 <td key={p.id} style={{ textAlign: 'center', padding: '10px 8px',
-                  color: 'var(--text)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>
+                  color: 'var(--text)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>
                   {fmtLimit(p.limits?.[key])}
                 </td>
               ))}
@@ -268,22 +268,22 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
           ))}
           <tr>
             <td colSpan={plans.length + 1} style={{ padding: '10px 16px 4px',
-              fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase',
-              letterSpacing: '0.08em', background: '#0f172a' }}>
+              fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+              letterSpacing: '0.08em', background: 'var(--surface)' }}>
               Features
             </td>
           </tr>
           {ALL_FEATURES.map((f, fi) => (
-            <tr key={f} style={{ background: fi % 2 === 0 ? '#1e293b' : '#0f172a' }}>
-              <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid #1e293b' }}>
+            <tr key={f} style={{ background: fi % 2 === 0 ? 'var(--raised)' : 'var(--surface)' }}>
+              <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
                 {FEATURE_LABELS[f] ?? f}
               </td>
               {plans.map(p => {
                 const included = hasFeature(p, f);
                 return (
                   <td key={p.id} style={{ textAlign: 'center', padding: '10px 8px',
-                    borderBottom: '1px solid #1e293b' }}>
-                    <span style={{ color: included ? '#22c55e' : '#334155', fontSize: 16 }}>
+                    borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ color: included ? '#22c55e' : 'var(--text-faint)', fontSize: 16 }}>
                       {included ? '✓' : '✕'}
                     </span>
                   </td>
@@ -293,18 +293,18 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
           ))}
           <tr>
             <td colSpan={plans.length + 1} style={{ padding: '10px 16px 4px',
-              fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase',
-              letterSpacing: '0.08em', background: '#0f172a' }}>
+              fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+              letterSpacing: '0.08em', background: 'var(--surface)' }}>
               Pricing
             </td>
           </tr>
-          <tr style={{ background: '#1e293b' }}>
-            <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid #1e293b' }}>
+          <tr style={{ background: 'var(--raised)' }}>
+            <td style={{ padding: '10px 16px', color: 'var(--text-dim)', borderBottom: '1px solid var(--border)' }}>
               Commission rate
             </td>
             {plans.map(p => (
               <td key={p.id} style={{ textAlign: 'center', padding: '10px 8px',
-                color: 'var(--text)', fontWeight: 700, borderBottom: '1px solid #1e293b' }}>
+                color: 'var(--text)', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>
                 {fmtPctRaw((p.commission_rate ?? 0) * 100, 1)}
               </td>
             ))}
@@ -333,7 +333,7 @@ const FAQ_FALLBACK = [
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ borderBottom: '1px solid #1e293b' }}>
+    <div style={{ borderBottom: '1px solid var(--border)' }}>
       <button onClick={() => setOpen(o => !o)} style={{
         width: '100%', textAlign: 'left', background: 'none', border: 'none',
         padding: '16px 0', cursor: 'pointer', display: 'flex',
@@ -402,14 +402,14 @@ const PricingPage: React.FC = () => {
           isAuth ? (
             <Link to="/settings" style={{
               fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
-              padding: '6px 14px', border: '1px solid #334155', borderRadius: 6,
+              padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
             }}>
               Account Settings
             </Link>
           ) : (
             <Link to="/login" style={{
               fontSize: 13, color: 'var(--text-dim)', textDecoration: 'none',
-              padding: '6px 14px', border: '1px solid #334155', borderRadius: 6,
+              padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
             }}>
               Sign in
             </Link>
@@ -419,7 +419,7 @@ const PricingPage: React.FC = () => {
 
       {/* Hero */}
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
-        <h1 style={{ margin: '0 0 12px', fontSize: 36, fontWeight: 800, color: '#f1f5f9' }}>
+        <h1 style={{ margin: '0 0 12px', fontSize: 36, fontWeight: 800, color: 'var(--text-strong)' }}>
           Simple, transparent pricing
         </h1>
         <p style={{ margin: '0 0 28px', fontSize: 16, color: 'var(--text-dim)',
@@ -427,15 +427,15 @@ const PricingPage: React.FC = () => {
           From paper trading to institutional-grade execution.
         </p>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12,
-          background: '#1e293b', border: '1px solid #334155', borderRadius: 30, padding: '6px 8px' }}>
+          background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 30, padding: '6px 8px' }}>
           <button onClick={() => setAnnual(false)} style={{
             padding: '6px 18px', borderRadius: 24, border: 'none', cursor: 'pointer', fontSize: 13,
-            fontWeight: 600, background: !annual ? '#334155' : 'transparent',
+            fontWeight: 600, background: !annual ? 'var(--surface-hover)' : 'transparent',
             color: !annual ? 'var(--text)' : 'var(--text-muted)',
           }}>Monthly</button>
           <button onClick={() => setAnnual(true)} style={{
             padding: '6px 18px', borderRadius: 24, border: 'none', cursor: 'pointer', fontSize: 13,
-            fontWeight: 600, background: annual ? '#334155' : 'transparent',
+            fontWeight: 600, background: annual ? 'var(--surface-hover)' : 'transparent',
             color: annual ? 'var(--text)' : 'var(--text-muted)',
           }}>
             Annual
@@ -473,7 +473,7 @@ const PricingPage: React.FC = () => {
           {/* Toggle comparison table */}
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <button onClick={() => setShowTable(t => !t)} style={{
-              background: 'none', border: '1px solid #334155', borderRadius: 8,
+              background: 'none', border: '1px solid var(--border-strong)', borderRadius: 8,
               color: 'var(--text-dim)', fontSize: 13, padding: '8px 20px', cursor: 'pointer',
             }}>
               {showTable ? 'Hide' : 'Show'} full feature comparison ↕
@@ -483,28 +483,28 @@ const PricingPage: React.FC = () => {
           {showTable && <ComparisonTable plans={plans} />}
 
           {/* Commission bar */}
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16,
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 16,
             padding: '32px 28px', marginBottom: 64 }}>
             <h2 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 700,
               color: 'var(--text)', textAlign: 'center' }}>
               Commission rates by plan
             </h2>
             <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden',
-              border: '1px solid #334155' }}>
+              border: '1px solid var(--border-strong)' }}>
               {plans.map((plan, i) => {
                 const accent = PLAN_ACCENTS[plan.id] ?? '#475569';
                 return (
                   <div key={plan.id} onClick={() => handleSelect(plan.id)} style={{
                     flex: 1, padding: '16px 12px', textAlign: 'center', cursor: 'pointer',
-                    background: i % 2 === 0 ? '#0f172a' : '#1e293b',
-                    borderRight: i < plans.length - 1 ? '1px solid #334155' : 'none',
+                    background: i % 2 === 0 ? 'var(--surface)' : 'var(--raised)',
+                    borderRight: i < plans.length - 1 ? '1px solid var(--border-strong)' : 'none',
                   }}>
                     <div style={{ fontSize: 11, color: accent, fontWeight: 700,
                       marginBottom: 6, textTransform: 'uppercase' }}>{plan.name}</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9' }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-strong)' }}>
                       {(plan.commission_rate * 100).toFixed(1)}%
                     </div>
-                    <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>per trade</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>per trade</div>
                   </div>
                 );
               })}
@@ -533,7 +533,7 @@ const PricingPage: React.FC = () => {
       ]} style={{ marginBottom: 32 }} />
 
       {/* CTA footer */}
-      <div style={{ textAlign: 'center', padding: '40px 0', borderTop: '1px solid #1e293b' }}>
+      <div style={{ textAlign: 'center', padding: '40px 0', borderTop: '1px solid var(--border)' }}>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>
           Questions? Contact us at{' '}
           <a href="mailto:support@hopefx.io" style={{ color: '#8b5cf6', textDecoration: 'none' }}>
@@ -551,7 +551,7 @@ const PricingPage: React.FC = () => {
           )}
           <Link to={isAuth ? '/dashboard' : '/login'} style={{
             padding: '12px 32px', background: 'transparent', color: 'var(--text-dim)',
-            border: '1px solid #334155', borderRadius: 8, fontSize: 15,
+            border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 15,
             fontWeight: 600, textDecoration: 'none', display: 'inline-block',
           }}>
             {isAuth ? 'Go to Dashboard' : 'Sign in'}

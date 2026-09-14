@@ -226,8 +226,8 @@ const FixRow: React.FC<FixRowProps> = ({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const wrapperStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
+  background: 'var(--surface, var(--raised))',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 10,
   display: 'flex',
   flexDirection: 'column',
@@ -239,18 +239,18 @@ const headerStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '12px 16px',
-  borderBottom: '1px solid var(--border, #334155)',
+  borderBottom: '1px solid var(--border, var(--border-strong))',
 };
 
 const titleStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
+  color: 'var(--text, var(--text-strong))',
   fontSize: 13,
   fontWeight: 700,
 };
 
 const badgeStyle = (hasPending: boolean): React.CSSProperties => ({
-  background: hasPending ? '#facc1522' : '#1e293b',
-  color: hasPending ? '#facc15' : '#64748b',
+  background: hasPending ? '#facc1522' : 'var(--raised)',
+  color: hasPending ? '#facc15' : 'var(--text-muted)',
   border: `1px solid ${hasPending ? '#facc15' : '#334155'}`,
   borderRadius: 12,
   fontSize: 11,
@@ -284,7 +284,7 @@ const listStyle: React.CSSProperties = {
 };
 
 const rowStyle: React.CSSProperties = {
-  borderBottom: '1px solid var(--border, #334155)',
+  borderBottom: '1px solid var(--border, var(--border-strong))',
 };
 
 const rowHeaderStyle: React.CSSProperties = {
@@ -298,7 +298,7 @@ const rowHeaderStyle: React.CSSProperties = {
 };
 
 const endpointStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
+  color: 'var(--text, var(--text-strong))',
   fontFamily: 'monospace',
   fontSize: 12,
   fontWeight: 600,
@@ -322,7 +322,7 @@ const statusPillStyle: React.CSSProperties = {
 };
 
 const expandedStyle: React.CSSProperties = {
-  borderTop: '1px solid var(--border, #334155)',
+  borderTop: '1px solid var(--border, var(--border-strong))',
   display: 'flex',
   flexDirection: 'column',
   gap: 12,
@@ -344,7 +344,7 @@ const diffLabelStyle: React.CSSProperties = {
 };
 
 const codeStyle: React.CSSProperties = {
-  background: '#0f172a',
+  background: 'var(--surface)',
   borderRadius: 6,
   color: 'var(--text)',
   fontFamily: 'monospace',

@@ -196,7 +196,7 @@ const AuditTrailSection: React.FC = () => {
       {/* Main tab switcher */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['compliance', 'system'] as const).map(t => (
-          <button key={t} onClick={() => setMainTab(t)} style={{ background: mainTab === t ? '#1e293b' : 'transparent', border: `1px solid ${mainTab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: mainTab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
+          <button key={t} onClick={() => setMainTab(t)} style={{ background: mainTab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${mainTab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: mainTab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
             {{ compliance: '🔗 Compliance Audit Trail', system: '📋 System Audit Log' }[t]}
           </button>
         ))}
@@ -248,7 +248,7 @@ const AuditTrailSection: React.FC = () => {
 
       <SectionCard title="Immutable Audit Trail" icon="🔗" accent="#a78bfa" noPad>
         {filtered.length === 0 ? (
-          <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No audit records match this filter</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No audit records match this filter</div>
         ) : (
           <div>
             {filtered.map((r, i) => (
@@ -258,12 +258,12 @@ const AuditTrailSection: React.FC = () => {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '10px 16px', cursor: 'pointer',
-                    borderBottom: '1px solid #0f172a',
+                    borderBottom: '1px solid var(--hairline)',
                     background: expanded === r.sequence ? '#0f1f35' : 'transparent',
                   }}
                 >
                   {/* Sequence */}
-                  <span style={{ fontSize: 10, color: '#334155', fontFamily: 'monospace', minWidth: 50, flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'monospace', minWidth: 50, flexShrink: 0 }}>
                     #{r.sequence}
                   </span>
                   {/* Level */}
@@ -287,35 +287,35 @@ const AuditTrailSection: React.FC = () => {
                   {/* Actor + Action */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.actor}</span>
-                    <span style={{ fontSize: 12, color: '#475569', margin: '0 6px' }}>→</span>
-                    <span style={{ fontSize: 12, color: '#f1f5f9', fontWeight: 600 }}>{r.action}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-faint)', margin: '0 6px' }}>→</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-strong)', fontWeight: 600 }}>{r.action}</span>
                   </div>
                   {/* Hash (truncated) */}
-                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#334155', flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-faint)', flexShrink: 0 }}>
                     {r.hash_chain?.slice(0, 12)}…
                   </span>
                   {/* Timestamp */}
-                  <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(r.timestamp)}</span>
-                  <span style={{ fontSize: 10, color: '#334155' }}>{expanded === r.sequence ? '▲' : '▼'}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(r.timestamp)}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{expanded === r.sequence ? '▲' : '▼'}</span>
                 </div>
                 {expanded === r.sequence && (
-                  <div style={{ background: '#050d1a', padding: '12px 16px', borderBottom: '1px solid #0f172a' }}>
+                  <div style={{ background: '#050d1a', padding: '12px 16px', borderBottom: '1px solid var(--hairline)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
                       <div>
-                        <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 4 }}>FULL HASH CHAIN</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>FULL HASH CHAIN</div>
                         <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--ai-model)', wordBreak: 'break-all' }}>{r.hash_chain}</div>
                       </div>
                       {r.signature && (
                         <div>
-                          <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 4 }}>SIGNATURE</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>SIGNATURE</div>
                           <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--link)', wordBreak: 'break-all' }}>{r.signature}</div>
                         </div>
                       )}
                     </div>
                     {Object.keys(r.data ?? {}).length > 0 && (
                       <div>
-                        <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginBottom: 4 }}>DATA PAYLOAD</div>
-                        <pre style={{ fontSize: 11, color: 'var(--text-dim)', background: '#0f172a', padding: '8px 10px', borderRadius: 6, overflow: 'auto', margin: 0 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>DATA PAYLOAD</div>
+                        <pre style={{ fontSize: 11, color: 'var(--text-dim)', background: 'var(--surface)', padding: '8px 10px', borderRadius: 6, overflow: 'auto', margin: 0 }}>
                           {JSON.stringify(r.data, null, 2)}
                         </pre>
                       </div>
@@ -367,18 +367,18 @@ const AuditTrailSection: React.FC = () => {
                       "15 total admin actions" above 15 rows showing a bare UUID and
                       nothing else: no action, no resource, no time. The records were
                       complete the whole time; only the read was wrong. */}
-                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['User', 'Action', 'Category', 'IP', 'Level', 'Timestamp'].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {sysEntries.map((e) => (
-                    <tr key={e.event_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                    <tr key={e.event_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                       <td style={{ padding: '8px 12px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{e.actor || '—'}</div>
-                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#475569' }}>{e.user_id}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-strong)' }}>{e.actor || '—'}</div>
+                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-faint)' }}>{e.user_id}</div>
                       </td>
                       <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--ai-model)', fontSize: 12 }}>
                         <div>{e.action || e.event_type || '—'}</div>
@@ -386,14 +386,14 @@ const AuditTrailSection: React.FC = () => {
                       </td>
                       <td style={{ padding: '8px 12px', fontSize: 11 }}>
                         {e.category
-                          ? <span style={{ background: '#1e293b', padding: '2px 6px', borderRadius: 3, color: 'var(--text-dim)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.category}</span>
-                          : <span style={{ color: '#334155' }}>—</span>}
+                          ? <span style={{ background: 'var(--raised)', padding: '2px 6px', borderRadius: 3, color: 'var(--text-dim)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.category}</span>
+                          : <span style={{ color: 'var(--text-faint)' }}>—</span>}
                       </td>
-                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: '#334155' }}>{e.ip_address || '—'}</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-faint)' }}>{e.ip_address || '—'}</td>
                       <td style={{ padding: '8px 12px' }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: e.level === 'CRITICAL' ? 'var(--loss)' : e.level === 'COMPLIANCE' ? 'var(--warn)' : 'var(--gain)' }}>{e.level || '—'}</span>
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(e.created_at)}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(e.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>

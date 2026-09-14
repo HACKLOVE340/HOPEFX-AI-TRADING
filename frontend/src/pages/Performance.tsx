@@ -64,7 +64,7 @@ interface Trade {
 
 function EquityCurveChart({ points }: { points: { t: number; v: number }[] }) {
   if (points.length < 2) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: '#475569', fontSize: 13 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: 'var(--text-faint)', fontSize: 13 }}>
       Not enough data to render curve
     </div>
   );
@@ -113,11 +113,11 @@ function EquityCurveChart({ points }: { points: { t: number; v: number }[] }) {
         <path d={ddPath} fill="none" stroke="#ff1744" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, padding: '0 4px' }}>
-        <span style={{ fontSize: 10, color: '#475569' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>
           {points[0] ? new Date(points[0].t * 1000).toLocaleDateString() : ''}
         </span>
-        <span style={{ fontSize: 10, color: '#475569', fontStyle: 'italic' }}>— — drawdown</span>
-        <span style={{ fontSize: 10, color: '#475569' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', fontStyle: 'italic' }}>— — drawdown</span>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>
           {lastPoint ? new Date(lastPoint.t * 1000).toLocaleDateString() : ''}
         </span>
       </div>
@@ -150,7 +150,7 @@ function StatCard({
           />
         )}
       </div>
-      <div style={{ ...s.statValue, color: color ?? '#f1f5f9' }}>{value}</div>
+      <div style={{ ...s.statValue, color: color ?? 'var(--text-strong)' }}>{value}</div>
       {sub && <div style={s.statSub}>{sub}</div>}
     </>
   );
@@ -179,8 +179,8 @@ function TradeRow({ trade }: { trade: Trade }) {
   const won = trade.realized_pnl > 0;
   const isLong = positionSide(trade) === 'long';  // F5-02
   return (
-    <tr style={{ borderBottom: '1px solid #1e293b' }}>
-      <td style={s.td}><strong style={{ color: '#f1f5f9' }}>{trade.symbol}</strong></td>
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td style={s.td}><strong style={{ color: 'var(--text-strong)' }}>{trade.symbol}</strong></td>
       <td style={s.td}>
         <span style={{ color: isLong ? 'var(--bull)' : 'var(--bear)', fontWeight: 700, fontSize: 11 }}>
           {isLong ? '▲' : '▼'} {trade.side.toUpperCase()}
@@ -251,12 +251,12 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
         <h3 style={s.cardTitle}>By Symbol</h3>
         {symbolRows.map(([sym, { count, pnl }]) => (
           <div key={sym} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', width: 72 }}>{sym}</span>
-            <div style={{ flex: 1, height: 6, background: '#0f172a', borderRadius: 3, overflow: 'hidden' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-strong)', width: 72 }}>{sym}</span>
+            <div style={{ flex: 1, height: 6, background: 'var(--surface)', borderRadius: 3, overflow: 'hidden' }}>
               <div style={{ height: '100%', borderRadius: 3, background: pnl >= 0 ? 'var(--bull)' : 'var(--bear)', width: `${Math.min(100, Math.abs(pnl) / maxAbsPnl * 100)}%` }} />
             </div>
             <span style={{ fontSize: 11, fontFamily: 'monospace', color: pnl >= 0 ? 'var(--bull)' : 'var(--bear)', width: 72, textAlign: 'right' }}>{fmtPnl(pnl)}</span>
-            <span style={{ fontSize: 10, color: '#475569', width: 24, textAlign: 'right' }}>{count}x</span>
+            <span style={{ fontSize: 10, color: 'var(--text-faint)', width: 24, textAlign: 'right' }}>{count}x</span>
           </div>
         ))}
       </div>
@@ -402,7 +402,7 @@ const Performance: React.FC = () => {
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {/* Period toggle */}
-            <div style={{ display: 'flex', gap: 2, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, padding: 2 }}>
+            <div style={{ display: 'flex', gap: 2, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 2 }}>
               {(['weekly', 'monthly', 'yearly', 'all'] as Period[]).map((p) => (
                 <button
                   key={p}
@@ -455,7 +455,7 @@ const Performance: React.FC = () => {
                   <Link to="/trade" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
                     ⚡ Start Trading
                   </Link>
-                  <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-dim)', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>
+                  <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>
                     🧠 AI Strategy
                   </Link>
                 </div>
@@ -479,7 +479,7 @@ const Performance: React.FC = () => {
               </div>
               <div style={s.noteBox}>
                 <span style={{ color: 'var(--warn)', marginRight: 8 }}>⏱</span>
-                <strong style={{ color: '#f1f5f9' }}>Transparency: </strong>
+                <strong style={{ color: 'var(--text-strong)' }}>Transparency: </strong>
                 {pub.note}
                 {/* Guarded against the '—' sentinel but not against the field
                     being absent, so a partial payload printed "Paper trading
@@ -507,7 +507,7 @@ const Performance: React.FC = () => {
             )}
             {!equityQ.isLoading && !equityQ.isError && (equity.length > 1
               ? <EquityCurveChart points={equity} />
-              : <div style={{ textAlign: 'center', color: '#475569', padding: 40, fontSize: 13 }}>No equity data yet</div>
+              : <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 40, fontSize: 13 }}>No equity data yet</div>
             )}
           </div>
 
@@ -525,7 +525,7 @@ const Performance: React.FC = () => {
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', width: 80, flexShrink: 0 }}>HOPEFX</span>
-                        <div style={{ flex: 1, height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ flex: 1, height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden' }}>
                           <div style={{ height: '100%', borderRadius: 4, background: stratReturn >= 0 ? 'var(--bull)' : 'var(--bear)', width: `${Math.abs(stratReturn) / maxReturn * 100}%`, transition: 'width 0.6s ease' }} />
                         </div>
                         <span style={{ fontSize: 12, fontWeight: 700, color: stratReturn >= 0 ? 'var(--bull)' : 'var(--bear)', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>
@@ -535,10 +535,10 @@ const Performance: React.FC = () => {
                       {Object.entries(BENCHMARKS).map(([name, ret]) => (
                         <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 80, flexShrink: 0 }}>{name}</span>
-                          <div style={{ flex: 1, height: 6, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ flex: 1, height: 6, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden' }}>
                             <div style={{ height: '100%', borderRadius: 4, background: '#475569', width: `${Math.abs(ret) / maxReturn * 100}%` }} />
                           </div>
-                          <span style={{ fontSize: 12, color: '#475569', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>+{ret.toFixed(1)}%</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-faint)', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>+{ret.toFixed(1)}%</span>
                         </div>
                       ))}
                     </>
@@ -596,7 +596,7 @@ const Performance: React.FC = () => {
             </div>
           )}
           {!tradesQ.isLoading && filteredTrades.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#475569', padding: 40, fontSize: 13 }}>No trades found</div>
+            <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 40, fontSize: 13 }}>No trades found</div>
           )}
         </div>
       )}
@@ -633,14 +633,14 @@ const Performance: React.FC = () => {
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12, marginBottom: 20 }}>
                   {rows.map(({ label, value, positive }) => (
-                    <div key={label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                    <div key={label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: positive === undefined ? '#f1f5f9' : positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: positive === undefined ? 'var(--text-strong)' : positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
                     </div>
                   ))}
                 </div>
                 {wr.ai_commentary && (
-                  <div style={{ background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' }}>
+                  <div style={{ background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' }}>
                     <div style={{ fontSize: 12, color: 'var(--link)', marginBottom: 6, fontWeight: 600 }}>🤖 AI Commentary</div>
                     <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0, lineHeight: 1.6 }}>{String(wr.ai_commentary)}</p>
                   </div>
@@ -681,25 +681,25 @@ const Performance: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:        { padding: 'clamp(12px,4vw,24px)', maxWidth: 1100, margin: '0 auto' },
   header:      { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 },
-  title:       { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
+  title:       { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px' },
   subtitle:    { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
-  tabBtn:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '6px 12px' },
+  tabBtn:      { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '6px 12px' },
   tabBtnActive:{ background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
-  refreshBtn:  { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 12px' },
+  refreshBtn:  { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 12px' },
   errorBox:    { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', fontSize: 13, padding: '12px 16px', marginBottom: 16 },
   statsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 },
-  statCard:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' },
+  statCard:    { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' },
   statLabel:   { fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' },
   statValue:   { fontSize: 22, fontWeight: 700 },
-  statSub:     { fontSize: 11, color: '#475569', marginTop: 4 },
-  noteBox:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-dim)', marginBottom: 20 },
-  card:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 16, marginBottom: 16 },
-  cardTitle:   { fontSize: 13, fontWeight: 700, color: '#f1f5f9', margin: '0 0 12px' },
+  statSub:     { fontSize: 11, color: 'var(--text-faint)', marginTop: 4 },
+  noteBox:     { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-dim)', marginBottom: 20 },
+  card:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 16, marginBottom: 16 },
+  cardTitle:   { fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 12px' },
   table:       { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
-  th:          { textAlign: 'left', color: '#475569', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', padding: '6px 10px', borderBottom: '1px solid #334155' },
+  th:          { textAlign: 'left', color: 'var(--text-faint)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', padding: '6px 10px', borderBottom: '1px solid var(--border-strong)' },
   td:          { padding: '8px 10px', color: 'var(--text-dim)', fontSize: 12 },
-  filterInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '8px 10px', fontSize: 16, outline: 'none', width: '100%', maxWidth: 160, WebkitAppearance: 'none' },
-  apiNote:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-muted)', marginTop: 16 },
+  filterInput: { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '8px 10px', fontSize: 16, outline: 'none', width: '100%', maxWidth: 160, WebkitAppearance: 'none' },
+  apiNote:     { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-muted)', marginTop: 16 },
 };
 
 export default Performance;

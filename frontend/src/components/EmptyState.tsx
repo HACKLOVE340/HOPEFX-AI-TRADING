@@ -65,11 +65,11 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     <div style={{
       width: 64, height: 64, borderRadius: 16,
       background: 'rgba(30,41,59,0.8)',
-      border: '1px solid #1e293b',
+      border: '1px solid var(--border)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 28, lineHeight: 1,
       marginBottom: 4,
-      color: '#475569',
+      color: 'var(--text-faint)',
     }}>
       {typeof icon === 'string'
         ? icon                                  /* legacy emoji call sites */
@@ -85,7 +85,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       <p style={{
         fontSize: 12.5, margin: 0, maxWidth: 520, lineHeight: 1.6,
         color: 'var(--text-dim)', textAlign: 'left',
-        background: '#0b1220', border: '1px solid var(--border)',
+        background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 8, padding: '8px 12px',
       }}>
         {serverNote}
@@ -112,9 +112,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
                        focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              minHeight: 44, fontSize: 12, color: '#475569',
+              minHeight: 44, fontSize: 12, color: 'var(--text-faint)',
               padding: '0 14px', borderRadius: 8,
-              border: '1px solid #1e293b',
+              border: '1px solid var(--border)',
               background: 'rgba(30,41,59,0.5)',
               textDecoration: 'none', cursor: 'pointer',
               transition: 'color 0.15s, border-color 0.15s',

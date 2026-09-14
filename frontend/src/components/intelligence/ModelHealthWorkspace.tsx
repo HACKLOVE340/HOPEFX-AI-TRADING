@@ -58,12 +58,12 @@ import type { EngineSignal, SignalAnalyticsReport } from '../../types';
 
 const Stat: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color }) => (
   <div style={{
-    background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 10,
+    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
     padding: '12px 14px', flex: 1, minWidth: 130,
   }}>
-    <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-    <div style={{ fontSize: 20, fontWeight: 800, color: color ?? '#f1f5f9', marginTop: 2 }}>{value}</div>
-    {sub && <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>{sub}</div>}
+    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+    <div style={{ fontSize: 20, fontWeight: 800, color: color ?? 'var(--text-strong)', marginTop: 2 }}>{value}</div>
+    {sub && <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>{sub}</div>}
   </div>
 );
 
@@ -167,7 +167,7 @@ export const ModelHealthWorkspace: React.FC = () => {
                   { k: 'Last trained',    v: engine.last_trained_at ? new Date(engine.last_trained_at).toLocaleDateString() : '—' },
                 ].map(({ k, v }) => (
                   <div key={k} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>{k}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>{k}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'ui-monospace, monospace', marginTop: 3 }}>{v}</div>
                   </div>
                 ))}
@@ -178,7 +178,7 @@ export const ModelHealthWorkspace: React.FC = () => {
                   drawing the bars anyway would present a flat placeholder as
                   insight (F232). Say so instead. */}
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)', marginBottom: 8 }}>
                   Feature attribution
                 </div>
                 {impQuery.isLoading ? (
@@ -227,7 +227,7 @@ export const ModelHealthWorkspace: React.FC = () => {
 
               {/* Drift — the endpoint explains itself when it has no data. */}
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)', marginBottom: 8 }}>
                   Feature drift
                 </div>
                 {drift?.overall_status && drift.overall_status !== 'unknown' ? (
@@ -260,13 +260,13 @@ export const ModelHealthWorkspace: React.FC = () => {
       <div style={{ marginBottom: 22 }}>
         <SectionTitle right={
           a && totalOutcomes === 0
-            ? <span style={{ fontSize: 11, color: '#475569' }}>awaiting resolved outcomes</span>
+            ? <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>awaiting resolved outcomes</span>
             : undefined
         }>
           Signal Quality
         </SectionTitle>
         {analyticsQuery.isLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-faint)', fontSize: 13 }}>
             <Spinner size="sm" /> Loading analytics…
           </div>
         ) : a ? (
@@ -287,7 +287,7 @@ export const ModelHealthWorkspace: React.FC = () => {
             <Stat label="Avg R:R" value={Number.isFinite(a.avg_rr_ratio) ? a.avg_rr_ratio.toFixed(2) : '—'} color={a.avg_rr_ratio >= 1.5 ? '#22c55e' : '#fbbf24'} />
           </div>
         ) : (
-          <div style={{ fontSize: 13, color: '#475569' }}>Analytics unavailable.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-faint)' }}>Analytics unavailable.</div>
         )}
       </div>
 
@@ -302,7 +302,7 @@ export const ModelHealthWorkspace: React.FC = () => {
       {/* Live engine signals */}
       <div>
         <SectionTitle right={
-          <span style={{ fontSize: 11, color: '#475569' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
             {signals.length} active · refreshes every 20s
           </span>
         }>
@@ -337,7 +337,7 @@ export const ModelHealthWorkspace: React.FC = () => {
         )}
       </div>
 
-      <p style={{ fontSize: 11, color: '#334155', marginTop: 24, lineHeight: 1.6 }}>
+      <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 24, lineHeight: 1.6 }}>
         Signals are model output, not financial advice. Confidence and strength reflect the model's
         internal state and historical calibration; they do not guarantee outcomes.
       </p>

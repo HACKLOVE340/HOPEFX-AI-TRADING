@@ -208,7 +208,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
   },
   gaugeCaption: {
-    fontSize: 10, color: '#475569', letterSpacing: 2, fontWeight: 700,
+    fontSize: 10, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700,
   },
   gaugeScore: {
     fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
@@ -224,7 +224,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   gaugeMarker: {
     position: 'absolute', top: -2, width: 1, height: 10,
-    background: '#334155', transform: 'translateX(-50%)',
+    background: 'var(--surface-hover)', transform: 'translateX(-50%)',
   },
   termRow: {
     display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2,
@@ -237,7 +237,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
   },
   termWeight: {
-    color: '#475569', fontSize: 9,
+    color: 'var(--text-faint)', fontSize: 9,
   },
   rightSection: {
     display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0,
@@ -246,7 +246,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2,
   },
   rlLabel: {
-    fontSize: 9, color: '#475569', letterSpacing: 2, fontWeight: 700,
+    fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700,
   },
   rlAction: {
     fontSize: 13, fontWeight: 800, letterSpacing: 1,

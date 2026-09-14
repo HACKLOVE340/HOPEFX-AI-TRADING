@@ -28,11 +28,11 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', background: '#0f172a',
+        justifyContent: 'center', background: 'var(--surface)',
       }}>
         <div style={{
           width: 32, height: 32, borderRadius: '50%',
-          border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+          border: '3px solid var(--border)', borderTopColor: '#3b82f6',
           animation: 'spin 0.7s linear infinite',
         }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -47,11 +47,11 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
   return (
     <div style={{
       minHeight: '60vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: '#0f172a', padding: 40,
+      justifyContent: 'center', background: 'var(--surface)', padding: 40,
     }}>
       <div style={{
         maxWidth: 440, textAlign: 'center',
-        background: '#1e293b', border: '1px solid #7f1d1d',
+        background: 'var(--raised)', border: '1px solid #7f1d1d',
         borderRadius: 16, padding: '40px 36px',
       }}>
         <div style={{
@@ -85,7 +85,7 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
           <button
             onClick={() => navigate('/dashboard')}
             style={{
-              background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
+              background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8,
               color: 'var(--text-dim)', cursor: 'pointer', fontSize: 14, fontWeight: 600,
               padding: '10px 20px',
             }}

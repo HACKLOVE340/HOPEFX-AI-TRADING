@@ -840,7 +840,7 @@ const TABS = [
 const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ active, onChange }) => (
   <div style={{
     display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 24,
-    borderBottom: '1px solid #1e293b', paddingBottom: 12,
+    borderBottom: '1px solid var(--border)', paddingBottom: 12,
   }}>
     {TABS.map((t) => (
       <button
@@ -849,7 +849,7 @@ const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ a
         style={{
           padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
           fontSize: 12, fontWeight: active === t.id ? 700 : 500,
-          background: active === t.id ? '#1e3a5f' : '#1e293b',
+          background: active === t.id ? '#1e3a5f' : 'var(--raised)',
           color: active === t.id ? 'var(--link)' : 'var(--text-dim)',
           transition: 'all 0.15s',
         }}
@@ -1384,17 +1384,17 @@ const HealingTab: React.FC<{
               { label: 'Last Test Passed', value: healerStatus.last_test_passed ?? '—' },
               { label: 'Last Test Failed', value: healerStatus.last_test_failed ?? '—' },
             ].map((kpi) => (
-              <div key={kpi.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+              <div key={kpi.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kpi.label}</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-strong)', marginTop: 4 }}>{kpi.value}</div>
               </div>
             ))}
           </div>
           {healerStatus.last_scan && (
-            <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>Last scan: {healerStatus.last_scan}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4 }}>Last scan: {healerStatus.last_scan}</div>
           )}
           {healerStatus.last_test_run && (
-            <div style={{ fontSize: 12, color: '#475569' }}>Last test run: {healerStatus.last_test_run}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Last test run: {healerStatus.last_test_run}</div>
           )}
         </Card>
       )}
@@ -1439,8 +1439,8 @@ const HealingTab: React.FC<{
             onChange={(e) => setHealer({ protected_paths: e.target.value })}
             rows={4}
             style={{
-              width: '100%', padding: '10px 12px', background: '#0f172a',
-              border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9',
+              width: '100%', padding: '10px 12px', background: 'var(--surface)',
+              border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)',
               fontSize: 13, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace',
             }}
           />
@@ -1472,18 +1472,18 @@ const HealingTab: React.FC<{
           Test Categories
         </div>
         {testIndex && (
-          <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 10 }}>
             {testIndex.total} tests discovered across {Object.keys(testIndex.by_category).length} categories
           </div>
         )}
         {TEST_CATEGORY_META.map((cat) => (
-          <div key={cat.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
+          <div key={cat.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
             <div>
               <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.accent, display: 'inline-block' }} />
                 {cat.label}
                 {testIndex?.by_category[cat.key] !== undefined && (
-                  <span style={{ fontSize: 11, color: '#475569' }}>({testIndex.by_category[cat.key]} tests)</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>({testIndex.by_category[cat.key]} tests)</span>
                 )}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{cat.desc}</div>
@@ -1887,13 +1887,13 @@ const ChainLegRow: React.FC<{
 }> = ({ roleTitle, index, total, leg, reachable, providerOptions, modelOptions, modelListId, onChange, onMove, onRemove }) => (
   <div style={{
     display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap',
-    padding: '10px 0', borderTop: index === 0 ? 'none' : '1px solid #1e293b',
+    padding: '10px 0', borderTop: index === 0 ? 'none' : '1px solid var(--border)',
   }}>
     <div style={{ minWidth: 82 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {index === 0 ? 'Primary' : `Fallback ${index}`}
       </div>
-      <div style={{ fontSize: 11, color: reachable === undefined ? '#475569' : reachable ? '#22c55e' : 'var(--loss)', marginTop: 2 }}>
+      <div style={{ fontSize: 11, color: reachable === undefined ? 'var(--text-faint)' : reachable ? '#22c55e' : 'var(--loss)', marginTop: 2 }}>
         {reachable === undefined ? 'unknown' : reachable ? 'credential present' : 'no credential'}
       </div>
     </div>
@@ -2420,7 +2420,7 @@ const InfrastructureTab: React.FC = () => {
               const s = val.status ?? 'unknown';
               return (
                 <div key={key} style={{
-                  background: '#0f172a', border: `1px solid ${statusColor(s)}33`,
+                  background: 'var(--surface)', border: `1px solid ${statusColor(s)}33`,
                   borderRadius: 8, padding: '12px 14px',
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -2428,10 +2428,10 @@ const InfrastructureTab: React.FC = () => {
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: statusColor(s) }}>{s.toUpperCase()}</div>
                   {val.latency_ms !== undefined && (
-                    <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{val.latency_ms}ms</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{val.latency_ms}ms</div>
                   )}
                   {val.detail && (
-                    <div style={{ fontSize: 11, color: '#475569', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {val.detail}
                     </div>
                   )}
@@ -2454,9 +2454,9 @@ const InfrastructureTab: React.FC = () => {
               { label: 'Keyspace Misses', value: String(cacheStats.keyspace_misses ?? '—') },
               { label: 'Commands/sec', value: String(cacheStats.instantaneous_ops_per_sec ?? '—') },
             ].map((m) => (
-              <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+              <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{m.value}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>{m.value}</div>
               </div>
             ))}
           </div>
@@ -2504,9 +2504,9 @@ const InfrastructureTab: React.FC = () => {
         {dbStats && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {Object.entries(dbStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
-              <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+              <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
               </div>
             ))}
           </div>
@@ -2518,9 +2518,9 @@ const InfrastructureTab: React.FC = () => {
         {queueStats && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {Object.entries(queueStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
-              <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+              <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
               </div>
             ))}
           </div>
@@ -2647,9 +2647,9 @@ const DiagnosticsTab: React.FC = () => {
               { label: 'Errors', value: String((summary.counts as Record<string,number>)?.error ?? 0), color: '#ef4444' },
               { label: 'Critical', value: String((summary.counts as Record<string,number>)?.critical ?? 0), color: '#dc2626' },
             ].map((m) => (
-              <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 16px', textAlign: 'center', minWidth: 80 }}>
+              <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', textAlign: 'center', minWidth: 80 }}>
                 <div style={{ fontSize: 20, fontWeight: 800, color: m.color }}>{m.value}</div>
-                <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{m.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{m.label}</div>
               </div>
             ))}
           </div>
@@ -2681,7 +2681,7 @@ const DiagnosticsTab: React.FC = () => {
               border: `1px solid ${r.status === 'ok' ? '#16a34a33' : r.status === 'warning' ? '#d9770633' : '#dc262633'}`,
             }}>
               <div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{r.check_name}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{r.check_name}</span>
                 <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.message}</div>
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444', textTransform: 'uppercase', flexShrink: 0, marginLeft: 12 }}>
@@ -2851,7 +2851,7 @@ const PlatformConfiguration: React.FC = () => {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 32 }}>
-      <div style={{ width: 20, height: 20, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+      <div style={{ width: 20, height: 20, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading platform configuration…
     </div>
   );

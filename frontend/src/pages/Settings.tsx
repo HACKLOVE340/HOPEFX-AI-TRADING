@@ -212,7 +212,7 @@ const TAB_GROUPS: TabGroup[] = [
 const SectionFallback: React.FC = () => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: '32px 0' }}>
     <div style={{
-      width: 20, height: 20, border: '2px solid #334155',
+      width: 20, height: 20, border: '2px solid var(--border-strong)',
       borderTopColor: '#3b82f6', borderRadius: '50%',
       animation: 'spin 0.7s linear infinite',
     }} />
@@ -223,10 +223,10 @@ const SectionFallback: React.FC = () => (
 const UpgradeNotice: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => (
   <div style={{
     padding: '48px 32px', textAlign: 'center',
-    background: '#0f172a', border: '1px solid #1e293b', borderRadius: 14,
+    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14,
   }}>
     <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
-    <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>
+    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
       {requiredPlan.charAt(0).toUpperCase() + requiredPlan.slice(1)} Plan Required
     </div>
     <div style={{ fontSize: 14, color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto 20px' }}>
@@ -388,13 +388,13 @@ const Settings: React.FC = () => {
         <div style={S.layout}>
           <nav style={S.sidebar}>
             {/* Search box */}
-            <div style={{ padding: '0 0 12px', position: 'sticky', top: 0, background: '#0f172a', zIndex: 1 }}>
+            <div style={{ padding: '0 0 12px', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1 }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                background: '#1e293b', border: '1px solid #334155',
+                background: 'var(--raised)', border: '1px solid var(--border-strong)',
                 borderRadius: 8, padding: '7px 10px',
               }}>
-                <span style={{ fontSize: 12, color: '#475569', flexShrink: 0 }}>🔍</span>
+                <span style={{ fontSize: 12, color: 'var(--text-faint)', flexShrink: 0 }}>🔍</span>
                 <input aria-label="Search settings"
                   type="text"
                   placeholder="Search settings…"
@@ -483,7 +483,7 @@ const Settings: React.FC = () => {
                         onClick={() => selectTab(tab.id)}
                         style={{
                           ...S.tabBtn,
-                          background: active ? '#1e293b' : 'transparent',
+                          background: active ? 'var(--raised)' : 'transparent',
                           color: active ? activeColor : inactiveColor,
                           borderLeft: active ? `3px solid ${borderColor}` : '3px solid transparent',
                           fontWeight: active ? 600 : 400,
@@ -492,7 +492,7 @@ const Settings: React.FC = () => {
                       >
                         <span style={S.tabIcon}>{tab.icon}</span>
                         <span style={{ flex: 1 }}>{tab.label}</span>
-                        {locked && <span style={{ fontSize: 10, color: '#475569' }}>🔒</span>}
+                        {locked && <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>🔒</span>}
                         {isSA && <span style={S.saBadgeSmall}>SA</span>}
                         {tab.adminOnly && !isSA && <span style={S.adminBadge}>ADM</span>}
                       </button>
@@ -518,7 +518,7 @@ const Settings: React.FC = () => {
 
 const S: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100vh', background: '#0f172a', color: '#f1f5f9',
+    minHeight: '100vh', background: 'var(--surface)', color: 'var(--text-strong)',
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     padding: '32px 24px', boxSizing: 'border-box',
   },
@@ -528,13 +528,13 @@ const S: Record<string, React.CSSProperties> = {
   saBadge:   { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
   layout:    { maxWidth: 1400, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start' },
   sidebar: {
-    width: 230, flexShrink: 0, background: '#0f172a', borderRadius: 12,
-    border: '1px solid #1e293b', padding: '10px 0',
+    width: 230, flexShrink: 0, background: 'var(--surface)', borderRadius: 12,
+    border: '1px solid var(--border)', padding: '10px 0',
     position: 'sticky' as const, top: 24,
     maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' as const,
   },
   groupLabel: {
-    fontSize: 10, fontWeight: 700, color: '#334155',
+    fontSize: 10, fontWeight: 700, color: 'var(--text-faint)',
     textTransform: 'uppercase' as const, letterSpacing: '0.08em',
     padding: '8px 16px 3px',
   },

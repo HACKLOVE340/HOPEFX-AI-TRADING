@@ -195,19 +195,19 @@ const ChargebacksPanel: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User','Amount','Provider','Reason','Status','Opened','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {items.map(c => (
-                <tr key={c.chargeback_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{c.username}</td>
+                <tr key={c.chargeback_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{c.username}</td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: '#fb923c' }}>{fmtMoney2(c.amount, c.currency)}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{c.provider}</td>
-                  <td style={{ padding: '10px 12px', color: '#cbd5e1', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: CB_COLOR[c.status] ?? 'var(--text-dim)', background: `${CB_COLOR[c.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {c.status.replace(/_/g, ' ')}
@@ -317,16 +317,16 @@ const TaxReportsPanel: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Period','Jurisdiction','Revenue','Taxable','Rate','Tax Owed','Due Date','Status','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {reports.map(r => (
-                <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{r.period}</td>
+                <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.period}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{r.jurisdiction}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.total_revenue, r.currency)}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.taxable_amount, r.currency)}</td>
@@ -442,7 +442,7 @@ const ReconciliationPanel: React.FC = () => {
             onChange={e => setPeriod(e.target.value)}
             aria-label="Reconciliation period"
             title="Period to reconcile (YYYY-MM)"
-            style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '4px 10px', fontSize: 13, width: 150 }}
+            style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 10px', fontSize: 13, width: 150 }}
           />
           <Select
             value={provider}
@@ -459,16 +459,16 @@ const ReconciliationPanel: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Period','Provider','Expected','Actual','Discrepancy','Status','Created','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {records.map(r => (
-                <tr key={r.recon_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{r.period}</td>
+                <tr key={r.recon_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.period}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{r.provider}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.expected_amount, r.currency)}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.actual_amount, r.currency)}</td>
@@ -488,7 +488,7 @@ const ReconciliationPanel: React.FC = () => {
                           placeholder="Resolution notes…"
                           value={notes[r.recon_id] ?? ''}
                           onChange={e => setNotes(n => ({ ...n, [r.recon_id]: e.target.value }))}
-                          style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '4px 8px', fontSize: 12 }}
+                          style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 12 }}
                         />
                         <ActionBtn label="Resolve" onClick={() => resolve(r.recon_id)} variant="success" size="sm" loading={busy === r.recon_id} />
                       </div>
@@ -499,7 +499,7 @@ const ReconciliationPanel: React.FC = () => {
             </tbody>
           </table>
           {records.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 28, color: '#475569', fontSize: 13 }}>No reconciliation records. Click "Run Reconciliation" to generate.</div>
+            <div style={{ textAlign: 'center', padding: 28, color: 'var(--text-faint)', fontSize: 13 }}>No reconciliation records. Click "Run Reconciliation" to generate.</div>
           )}
         </div>
       )}
@@ -557,19 +557,19 @@ const AffiliatePanel: React.FC = () => {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   {['#','Username','Referrals','Conversions','Earned','Pending'].map((h, i) => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {stats.top_affiliates.map((a, idx) => (
-                  <tr key={a.affiliate_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <tr key={a.affiliate_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? 'var(--warn)' : idx === 1 ? 'var(--text-dim)' : '#78350f', fontWeight: 700 }}>
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                     </td>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{a.username}</td>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{a.username}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{a.referrals.toLocaleString()}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--gain)', fontWeight: 600 }}>{a.conversions.toLocaleString()}</td>
                     <td style={{ padding: '10px 12px', fontWeight: 700, color: '#f59e0b' }}>{fmtMoney(a.commission_earned, stats.currency)}</td>
@@ -677,7 +677,7 @@ const RefundPolicyPanel: React.FC = () => {
         }}
       >
         <AlertTriangle size={16} color="#f59e0b" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
-        <div style={{ fontSize: 12.5, color: '#cbd5e1', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>
           Once a payout has settled a sale, the creator&rsquo;s share has left the platform.
           If that sale is then refunded, this setting decides where the money comes back from.
           {note && <><br />{note}</>}
@@ -704,7 +704,7 @@ const RefundPolicyPanel: React.FC = () => {
                   // 44px minimum target height — the whole row is the control,
                   // not just the radio dot.
                   minHeight: 44, padding: '14px 16px',
-                  background: active ? '#f59e0b14' : '#0b1220',
+                  background: active ? '#f59e0b14' : 'var(--surface)',
                   border: `1px solid ${active ? '#f59e0b66' : '#1e293b'}`,
                   borderRadius: 10, cursor: 'pointer',
                   transition: 'background 200ms, border-color 200ms',
@@ -724,7 +724,7 @@ const RefundPolicyPanel: React.FC = () => {
                 />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: '#f1f5f9' }}>{opt.label}</span>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-strong)' }}>{opt.label}</span>
                     {opt.recommended === 'true' && (
                       <span style={{
                         fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
@@ -862,7 +862,7 @@ const FinancialSection: React.FC = () => {
       )}
 
       {/* ── Tab bar ── */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#0a1628', border: '1px solid #1e293b', borderRadius: 10, padding: 6, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#0a1628', border: '1px solid var(--border)', borderRadius: 10, padding: 6, overflowX: 'auto' }}>
         {FIN_TABS.map(t => (
           <button
             key={t.id}
@@ -871,7 +871,7 @@ const FinancialSection: React.FC = () => {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '7px 14px', borderRadius: 7, border: 'none',
               background: activeTab === t.id ? '#0f1f35' : 'transparent',
-              color: activeTab === t.id ? '#f1f5f9' : 'var(--text-muted)',
+              color: activeTab === t.id ? 'var(--text-strong)' : 'var(--text-muted)',
               fontWeight: activeTab === t.id ? 600 : 400,
               fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
               outline: activeTab === t.id ? '1px solid #1e3a5f' : 'none',
@@ -935,7 +935,7 @@ const FinancialSection: React.FC = () => {
                   <SectionCard title="Revenue by Plan" icon="💳" accent="#8b5cf6">
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
                       {Object.entries(revenue.plan_breakdown).map(([plan, amount]) => (
-                        <div key={plan} style={{ background: '#1e293b', borderRadius: 8, padding: '14px 16px', borderLeft: `3px solid ${PLAN_COLORS[plan as Plan] ?? '#475569'}` }}>
+                        <div key={plan} style={{ background: 'var(--raised)', borderRadius: 8, padding: '14px 16px', borderLeft: `3px solid ${PLAN_COLORS[plan as Plan] ?? '#475569'}` }}>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{PLAN_LABELS[plan as Plan] ?? plan}</div>
                           <div style={{ fontSize: 18, fontWeight: 700, color: PLAN_COLORS[plan as Plan] ?? 'var(--text-dim)' }}>{fmtMoney(amount, revenue.currency)}</div>
                         </div>
@@ -950,16 +950,16 @@ const FinancialSection: React.FC = () => {
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
-                      <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         {['User','Amount','Plan','Provider','Status','Date',''].map(h => (
-                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {payments.map(p => (
-                        <tr key={p.payment_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                          <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{p.username}</td>
+                        <tr key={p.payment_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                          <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{p.username}</td>
                           <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--gain)' }}>{fmtMoney(p.amount, p.currency)}</td>
                           <td style={{ padding: '10px 12px' }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[p.plan as Plan] ?? 'var(--text-dim)' }}>{PLAN_LABELS[p.plan as Plan] ?? p.plan}</span>
@@ -978,7 +978,7 @@ const FinancialSection: React.FC = () => {
                                       placeholder="Reason…"
                                       value={refundReason}
                                       onChange={e => setRefundReason(e.target.value)}
-                                      style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '4px 8px', fontSize: 12, width: 120 }}
+                                      style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 12, width: 120 }}
                                     />
                                     <ActionBtn label="Confirm" onClick={doRefund} variant="danger" size="sm" loading={busy} />
                                     <ActionBtn label="✕" onClick={() => { setRefundTarget(null); setRefundReason(''); }} variant="ghost" size="sm" />

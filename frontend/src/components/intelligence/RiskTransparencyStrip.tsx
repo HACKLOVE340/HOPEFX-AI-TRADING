@@ -27,9 +27,9 @@ const Cell: React.FC<{
   return (
     <div title={title} style={{
       flex: 1, minWidth: 120, padding: '10px 12px',
-      background: '#0f172a', border: '1px solid #1e293b', borderRadius: 9,
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
       <div style={{ fontSize: 17, fontWeight: 800, color: fg, marginTop: 2 }}>{value}</div>
     </div>
   );
@@ -61,7 +61,7 @@ export const RiskTransparencyStrip: React.FC = () => {
       borderRadius: 12, padding: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>🛡️ Risk State</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>🛡️ Risk State</span>
         <span style={{
           fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',
@@ -74,7 +74,7 @@ export const RiskTransparencyStrip: React.FC = () => {
       </div>
 
       {!hasAny ? (
-        <div style={{ fontSize: 13, color: '#475569' }}>
+        <div style={{ fontSize: 13, color: 'var(--text-faint)' }}>
           Risk telemetry will appear once the live feed is connected.
         </div>
       ) : (

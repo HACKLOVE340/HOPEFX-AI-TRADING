@@ -99,7 +99,7 @@ const LayerSelector = memo(({ allLayers, active, onChange }: LayerSelectorProps)
             ...s.layerBtn,
             borderColor: on ? color : '#1e3a5f',
             background: on ? `${color}18` : 'rgba(255,255,255,0.02)',
-            color: on ? color : '#475569',
+            color: on ? color : 'var(--text-faint)',
           }}
           onClick={() => onChange(layer)}
           title={`Toggle ${layer} layer`}
@@ -397,7 +397,7 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--text)',
     letterSpacing: 0.5,
   },
-  pageSubtitle: { margin: '6px 0 0', fontSize: 12, color: '#475569' },
+  pageSubtitle: { margin: '6px 0 0', fontSize: 12, color: 'var(--text-faint)' },
 
   grid: {
     display: 'grid',
@@ -423,13 +423,13 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 200,
     textAlign: 'center' as const,
   },
-  fallbackText: { margin: 0, fontSize: 12, color: '#475569', lineHeight: 1.6 },
+  fallbackText: { margin: 0, fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.6 },
 
   wmHeader: { display: 'flex', flexDirection: 'column', gap: 4 },
   wmTitleRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   wmTitle: { fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)' },
   liveDot: { color: '#00ff88', fontSize: 9, letterSpacing: 1, animation: 'pulse 2s infinite' },
-  wmSubtitle: { margin: 0, fontSize: 11, color: '#334155' },
+  wmSubtitle: { margin: 0, fontSize: 11, color: 'var(--text-faint)' },
   wmExtLink: { fontSize: 11, color: '#3b82f6', textDecoration: 'none' },
 
   groupRow: { display: 'flex', gap: 6 },
@@ -497,7 +497,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   sectionLabel: {
     fontSize: 9,
-    color: '#334155',
+    color: 'var(--text-faint)',
     letterSpacing: 2,
     fontWeight: 700,
   },
@@ -507,7 +507,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(255,255,255,0.03)',
     border: '1px solid #1e3a5f',
     borderRadius: 4,
-    color: '#475569',
+    color: 'var(--text-faint)',
     fontSize: 9,
     fontFamily: 'monospace',
     cursor: 'pointer',

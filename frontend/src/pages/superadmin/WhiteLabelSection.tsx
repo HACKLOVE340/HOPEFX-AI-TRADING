@@ -156,7 +156,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       )}
 
       <div style={{ position: 'fixed', inset: 0, zIndex: 800, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)' }} onClick={onClose} />
-      <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 801, width: 480, background: '#0a1628', borderLeft: '1px solid #1e293b', overflowY: 'auto', padding: 24, animation: 'sa-fadein 0.2s ease' }}>
+      <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 801, width: 480, background: '#0a1628', borderLeft: '1px solid var(--border)', overflowY: 'auto', padding: 24, animation: 'sa-fadein 0.2s ease' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -165,7 +165,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
               {tenant.name[0]}
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{tenant.name}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{tenant.name}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tenant.domain}</div>
             </div>
           </div>
@@ -175,7 +175,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 18 }}>
           {(['overview', 'keys', 'usage'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? '#1e293b' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
               {{ overview: 'Overview', keys: 'API Keys', usage: 'Usage' }[t]}
             </button>
           ))}
@@ -191,8 +191,8 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
                 { label: 'Status',  value: <StatusBadge status={tenant.status} size="sm" /> },
                 { label: 'Created', value: fmtDate(tenant.created_at) },
               ].map(m => (
-                <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>{m.label}</div>
+                <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 3 }}>{m.label}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.value}</div>
                 </div>
               ))}
@@ -207,7 +207,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
             </div>
 
             {/* Branding */}
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 10 }}>Branding</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <Input label="Company Name" value={form.company_name ?? ''} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} />
@@ -217,7 +217,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input type="color" value={form.primary_color ?? '#3b82f6'} onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))}
                       aria-labelledby="sa-whitelabel-primary-colour-label"
-                      style={{ width: 40, height: 32, border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', background: 'none' }} />
+                      style={{ width: 40, height: 32, border: '1px solid var(--border-strong)', borderRadius: 6, cursor: 'pointer', background: 'none' }} />
                     <Input value={form.primary_color ?? ''} onChange={e => setForm(f => ({ ...f, primary_color: e.target.value }))} style={{ flex: 1 }} />
                   </div>
                 </div>
@@ -227,7 +227,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
             <ActionBtn label={saving ? 'Saving…' : 'Save Changes'} onClick={save} variant="primary" loading={saving} />
 
             {/* Danger zone */}
-            <div style={{ borderTop: '1px solid #1e293b', marginTop: 16, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {tenant.status === 'suspended'
                 ? <ActionBtn label="Activate Tenant" onClick={activate}                      variant="success" icon="✅" loading={busy === 'activate'} />
                 : <ActionBtn label="Suspend Tenant"  onClick={() => setSuspendConfirm(true)} variant="warning" icon="��" loading={busy === 'suspend'} />
@@ -244,17 +244,17 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
               <ActionBtn label="Rotate Key" onClick={rotateKey} loading={busy === 'rotate'} variant="warning" icon="🔄" size="sm" />
             </div>
             {keysLoading ? (
-              <div style={{ color: '#475569', fontSize: 13, padding: 24 }}>Loading keys…</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: 24 }}>Loading keys…</div>
             ) : keys.length === 0 ? (
               <EmptyState compact icon="🔑" title="No API keys found" description="Tenant API keys will appear here once generated." />
             ) : (
               keys.map(k => (
-                <div key={k.key_id} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
+                <div key={k.key_id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--ai-model)' }}>{k.prefix}…</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: k.active ? 'var(--gain)' : 'var(--loss)' }}>{k.active ? 'Active' : 'Revoked'}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
                     Created: {fmtDate(k.created_at)} · Last used: {k.last_used ? fmtDate(k.last_used) : 'Never'}
                   </div>
                 </div>
@@ -267,9 +267,9 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
         {tab === 'usage' && (
           <div>
             {usageLoading ? (
-              <div style={{ color: '#475569', fontSize: 13, padding: 24 }}>Loading usage…</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: 24 }}>Loading usage…</div>
             ) : !usage ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No usage data available.</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No usage data available.</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[
@@ -279,8 +279,8 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
                   { label: 'Bandwidth',        value: `${(usage.bandwidth_mb ?? 0).toFixed(1)} MB`,  icon: '📡', color: '#8b5cf6' },
                   { label: 'Trades Today',     value: (usage.trades_today ?? 0).toLocaleString(),    icon: '📊', color: '#06b6d4' },
                 ].map(m => (
-                  <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: '14px 16px' }}>
-                    <div style={{ fontSize: 12, color: '#475569', marginBottom: 6 }}>{m.icon} {m.label}</div>
+                  <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 6 }}>{m.icon} {m.label}</div>
                     <div style={{ fontSize: 20, fontWeight: 700, color: m.color }}>{m.value}</div>
                   </div>
                 ))}
@@ -320,7 +320,7 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
   return (
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 800, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)' }} onClick={onClose} />
-      <div style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', zIndex: 801, width: 420, background: '#0a1628', border: '1px solid #1e293b', borderRadius: 14, padding: 28, animation: 'sa-fadein 0.2s ease' }}>
+      <div style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', zIndex: 801, width: 420, background: '#0a1628', border: '1px solid var(--border)', borderRadius: 14, padding: 28, animation: 'sa-fadein 0.2s ease' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>Create New Tenant</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20 }}>×</button>
@@ -336,7 +336,7 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
             <div style={{ display: 'flex', gap: 8 }}>
               <input type="color" value={form.primary_color} onChange={e => set('primary_color', e.target.value)}
                 aria-labelledby="sa-whitelabel-create-colour-label"
-                style={{ width: 40, height: 32, border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', background: 'none' }} />
+                style={{ width: 40, height: 32, border: '1px solid var(--border-strong)', borderRadius: 6, cursor: 'pointer', background: 'none' }} />
               <Input value={form.primary_color} onChange={e => set('primary_color', e.target.value)} style={{ flex: 1 }} />
             </div>
           </div>
@@ -413,15 +413,15 @@ const WhiteLabelSection: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
           {tenants.map(t => (
             <div key={t.tenant_id} className="sa-row" onClick={() => setSelected(t)}
-              style={{ background: '#1e293b', borderRadius: 12, padding: '16px 18px', border: '1px solid #334155', cursor: 'pointer', transition: 'border-color 0.15s' }}>
+              style={{ background: 'var(--raised)', borderRadius: 12, padding: '16px 18px', border: '1px solid var(--border-strong)', cursor: 'pointer', transition: 'border-color 0.15s' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 36, height: 36, borderRadius: 8, background: t.branding.primary_color + '33', border: `2px solid ${t.branding.primary_color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: t.branding.primary_color }}>
                     {t.name[0]}
                   </div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{t.name}</div>
-                    <div style={{ fontSize: 11, color: '#475569' }}>{t.domain}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{t.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{t.domain}</div>
                   </div>
                 </div>
                 <StatusBadge status={t.status} size="sm" />
@@ -432,8 +432,8 @@ const WhiteLabelSection: React.FC = () => {
                   { label: 'Revenue', value: fmtMoney(t.monthly_revenue) },
                   { label: 'Plan',    value: t.plan },
                 ].map(m => (
-                  <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '6px 8px' }}>
-                    <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
+                  <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '6px 8px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)' }}>{m.value}</div>
                   </div>
                 ))}

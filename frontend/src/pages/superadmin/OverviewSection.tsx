@@ -82,7 +82,7 @@ const GaugeBar: React.FC<GaugeBarProps> = ({ label, value, max = 100, color = '#
         <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</span>
         <span style={{ fontSize: 12, fontWeight: 700, color: barColor }}>{value}{unit}</span>
       </div>
-      <div style={{ height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+      <div style={{ height: 6, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{
           height: '100%', width: `${pct}%`, background: barColor,
           borderRadius: 3, transition: 'width 0.6s ease',
@@ -222,7 +222,7 @@ const OverviewSection: React.FC = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 20 }}>
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} style={{ height: 100, borderRadius: 12, background: '#1e293b', animation: 'sa-pulse 1.5s ease-in-out infinite' }} />
+          <div key={i} style={{ height: 100, borderRadius: 12, background: 'var(--raised)', animation: 'sa-pulse 1.5s ease-in-out infinite' }} />
         ))}
       </div>
       <LoadingRows rows={4} />
@@ -249,7 +249,7 @@ const OverviewSection: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <StatusBadge status={data.system_health} />
-          <span style={{ fontSize: 12, color: '#475569' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
             Uptime {fmtPct(data.uptime_pct ?? 0)} · Engine: <span style={{ color: data.engine_status === 'running' ? 'var(--gain)' : 'var(--loss)' }}>{data.engine_status}</span>
           </span>
         </div>
@@ -301,7 +301,7 @@ const OverviewSection: React.FC = () => {
               { label: 'Engine',       value: data.engine_status,          ok: data.engine_status === 'running' },
             ].map(m => (
               <div key={m.label} style={{
-                background: '#1e293b', borderRadius: 8, padding: '12px 14px',
+                background: 'var(--raised)', borderRadius: 8, padding: '12px 14px',
                 border: `1px solid ${m.ok ? '#16a34a33' : '#dc262633'}`,
               }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
@@ -350,7 +350,7 @@ const OverviewSection: React.FC = () => {
             {infra.health && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Server Resources</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Server Resources</div>
                   <GaugeBar label="CPU"          value={infra.health.cpu_pct}         color="#3b82f6" />
                   <GaugeBar label="Memory"       value={infra.health.mem_pct}         color="#8b5cf6" />
                   <GaugeBar label="Disk"         value={infra.health.disk_pct}        color="#f59e0b" />
@@ -362,8 +362,8 @@ const OverviewSection: React.FC = () => {
                       { label: 'Load 5m',  v: (infra.health.load_avg_5m  ?? 0).toFixed(2) },
                       { label: 'Load 15m', v: (infra.health.load_avg_15m ?? 0).toFixed(2) },
                     ].map(l => (
-                      <div key={l.label} style={{ background: '#1e293b', borderRadius: 6, padding: '6px 10px', flex: 1 }}>
-                        <div style={{ fontSize: 10, color: '#475569' }}>{l.label}</div>
+                      <div key={l.label} style={{ background: 'var(--raised)', borderRadius: 6, padding: '6px 10px', flex: 1 }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{l.label}</div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-dim)' }}>{l.v}</div>
                       </div>
                     ))}
@@ -374,7 +374,7 @@ const OverviewSection: React.FC = () => {
                 <div>
                   {infra.cache && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Redis Cache</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Redis Cache</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
                         {[
                           { label: 'Hit Rate',     value: `${(infra.cache.hit_rate_pct ?? 0).toFixed(1)}%`, color: (infra.cache.hit_rate_pct ?? 0) > 80 ? '#4ade80' : '#fbbf24' },
@@ -384,8 +384,8 @@ const OverviewSection: React.FC = () => {
                           { label: 'Clients',      value: infra.cache.connected_clients ?? 0,               color: '#94a3b8' },
                           { label: 'Ops/sec',      value: (infra.cache.ops_per_sec  ?? 0).toLocaleString(), color: '#a78bfa' },
                         ].map(m => (
-                          <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '8px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
+                          <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '8px 10px' }}>
+                            <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: m.color }}>{m.value}</div>
                           </div>
                         ))}
@@ -394,7 +394,7 @@ const OverviewSection: React.FC = () => {
                   )}
                   {infra.db && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Database</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Database</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         {[
                           { label: 'Connections',  value: `${infra.db.active_connections ?? 0}/${infra.db.max_connections ?? 0}`, color: ((infra.db.active_connections ?? 0) / (infra.db.max_connections || 1)) > 0.8 ? '#f87171' : '#4ade80' },
@@ -403,8 +403,8 @@ const OverviewSection: React.FC = () => {
                           { label: 'Slow Queries', value: infra.db.slow_queries ?? 0,                                        color: (infra.db.slow_queries ?? 0) > 0 ? '#f87171' : '#4ade80' },
                           { label: 'Deadlocks',    value: infra.db.deadlocks ?? 0,                                           color: (infra.db.deadlocks ?? 0) > 0 ? '#f87171' : '#4ade80' },
                         ].map(m => (
-                          <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '8px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
+                          <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '8px 10px' }}>
+                            <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: m.color }}>{m.value}</div>
                           </div>
                         ))}
@@ -418,20 +418,20 @@ const OverviewSection: React.FC = () => {
             {/* Task Queues */}
             {infra.queues.length > 0 && (
               <>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Task Queues</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Task Queues</div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
-                      <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         {['Queue', 'Pending', 'Processing', 'Failed', 'Workers'].map(h => (
-                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {infra.queues.map((q) => (
-                        <tr key={q.name} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                          <td style={{ padding: '8px 12px', fontWeight: 600, color: '#f1f5f9' }}>{q.name}</td>
+                        <tr key={q.name} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{q.name}</td>
                           <td style={{ padding: '8px 12px', color: (q.pending ?? 0) > 100 ? 'var(--warn)' : 'var(--text-dim)', fontWeight: (q.pending ?? 0) > 100 ? 700 : 400 }}>{(q.pending ?? 0).toLocaleString()}</td>
                           <td style={{ padding: '8px 12px', color: 'var(--link)' }}>{(q.processing ?? 0).toLocaleString()}</td>
                           <td style={{ padding: '8px 12px', color: (q.failed ?? 0) > 0 ? 'var(--loss)' : 'var(--gain)', fontWeight: (q.failed ?? 0) > 0 ? 700 : 400 }}>{(q.failed ?? 0).toLocaleString()}</td>

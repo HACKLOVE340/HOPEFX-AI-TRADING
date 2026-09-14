@@ -73,8 +73,8 @@ const StrategyBuilder: React.FC = () => {
     }
   };
 
-  const labelStyle: React.CSSProperties = { fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 4 };
-  const inputStyle: React.CSSProperties = { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: '8px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' };
+  const labelStyle: React.CSSProperties = { fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 4 };
+  const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' };
 
   return (
     <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', color: 'var(--text)' }}>
@@ -91,13 +91,13 @@ const StrategyBuilder: React.FC = () => {
       )}
 
       {showCatalog && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 14, marginBottom: 20 }}>
+        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 14, marginBottom: 20 }}>
           {Object.entries(nodeTypes).map(([group, items]) => (
             <div key={group} style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{group.replace(/_/g, ' ')}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {items.map((it) => (
-                  <span key={it.id} title={(it.params ?? []).join(', ')} style={{ fontSize: 12, padding: '3px 9px', background: '#0f172a', border: '1px solid #334155', borderRadius: 6 }}>{it.name}</span>
+                  <span key={it.id} title={(it.params ?? []).join(', ')} style={{ fontSize: 12, padding: '3px 9px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6 }}>{it.name}</span>
                 ))}
               </div>
             </div>
@@ -111,7 +111,7 @@ const StrategyBuilder: React.FC = () => {
             <div style={{ color: 'var(--text-muted)' }}>No templates available.</div>
           )}
           {templates.map((t) => (
-            <button key={t.id} onClick={() => pick(t)} style={{ textAlign: 'left', cursor: 'pointer', background: selected?.id === t.id ? '#1c2438' : '#1e293b', border: `1px solid ${selected?.id === t.id ? '#3b82f6' : '#334155'}`, borderRadius: 10, padding: '14px 16px', color: 'inherit' }}>
+            <button key={t.id} onClick={() => pick(t)} style={{ textAlign: 'left', cursor: 'pointer', background: selected?.id === t.id ? '#1c2438' : 'var(--raised)', border: `1px solid ${selected?.id === t.id ? '#3b82f6' : '#334155'}`, borderRadius: 10, padding: '14px 16px', color: 'inherit' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <span style={{ fontWeight: 700 }}>{t.name}</span>
                 {t.complexity && <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: COMPLEXITY_COLOR[t.complexity] ?? 'var(--text-dim)' }}>{t.complexity}</span>}
@@ -125,7 +125,7 @@ const StrategyBuilder: React.FC = () => {
 
       {/* Configure & deploy the selected template */}
       {selected && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 20 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 14px' }}>Configure “{selected.name}”</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
             <label>

@@ -289,13 +289,13 @@ const PriceAlerts: React.FC = () => {
           <div key={alert.id} style={s.alertRow}>
             <div style={{ ...s.statusDot, background: STATUS_COLOR[alert.status] ?? '#475569' }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 14 }}>{alert.name}</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 14 }}>{alert.name}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                 {alert.symbol} · {(alert.conditions ?? []).map((c) => `${CONDITION_LABELS[c.type] ?? c.type} ${c.threshold}`).join(', ')}
                 {(alert.notification_channels?.length ?? 0) > 0 && <>{' · '}{alert.notification_channels!.join(', ')}</>}
               </div>
             </div>
-            <div style={{ fontSize: 12, color: '#475569', marginRight: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', marginRight: 12 }}>
               Triggered {alert.trigger_count}×
             </div>
             <button
@@ -334,14 +334,14 @@ const PriceAlerts: React.FC = () => {
               )
           )
           : wsTriggered.map((t) => (
-            <div key={t.id} style={{ ...s.historyRow, background: '#1e293b', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
+            <div key={t.id} style={{ ...s.historyRow, background: 'var(--raised)', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
               <span style={{ color: '#f97316', fontSize: 16 }}>⚡</span>
               <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 13 }}>{t.symbol}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 13 }}>{t.symbol}</span>
                 <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>{t.condition}</span>
                 {t.message && <span style={{ color: 'var(--text-dim)', fontSize: 12, marginLeft: 8 }}>{t.message}</span>}
               </div>
-              <span style={{ fontSize: 12, color: '#475569' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
                 {new Date(t.triggered_at).toLocaleString()}
               </span>
               <button
@@ -361,12 +361,12 @@ const PriceAlerts: React.FC = () => {
           <div key={i} style={s.historyRow}>
             <span style={{ color: '#f97316', fontSize: 13 }}>⚡</span>
             <div style={{ flex: 1 }}>
-              <span style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 13 }}>{t.alert_name}</span>
+              <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 13 }}>{t.alert_name}</span>
               <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>
                 {t.symbol} @ {t.trigger_value}
               </span>
             </div>
-            <span style={{ fontSize: 12, color: '#475569' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
               {new Date(t.triggered_at).toLocaleString()}
             </span>
           </div>
@@ -381,28 +381,28 @@ const PriceAlerts: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:             { padding: 24, maxWidth: 900, margin: '0 auto' },
   header:           { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  title:            { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
+  title:            { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px' },
   subtitle:         { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
   createBtn:        { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 18px' },
-  card:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 },
-  cardTitle:        { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' },
+  card:             { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24, marginBottom: 20 },
+  cardTitle:        { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 16px' },
   formGrid:         { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 },
   label:            { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
-  input:            { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14, boxSizing: 'border-box' },
-  select:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
+  input:            { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14, boxSizing: 'border-box' },
+  select:           { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
   channelRow:       { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
-  channelBtn:       { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', padding: '6px 14px', fontSize: 13 },
+  channelBtn:       { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', padding: '6px 14px', fontSize: 13 },
   channelBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   saveBtn:          { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 24px', marginTop: 8 },
   tabs:             { display: 'flex', gap: 8, marginBottom: 16 },
-  tab:              { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
+  tab:              { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
   tabActive:        { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
-  alertRow:         { display: 'flex', alignItems: 'center', gap: 12, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
+  alertRow:         { display: 'flex', alignItems: 'center', gap: 12, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
   statusDot:        { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
   iconBtn:          { background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', padding: '4px 6px' },
-  historyRow:       { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid #1e293b' },
+  historyRow:       { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' },
   errorBox:         { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
-  empty:            { textAlign: 'center', color: '#475569', padding: 40 },
+  empty:            { textAlign: 'center', color: 'var(--text-faint)', padding: 40 },
 };
 
 export default PriceAlerts;

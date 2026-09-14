@@ -20,7 +20,7 @@ const LatencyBar: React.FC<{ ms: number; max?: number }> = ({ ms, max = 500 }) =
   const color = ms < 50 ? '#4ade80' : ms < 150 ? '#fbbf24' : '#f87171';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: 5, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.5s' }} />
       </div>
       <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 50 }}>{ms}ms</span>
@@ -32,7 +32,7 @@ const FillRateBar: React.FC<{ pct: number }> = ({ pct }) => {
   const color = pct >= 98 ? '#4ade80' : pct >= 90 ? '#fbbf24' : '#f87171';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: 5, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3 }} />
       </div>
       <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 40 }}>{pct.toFixed(1)}%</span>
@@ -151,13 +151,13 @@ const BrokerManagementSection: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
           {brokers.map(b => (
             <div key={b.broker_id} style={{
-              background: '#1e293b', borderRadius: 12, padding: '16px 18px',
+              background: 'var(--raised)', borderRadius: 12, padding: '16px 18px',
               border: `1px solid ${b.status === 'connected' ? '#16a34a33' : b.status === 'degraded' ? '#d9770633' : '#dc262633'}`,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{b.name}</div>
-                  <div style={{ fontSize: 11, color: '#475569' }}>{b.type} · {b.broker_id}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{b.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{b.type} · {b.broker_id}</div>
                 </div>
                 <StatusBadge status={b.status} size="sm" />
               </div>
@@ -177,14 +177,14 @@ const BrokerManagementSection: React.FC = () => {
                   { label: 'Orders Today', value: b.orders_today.toLocaleString() },
                   { label: 'Uptime',      value: `${b.uptime_pct.toFixed(1)}%` },
                 ].map(m => (
-                  <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '6px 8px' }}>
-                    <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
+                  <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '6px 8px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)' }}>{m.value}</div>
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: '#334155' }}>Last heartbeat: {fmtDate(b.last_heartbeat)}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Last heartbeat: {fmtDate(b.last_heartbeat)}</span>
                 {b.status !== 'connected' && (
                   <ActionBtn label="Reconnect" onClick={() => reconnect(b.broker_id)} variant="primary" size="sm" loading={busy === `reconnect-${b.broker_id}`} />
                 )}
@@ -194,7 +194,7 @@ const BrokerManagementSection: React.FC = () => {
               </div>
             </div>
           ))}
-          {brokers.length === 0 && <div style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>No brokers configured.</div>}
+          {brokers.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: '16px 0' }}>No brokers configured.</div>}
         </div>
       </SectionCard>
 
@@ -204,16 +204,16 @@ const BrokerManagementSection: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Broker', 'Avg Slippage', 'Fill Rate', 'Rejection Rate', 'Avg Execution', 'Total Orders', 'Period'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {tca.map(t => (
-                <tr key={t.broker_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{t.broker_name}</td>
+                <tr key={t.broker_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{t.broker_name}</td>
                   <td style={{ padding: '10px 12px', color: t.avg_slippage_pips < 1 ? 'var(--gain)' : t.avg_slippage_pips < 3 ? 'var(--warn)' : 'var(--loss)', fontWeight: 700 }}>
                     {t.avg_slippage_pips.toFixed(2)} pips
                   </td>
@@ -228,7 +228,7 @@ const BrokerManagementSection: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {tca.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No TCA data available.</div>}
+          {tca.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No TCA data available.</div>}
         </div>
       </SectionCard>
 

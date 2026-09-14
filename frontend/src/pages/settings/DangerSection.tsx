@@ -222,9 +222,9 @@ const DangerSection: React.FC = () => {
             onChange={(e) => { setDeleteConfirm(e.target.value); setDeleteError(''); }}
             placeholder='Type "DELETE" to confirm'
             style={{
-              flex: 1, padding: '10px 12px', background: '#0f172a',
+              flex: 1, padding: '10px 12px', background: 'var(--surface)',
               border: `1px solid ${deleteError ? '#ef4444' : '#7f1d1d'}`,
-              borderRadius: 8, color: '#f1f5f9', fontSize: 14, outline: 'none',
+              borderRadius: 8, color: 'var(--text-strong)', fontSize: 14, outline: 'none',
             }}
           />
           <Button

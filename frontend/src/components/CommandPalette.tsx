@@ -297,10 +297,10 @@ export const CommandPalette: React.FC = () => {
           title="Open command palette (Cmd+K)"
           style={{
             position: 'fixed', bottom: 24, left: 24, zIndex: 8000,
-            background: 'var(--surface)', border: '1px solid #1e293b',
+            background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 8, padding: '6px 10px',
             display: 'flex', alignItems: 'center', gap: 6,
-            cursor: 'pointer', fontSize: 11, color: '#475569',
+            cursor: 'pointer', fontSize: 11, color: 'var(--text-faint)',
             boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
             transition: 'border-color 0.15s, color 0.15s',
           }}
@@ -308,7 +308,7 @@ export const CommandPalette: React.FC = () => {
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLDivElement).style.color = '#475569'; }}
         >
           <span style={{ fontSize: 13 }}>⌘</span>
-          <kbd style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontFamily: 'monospace' }}>K</kbd>
+          <kbd style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontFamily: 'monospace' }}>K</kbd>
           <span>Search</span>
         </div>
       </CommandContext.Provider>
@@ -334,7 +334,7 @@ export const CommandPalette: React.FC = () => {
         style={{
           position: 'fixed', top: '18%', left: '50%', transform: 'translateX(-50%)',
           zIndex: 9001, width: '90%', maxWidth: 580,
-          background: 'var(--surface)', border: '1px solid #1e293b',
+          background: 'var(--surface)', border: '1px solid var(--border)',
           borderRadius: 14, boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
           overflow: 'hidden',
           animation: 'cmdSlideIn 0.18s cubic-bezier(0.34,1.56,0.64,1)',
@@ -344,7 +344,7 @@ export const CommandPalette: React.FC = () => {
         <style>{`@keyframes cmdSlideIn { from { transform: translateX(-50%) translateY(-12px) scale(0.97); opacity: 0 } to { transform: translateX(-50%) translateY(0) scale(1); opacity: 1 } }`}</style>
 
         {/* Search input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid #1e293b' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
           <SearchIcon size={16} strokeWidth={2} color="#475569" style={{ flexShrink: 0 }} aria-hidden="true" />
           <input aria-label="Search pages, actions, settings"
             ref={inputRef}
@@ -353,12 +353,12 @@ export const CommandPalette: React.FC = () => {
             placeholder="Search pages, actions, settings…"
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
-              color: '#f1f5f9', fontSize: 15, fontFamily: 'Inter, system-ui, sans-serif',
+              color: 'var(--text-strong)', fontSize: 15, fontFamily: 'Inter, system-ui, sans-serif',
             }}
           />
           <kbd style={{
-            background: '#1e293b', border: '1px solid #334155', borderRadius: 5,
-            padding: '2px 7px', fontSize: 11, color: '#475569', fontFamily: 'monospace', flexShrink: 0,
+            background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 5,
+            padding: '2px 7px', fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace', flexShrink: 0,
           }}>
             Esc
           </kbd>
@@ -367,7 +367,7 @@ export const CommandPalette: React.FC = () => {
         {/* Results */}
         <div style={{ maxHeight: 380, overflowY: 'auto', padding: '8px 0' }}>
           {filtered.length === 0 ? (
-            <div style={{ padding: '24px 16px', textAlign: 'center', color: '#475569', fontSize: 13 }}>
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
               No results for <strong style={{ color: 'var(--text-muted)' }}>"{query}"</strong>
             </div>
           ) : (
@@ -376,7 +376,7 @@ export const CommandPalette: React.FC = () => {
               // when the group header showed its first row's index.
               return (
                 <div key={cat}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '8px 16px 4px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '8px 16px 4px' }}>
                     {cat}
                   </div>
                   {items.map(item => {
@@ -390,10 +390,10 @@ export const CommandPalette: React.FC = () => {
                         style={{
                           display: 'flex', alignItems: 'center', gap: 12,
                           padding: '9px 16px', cursor: 'pointer',
-                          background: isSelected ? '#1e293b' : 'transparent',
+                          background: isSelected ? 'var(--raised)' : 'transparent',
                           // On the row, not the label: the Lucide icon inherits
                           // it through currentColor.
-                          color: isSelected ? '#f1f5f9' : '#cbd5e1',
+                          color: isSelected ? 'var(--text-strong)' : 'var(--text-dim)',
                           transition: 'background 0.1s',
                         }}
                       >
@@ -403,17 +403,17 @@ export const CommandPalette: React.FC = () => {
                             <HighlightMatch text={item.label} query={query} />
                           </div>
                           {item.desc && (
-                            <div style={{ fontSize: 11, color: '#475569', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {item.desc}
                             </div>
                           )}
                         </div>
                         {item.shortcut && (
-                          <kbd style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 6px', fontSize: 10, color: '#475569', fontFamily: 'monospace', flexShrink: 0 }}>
+                          <kbd style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 4, padding: '1px 6px', fontSize: 10, color: 'var(--text-faint)', fontFamily: 'monospace', flexShrink: 0 }}>
                             {item.shortcut}
                           </kbd>
                         )}
-                        {isSelected && <span style={{ color: '#334155', fontSize: 12, flexShrink: 0 }}>↵</span>}
+                        {isSelected && <span style={{ color: 'var(--text-faint)', fontSize: 12, flexShrink: 0 }}>↵</span>}
                       </div>
                     );
                   })}
@@ -424,10 +424,10 @@ export const CommandPalette: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div style={{ borderTop: '1px solid #1e293b', padding: '8px 16px', display: 'flex', gap: 16, fontSize: 11, color: '#334155' }}>
-          <span><kbd style={{ background: '#1e293b', border: '1px solid #1e293b', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>↑↓</kbd> navigate</span>
-          <span><kbd style={{ background: '#1e293b', border: '1px solid #1e293b', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>↵</kbd> open</span>
-          <span><kbd style={{ background: '#1e293b', border: '1px solid #1e293b', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>Esc</kbd> close</span>
+        <div style={{ borderTop: '1px solid var(--border)', padding: '8px 16px', display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-faint)' }}>
+          <span><kbd style={{ background: 'var(--raised)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>↑↓</kbd> navigate</span>
+          <span><kbd style={{ background: 'var(--raised)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>↵</kbd> open</span>
+          <span><kbd style={{ background: 'var(--raised)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>Esc</kbd> close</span>
           <span style={{ marginLeft: 'auto' }}>{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
         </div>
       </div>

@@ -75,7 +75,7 @@ function buildAccCols(
       header: 'Label',
       sortKey: 'label',
       sortable: true,
-      render: (r) => <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{r.label}</span>,
+      render: (r) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{r.label}</span>,
     },
     {
       key: 'broker',
@@ -590,7 +590,7 @@ const SubAccounts: React.FC = () => {
 
 const btnStyle: React.CSSProperties = {
   background: 'transparent',
-  border: '1px solid var(--border, #334155)',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 5,
   color: 'var(--text-dim)',
   cursor: 'pointer',
@@ -602,29 +602,29 @@ const s: Record<string, React.CSSProperties> = {
   page:    { padding: '24px 28px', maxWidth: 1200 },
   metrics: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 28 },
   section: { marginBottom: 32 },
-  sectionTitle: { color: 'var(--text, #f1f5f9)', fontSize: 15, fontWeight: 600, marginBottom: 12 },
+  sectionTitle: { color: 'var(--text, var(--text-strong))', fontSize: 15, fontWeight: 600, marginBottom: 12 },
   primaryBtn: {
     alignItems: 'center', background: '#3b82f6', border: 'none', borderRadius: 6,
     color: '#fff', cursor: 'pointer', display: 'flex', fontSize: 13, fontWeight: 600,
     gap: 6, padding: '7px 16px',
   },
   secondaryBtn: {
-    background: 'transparent', border: '1px solid var(--border, #334155)', borderRadius: 6,
+    background: 'transparent', border: '1px solid var(--border, var(--border-strong))', borderRadius: 6,
     color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
   },
   cancelBtn: {
-    background: 'transparent', border: '1px solid var(--border, #334155)', borderRadius: 6,
+    background: 'transparent', border: '1px solid var(--border, var(--border-strong))', borderRadius: 6,
     color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
   },
   formGrid: { display: 'flex', flexDirection: 'column', gap: 10 },
   label:    { color: 'var(--text-muted, var(--text-dim))', fontSize: 12, fontWeight: 600 },
   input: {
-    background: 'var(--surface-raised, #243044)', border: '1px solid var(--border, #334155)',
-    borderRadius: 6, color: 'var(--text, #f1f5f9)', fontSize: 13, outline: 'none', padding: '8px 12px',
+    background: 'var(--surface-raised, #243044)', border: '1px solid var(--border, var(--border-strong))',
+    borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 13, outline: 'none', padding: '8px 12px',
   },
   select: {
-    background: 'var(--surface, #1e293b)', border: '1px solid var(--border, #334155)',
-    borderRadius: 6, color: 'var(--text, #f1f5f9)', fontSize: 13, padding: '6px 10px',
+    background: 'var(--surface, var(--raised))', border: '1px solid var(--border, var(--border-strong))',
+    borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 13, padding: '6px 10px',
   },
 };
 

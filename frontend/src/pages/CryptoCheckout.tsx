@@ -159,7 +159,7 @@ const PlanCard: React.FC<{ plan: Plan; selected: boolean; onSelect: () => void }
   const accent = PLAN_COLORS[plan.id as keyof typeof PLAN_COLORS] ?? '#475569';
   return (
     <div onClick={onSelect} style={{
-      background: selected ? '#1e3a5f' : '#1e293b',
+      background: selected ? '#1e3a5f' : 'var(--raised)',
       border: '2px solid ' + (selected ? accent : '#334155'),
       borderRadius: 12, padding: '16px 14px', cursor: 'pointer',
       transition: 'border-color 0.15s, background 0.15s',
@@ -168,7 +168,7 @@ const PlanCard: React.FC<{ plan: Plan; selected: boolean; onSelect: () => void }
         textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
         {plan.name}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 8 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-strong)', marginBottom: 8 }}>
         ${plan.price_usd.toLocaleString()}
         <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>/mo</span>
       </div>
@@ -190,7 +190,7 @@ const CryptoButton: React.FC<{ currency: CryptoOption; selected: boolean; onSele
     <button onClick={onSelect} style={{
       display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
       border: '2px solid ' + (selected ? meta.color : '#334155'),
-      background: selected ? meta.color + '18' : '#1e293b',
+      background: selected ? meta.color + '18' : 'var(--raised)',
       borderRadius: 10, cursor: 'pointer', flex: 1, minWidth: 100,
     }}>
       <span style={{ fontSize: 22, color: meta.color }}>{meta.icon}</span>
@@ -218,7 +218,7 @@ const ExpiryCountdown: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
   const secs = remaining % 60;
   const urgent = remaining < 300;
   return (
-    <span style={{ color: urgent ? '#ef4444' : '#f1f5f9', fontWeight: 700 }}>
+    <span style={{ color: urgent ? '#ef4444' : 'var(--text-strong)', fontWeight: 700 }}>
       {mins}:{secs.toString().padStart(2, '0')}
     </span>
   );
@@ -456,7 +456,7 @@ const CryptoCheckout: React.FC = () => {
         </section>
 
         {flwEnabled && (
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
             padding: '20px 24px', marginBottom: 20 }}>
             <div style={{ fontWeight: 600, color: 'var(--text-strong)', marginBottom: 6 }}>Pay with Flutterwave</div>
             <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: '0 0 12px' }}>
@@ -470,11 +470,11 @@ const CryptoCheckout: React.FC = () => {
           </div>
         )}
 
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
           padding: '16px 20px', display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{selectedPlan.name}</span>
+            <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{selectedPlan.name}</span>
             <span style={{ color: 'var(--text-muted)' }}> — ${selectedPlan.price_usd.toLocaleString()}/mo</span>
             {cryptoAmount !== null && (
               <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>
@@ -529,7 +529,7 @@ const CryptoCheckout: React.FC = () => {
               size={180}
               alt={`Payment QR code for ${selectedCrypto} deposit address ${depositInfo.address}`}
               fallback={
-                <div style={{ width: 180, height: 180, background: '#0f172a', border: '1px solid #334155',
+                <div style={{ width: 180, height: 180, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                   borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 8 }}>
                   <span style={{ fontSize: 32 }}>📷</span>
@@ -542,9 +542,9 @@ const CryptoCheckout: React.FC = () => {
           </div>
 
           {/* Address */}
-          <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
             padding: '12px 14px', marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: '#475569', marginBottom: 6 }}>Deposit address</div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 6 }}>Deposit address</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <code style={{ flex: 1, fontSize: 12, color: 'var(--text-dim)', wordBreak: 'break-all',
                 lineHeight: 1.5 }}>{depositInfo.address}</code>
@@ -601,7 +601,7 @@ const CryptoCheckout: React.FC = () => {
               </div>
             )}
           </div>
-          <div style={{ width: '100%', height: 8, background: '#1e293b', borderRadius: 4,
+          <div style={{ width: '100%', height: 8, background: 'var(--raised)', borderRadius: 4,
             overflow: 'hidden', marginBottom: 16 }}>
             <div style={{ height: '100%', borderRadius: 4, background: meta.color,
               width: pct + '%', transition: 'width 0.5s ease' }} />
@@ -637,7 +637,7 @@ const CryptoCheckout: React.FC = () => {
             <Link to="/dashboard" style={{ ...st.proceedBtn, textDecoration: 'none', display: 'inline-block' }}>
               Go to Dashboard →
             </Link>
-            <Link to="/settings" style={{ ...st.proceedBtn, background: '#334155',
+            <Link to="/settings" style={{ ...st.proceedBtn, background: 'var(--surface-hover)',
               textDecoration: 'none', display: 'inline-block' }}>
               Account Settings
             </Link>
@@ -679,7 +679,7 @@ const CryptoCheckout: React.FC = () => {
           <>
             <div style={{
               width: 36, height: 36,
-              border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+              border: '3px solid var(--border)', borderTopColor: '#3b82f6',
               borderRadius: '50%', animation: 'spin 0.7s linear infinite',
               margin: '0 auto 16px',
             }} />
@@ -697,18 +697,18 @@ const CryptoCheckout: React.FC = () => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const st: Record<string, React.CSSProperties> = {
-  page:       { maxWidth: 800, margin: '0 auto', padding: '24px 16px', color: '#f1f5f9' },
+  page:       { maxWidth: 800, margin: '0 auto', padding: '24px 16px', color: 'var(--text-strong)' },
   section:    { marginBottom: 28 },
   sectionTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: '0 0 12px' },
-  card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 16 },
+  card:       { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24, marginBottom: 16 },
   proceedBtn: { padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none',
     borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
-  backBtn:    { background: 'none', border: '1px solid #334155', borderRadius: 6,
+  backBtn:    { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
     color: 'var(--text-dim)', fontSize: 13, padding: '6px 14px', cursor: 'pointer' },
-  copyBtn:    { background: '#334155', border: 'none', borderRadius: 6,
+  copyBtn:    { background: 'var(--surface-hover)', border: 'none', borderRadius: 6,
     color: 'var(--text)', fontSize: 12, padding: '5px 12px', cursor: 'pointer' },
   headerLink: { fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
-    padding: '6px 14px', border: '1px solid #334155', borderRadius: 6 },
+    padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6 },
   warnBox:    { background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
     padding: '10px 14px', color: 'var(--warn)', fontSize: 13, marginBottom: 16 },
   errorBox:   { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,

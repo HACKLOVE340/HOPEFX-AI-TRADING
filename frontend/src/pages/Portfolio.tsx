@@ -281,8 +281,8 @@ const TradeHistory: React.FC = () => {
   ];
 
   const dateInputStyle: React.CSSProperties = {
-    background: '#111827', border: '1px solid #1e2d3d', borderRadius: 4,
-    padding: '2px 6px', fontSize: 10, color: '#94a3b8', outline: 'none',
+    background: 'var(--raised)', border: '1px solid var(--border)', borderRadius: 4,
+    padding: '2px 6px', fontSize: 10, color: 'var(--text-dim)', outline: 'none',
     colorScheme: 'dark' as React.CSSProperties['colorScheme'],
   };
 
@@ -291,12 +291,12 @@ const TradeHistory: React.FC = () => {
       {/* Date range */}
       <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle}
              title="From date" aria-label="From date" />
-      <span style={{ fontSize: 10, color: '#334155' }}>→</span>
+      <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>→</span>
       <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle}
              title="To date" aria-label="To date" />
       {(dateFrom || dateTo) && (
         <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{
-          background: 'transparent', border: 'none', color: '#475569', fontSize: 10, cursor: 'pointer', padding: '0 2px',
+          background: 'transparent', border: 'none', color: 'var(--text-faint)', fontSize: 10, cursor: 'pointer', padding: '0 2px',
         }} title="Clear date filter">✕</button>
       )}
       <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
@@ -317,7 +317,7 @@ const TradeHistory: React.FC = () => {
             padding: '2px 8px', borderRadius: 4,
             background: filter === id ? `${color}18` : 'transparent',
             border: `1px solid ${filter === id ? `${color}50` : 'var(--border)'}`,
-            color: filter === id ? color : '#475569',
+            color: filter === id ? color : 'var(--text-faint)',
             fontSize: 9, fontWeight: 700, letterSpacing: 0.8, cursor: 'pointer',
           }}
         >

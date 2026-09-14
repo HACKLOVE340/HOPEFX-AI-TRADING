@@ -115,7 +115,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     key: 'detail',
     header: 'Detail',
     render: (row) => (
-      <span style={{ color: '#cbd5e1', fontSize: 13 }}>{row.detail || '—'}</span>
+      <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>{row.detail || '—'}</span>
     ),
   },
   {
@@ -354,10 +354,10 @@ const s: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap',
   },
   input: {
-    background: 'var(--surface, #1e293b)',
-    border: '1px solid var(--border, #334155)',
+    background: 'var(--surface, var(--raised))',
+    border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
-    color: 'var(--text, #f1f5f9)',
+    color: 'var(--text, var(--text-strong))',
     fontSize: 13,
     padding: '7px 12px',
     width: 220,
@@ -375,7 +375,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   clearBtn: {
     background: 'transparent',
-    border: '1px solid var(--border, #334155)',
+    border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
     color: 'var(--text-muted, var(--text-dim))',
     cursor: 'pointer',
@@ -385,7 +385,7 @@ const s: Record<string, React.CSSProperties> = {
   exportBtn: {
     alignItems: 'center',
     background: 'transparent',
-    border: '1px solid var(--border, #334155)',
+    border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
     color: 'var(--text-muted, var(--text-dim))',
     cursor: 'pointer',
@@ -403,7 +403,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   pageBtn: {
     background: 'transparent',
-    border: '1px solid var(--border, #334155)',
+    border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
     color: 'var(--text-dim)',
     cursor: 'pointer',

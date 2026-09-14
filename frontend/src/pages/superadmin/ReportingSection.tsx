@@ -163,7 +163,7 @@ const ReportingSection: React.FC = () => {
           <ActionBtn label="Refresh" onClick={load} accent="#475569" size="sm" />
         }>
         {reports.length === 0 ? (
-          <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>
+          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>
             No reports generated yet. Use the form above to generate your first report.
           </div>
         ) : (
@@ -171,13 +171,13 @@ const ReportingSection: React.FC = () => {
             <thead>
               <tr>
                 {['Report', 'Type', 'Status', 'Generated', 'Size', 'Actions'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {reports.map(r => (
-                <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 16px' }}>
                     <div style={{ fontWeight: 600, fontSize: 13, fontFamily: 'monospace', color: 'var(--text-strong)' }}>{r.report_id}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{r.period}</div>

@@ -167,7 +167,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
           </style>
 
           <div style={{
-            background: 'var(--surface)', border: '1px solid #1e293b',
+            background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 14, padding: '28px 28px 24px',
             maxWidth: 420, width: '90%',
             boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
@@ -183,7 +183,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
               {variant === 'danger' ? '🗑' : variant === 'warning' ? '⚠️' : '❓'}
             </div>
 
-            <h2 id="confirm-title" style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>
+            <h2 id="confirm-title" style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' }}>
               {opts.title}
             </h2>
 
@@ -198,7 +198,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                 autoFocus
                 onClick={() => resolve(false)}
                 style={{
-                  background: 'transparent', border: '1px solid #334155',
+                  background: 'transparent', border: '1px solid var(--border-strong)',
                   borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
                   fontSize: 13, fontWeight: 600, padding: '9px 18px',
                 }}

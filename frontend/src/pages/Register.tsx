@@ -81,7 +81,7 @@ function PasswordStrengthBar({ password }: { password: string }) {
             key={i}
             style={{
               flex: 1, height: 3, borderRadius: 2,
-              background: i <= strength.score ? strength.color : '#1e293b',
+              background: i <= strength.score ? strength.color : 'var(--raised)',
               transition: 'background 0.2s',
             }}
           />
@@ -101,7 +101,7 @@ function PasswordStrengthBar({ password }: { password: string }) {
 function shimBar(w: number | string, h: number, mb = 0): React.CSSProperties {
   return {
     width: w, height: h, marginBottom: mb, borderRadius: 6,
-    background: 'linear-gradient(90deg,#1e293b 25%,#334155 50%,#1e293b 75%)',
+    background: 'linear-gradient(90deg,var(--raised) 25%,var(--surface-hover) 50%,var(--raised) 75%)',
     backgroundSize: '200% 100%',
     animation: 'shimmer 1.4s infinite',
   };
@@ -493,7 +493,7 @@ const s: Record<string, React.CSSProperties> = {
   label:     { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   fieldHint: { fontSize: 11, color: 'var(--text-muted)', marginTop: 4 },
   input: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     padding: '12px 14px',
     fontSize: 16, /* prevents iOS zoom on focus */
     color: 'var(--text-strong)', outline: 'none',
@@ -531,7 +531,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     touchAction: 'manipulation',
   },
-  terms:  { fontSize: 11, color: '#475569', textAlign: 'center', lineHeight: 1.6, margin: 0 },
+  terms:  { fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', lineHeight: 1.6, margin: 0 },
   footer: { textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--text-muted)' },
   link:   { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };

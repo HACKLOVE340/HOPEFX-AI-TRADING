@@ -64,7 +64,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 22 }}>{isLong ? '▲' : '▼'}</span>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9', fontFamily: 'monospace' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'monospace' }}>
                 {signal.symbol.replace('_', '/')}
               </div>
               <div style={{ fontSize: 11, color: accentColor, fontWeight: 700, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -141,7 +141,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
           </div>
 
           {/* Timestamp */}
-          <div style={{ fontSize: 11, color: '#475569', textAlign: 'right' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'right' }}>
             Generated {fmtRelative(signal.generated_at)}
           </div>
 
@@ -162,7 +162,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
               onClick={onClose}
               style={{
                 padding: '12px 20px',
-                background: 'transparent', border: '1px solid #334155',
+                background: 'transparent', border: '1px solid var(--border-strong)',
                 borderRadius: 8, color: 'var(--text-muted)', fontSize: 13,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
@@ -234,7 +234,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
           }}>
             {signal.status}
           </span>
-          <span style={{ fontSize: 9, color: '#475569', fontFamily: 'monospace' }}>{fmtRelative(signal.generated_at)}</span>
+          <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{fmtRelative(signal.generated_at)}</span>
         </div>
       </div>
 
@@ -264,7 +264,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
 
       {/* Footer */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-        <span style={{ fontSize: 9, color: '#475569', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+        <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
           {signal.model}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -299,7 +299,7 @@ function PositionRow({ pos }: { pos: import('../../types').Position }) {
         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>×{pos.size}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace' }}>@ {fmtPrice(pos.entry_price)}</span>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'monospace' }}>@ {fmtPrice(pos.entry_price)}</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: pnlColor, fontFamily: 'monospace' }}>
           {(pos.unrealized_pnl ?? 0) >= 0 ? '+' : ''}${(pos.unrealized_pnl ?? 0).toFixed(2)}
         </span>
@@ -359,7 +359,7 @@ export function LiveSignalFeed() {
       <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--bull)', fontWeight: 700 }}>
         {activeCount} active
       </span>
-      <span style={{ fontSize: 10, color: '#334155' }}>|</span>
+      <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>|</span>
       <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
         {openPositions.length} pos
       </span>
@@ -394,7 +394,7 @@ export function LiveSignalFeed() {
                 padding: '3px 10px', borderRadius: 4,
                 background: filter === id ? `${color}20` : 'transparent',
                 border: `1px solid ${filter === id ? `${color}60` : '#1e293b'}`,
-                color: filter === id ? color : '#475569',
+                color: filter === id ? color : 'var(--text-faint)',
                 fontSize: 9, fontWeight: 700, letterSpacing: 1,
                 cursor: 'pointer', fontFamily: 'monospace',
                 transition: 'all 0.15s ease',
@@ -432,7 +432,7 @@ export function LiveSignalFeed() {
               justifyContent: 'center', padding: '32px 16px', gap: 8,
             }}>
               <span style={{ fontSize: 24, opacity: 0.3 }}>📡</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
                 {signals.length === 0 ? 'Awaiting signals from inference engine…' : `No ${filter} signals`}
               </span>
             </div>

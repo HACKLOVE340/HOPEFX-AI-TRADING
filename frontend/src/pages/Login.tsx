@@ -56,7 +56,7 @@ function SkeletonField() {
 function shimBar(w: number | string, h: number, mb = 0): React.CSSProperties {
   return {
     width: w, height: h, marginBottom: mb, borderRadius: 6,
-    background: 'linear-gradient(90deg,#1e293b 25%,#334155 50%,#1e293b 75%)',
+    background: 'linear-gradient(90deg,var(--raised) 25%,var(--surface-hover) 50%,var(--raised) 75%)',
     backgroundSize: '200% 100%',
     animation: 'shimmer 1.4s infinite',
   };
@@ -290,11 +290,11 @@ const Login: React.FC = () => {
 
         <div style={s.footer}>
           <Link to="/register" style={s.link}>Create account</Link>
-          <span style={{ color: '#334155' }}>·</span>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
           <Link to="/forgot-password" style={s.link}>Forgot password</Link>
-          <span style={{ color: '#334155' }}>·</span>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
           <Link to="/status" style={s.link}>System Status</Link>
-          <span style={{ color: '#334155' }}>·</span>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
           <a href="mailto:support@hopefx.io" style={s.link}>Support</a>
         </div>
       </div>
@@ -349,8 +349,8 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6,
   },
   input: {
-    background: '#0f172a',
-    border: '1px solid #334155',
+    background: 'var(--surface)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 8,
     padding: '12px 14px',
     /* 16px prevents iOS Safari from zooming on focus */

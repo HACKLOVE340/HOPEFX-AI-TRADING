@@ -237,9 +237,9 @@ const ComplianceSection: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Status', 'Document', 'Country', 'Submitted', 'Reviewed', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -247,10 +247,10 @@ const ComplianceSection: React.FC = () => {
               {kyc.map(k => {
                 const sc = KYC_STATUS_COLORS[k.kyc_status] ?? KYC_STATUS_COLORS_DEFAULT;
                 return (
-                  <tr key={k.user_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <tr key={k.user_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 12px' }}>
-                      <div style={{ fontWeight: 600, color: '#f1f5f9' }}>{k.username}</div>
-                      <div style={{ fontSize: 11, color: '#475569' }}>{k.email}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{k.username}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{k.email}</div>
                     </td>
                     <td style={{ padding: '10px 12px' }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: sc.color, background: sc.bg, border: `1px solid ${sc.color}33`, borderRadius: 4, padding: '2px 7px' }}>
@@ -274,7 +274,7 @@ const ComplianceSection: React.FC = () => {
               })}
             </tbody>
           </table>
-          {kyc.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No KYC records match the current filter.</div>}
+          {kyc.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No KYC records match the current filter.</div>}
         </div>
         {confirm?.action === 'reject' && (
           <div style={{ marginTop: 12 }}>
@@ -289,16 +289,16 @@ const ComplianceSection: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Type', 'Severity', 'Amount', 'Description', 'Status', 'Date', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {aml.map(a => (
-                <tr key={a.alert_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{a.username}</td>
+                <tr key={a.alert_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{a.username}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{a.alert_type}</td>
                   <td style={{ padding: '10px 12px' }}><SeverityBadge severity={a.severity} /></td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--loss)' }}>{a.amount.toLocaleString()} {a.currency}</td>
@@ -323,7 +323,7 @@ const ComplianceSection: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {aml.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No AML alerts.</div>}
+          {aml.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No AML alerts.</div>}
         </div>
       </SectionCard>
 
@@ -333,16 +333,16 @@ const ComplianceSection: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'List', 'Match Score', 'Status', 'Date', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {sanctions.map(s => (
-                <tr key={s.hit_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{s.username}</td>
+                <tr key={s.hit_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{s.username}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{s.list_name}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -352,7 +352,7 @@ const ComplianceSection: React.FC = () => {
                       <div
                         role="img"
                         aria-label={`Sanctions match score ${(s.match_score * 100).toFixed(0)} percent for ${s.username} against ${s.list_name}`}
-                        style={{ flex: 1, height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden', minWidth: 80 }}
+                        style={{ flex: 1, height: 6, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden', minWidth: 80 }}
                       >
                         <div style={{ height: '100%', width: `${s.match_score * 100}%`, background: s.match_score > 0.8 ? '#ef4444' : s.match_score > 0.6 ? '#f59e0b' : '#22c55e', borderRadius: 3 }} />
                       </div>
@@ -373,7 +373,7 @@ const ComplianceSection: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {sanctions.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No sanctions hits.</div>}
+          {sanctions.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No sanctions hits.</div>}
         </div>
       </SectionCard>
 

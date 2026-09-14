@@ -114,7 +114,7 @@ const LogsSection: React.FC = () => {
             {Object.entries(logLevels).map(([logger, level]) => (
               <div key={logger} style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                background: '#1e293b', borderRadius: 8, padding: '8px 12px',
+                background: 'var(--raised)', borderRadius: 8, padding: '8px 12px',
               }}>
                 <span style={{ fontSize: 12, color: 'var(--text-dim)', minWidth: 120 }}>{logger}</span>
                 <select
@@ -122,7 +122,7 @@ const LogsSection: React.FC = () => {
                   onChange={e => setLevel(logger, e.target.value)}
                   disabled={savingLevel === logger}
                   style={{
-                    background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
+                    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 5,
                     color: LEVEL_COLORS[level]?.color ?? 'var(--text-dim)',
                     fontSize: 12, padding: '4px 8px', cursor: 'pointer',
                   }}
@@ -132,7 +132,7 @@ const LogsSection: React.FC = () => {
                   ))}
                 </select>
                 {savingLevel === logger && (
-                  <div style={{ width: 12, height: 12, border: '2px solid #334155', borderTopColor: 'var(--link)', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
+                  <div style={{ width: 12, height: 12, border: '2px solid var(--border-strong)', borderTopColor: 'var(--link)', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
                 )}
               </div>
             ))}
@@ -160,7 +160,7 @@ const LogsSection: React.FC = () => {
         }
       >
         {/* Filters */}
-        <div style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid #1e293b', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
           <Select
             value={levelFilter}
             onChange={e => setLevelFilter(e.target.value)}
@@ -197,19 +197,19 @@ const LogsSection: React.FC = () => {
             fontSize: 12, background: '#020817',
           }}>
             {loading && filteredLogs.length === 0 ? (
-              <div style={{ padding: 20, color: '#475569' }}>Loading logs…</div>
+              <div style={{ padding: 20, color: 'var(--text-faint)' }}>Loading logs…</div>
             ) : filteredLogs.length === 0 ? (
-              <div style={{ padding: 20, color: '#475569' }}>No log entries match the current filters.</div>
+              <div style={{ padding: 20, color: 'var(--text-faint)' }}>No log entries match the current filters.</div>
             ) : (
               filteredLogs.map((l, i) => {
                 const lc = LEVEL_COLORS[l.level] ?? LEVEL_COLORS_DEFAULT;
                 return (
                   <div key={i} style={{
                     display: 'flex', gap: 0, padding: '3px 0',
-                    background: i % 2 === 0 ? 'transparent' : '#0a0f1a',
+                    background: i % 2 === 0 ? 'transparent' : 'var(--bg)',
                     borderLeft: `3px solid ${lc.color}33`,
                   }}>
-                    <span style={{ color: '#334155', padding: '0 10px', flexShrink: 0, minWidth: 160 }}>
+                    <span style={{ color: 'var(--text-faint)', padding: '0 10px', flexShrink: 0, minWidth: 160 }}>
                       {new Date(l.ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                     <span style={{
@@ -219,14 +219,14 @@ const LogsSection: React.FC = () => {
                     }}>
                       {l.level}
                     </span>
-                    <span style={{ color: '#475569', padding: '0 10px', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: 'var(--text-faint)', padding: '0 10px', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {l.logger}
                     </span>
                     <span style={{ color: 'var(--text-dim)', paddingRight: 12, flex: 1 }}>
                       {l.message}
                     </span>
                     {l.trace_id && (
-                      <span style={{ color: '#334155', paddingRight: 12, flexShrink: 0, fontSize: 10 }}>
+                      <span style={{ color: 'var(--text-faint)', paddingRight: 12, flexShrink: 0, fontSize: 10 }}>
                         {l.trace_id.slice(0, 8)}
                       </span>
                     )}

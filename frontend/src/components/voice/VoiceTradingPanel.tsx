@@ -140,7 +140,7 @@ const VoiceTradingPanel: React.FC = () => {
           type="button"
           onClick={() => (voice.listening ? voice.stopListening() : voice.startListening(onFinal))}
           style={{
-            background: voice.listening ? '#dc2626' : '#1e293b',
+            background: voice.listening ? '#dc2626' : 'var(--raised)',
             border: `1px solid ${voice.listening ? '#ef4444' : '#334155'}`,
             borderRadius: 9, color: voice.listening ? '#fff' : 'var(--text)',
             cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '9px 16px',
@@ -166,11 +166,11 @@ const VoiceTradingPanel: React.FC = () => {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: 'var(--surface)', border: '1px solid #334155', borderRadius: 14,
+              background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 14,
               padding: 24, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
             }}
           >
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#f1f5f9', marginBottom: 8 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-strong)', marginBottom: 8 }}>
               {pending.kind === 'kill_switch' ? '⚠️ Confirm kill switch' : 'Confirm trade'}
             </div>
             {heard && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>Heard: “{heard}”</div>}
@@ -186,7 +186,7 @@ const VoiceTradingPanel: React.FC = () => {
                 type="button"
                 onClick={cancel}
                 disabled={busy}
-                style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 9, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '9px 18px' }}
+                style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 9, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '9px 18px' }}
               >
                 Cancel
               </button>
@@ -211,7 +211,7 @@ const VoiceTradingPanel: React.FC = () => {
 };
 
 const panelStyle: React.CSSProperties = {
-  background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12, padding: 16,
+  background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16,
 };
 
 function fmtNum(v: number | undefined): string {

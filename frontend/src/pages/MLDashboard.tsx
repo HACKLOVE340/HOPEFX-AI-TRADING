@@ -182,7 +182,7 @@ const MLDashboard: React.FC = () => {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
             {tiles.map((t) => (
-              <div key={t.label} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' }}>
+              <div key={t.label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>{t.value}</div>
               </div>
@@ -190,13 +190,13 @@ const MLDashboard: React.FC = () => {
           </div>
 
           <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Shadow Models</h2>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12, marginBottom: 20 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12, marginBottom: 20 }}>
             {Object.keys(shadows).length === 0 ? (
               <div style={{ color: 'var(--text-muted)', padding: 8 }}>No shadow deployments.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {Object.entries(shadows).map(([id]) => (
-                  <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: '#0f172a', borderRadius: 8 }}>
+                  <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: 'var(--surface)', borderRadius: 8 }}>
                     <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 12 }}>{id}</span>
                     <button onClick={() => promote(id)} disabled={busy === `promote:${id}`}
                       style={{ padding: '4px 12px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, color: 'var(--gain)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
@@ -209,13 +209,13 @@ const MLDashboard: React.FC = () => {
           </div>
 
           <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Retrain / Promotion History</h2>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12 }}>
             {history.length === 0 ? (
               <div style={{ color: 'var(--text-muted)', padding: 8 }}>No retrain history yet.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {history.map((h, i) => (
-                  <div key={i} style={{ padding: '6px 10px', background: '#0f172a', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', color: 'var(--text-dim)', wordBreak: 'break-all' }}>
+                  <div key={i} style={{ padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', color: 'var(--text-dim)', wordBreak: 'break-all' }}>
                     {typeof h === 'string' ? h : JSON.stringify(h)}
                   </div>
                 ))}

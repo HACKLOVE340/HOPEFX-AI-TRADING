@@ -45,7 +45,7 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     aria-label={onClick ? `${label}: ${value}${title ? ` — ${title}` : ''}` : undefined}
     title={onClick ? title : undefined}
     style={{
-      background: '#0f172a',
+      background: 'var(--surface)',
       border: `1px solid #1e293b`,
       borderTop: `3px solid ${accent}`,
       borderRadius: 12,
@@ -77,7 +77,7 @@ export const KpiTile: React.FC<KpiTileProps> = ({
           {trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—'} {trendValue}
         </span>
       )}
-      {sub && <span style={{ fontSize: 11, color: '#475569' }}>{sub}</span>}
+      {sub && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{sub}</span>}
     </div>
   </div>
 );
@@ -101,8 +101,8 @@ export const SectionCard: React.FC<SectionCardProps> = ({
   title, subtitle, icon, accent = '#3b82f6', actions, children, noPad,
 }) => (
   <div style={{
-    background: '#0f172a',
-    border: '1px solid #1e293b',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: 14,
     overflow: 'hidden',
     marginBottom: 20,
@@ -110,7 +110,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '16px 20px',
-      borderBottom: '1px solid #1e293b',
+      borderBottom: '1px solid var(--border)',
       background: '#0a1628',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -125,8 +125,8 @@ export const SectionCard: React.FC<SectionCardProps> = ({
           </div>
         )}
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 12, color: '#475569', marginTop: 1 }}>{subtitle}</div>}
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 1 }}>{subtitle}</div>}
         </div>
       </div>
       {actions && <div style={{ display: 'flex', gap: 8 }}>{actions}</div>}
@@ -295,8 +295,8 @@ export const Input: React.FC<InputProps> = ({ label, style, ...rest }) => (
     <input
       {...rest}
       style={{
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
-        color: '#f1f5f9', fontSize: 13, padding: '8px 12px',
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
+        color: 'var(--text-strong)', fontSize: 13, padding: '8px 12px',
         outline: 'none', width: '100%', boxSizing: 'border-box',
         ...style,
       }}
@@ -317,8 +317,8 @@ export const Select: React.FC<SelectProps> = ({ label, options, style, ...rest }
     <select
       {...rest}
       style={{
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
-        color: '#f1f5f9', fontSize: 13, padding: '8px 12px',
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
+        color: 'var(--text-strong)', fontSize: 13, padding: '8px 12px',
         outline: 'none', width: '100%', boxSizing: 'border-box',
         cursor: 'pointer',
         ...style,
@@ -376,7 +376,7 @@ export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onC
 // ── Divider ───────────────────────────────────────────────────────────────────
 
 export const Divider: React.FC = () => (
-  <div style={{ height: 1, background: '#1e293b', margin: '8px 0' }} />
+  <div style={{ height: 1, background: 'var(--raised)', margin: '8px 0' }} />
 );
 
 // ── Empty State ───────────────────────────────────────────────────────────────
@@ -387,7 +387,7 @@ export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> =
   icon = <Inbox size={22} strokeWidth={1.5} aria-hidden />,
   message,
 }) => (
-  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
+  <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-faint)' }}>
     <div style={{ fontSize: 32, marginBottom: 10 }}>{icon}</div>
     <div style={{ fontSize: 13 }}>{message}</div>
   </div>
@@ -401,7 +401,7 @@ export const ErrorState: React.FC<{ message: string; onRetry?: () => void }> = (
     <div style={{ fontSize: 13, color: 'var(--loss)', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
     {onRetry && (
       <button onClick={onRetry} style={{
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
         color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '6px 14px',
       }}>
         Retry
@@ -416,7 +416,7 @@ export const LoadingRows: React.FC<{ rows?: number }> = ({ rows = 5 }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
     {Array.from({ length: rows }).map((_, i) => (
       <div key={i} style={{
-        height: 40, borderRadius: 6, background: '#1e293b',
+        height: 40, borderRadius: 6, background: 'var(--raised)',
         animation: 'sa-pulse 1.5s ease-in-out infinite',
         animationDelay: `${i * 0.1}s`,
         opacity: 1 - i * 0.1,
@@ -461,7 +461,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   }}>
     <div style={{
-      background: '#0f172a', border: `1px solid ${resolvedVariant === 'danger' ? '#7f1d1d' : '#92400e'}`,
+      background: 'var(--surface)', border: `1px solid ${resolvedVariant === 'danger' ? '#7f1d1d' : '#92400e'}`,
       borderRadius: 14, padding: '28px 32px', maxWidth: 420, width: '90%',
     }}>
       <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 10 }}>{title}</div>

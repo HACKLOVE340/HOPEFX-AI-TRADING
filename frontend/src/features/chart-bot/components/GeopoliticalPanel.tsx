@@ -245,15 +245,15 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)',
   },
   timestamp: {
-    fontSize: 10, color: '#334155',
+    fontSize: 10, color: 'var(--text-faint)',
   },
-  loading: { color: '#475569', textAlign: 'center', padding: 16 },
+  loading: { color: 'var(--text-faint)', textAlign: 'center', padding: 16 },
   error:   { color: '#ff6600', textAlign: 'center', padding: 16 },
 
   // Gauge
   gaugeWrap: { display: 'flex', flexDirection: 'column', gap: 4 },
   gaugeHeader: { display: 'flex', justifyContent: 'space-between' },
-  gaugeLabel: { fontSize: 10, color: '#475569', letterSpacing: 1.5, fontWeight: 700 },
+  gaugeLabel: { fontSize: 10, color: 'var(--text-faint)', letterSpacing: 1.5, fontWeight: 700 },
   gaugeScore: { fontSize: 12, fontWeight: 700 },
   gaugeTrack: {
     position: 'relative', height: 6, background: '#1a2e4a', borderRadius: 3,
@@ -264,7 +264,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   gaugeMarker: {
     position: 'absolute', top: -2, width: 1, height: 10,
-    background: '#334155', transform: 'translateX(-50%)',
+    background: 'var(--surface-hover)', transform: 'translateX(-50%)',
   },
 
   // Outlook + signal
@@ -282,7 +282,7 @@ const s: Record<string, React.CSSProperties> = {
   // Counts
   countsGrid: { display: 'flex', gap: 12 },
   countRow: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
-  countLabel: { fontSize: 9, color: '#475569', letterSpacing: 1.5, fontWeight: 700 },
+  countLabel: { fontSize: 9, color: 'var(--text-faint)', letterSpacing: 1.5, fontWeight: 700 },
   countValue: { fontSize: 18, fontWeight: 900 },
 
   // Regions
@@ -295,12 +295,12 @@ const s: Record<string, React.CSSProperties> = {
 
   // Events
   eventsSection: { display: 'flex', flexDirection: 'column', gap: 6 },
-  sectionLabel: { fontSize: 9, color: '#475569', letterSpacing: 2, fontWeight: 700 },
+  sectionLabel: { fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700 },
   eventItem: { display: 'flex', alignItems: 'flex-start', gap: 8 },
   severityDot: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 3 },
   eventContent: { display: 'flex', flexDirection: 'column', gap: 1 },
-  eventTitle: { fontSize: 11, color: '#cbd5e1', lineHeight: 1.3 },
-  eventMeta: { fontSize: 9, color: '#475569' },
+  eventTitle: { fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.3 },
+  eventMeta: { fontSize: 9, color: 'var(--text-faint)' },
 
   // Recommendations
   recsSection: { display: 'flex', flexDirection: 'column', gap: 4 },

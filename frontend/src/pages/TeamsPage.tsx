@@ -82,7 +82,7 @@ function RoleBadge({ role }: { role: string }) {
 
 function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 16px' }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px' }}>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, color: color ?? 'var(--text)' }}>{value}</div>
     </div>
@@ -135,19 +135,19 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
   const isOwner = detailData?.owner_id === currentUser?.id;
 
   return (
-    <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24 }}>
+    <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{detailData?.name}</h2>
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{detailData?.description}</p>
         </div>
         <button onClick={onClose}
-          style={{ padding: '6px 10px', background: '#334155', color: 'var(--text-dim)', border: 'none',
+          style={{ padding: '6px 10px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
             borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>✕</button>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #334155', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border-strong)', paddingBottom: 0 }}>
         {(['members', 'performance'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
@@ -168,10 +168,10 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <input aria-label="Email address" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                   placeholder="Email address"
-                  style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
+                  style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
                     padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
                 <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
-                  style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
                     padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
                   <option value="trader">Trader</option>
                   <option value="manager">Manager</option>
@@ -203,9 +203,9 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
             {members.map(m => (
               <div key={m.user_id} style={{
                 display: 'flex', alignItems: 'center', gap: 12,
-                background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px',
+                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px',
               }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#334155',
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--surface-hover)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 13, fontWeight: 700, color: 'var(--text-dim)', flexShrink: 0 }}>
                   {m.username?.[0]?.toUpperCase() ?? '?'}
@@ -242,7 +242,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
             <StatCard label="Max Drawdown" value={Number.isFinite(perf.max_drawdown_pct) ? `${perf.max_drawdown_pct.toFixed(1)}%` : '—'}
               color="#ef4444" />
           </div>
-          <div style={{ fontSize: 11, color: '#475569', textAlign: 'right' }}>Period: {perf.period}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'right' }}>Period: {perf.period}</div>
         </div>
       )}
 
@@ -323,15 +323,15 @@ const TeamsPage: React.FC = () => {
 
       {/* Create form */}
       {showCreate && (
-        <div style={{ background: '#1e293b', border: '1px solid #06b6d444', borderRadius: 12,
+        <div style={{ background: 'var(--raised)', border: '1px solid #06b6d444', borderRadius: 12,
           padding: 20, marginBottom: 20 }}>
           <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Create Team</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <input aria-label="Team name" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Team name"
-              style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
+              style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
                 padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
             <input aria-label="Description (optional)" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)"
-              style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
+              style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
                 padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -342,7 +342,7 @@ const TeamsPage: React.FC = () => {
               {createMut.isPending ? 'Creating…' : 'Create'}
             </button>
             <button onClick={() => setShowCreate(false)}
-              style={{ padding: '8px 14px', background: '#334155', color: 'var(--text-dim)', border: 'none',
+              style={{ padding: '8px 14px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
                 borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
               Cancel
             </button>
@@ -360,7 +360,7 @@ const TeamsPage: React.FC = () => {
         <div>
           {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading…</div>}
           {!isLoading && teams.length === 0 && (
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+            <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>👥</div>
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No teams yet</div>
@@ -371,7 +371,7 @@ const TeamsPage: React.FC = () => {
             {teams.map(t => (
               <div key={t.team_id} onClick={() => setSelected(t)}
                 style={{
-                  background: selected?.team_id === t.team_id ? '#0c2340' : '#1e293b',
+                  background: selected?.team_id === t.team_id ? '#0c2340' : 'var(--raised)',
                   border: `1px solid ${selected?.team_id === t.team_id ? '#06b6d4' : '#334155'}`,
                   borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
                 }}>

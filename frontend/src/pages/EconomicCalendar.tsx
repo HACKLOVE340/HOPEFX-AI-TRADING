@@ -115,14 +115,14 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
   return (
     <div style={{ ...s.eventRow, borderLeft: `3px solid ${color}` }}>
       <div style={s.eventTime}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{formatTime(ev.scheduled_time)}</div>
-        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{formatCountdown(mins)}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{formatTime(ev.scheduled_time)}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{formatCountdown(mins)}</div>
       </div>
 
       <div style={s.eventMain}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>{flag}</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{ev.title}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{ev.title}</span>
           {ev.currency && <span style={s.currencyBadge}>{ev.currency}</span>}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -156,7 +156,7 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
                 depends on the indicator, so show the comparison and leave the
                 reading to the trader. */}
             <span
-              style={{ ...s.dataValue, color: '#f1f5f9' }}
+              style={{ ...s.dataValue, color: 'var(--text-strong)' }}
               title={
                 ev.forecast === null
                   ? undefined
@@ -296,7 +296,7 @@ const EconomicCalendar: React.FC = () => {
               disabled={savingPause}
               style={{
                 ...s.toggleBtn,
-                background: autoPause.enabled ? '#166534' : '#334155',
+                background: autoPause.enabled ? '#166534' : 'var(--surface-hover)',
                 color:      autoPause.enabled ? 'var(--gain)' : 'var(--text-dim)',
                 opacity:    savingPause ? 0.6 : 1,
               }}
@@ -405,24 +405,24 @@ const EconomicCalendar: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:          { padding: 24, maxWidth: 960, margin: '0 auto' },
   header:        { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 16 },
-  title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
+  title:         { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px' },
   subtitle:      { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
-  autoPauseCard: { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 16px', minWidth: 260 },
+  autoPauseCard: { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '12px 16px', minWidth: 260 },
   toggleBtn:     { border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 14px', fontWeight: 700, fontSize: 13 },
   tabs:          { display: 'flex', gap: 8, marginBottom: 20 },
-  tab:           { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
+  tab:           { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
   tabActive:     { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   dayGroup:      { marginBottom: 24 },
-  dayHeader:     { fontSize: 13, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #1e293b' },
-  eventRow:      { display: 'flex', alignItems: 'center', gap: 16, background: '#1e293b', borderRadius: 8, padding: '12px 16px', marginBottom: 6 },
+  dayHeader:     { fontSize: 13, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border)' },
+  eventRow:      { display: 'flex', alignItems: 'center', gap: 16, background: 'var(--raised)', borderRadius: 8, padding: '12px 16px', marginBottom: 6 },
   eventTime:     { minWidth: 60, textAlign: 'center' },
   eventMain:     { flex: 1 },
   eventData:     { display: 'flex', gap: 16 },
   dataItem:      { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 60 },
-  dataLabel:     { fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 },
-  dataValue:     { fontSize: 14, fontWeight: 600, color: '#f1f5f9', marginTop: 2 },
-  currencyBadge: { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '1px 6px' },
-  empty:         { textAlign: 'center', color: '#475569', padding: 40 },
+  dataLabel:     { fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dataValue:     { fontSize: 14, fontWeight: 600, color: 'var(--text-strong)', marginTop: 2 },
+  currencyBadge: { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '1px 6px' },
+  empty:         { textAlign: 'center', color: 'var(--text-faint)', padding: 40 },
   errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
 };
 

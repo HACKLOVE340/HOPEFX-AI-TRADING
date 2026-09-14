@@ -35,17 +35,17 @@ const ConfidenceMeter: React.FC<{ value: number; raw?: number }> = ({ value, raw
   return (
     <div style={{ minWidth: 0, flex: 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
           Confidence
         </span>
         <span style={{ fontSize: 12, fontWeight: 700, color }}>
           {(calibrated * 100).toFixed(0)}%
           {raw != null && Number.isFinite(raw) && (
-            <span style={{ color: '#475569', fontWeight: 500 }}> · raw {(raw * 100).toFixed(0)}%</span>
+            <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}> · raw {(raw * 100).toFixed(0)}%</span>
           )}
         </span>
       </div>
-      <div style={{ height: 6, borderRadius: 3, background: '#1e293b', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ height: 6, borderRadius: 3, background: 'var(--raised)', overflow: 'hidden', position: 'relative' }}>
         <div style={{ width: `${calibrated * 100}%`, height: '100%', background: color, transition: 'width 0.3s' }} />
         {/* raw probability tick for calibration comparison */}
         {raw != null && Number.isFinite(raw) && (
@@ -63,7 +63,7 @@ const ConfidenceMeter: React.FC<{ value: number; raw?: number }> = ({ value, raw
 const Chip: React.FC<{ children: React.ReactNode; title?: string; color?: string }> = ({ children, title, color }) => (
   <span title={title} style={{
     fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 5,
-    background: 'rgba(148,163,184,0.08)', border: '1px solid #1e293b',
+    background: 'rgba(148,163,184,0.08)', border: '1px solid var(--border)',
     color: color ?? 'var(--text-dim)', whiteSpace: 'nowrap',
   }}>
     {children}
@@ -83,12 +83,12 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
 
   return (
     <div className="hover-lift" style={{
-      background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12,
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
       padding: 14, opacity: stale ? 0.6 : 1,
     }}>
       {/* Header: symbol + direction + strength */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 15, fontWeight: 800, color: '#f1f5f9' }}>{signal.symbol}</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-strong)' }}>{signal.symbol}</span>
         <span style={{
           fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           color: dir.color, background: `${dir.color}1a`, border: `1px solid ${dir.color}40`,
@@ -103,7 +103,7 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
           {strength.label}
         </span>
         {stale && <Chip color="#f87171" title="Signal past its expiry">expired</Chip>}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#334155' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
           {signal.timeframe} · {new Date(signal.timestamp).toLocaleTimeString()}
         </span>
       </div>
@@ -121,12 +121,12 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
           ['Target',signal.take_profit, '#22c55e'],
         ] as const).map(([label, val, color]) => (
           <div key={label} style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{label}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{label}</div>
             <div style={{ fontSize: 13, fontWeight: 700, color }}>{num(val)}</div>
           </div>
         ))}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>R:R</div>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>R:R</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: signal.risk_reward_ratio >= 1.5 ? '#22c55e' : 'var(--warn)' }}>
             {num(signal.risk_reward_ratio, 2)}
           </div>
@@ -136,14 +136,14 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
       {/* Model consensus bar */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-          <span style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
             Model consensus
           </span>
           <span style={{ fontSize: 11, fontWeight: 700, color: '#93c5fd' }}>
             {signal.strategies_agreeing.length}/{signal.total_strategies} agree
           </span>
         </div>
-        <div style={{ height: 5, borderRadius: 3, background: '#1e293b', overflow: 'hidden' }}>
+        <div style={{ height: 5, borderRadius: 3, background: 'var(--raised)', overflow: 'hidden' }}>
           <div style={{ width: `${consensus * 100}%`, height: '100%', background: '#3b82f6' }} />
         </div>
         {signal.strategies_agreeing.length > 0 && (

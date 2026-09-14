@@ -96,8 +96,8 @@ const AccessibilitySection: React.FC = () => {
           />
         </Field>
         <div style={{
-          marginTop: 12, padding: '12px 16px', background: '#0f172a',
-          borderRadius: 8, border: '1px solid #1e293b',
+          marginTop: 12, padding: '12px 16px', background: 'var(--surface)',
+          borderRadius: 8, border: '1px solid var(--border)',
           fontSize: `calc(14px * ${form.font_size === 'small' ? 0.875 : form.font_size === 'large' ? 1.125 : form.font_size === 'xlarge' ? 1.25 : 1})`,
           color: 'var(--text-dim)',
         }}>

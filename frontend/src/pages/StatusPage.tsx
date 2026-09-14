@@ -277,7 +277,7 @@ const StatusPage: React.FC = () => {
         <section aria-labelledby="readiness-h" style={{ marginBottom: 16 }}>
           <h2 id="readiness-h" style={{
             fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-            letterSpacing: '0.08em', color: '#475569', margin: '0 0 8px 2px',
+            letterSpacing: '0.08em', color: 'var(--text-faint)', margin: '0 0 8px 2px',
           }}>
             Trading readiness
           </h2>
@@ -310,7 +310,7 @@ const StatusPage: React.FC = () => {
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
             {sharpe && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
                   Statistical confidence
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'ui-monospace, monospace', marginTop: 4 }}>
@@ -338,7 +338,7 @@ const StatusPage: React.FC = () => {
 
             {paperGate && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#475569' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
                   Validation phases
                 </div>
                 <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -349,7 +349,7 @@ const StatusPage: React.FC = () => {
                     <li key={ph.n} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                       {ph.ok
                         ? <CheckCircle2 size={13} strokeWidth={2.5} aria-hidden style={{ color: '#22c55e', flexShrink: 0, marginTop: 2 }} />
-                        : <Circle size={13} strokeWidth={2} aria-hidden style={{ color: '#475569', flexShrink: 0, marginTop: 2 }} />}
+                        : <Circle size={13} strokeWidth={2} aria-hidden style={{ color: 'var(--text-faint)', flexShrink: 0, marginTop: 2 }} />}
                       <span style={{ minWidth: 0 }}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: ph.ok ? '#22c55e' : 'var(--text-dim)' }}>{ph.n}</span>
                         {ph.why && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{ph.why}</span>}
@@ -369,7 +369,7 @@ const StatusPage: React.FC = () => {
       {/* WebSocket live status */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10,
         padding: '10px 16px', marginBottom: 16,
       }}>
         <span style={{
@@ -382,7 +382,7 @@ const StatusPage: React.FC = () => {
             {wsStatus.charAt(0).toUpperCase() + wsStatus.slice(1)}
           </strong>
         </span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
           Live market data stream
         </span>
       </div>
@@ -395,7 +395,7 @@ const StatusPage: React.FC = () => {
             key={name}
             style={{
               ...styles.componentRow,
-              borderBottom: i < arr.length - 1 ? '1px solid #1e293b' : 'none',
+              borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
             }}
           >
             <div style={styles.componentName}>{name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
@@ -408,7 +408,7 @@ const StatusPage: React.FC = () => {
             <div style={styles.componentMsg}>
               {info.message}
               {info.response_time_ms != null && (
-                <span style={{ color: '#475569', marginLeft: 6 }}>{info.response_time_ms}ms</span>
+                <span style={{ color: 'var(--text-faint)', marginLeft: 6 }}>{info.response_time_ms}ms</span>
               )}
             </div>
           </div>
@@ -473,12 +473,12 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 auto',
     padding: '32px 16px',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#f1f5f9',
-    background: '#0f172a',
+    color: 'var(--text-strong)',
+    background: 'var(--surface)',
     minHeight: '100vh',
   },
   banner: {
-    border: '1px solid #334155',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     padding: '20px 24px',
     marginBottom: 32,
@@ -491,7 +491,7 @@ const styles: Record<string, React.CSSProperties> = {
   refreshBtn: {
     marginLeft: 'auto',
     background: 'transparent',
-    border: '1px solid #334155',
+    border: '1px solid var(--border-strong)',
     color: 'var(--text-dim)',
     borderRadius: 6,
     padding: '6px 12px',
@@ -508,8 +508,8 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
   },
   componentsCard: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 28,
@@ -525,8 +525,8 @@ const styles: Record<string, React.CSSProperties> = {
   componentStatus: { display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' },
   componentMsg: { fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' },
   uptimeCard: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     padding: '20px 24px',
     marginBottom: 28,
@@ -537,12 +537,12 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     fontSize: 11,
-    color: '#475569',
+    color: 'var(--text-faint)',
     marginTop: 6,
   },
   incidentCard: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     padding: '16px 20px',
     marginBottom: 28,
@@ -552,13 +552,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 12,
     padding: '8px 0',
-    borderBottom: '1px solid #1e293b',
+    borderBottom: '1px solid var(--border)',
     fontSize: 14,
   },
   footer: {
     textAlign: 'center',
     fontSize: 12,
-    color: '#475569',
+    color: 'var(--text-faint)',
     paddingTop: 8,
   },
 };

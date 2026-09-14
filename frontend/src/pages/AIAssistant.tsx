@@ -27,10 +27,10 @@ const INTRO =
 const AIAssistant: React.FC = () => {
   return (
     <div className="page-content" style={{ padding: 0, flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <Brain size={20} strokeWidth={1.75} aria-hidden />
         <div>
-          <h2 style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>AI Assistant</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>AI Assistant</h2>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Your trading copilot — powered by HOPEFX AI</div>
         </div>
       </div>

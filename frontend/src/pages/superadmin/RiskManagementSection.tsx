@@ -188,7 +188,7 @@ const RiskManagementSection: React.FC = () => {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            background: tab === t.id ? '#1e293b' : 'transparent',
+            background: tab === t.id ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t.id ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t.id ? 'var(--text-strong)' : 'var(--text-muted)',
             padding: '7px 14px', fontSize: 13, cursor: 'pointer',
@@ -214,7 +214,7 @@ const RiskManagementSection: React.FC = () => {
               { label: 'Sortino Ratio',      value: varMetrics.sortino_ratio.toFixed(2),                       color: '#8b5cf6' },
               { label: 'Calmar Ratio',       value: varMetrics.calmar_ratio.toFixed(2),                        color: '#06b6d4' },
             ].map(m => (
-              <div key={m.label} style={{ background: '#1e293b', borderRadius: 8, padding: '14px 16px' }}>
+              <div key={m.label} style={{ background: 'var(--raised)', borderRadius: 8, padding: '14px 16px' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: m.color }}>{m.value}</div>
               </div>
@@ -238,9 +238,9 @@ const RiskManagementSection: React.FC = () => {
             {breakers.map(b => {
               const sc = CB_COLORS[b.state] ?? CB_COLORS_DEFAULT;
               return (
-                <div key={b.name} style={{ background: '#1e293b', borderRadius: 10, padding: '14px 16px', border: `1px solid ${sc.color}33` }}>
+                <div key={b.name} style={{ background: 'var(--raised)', borderRadius: 10, padding: '14px 16px', border: `1px solid ${sc.color}33` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{b.name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>{b.name}</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: sc.color, background: sc.bg, border: `1px solid ${sc.color}44`, borderRadius: 4, padding: '2px 8px' }}>
                       {b.state.replace('_', ' ').toUpperCase()}
                     </span>
@@ -252,8 +252,8 @@ const RiskManagementSection: React.FC = () => {
                       { label: 'Last Failure', value: fmtDate(b.last_failure) },
                       { label: 'Last Success', value: fmtDate(b.last_success) },
                     ].map(m => (
-                      <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '6px 8px' }}>
-                        <div style={{ fontSize: 10, color: '#475569' }}>{m.label}</div>
+                      <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '6px 8px' }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 600 }}>{m.value}</div>
                       </div>
                     ))}
@@ -267,7 +267,7 @@ const RiskManagementSection: React.FC = () => {
                 </div>
               );
             })}
-            {breakers.length === 0 && <div style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>No circuit breakers registered.</div>}
+            {breakers.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: '16px 0' }}>No circuit breakers registered.</div>}
           </div>
         </SectionCard>
       )}
@@ -292,16 +292,16 @@ const RiskManagementSection: React.FC = () => {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['Scenario', 'P&L Impact', 'P&L %', 'Max Loss', 'Probability', 'Run At'].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {stressTests.map((t, i) => (
-                    <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                      <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{t.name ?? t.scenario}</td>
+                    <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{t.name ?? t.scenario}</td>
                       <td style={{ padding: '10px 12px', fontWeight: 700, color: (t.pnl_usd ?? t.pnl_impact ?? 0) < 0 ? 'var(--loss)' : 'var(--gain)' }}>
                         {t.pnl_usd != null ? fmtMoney(t.pnl_usd) : t.pnl_impact != null ? fmtMoney(t.pnl_impact) : '—'}
                       </td>
@@ -341,7 +341,7 @@ const RiskManagementSection: React.FC = () => {
               { value: 'warning',      label: 'Severity: Warning' },
             ].map(f => (
               <button key={f.value} onClick={() => setBreachFilter(f.value)} style={{
-                background: breachFilter === f.value ? '#1e293b' : 'transparent',
+                background: breachFilter === f.value ? 'var(--raised)' : 'transparent',
                 border: `1px solid ${breachFilter === f.value ? '#475569' : '#1e293b'}`,
                 borderRadius: 6, color: breachFilter === f.value ? 'var(--text-strong)' : 'var(--text-muted)',
                 padding: '5px 12px', fontSize: 12, cursor: 'pointer',
@@ -357,9 +357,9 @@ const RiskManagementSection: React.FC = () => {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['User', 'Account', 'Breach Type', 'Threshold', 'Actual', 'Severity', 'Status', 'Detected'].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -367,14 +367,14 @@ const RiskManagementSection: React.FC = () => {
                   {filteredBreaches.map(b => {
                     const sev = BREACH_SEVERITY_COLORS[b.severity] ?? BREACH_SEVERITY_COLORS_DEFAULT;
                     return (
-                      <tr key={b.breach_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                      <tr key={b.breach_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                         <td style={{ padding: '10px 12px' }}>
-                          <div style={{ fontWeight: 600, color: '#f1f5f9' }}>{b.username}</div>
-                          <div style={{ fontSize: 11, color: '#475569' }}>{b.user_id}</div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{b.username}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{b.user_id}</div>
                         </td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12, fontFamily: 'monospace' }}>{b.account_id}</td>
                         <td style={{ padding: '10px 12px' }}>
-                          <span style={{ fontSize: 11, color: '#cbd5e1', background: '#1e293b', borderRadius: 4, padding: '2px 7px' }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-dim)', background: 'var(--raised)', borderRadius: 4, padding: '2px 7px' }}>
                             {b.breach_type.replace(/_/g, ' ')}
                           </span>
                         </td>
@@ -419,7 +419,7 @@ const RiskManagementSection: React.FC = () => {
 
               {/* Drawdown distribution */}
               {drawdown.drawdown_distribution && drawdown.drawdown_distribution.length > 0 && (
-                <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16 }}>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 12 }}>Drawdown Distribution</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {drawdown.drawdown_distribution.map(d => {
@@ -429,7 +429,7 @@ const RiskManagementSection: React.FC = () => {
                       return (
                         <div key={d.bucket} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 80, fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{d.bucket}</div>
-                          <div style={{ flex: 1, background: '#1e293b', borderRadius: 4, height: 16, overflow: 'hidden' }}>
+                          <div style={{ flex: 1, background: 'var(--raised)', borderRadius: 4, height: 16, overflow: 'hidden' }}>
                             <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s' }} />
                           </div>
                           <div style={{ width: 32, fontSize: 11, color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>{d.count}</div>
@@ -441,7 +441,7 @@ const RiskManagementSection: React.FC = () => {
               )}
             </>
           ) : (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>
+            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>
               No drawdown data available.
             </div>
           )}

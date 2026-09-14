@@ -127,8 +127,8 @@ function CodeInput({ value, onChange, disabled, placeholder = '000000', labelId 
       placeholder={placeholder}
       disabled={disabled}
       style={{
-        width: '100%', background: '#0f172a', border: '1px solid #334155',
-        borderRadius: 8, color: '#f1f5f9', padding: '12px', fontSize: 28,
+        width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)',
+        borderRadius: 8, color: 'var(--text-strong)', padding: '12px', fontSize: 28,
         textAlign: 'center', letterSpacing: 10, marginBottom: 16,
         boxSizing: 'border-box', fontFamily: 'monospace',
         opacity: disabled ? 0.5 : 1,
@@ -269,7 +269,7 @@ const TwoFactorSetup: React.FC = () => {
             Contact your administrator to enable it.
           </div>
           <Link to="/settings" style={{
-            display: 'inline-block', padding: '10px 24px', background: '#334155',
+            display: 'inline-block', padding: '10px 24px', background: 'var(--surface-hover)',
             color: 'var(--text)', borderRadius: 8, textDecoration: 'none', fontSize: 14, fontWeight: 600,
           }}>
             Back to Settings
@@ -293,7 +293,7 @@ const TwoFactorSetup: React.FC = () => {
         actions={
           <Link to="/settings" style={{
             fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
-            padding: '6px 14px', border: '1px solid #334155', borderRadius: 6,
+            padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
           }}>
             ← Settings
           </Link>
@@ -303,7 +303,7 @@ const TwoFactorSetup: React.FC = () => {
       {/* Status banner */}
       <div style={{
         ...s.statusBanner,
-        background: status.enabled ? '#14532d' : '#1e293b',
+        background: status.enabled ? '#14532d' : 'var(--raised)',
         border: '1px solid ' + (status.enabled ? '#166534' : '#334155'),
       }}>
         <span style={{ fontSize: 22 }}>{status.enabled ? '🔒' : '🔓'}</span>
@@ -378,7 +378,7 @@ const TwoFactorSetup: React.FC = () => {
               alt="TOTP QR Code — scan with your authenticator app"
               fallback={
                 <div style={{
-                  width: 200, height: 200, background: '#0f172a', border: '1px solid #334155',
+                  width: 200, height: 200, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                   borderRadius: 8, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center', padding: 12, gap: 8,
                 }}>
@@ -403,7 +403,7 @@ const TwoFactorSetup: React.FC = () => {
           </div>
 
           {/* Issuer info */}
-          <div style={{ fontSize: 12, color: '#475569', marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 20 }}>
             Issuer: <strong style={{ color: 'var(--text-muted)' }}>HOPEFX</strong> ·
             Algorithm: SHA1 · Digits: 6 · Period: 30s
           </div>
@@ -526,34 +526,34 @@ const s: Record<string, React.CSSProperties> = {
   page:         { padding: 24, maxWidth: 640, margin: '0 auto' },
   statusBanner: { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
     borderRadius: 10, marginBottom: 20 },
-  card:         { background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+  card:         { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
     padding: 24, marginBottom: 16 },
-  cardTitle:    { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 10px' },
+  cardTitle:    { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 10px' },
   cardText:     { fontSize: 14, color: 'var(--text-dim)', margin: '0 0 20px', lineHeight: 1.6 },
   btn:          { display: 'block', width: '100%', background: '#3b82f6', border: 'none',
     borderRadius: 8, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer',
     padding: '12px 0', transition: 'opacity 0.15s' },
-  btnSecondary: { display: 'block', width: '100%', background: '#334155', border: 'none',
+  btnSecondary: { display: 'block', width: '100%', background: 'var(--surface-hover)', border: 'none',
     borderRadius: 8, color: 'var(--text-dim)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
     padding: '10px 0' },
   label:        { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
   qrContainer:  { display: 'flex', justifyContent: 'center', margin: '16px 0' },
-  secretBox:    { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8,
+  secretBox:    { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8,
     padding: '10px 14px', marginBottom: 16 },
-  secretLabel:  { fontSize: 12, color: '#475569' },
+  secretLabel:  { fontSize: 12, color: 'var(--text-faint)' },
   secretCode:   { fontSize: 13, color: 'var(--link)', letterSpacing: 2, wordBreak: 'break-all',
     display: 'block', marginTop: 4 },
-  copyBtn:      { background: 'none', border: '1px solid #334155', borderRadius: 6,
+  copyBtn:      { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
     color: 'var(--text-dim)', fontSize: 12, padding: '3px 10px', cursor: 'pointer' },
   codesGrid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '16px 0' },
-  backupCode:   { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 6,
+  backupCode:   { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 6,
     padding: '10px 12px', fontSize: 15, color: 'var(--text-dim)', textAlign: 'center',
     letterSpacing: 3, fontFamily: 'monospace' },
   errorBox:     { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
     padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
   appLink:      { fontSize: 12, color: 'var(--link)', textDecoration: 'none',
     padding: '4px 10px', border: '1px solid #1e3a5f', borderRadius: 6,
-    background: '#0f172a' },
+    background: 'var(--surface)' },
   crossLink:    { fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none' },
 };
 

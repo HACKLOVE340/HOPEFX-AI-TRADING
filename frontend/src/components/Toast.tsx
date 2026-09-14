@@ -124,7 +124,7 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
 
       {/* Message */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: '#f1f5f9', lineHeight: 1.45, wordBreak: 'break-word' }}>
+        <div style={{ fontSize: 13, color: 'var(--text-strong)', lineHeight: 1.45, wordBreak: 'break-word' }}>
           {item.message}
         </div>
         {item.action && (
@@ -146,7 +146,7 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
         onClick={dismiss}
         aria-label="Dismiss"
         style={{
-          background: 'transparent', border: 'none', color: '#475569',
+          background: 'transparent', border: 'none', color: 'var(--text-faint)',
           cursor: 'pointer', fontSize: 14, padding: '0 2px', flexShrink: 0,
           lineHeight: 1, marginTop: 1,
         }}

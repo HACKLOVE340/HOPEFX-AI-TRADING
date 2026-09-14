@@ -71,7 +71,7 @@ const IntegrationsSection: React.FC = () => {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading integrations…
     </div>
   );
@@ -110,7 +110,7 @@ const IntegrationsSection: React.FC = () => {
                 type="password"
               />
             </Field>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#0f172a', padding: '10px 14px', borderRadius: 8, border: '1px solid #1e293b' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
               Webhook URL: <code style={{ color: 'var(--link)' }}>{window.location.origin}/api/webhooks/tradingview</code>
             </div>
           </>

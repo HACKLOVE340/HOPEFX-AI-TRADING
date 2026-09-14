@@ -36,7 +36,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
     <Link
       to="/dashboard"
       style={{
-        color: '#475569',
+        color: 'var(--text-faint)',
         textDecoration: 'none',
         display: 'flex',
         alignItems: 'center',

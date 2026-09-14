@@ -82,7 +82,7 @@ interface ReplayTrade {
 function MiniChart({ bars, currentBar }: { bars: OHLCBar[]; currentBar: number }) {
   if (!bars.length) return (
     <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#475569', fontSize: 13 }}>No bars loaded</div>
+      color: 'var(--text-faint)', fontSize: 13 }}>No bars loaded</div>
   );
 
   const visible = bars.slice(Math.max(0, currentBar - 60), currentBar + 1);
@@ -99,7 +99,7 @@ function MiniChart({ bars, currentBar }: { bars: OHLCBar[]; currentBar: number }
   const scaleY = (v: number) => H - ((v - minL) / range) * H;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 200, background: '#0a0f1a', borderRadius: 8 }}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 200, background: 'var(--bg)', borderRadius: 8 }}>
       {visible.map((b, i) => {
         const x    = i * barW + barW * 0.1;
         const bw   = barW * 0.8;
@@ -133,7 +133,7 @@ function SessionCard({ session, selected, onClick }: {
   const pct = session.total_bars > 0 ? (session.current_bar / session.total_bars) * 100 : 0;
   return (
     <div onClick={onClick} style={{
-      background: selected ? '#1a2744' : '#1e293b',
+      background: selected ? '#1a2744' : 'var(--raised)',
       border: `1px solid ${selected ? '#3b82f6' : '#334155'}`,
       borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
     }}>
@@ -145,7 +145,7 @@ function SessionCard({ session, selected, onClick }: {
           {session.current_bar}/{session.total_bars} bars
         </span>
       </div>
-      <div style={{ height: 4, background: '#334155', borderRadius: 2, marginBottom: 8 }}>
+      <div style={{ height: 4, background: 'var(--surface-hover)', borderRadius: 2, marginBottom: 8 }}>
         <div style={{ height: '100%', width: `${pct}%`, background: '#3b82f6', borderRadius: 2 }} />
       </div>
       <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
@@ -311,37 +311,37 @@ const ReplayPage: React.FC = () => {
 
       {/* Create form */}
       {showCreate && (
-        <div style={{ background: '#1e293b', border: '1px solid #3b82f644', borderRadius: 12,
+        <div style={{ background: 'var(--raised)', border: '1px solid #3b82f644', borderRadius: 12,
           padding: 20, marginBottom: 20 }}>
           <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>New Replay Session</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
               Symbol
               <select value={symbol} onChange={e => setSymbol(e.target.value)}
-                style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a',
-                  border: '1px solid #334155', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
+                style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
+                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
             <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
               Timeframe
               <select value={timeframe} onChange={e => setTimeframe(e.target.value)}
-                style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a',
-                  border: '1px solid #334155', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
+                style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
+                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
                 {TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
               </select>
             </label>
             <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
               Start Date
               <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a',
-                  border: '1px solid #334155', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
+                style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
+                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
             </label>
             <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
               End Date
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a',
-                  border: '1px solid #334155', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
+                style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
+                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
             </label>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -352,7 +352,7 @@ const ReplayPage: React.FC = () => {
               {createMut.isPending ? 'Creating…' : 'Create Session'}
             </button>
             <button onClick={() => setShowCreate(false)}
-              style={{ padding: '8px 14px', background: '#334155', color: 'var(--text-dim)', border: 'none',
+              style={{ padding: '8px 14px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
                 borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
             {createMut.isError && (
               <span style={{ fontSize: 12, color: 'var(--loss)' }}>
@@ -368,7 +368,7 @@ const ReplayPage: React.FC = () => {
         <div>
           {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading…</div>}
           {!isLoading && sessions.length === 0 && (
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+            <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📈</div>
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No replay sessions</div>
@@ -390,7 +390,7 @@ const ReplayPage: React.FC = () => {
 
         {/* Replay player */}
         {selected && (
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24 }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <div>
@@ -415,13 +415,13 @@ const ReplayPage: React.FC = () => {
                   Delete
                 </button>
                 <button onClick={() => setSelected(null)}
-                  style={{ padding: '6px 10px', background: '#334155', color: 'var(--text-dim)',
+                  style={{ padding: '6px 10px', background: 'var(--surface-hover)', color: 'var(--text-dim)',
                     border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>✕</button>
               </div>
             </div>
 
             {/* Progress bar */}
-            <div style={{ height: 4, background: '#334155', borderRadius: 2, marginBottom: 16 }}>
+            <div style={{ height: 4, background: 'var(--surface-hover)', borderRadius: 2, marginBottom: 16 }}>
               <div style={{
                 height: '100%', borderRadius: 2, background: '#3b82f6',
                 width: `${selected.total_bars > 0 ? (selected.current_bar / selected.total_bars) * 100 : 0}%`,
@@ -455,7 +455,7 @@ const ReplayPage: React.FC = () => {
               </button>
 
               {/* Speed selector */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: '2px 4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '2px 4px' }}>
                 {SPEED_OPTIONS.map((opt, i) => (
                   <button key={opt.label} onClick={() => handleSpeedChange(i)}
                     style={{
@@ -470,7 +470,7 @@ const ReplayPage: React.FC = () => {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="number" value={runBars} onChange={e => setRunBars(Number(e.target.value))}
-                  aria-label="Bars to advance" min={1} max={500} style={{ width: 60, background: '#0f172a', border: '1px solid #334155',
+                  aria-label="Bars to advance" min={1} max={500} style={{ width: 60, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                     borderRadius: 6, padding: '7px 8px', color: 'var(--text)', fontSize: 13 }} />
                 <button onClick={() => runMut.mutate({ id: selected.session_id, bars: runBars })}
                   disabled={runMut.isPending || selected.status === 'completed'}
@@ -485,11 +485,11 @@ const ReplayPage: React.FC = () => {
               )}
             </div>
             {/* Keyboard hint */}
-            <div style={{ fontSize: 10, color: '#334155', marginBottom: 16 }}>
-              Keyboard: <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)' }}>Space</kbd> play/pause ·
-              <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)', marginLeft: 4 }}>→</kbd> step ·
-              <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)', marginLeft: 4 }}>+/-</kbd> speed ·
-              <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)', marginLeft: 4 }}>Esc</kbd> close
+            <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 16 }}>
+              Keyboard: <kbd style={{ background: 'var(--raised)', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)' }}>Space</kbd> play/pause ·
+              <kbd style={{ background: 'var(--raised)', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)', marginLeft: 4 }}>→</kbd> step ·
+              <kbd style={{ background: 'var(--raised)', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)', marginLeft: 4 }}>+/-</kbd> speed ·
+              <kbd style={{ background: 'var(--raised)', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)', marginLeft: 4 }}>Esc</kbd> close
             </div>
 
             {/* Trade log */}
@@ -503,7 +503,7 @@ const ReplayPage: React.FC = () => {
                   {selected.trades.map(t => (
                     <div key={t.trade_id} style={{
                       display: 'flex', gap: 12, alignItems: 'center',
-                      background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, padding: '8px 12px',
+                      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px',
                       fontSize: 12,
                     }}>
                       <span style={{ color: t.side === 'buy' ? '#22c55e' : '#ef4444', fontWeight: 600,
@@ -526,11 +526,11 @@ const ReplayPage: React.FC = () => {
       </div>
 
       {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
-        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
-        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
+        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
+        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
+        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
       </div>
     </PageShell>
   );

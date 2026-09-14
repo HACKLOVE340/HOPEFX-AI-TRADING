@@ -220,7 +220,7 @@ function TabBar({
               background: isActive ? `${color}12` : 'transparent',
               border: 'none',
               borderBottom: isActive ? `2px solid ${color}` : '2px solid transparent',
-              color: isActive ? color : '#475569',
+              color: isActive ? color : 'var(--text-faint)',
               fontSize: 10, fontWeight: 700, cursor: 'pointer',
               transition: 'all 0.15s ease',
               letterSpacing: 0.5,

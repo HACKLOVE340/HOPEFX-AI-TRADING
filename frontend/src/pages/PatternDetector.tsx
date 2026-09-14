@@ -97,12 +97,12 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
     <div style={s.card}>
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>
           {formatPatternName(pattern.pattern_type)}
         </div>
         <span style={{
           fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
-          background: neutral ? '#1e293b' : bullish ? '#14532d' : '#450a0a',
+          background: neutral ? 'var(--raised)' : bullish ? '#14532d' : '#450a0a',
           color: dirColor,
           border: `1px solid ${neutral ? '#334155' : bullish ? '#166534' : '#7f1d1d'}`,
           textTransform: 'uppercase',
@@ -118,7 +118,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
           <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Confidence</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: barColor }}>{pct}%</span>
         </div>
-        <div style={{ height: 6, borderRadius: 4, background: '#0f172a', overflow: 'hidden' }}>
+        <div style={{ height: 6, borderRadius: 4, background: 'var(--surface)', overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 4, transition: 'width 0.4s ease' }} />
         </div>
       </div>
@@ -127,7 +127,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 8, marginBottom: 14 }}>
         <div style={s.priceCell}>
           <span style={s.priceLabel}>Entry</span>
-          <span style={{ ...s.priceVal, color: '#f1f5f9' }}>{fmtPrice(pattern.entry_price)}</span>
+          <span style={{ ...s.priceVal, color: 'var(--text-strong)' }}>{fmtPrice(pattern.entry_price)}</span>
         </div>
         <div style={s.priceCell}>
           <span style={s.priceLabel}>Target</span>
@@ -142,10 +142,10 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
       {/* R:R + description */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>R:R</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>
           {riskReward(pattern.entry_price, pattern.target_price, pattern.stop_loss)}
         </span>
-        <span style={{ fontSize: 11, color: '#475569', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 'auto' }}>
           Bars {pattern.start_index}–{pattern.end_index}
         </span>
       </div>
@@ -279,7 +279,7 @@ const PatternDetector: React.FC = () => {
           {/* Confidence threshold */}
           <div style={s.controlGroup}>
             <label id="patterndetector-min-confidence-label" htmlFor="patterndetector-min-confidence" style={s.controlLabel}>
-              Min Confidence: <span style={{ color: '#f1f5f9', fontWeight: 700 }}>{Math.round(minConf * 100)}%</span>
+              Min Confidence: <span style={{ color: 'var(--text-strong)', fontWeight: 700 }}>{Math.round(minConf * 100)}%</span>
             </label>
             <input id="patterndetector-min-confidence" aria-labelledby="patterndetector-min-confidence-label"
               type="range"
@@ -372,7 +372,7 @@ const PatternDetector: React.FC = () => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:    { minHeight: '100vh', background: '#0f172a', color: '#f1f5f9', fontFamily: "'Inter',system-ui,sans-serif", padding: 24 },
+  page:    { minHeight: '100vh', background: 'var(--surface)', color: 'var(--text-strong)', fontFamily: "'Inter',system-ui,sans-serif", padding: 24 },
   header:  { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 20 },
   title:   { fontSize: 28, fontWeight: 700, margin: 0 },
   subtitle:{ fontSize: 14, color: 'var(--text-dim)', marginTop: 4 },
@@ -382,13 +382,13 @@ const s: Record<string, React.CSSProperties> = {
   controlLabel: { fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 },
 
   select: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
-    color: '#f1f5f9', fontSize: 13, padding: '6px 10px', cursor: 'pointer',
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6,
+    color: 'var(--text-strong)', fontSize: 13, padding: '6px 10px', cursor: 'pointer',
     outline: 'none',
   },
 
   tfBtn: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6,
     color: 'var(--text-muted)', fontSize: 12, padding: '5px 9px', cursor: 'pointer',
     fontWeight: 500,
   },
@@ -402,28 +402,28 @@ const s: Record<string, React.CSSProperties> = {
   scanBtnDisabled: { opacity: 0.6, cursor: 'not-allowed' },
 
   retryBtn: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6,
     color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 18px',
   },
 
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 20 },
 
-  card: { background: '#1e293b', borderRadius: 12, padding: 22, border: '1px solid #334155' },
+  card: { background: 'var(--raised)', borderRadius: 12, padding: 22, border: '1px solid var(--border-strong)' },
 
-  priceCell:  { background: '#0f172a', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 },
-  priceLabel: { fontSize: 11, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' },
+  priceCell:  { background: 'var(--surface)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 },
+  priceLabel: { fontSize: 11, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' },
   priceVal:   { fontSize: 14, fontWeight: 700 },
 
   center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 64, gap: 8 },
   spinner: {
     width: 32, height: 32,
-    border: '3px solid #334155',
+    border: '3px solid var(--border-strong)',
     borderTopColor: '#3b82f6',
     borderRadius: '50%',
     animation: 'spin 0.8s linear infinite',
   },
   navBtn: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
     color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, fontWeight: 600,
     padding: '6px 14px', fontFamily: 'inherit',
   },

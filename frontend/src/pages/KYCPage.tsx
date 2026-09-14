@@ -99,20 +99,20 @@ const StepIndicator: React.FC<{ status: KYCStatus }> = ({ status }) => {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
-                background: done ? '#166534' : active ? '#1d4ed8' : '#1e293b',
+                background: done ? '#166534' : active ? '#1d4ed8' : 'var(--raised)',
                 border: `2px solid ${done ? 'var(--gain)' : active ? '#3b82f6' : '#334155'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 13, fontWeight: 700,
-                color: done ? 'var(--gain)' : active ? '#93c5fd' : '#475569',
+                color: done ? 'var(--gain)' : active ? '#93c5fd' : 'var(--text-faint)',
               }}>
                 {done ? '✓' : step.id}
               </div>
-              <span style={{ fontSize: 11, color: active ? '#93c5fd' : done ? 'var(--gain)' : '#475569', fontWeight: active ? 600 : 400, textAlign: 'center' }}>
+              <span style={{ fontSize: 11, color: active ? '#93c5fd' : done ? 'var(--gain)' : 'var(--text-faint)', fontWeight: active ? 600 : 400, textAlign: 'center' }}>
                 {step.label}
               </span>
             </div>
             {idx < STEPS.length - 1 && (
-              <div style={{ height: 2, flex: 1, marginBottom: 18, background: done ? '#166534' : '#1e293b' }} />
+              <div style={{ height: 2, flex: 1, marginBottom: 18, background: done ? '#166534' : 'var(--raised)' }} />
             )}
           </React.Fragment>
         );
@@ -244,7 +244,7 @@ const KYCPage: React.FC = () => {
             onClick={loadStatus}
             disabled={loading}
             style={{
-              background: 'transparent', border: '1px solid #334155',
+              background: 'transparent', border: '1px solid var(--border-strong)',
               borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
               fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6,
             }}
@@ -324,8 +324,8 @@ const KYCPage: React.FC = () => {
 
           {/* Previously uploaded docs */}
           {(kycState?.documents ?? []).length > 0 && (
-            <div style={{ background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12, padding: '18px 22px', marginBottom: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 22px', marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>📄</span> Submitted Documents
               </h3>
               {kycState!.documents.map((doc, i) => {
@@ -335,12 +335,12 @@ const KYCPage: React.FC = () => {
                   <div key={doc.type} style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     padding: '10px 0',
-                    borderBottom: i < kycState!.documents.length - 1 ? '1px solid #1e293b' : 'none',
+                    borderBottom: i < kycState!.documents.length - 1 ? '1px solid var(--border)' : 'none',
                   }}>
                     <div>
-                      <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 500 }}>{docLabel}</span>
+                      <span style={{ fontSize: 13, color: 'var(--text-strong)', fontWeight: 500 }}>{docLabel}</span>
                       {doc.uploaded_at && (
-                        <span style={{ fontSize: 11, color: '#475569', marginLeft: 10 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 10 }}>
                           {new Date(doc.uploaded_at).toLocaleDateString()}
                         </span>
                       )}
@@ -356,8 +356,8 @@ const KYCPage: React.FC = () => {
 
           {/* Upload form */}
           {canSubmit && (
-            <div style={{ background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12, padding: '22px 24px', marginBottom: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '22px 24px', marginBottom: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>📤</span> Upload Documents
               </h3>
               <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px', lineHeight: 1.5 }}>
@@ -376,7 +376,7 @@ const KYCPage: React.FC = () => {
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div>
-                          <label id={`kyc-doc-${doc.id}-label`} style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{doc.label}</label>
+                          <label id={`kyc-doc-${doc.id}-label`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{doc.label}</label>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{doc.desc}</div>
                         </div>
                         {isUploaded && (
@@ -400,8 +400,8 @@ const KYCPage: React.FC = () => {
                         <button
                           onClick={() => fileRefs.current[doc.id]?.click()}
                           style={{
-                            background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
-                            color: hasFile ? '#f1f5f9' : 'var(--text-muted)', cursor: 'pointer',
+                            background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8,
+                            color: hasFile ? 'var(--text-strong)' : 'var(--text-muted)', cursor: 'pointer',
                             fontSize: 12, padding: '8px 14px', flex: 1, textAlign: 'left',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}
@@ -412,9 +412,9 @@ const KYCPage: React.FC = () => {
                           onClick={() => handleUpload(doc.id)}
                           disabled={!hasFile || uploading === doc.id}
                           style={{
-                            background: hasFile ? '#1d4ed8' : '#1e293b',
+                            background: hasFile ? '#1d4ed8' : 'var(--raised)',
                             border: `1px solid ${hasFile ? '#3b82f6' : '#334155'}`,
-                            borderRadius: 8, color: hasFile ? '#93c5fd' : '#475569',
+                            borderRadius: 8, color: hasFile ? '#93c5fd' : 'var(--text-faint)',
                             cursor: hasFile ? 'pointer' : 'not-allowed',
                             fontSize: 12, fontWeight: 600, padding: '8px 16px',
                             display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
@@ -453,9 +453,9 @@ const KYCPage: React.FC = () => {
                 onClick={handleSubmit}
                 disabled={submitting || !canSubmitDocs}
                 style={{
-                  background: canSubmitDocs ? '#1d4ed8' : '#1e293b',
+                  background: canSubmitDocs ? '#1d4ed8' : 'var(--raised)',
                   border: `1px solid ${canSubmitDocs ? '#3b82f6' : '#334155'}`,
-                  borderRadius: 10, color: canSubmitDocs ? '#fff' : '#475569',
+                  borderRadius: 10, color: canSubmitDocs ? '#fff' : 'var(--text-faint)',
                   cursor: canSubmitDocs ? 'pointer' : 'not-allowed',
                   fontSize: 14, fontWeight: 700, padding: '13px 28px',
                   marginTop: 18, width: '100%',
@@ -475,9 +475,9 @@ const KYCPage: React.FC = () => {
               { icon: '🌍', title: '180+ Countries',      body: 'We accept IDs from 180+ countries and territories.' },
               { icon: '🗑️', title: 'GDPR Compliant',     body: 'Documents are retained only as required by regulation.' },
             ].map(({ icon, title, body }) => (
-              <div key={title} style={{ background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 10, padding: '14px 16px' }}>
+              <div key={title} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
                 <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{title}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>{title}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{body}</div>
               </div>
             ))}

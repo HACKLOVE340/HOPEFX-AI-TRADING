@@ -142,7 +142,7 @@ const Profile: React.FC = () => {
     <div className="page-content">
       <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-muted)' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>👤</div>
-        <div style={{ fontSize: 18, fontWeight: 600, color: '#f1f5f9', marginBottom: 8 }}>
+        <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>
           Profile not found
         </div>
         <div style={{ fontSize: 14, marginBottom: 24 }}>
@@ -211,7 +211,7 @@ const Profile: React.FC = () => {
               <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
             </>
           ) : (
-            <button onClick={handleFollow} disabled={followLoading} style={{...s.followBtn, background: following ? '#334155' : '#3b82f6'}}>
+            <button onClick={handleFollow} disabled={followLoading} style={{...s.followBtn, background: following ? 'var(--surface-hover)' : '#3b82f6'}}>
               {followLoading ? '…' : following ? 'Unfollow' : 'Follow'}
             </button>
           )}
@@ -248,7 +248,7 @@ const Profile: React.FC = () => {
         ].map(({label,value,positive})=>(
           <div key={label} style={s.statCard}>
             <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:4}}>{label}</div>
-            <div style={{fontSize:20,fontWeight:700,color:positive===undefined?'#f1f5f9':positive?'var(--gain)':'var(--loss)'}}>{value}</div>
+            <div style={{fontSize:20,fontWeight:700,color:positive===undefined?'var(--text-strong)':positive?'var(--gain)':'var(--loss)'}}>{value}</div>
           </div>
         ))}
       </div>
@@ -260,7 +260,7 @@ const Profile: React.FC = () => {
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {profile.strategies?.map(str=>(
               <div key={str.strategy_id} style={s.stratRow}>
-                <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
+                <span style={{fontWeight:600,color:'var(--text-strong)'}}>{str.name}</span>
                 <span style={{fontSize:13,color:'var(--text-muted)'}}>{str.subscribers ?? 0} subscribers</span>
                 <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(str.rating != null && Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0)} {str.rating != null && Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}</span>
               </div>
@@ -294,11 +294,11 @@ const Profile: React.FC = () => {
 };
 
 const s: Record<string,React.CSSProperties> = {
-  header:{display:'flex',gap:20,alignItems:'flex-start',marginBottom:28,background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:'24px'},
+  header:{display:'flex',gap:20,alignItems:'flex-start',marginBottom:28,background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:12,padding:'24px'},
   avatarWrap:{position:'relative',flexShrink:0},
-  avatar:{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'2px solid #334155'},
-  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid #334155',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:700,color:'var(--link)'},
-  avatarEditBtn:{position:'absolute',bottom:0,right:0,background:'#334155',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'},
+  avatar:{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-strong)'},
+  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid var(--border-strong)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:700,color:'var(--link)'},
+  avatarEditBtn:{position:'absolute',bottom:0,right:0,background:'var(--surface-hover)',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'},
   headerInfo:{flex:1},
   name:{fontSize:22,fontWeight:700,color:'var(--text-strong)',margin:'0 0 4px'},
   username:{fontSize:14,color:'var(--text-muted)',margin:'0 0 8px'},
@@ -306,25 +306,25 @@ const s: Record<string,React.CSSProperties> = {
   followRow:{display:'flex',gap:16},
   followStat:{fontSize:13,color:'var(--text-muted)'},
   headerActions:{flexShrink:0},
-  editBtn:{background:'#334155',border:'1px solid #475569',borderRadius:8,color:'#f1f5f9',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 16px'},
+  editBtn:{background:'var(--surface-hover)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 16px'},
   followBtn:{border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 20px'},
-  editCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:20},
+  editCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'20px 24px',marginBottom:20},
   cardTitle:{fontSize:16,fontWeight:600,color:'var(--text)',marginBottom:14,marginTop:0},
   label:{display:'block',fontSize:13,color:'var(--text-dim)',marginBottom:6},
-  input:{width:'100%',background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box'},
-  textarea:{width:'100%',background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'},
+  input:{width:'100%',background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box'},
+  textarea:{width:'100%',background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'},
   inlineError:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:6,padding:'6px 10px',fontSize:12,color:'var(--loss)',marginTop:8},
   successMsg:{background:'rgba(74,222,128,0.1)',border:'1px solid var(--gain)',borderRadius:6,padding:'6px 10px',fontSize:12,color:'var(--gain)',marginTop:8},
   saveBtn:{background:'#3b82f6',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,padding:'9px 20px'},
-  cancelBtn:{background:'transparent',border:'1px solid #334155',borderRadius:8,color:'var(--text-dim)',cursor:'pointer',fontSize:13,padding:'9px 16px'},
+  cancelBtn:{background:'transparent',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-dim)',cursor:'pointer',fontSize:13,padding:'9px 16px'},
   statsGrid:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:12,marginBottom:20},
-  statCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:8,padding:'12px 16px'},
-  card:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16},
-  stratRow:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid #0f172a'},
+  statCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:8,padding:'12px 16px'},
+  card:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'20px 24px',marginBottom:16},
+  stratRow:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid var(--hairline)'},
   table:{width:'100%',borderCollapse:'collapse'},
-  th:{textAlign:'left',fontSize:12,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'},
-  tr:{borderBottom:'1px solid #1e293b'},
-  td:{padding:'10px 12px',fontSize:14,color:'#cbd5e1'},
+  th:{textAlign:'left',fontSize:12,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid var(--border-strong)'},
+  tr:{borderBottom:'1px solid var(--border)'},
+  td:{padding:'10px 12px',fontSize:14,color:'var(--text-dim)'},
   errorBox:{background:'#450a0a',border:'1px solid #dc2626',borderRadius:10,padding:'20px 24px',color:'#fca5a5'},
   retryBtn:{marginLeft:16,background:'transparent',border:'1px solid #dc2626',color:'#fca5a5',borderRadius:6,padding:'4px 12px',cursor:'pointer'},
 };

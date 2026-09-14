@@ -50,7 +50,7 @@ const PodiumCard: React.FC<{ trader: Trader; tall?: boolean }> = ({ trader, tall
     : '/copy-trading';
   return (
     <div className={`flex-1 rounded-xl p-5 flex flex-col items-center gap-2 border transition-all hover:scale-[1.02] ${tall ? 'mt-0' : 'mt-6'}`}
-      style={{ background: '#1e293b', borderColor: color + '55' }}>
+      style={{ background: 'var(--raised)', borderColor: color + '55' }}>
       <div className="w-9 h-9 rounded-full flex items-center justify-center font-black text-sm"
         style={{ background: color, color: '#0f172a' }}>
         {trader.rank}

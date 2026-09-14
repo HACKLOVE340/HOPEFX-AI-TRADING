@@ -76,13 +76,13 @@ const StepIndicator: React.FC<{ current: number; total: number }> = ({ current, 
             fontSize: 14, fontWeight: 700,
             background: done ? '#f59e0b' : active ? 'transparent' : 'transparent',
             border: `2px solid ${done ? '#f59e0b' : active ? '#f59e0b' : '#334155'}`,
-            color: done ? '#0f172a' : active ? 'var(--warn)' : '#475569',
+            color: done ? '#0f172a' : active ? 'var(--warn)' : 'var(--text-faint)',
             flexShrink: 0,
           }}>
             {done ? '✓' : STEPS[i]?.icon ?? ''}
           </div>
           {i < total - 1 && (
-            <div style={{ flex: 1, height: 2, background: i < current ? '#f59e0b' : '#334155' }} />
+            <div style={{ flex: 1, height: 2, background: i < current ? '#f59e0b' : 'var(--surface-hover)' }} />
           )}
         </React.Fragment>
       );
@@ -108,9 +108,9 @@ const Step1Broker: React.FC<{ state: WizardState; setState: (s: WizardState) => 
             style={{
               ...s.optionBtn,
               border: `1px solid ${state.broker === b.id ? '#f59e0b' : '#334155'}`,
-              background: state.broker === b.id ? '#1c1a0a' : '#1e293b',
+              background: state.broker === b.id ? '#1c1a0a' : 'var(--raised)',
             }}>
-            <div style={{ fontWeight: 600, color: '#f1f5f9', textAlign: 'left' }}>{b.name}</div>
+            <div style={{ fontWeight: 600, color: 'var(--text-strong)', textAlign: 'left' }}>{b.name}</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{b.desc}</div>
           </button>
         ))}
@@ -149,10 +149,10 @@ const Step2Risk: React.FC<{ state: WizardState; setState: (s: WizardState) => vo
             style={{
               ...s.optionBtn,
               border: `1px solid ${state.riskLevel === l.id ? '#f59e0b' : '#334155'}`,
-              background: state.riskLevel === l.id ? '#1c1a0a' : '#1e293b',
+              background: state.riskLevel === l.id ? '#1c1a0a' : 'var(--raised)',
             }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{l.name}</span>
+              <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{l.name}</span>
               <span style={{ fontSize: 13, color: 'var(--warn)', fontWeight: 700 }}>{l.risk} / trade</span>
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{l.desc}</div>
@@ -188,9 +188,9 @@ const Step3PropFirm: React.FC<{ state: WizardState; setState: (s: WizardState) =
             style={{
               ...s.optionBtn,
               border: `1px solid ${state.propFirm === f.id ? '#f59e0b' : '#334155'}`,
-              background: state.propFirm === f.id ? '#1c1a0a' : '#1e293b',
+              background: state.propFirm === f.id ? '#1c1a0a' : 'var(--raised)',
             }}>
-            <div style={{ fontWeight: 600, color: '#f1f5f9', textAlign: 'left' }}>{f.name}</div>
+            <div style={{ fontWeight: 600, color: 'var(--text-strong)', textAlign: 'left' }}>{f.name}</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{f.desc}</div>
           </button>
         ))}
@@ -259,15 +259,15 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
           <div style={{ color: 'var(--gain)', fontWeight: 600, marginBottom: 12 }}>✓ Backtest complete</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, textAlign: 'center' }}>
             <div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#f1f5f9' }}>{result.return_pct.toFixed(1)}%</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.return_pct.toFixed(1)}%</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Return</div>
             </div>
             <div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#f1f5f9' }}>{result.trades}</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.trades}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Trades</div>
             </div>
             <div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#f1f5f9' }}>{result.win_rate.toFixed(0)}%</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.win_rate.toFixed(0)}%</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Win Rate</div>
             </div>
           </div>
@@ -403,7 +403,7 @@ const Onboarding: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--warn)', margin: '0 0 4px' }}>HOPEFX Setup</h1>
-            <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>Step {step + 1} of {STEPS.length}</p>
+            <p style={{ fontSize: 13, color: 'var(--text-faint)', margin: 0 }}>Step {step + 1} of {STEPS.length}</p>
           </div>
           <button onClick={skip} style={s.skipBtn}>✕ Skip</button>
         </div>
@@ -444,18 +444,18 @@ const Onboarding: React.FC = () => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  shell:      { minHeight: '100vh', background: '#020617', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  shell:      { minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
   wizard:     { width: '100%', maxWidth: 520 },
-  stepCard:   { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, minHeight: 280 },
-  stepTitle:  { fontSize: 20, fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
+  stepCard:   { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24, minHeight: 280 },
+  stepTitle:  { fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' },
   stepSub:    { fontSize: 14, color: 'var(--text-muted)', margin: '0 0 20px' },
-  optionBtn:  { width: '100%', background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.15s' },
+  optionBtn:  { width: '100%', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.15s' },
   infoBox:    { background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#93c5fd', marginTop: 12 },
-  code:       { background: '#1e293b', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 12 },
+  code:       { background: 'var(--raised)', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 12 },
   primaryBtn: { width: '100%', background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 15, fontWeight: 700, cursor: 'pointer', padding: '14px 0' },
-  resultBox:  { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: 16 },
+  resultBox:  { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 16 },
   errorBox:   { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--loss)', marginBottom: 12 },
-  skipBtn:    { background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 13, padding: '4px 8px' },
+  skipBtn:    { background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 13, padding: '4px 8px' },
   navBtn:     { background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, padding: '8px 12px' },
   nextBtn:    { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '10px 24px' },
 };

@@ -325,7 +325,7 @@ const SecurityDashboard: React.FC = () => {
                     onClick={() => handleUnblockIp(ip)}
                     disabled={unblockingIp === ip}
                     style={{
-                      background: 'transparent', border: '1px solid #334155',
+                      background: 'transparent', border: '1px solid var(--border-strong)',
                       borderRadius: 5, color: 'var(--text-dim)', cursor: 'pointer',
                       fontSize: 11, padding: '2px 8px',
                     }}
@@ -452,8 +452,8 @@ const bottomGridStyle: React.CSSProperties = {
 };
 
 const panelStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
+  background: 'var(--surface, var(--raised))',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 10,
   display: 'flex',
   flexDirection: 'column',
@@ -462,20 +462,20 @@ const panelStyle: React.CSSProperties = {
 
 const panelHeaderStyle: React.CSSProperties = {
   alignItems: 'center',
-  borderBottom: '1px solid var(--border, #334155)',
+  borderBottom: '1px solid var(--border, var(--border-strong))',
   display: 'flex',
   justifyContent: 'space-between',
   padding: '12px 16px',
 };
 
 const panelTitleStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
+  color: 'var(--text, var(--text-strong))',
   fontSize: 13,
   fontWeight: 700,
 };
 
 const panelCountStyle: React.CSSProperties = {
-  background: '#334155',
+  background: 'var(--surface-hover)',
   borderRadius: 10,
   color: 'var(--text-dim)',
   fontSize: 11,
@@ -499,7 +499,7 @@ const ipListStyle: React.CSSProperties = {
 
 const ipRowStyle: React.CSSProperties = {
   alignItems: 'center',
-  borderBottom: '1px solid #1e293b',
+  borderBottom: '1px solid var(--border)',
   display: 'flex',
   justifyContent: 'space-between',
   padding: '8px 16px',
@@ -507,14 +507,14 @@ const ipRowStyle: React.CSSProperties = {
 
 const alertRowStyle: React.CSSProperties = {
   alignItems: 'center',
-  borderBottom: '1px solid #1e293b',
+  borderBottom: '1px solid var(--border)',
   display: 'flex',
   justifyContent: 'space-between',
   padding: '8px 16px',
 };
 
 const ipTextStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
+  color: 'var(--text, var(--text-strong))',
   fontFamily: 'monospace',
   fontSize: 12,
 };

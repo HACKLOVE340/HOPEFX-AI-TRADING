@@ -179,9 +179,9 @@ const SecuritySection: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Severity', 'Type', 'Detail', 'IP', 'User', 'Time'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -189,13 +189,13 @@ const SecuritySection: React.FC = () => {
             </thead>
             <tbody>
               {events.slice(0, 50).map(ev => (
-                <tr key={ev.event_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                <tr key={ev.event_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 12px' }}><SeverityBadge severity={ev.severity} /></td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{ev.event_type}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12, fontFamily: 'monospace' }}>{ev.ip_address}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{ev.user_id ?? '—'}</td>
-                  <td style={{ padding: '10px 12px', color: '#475569', fontSize: 12 }}>{timeAgo(ev.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-faint)', fontSize: 12 }}>{timeAgo(ev.created_at)}</td>
                 </tr>
               ))}
             </tbody>
@@ -217,9 +217,9 @@ const SecuritySection: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['IP Address', 'Reason', 'Blocked By', 'Blocked At', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {h}
                   </th>
                 ))}
@@ -227,7 +227,7 @@ const SecuritySection: React.FC = () => {
             </thead>
             <tbody>
               {blocked.map(b => (
-                <tr key={b.ip} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                <tr key={b.ip} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: 'var(--loss)' }}>{b.ip}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{b.reason}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{b.blocked_by}</td>
@@ -245,7 +245,7 @@ const SecuritySection: React.FC = () => {
             </tbody>
           </table>
           {blocked.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 24, color: '#475569', fontSize: 13 }}>No IPs currently blocked.</div>
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-faint)', fontSize: 13 }}>No IPs currently blocked.</div>
           )}
         </div>
       </SectionCard>
@@ -256,9 +256,9 @@ const SecuritySection: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'IP', 'Device', 'Started', 'Last Active', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -266,8 +266,8 @@ const SecuritySection: React.FC = () => {
             </thead>
             <tbody>
               {sessions.map(s => (
-                <tr key={s.session_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{s.username}</td>
+                <tr key={s.session_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{s.username}</td>
                   <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: 'var(--text-dim)', fontSize: 12 }}>{s.ip}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{s.device}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
@@ -293,7 +293,7 @@ const SecuritySection: React.FC = () => {
             </tbody>
           </table>
           {sessions.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 24, color: '#475569', fontSize: 13 }}>No active sessions.</div>
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-faint)', fontSize: 13 }}>No active sessions.</div>
           )}
         </div>
       </SectionCard>

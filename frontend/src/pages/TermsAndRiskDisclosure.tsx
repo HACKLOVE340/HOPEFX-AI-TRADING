@@ -269,11 +269,11 @@ const TermsAndRiskDisclosure: React.FC = () => {
               <button onClick={() => handleTabChange('terms')} style={s.footerNavLink}>
                 Terms of Service
               </button>
-              <span style={{ color: '#334155' }}>·</span>
+              <span style={{ color: 'var(--text-faint)' }}>·</span>
               <button onClick={() => handleTabChange('risk')} style={s.footerNavLink}>
                 Risk Disclosure
               </button>
-              <span style={{ color: '#334155' }}>·</span>
+              <span style={{ color: 'var(--text-faint)' }}>·</span>
               <Link to="/" style={{...s.footerNavLink, textDecoration:'none'}}>
                 Back to Home
               </Link>
@@ -290,12 +290,12 @@ const TermsAndRiskDisclosure: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: '#0f172a',
+    background: 'var(--surface)',
     color: 'var(--text)',
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
   },
   header: {
-    borderBottom: '1px solid #1e293b',
+    borderBottom: '1px solid var(--border)',
     background: 'rgba(15,23,42,0.95)',
     position: 'sticky',
     top: 0,
@@ -346,7 +346,7 @@ const s: Record<string, React.CSSProperties> = {
   tabs: {
     display: 'flex',
     gap: 4,
-    background: '#1e293b',
+    background: 'var(--raised)',
     borderRadius: 10,
     padding: 4,
     marginBottom: 40,
@@ -364,7 +364,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s',
   },
   tabActive: {
-    background: '#0f172a',
+    background: 'var(--surface)',
     color: 'var(--text-strong)',
     fontWeight: 600,
     boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
@@ -380,8 +380,8 @@ const s: Record<string, React.CSSProperties> = {
   subtitle: { fontSize: 15, color: 'var(--text-muted)', margin: 0 },
   sections: { display: 'flex', flexDirection: 'column', gap: 24 },
   section: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     padding: '28px 32px',
   },
@@ -406,19 +406,19 @@ const s: Record<string, React.CSSProperties> = {
   footerNote: {
     marginTop: 48,
     paddingTop: 24,
-    borderTop: '1px solid #1e293b',
+    borderTop: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: 12,
   },
-  footerText: { fontSize: 13, color: '#475569', margin: 0 },
+  footerText: { fontSize: 13, color: 'var(--text-faint)', margin: 0 },
   footerLink: { color: '#3b82f6', textDecoration: 'none' },
   footerLinks: { display: 'flex', gap: 12, alignItems: 'center' },
   footerNavLink: {
     background: 'none',
     border: 'none',
-    color: '#475569',
+    color: 'var(--text-faint)',
     fontSize: 13,
     cursor: 'pointer',
     padding: 0,

@@ -421,7 +421,7 @@ const RiskCalculator: React.FC = () => {
                 look current when it is not (F1-01). */}
             {livePrice && !freshness.failed && (
               <div style={{ fontSize: 11, color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
-                ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: '#475569' }}>{livePriceAge}s</span>
+                ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: 'var(--text-faint)' }}>{livePriceAge}s</span>
               </div>
             )}
             <button onClick={() => setShowHistory(h => !h)}
@@ -585,7 +585,7 @@ const RiskCalculator: React.FC = () => {
                   value={calcLabel}
                   onChange={e => setCalcLabel(e.target.value)}
                   placeholder="Label (optional)"
-                  style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-strong)', fontSize: 12, padding: '6px 10px', outline: 'none' }}
+                  style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 12, padding: '6px 10px', outline: 'none' }}
                 />
                 <button onClick={() => void handleSave()} disabled={saving}
                   style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
@@ -609,7 +609,7 @@ const RiskCalculator: React.FC = () => {
 
       {/* ── Saved history panel ── */}
       {showHistory && (
-        <div style={{ marginTop: 24, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20 }}>
+        <div style={{ marginTop: 24, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div style={s.cardTitle}>Saved Calculations</div>
             <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
@@ -624,7 +624,7 @@ const RiskCalculator: React.FC = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {history.map(h => (
-                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
                       {h.label || h.symbol} · 1:{Number.isFinite(h.rr_ratio) ? h.rr_ratio.toFixed(2) : '—'} R:R
@@ -632,7 +632,7 @@ const RiskCalculator: React.FC = () => {
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       Entry {h.entry_price} · SL {h.stop_loss} · TP {h.take_profit} · {h.lot_size.toFixed(4)} lots
                     </div>
-                    <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>
                       {new Date(h.saved_at).toLocaleString()}
                     </div>
                   </div>
@@ -703,12 +703,12 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
       </div>
 
       {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Prop Firm</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
-        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
-        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
+        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Prop Firm</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
+        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
+        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
+        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
       </div>
       <RelatedPages
         links={[
@@ -728,7 +728,7 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: '#0f172a',
+    background: 'var(--surface)',
     color: 'var(--text-strong)',
     fontFamily: "'Inter', system-ui, sans-serif",
     padding: '24px',
@@ -742,10 +742,10 @@ const s: Record<string, React.CSSProperties> = {
     gap: 24,
   },
   card: {
-    background: '#1e293b',
+    background: 'var(--raised)',
     borderRadius: 12,
     padding: 24,
-    border: '1px solid #334155',
+    border: '1px solid var(--border-strong)',
   },
   cardTitle: {
     fontSize: 14,
@@ -759,8 +759,8 @@ const s: Record<string, React.CSSProperties> = {
   inputWrap: {
     display: 'flex',
     alignItems: 'center',
-    background: '#0f172a',
-    border: '1px solid #334155',
+    background: 'var(--surface)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -777,23 +777,23 @@ const s: Record<string, React.CSSProperties> = {
     padding: '0 10px',
     color: 'var(--text-muted)',
     fontSize: 13,
-    background: '#1e293b',
-    borderRight: '1px solid #334155',
+    background: 'var(--raised)',
+    borderRight: '1px solid var(--border-strong)',
     height: '100%',
     display: 'flex',
     alignItems: 'center',
   },
   select: {
     width: '100%',
-    background: '#0f172a',
-    border: '1px solid #334155',
+    background: 'var(--surface)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 8,
     color: 'var(--text-strong)',
     fontSize: 15,
     padding: '10px 12px',
     outline: 'none',
   },
-  divider: { height: 1, background: '#334155', margin: '20px 0' },
+  divider: { height: 1, background: 'var(--surface-hover)', margin: '20px 0' },
   rrDisplay: { textAlign: 'center', padding: '16px 0' },
   rrLabel: { fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 },
   rrValue: { fontSize: 48, fontWeight: 800, lineHeight: 1 },
@@ -803,19 +803,19 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '8px 0',
-    borderBottom: '1px solid #1e293b',
+    borderBottom: '1px solid var(--border)',
   },
-  resultRowHighlight: { background: '#1e293b', borderRadius: 6, padding: '8px 12px', marginBottom: 4 },
+  resultRowHighlight: { background: 'var(--raised)', borderRadius: 6, padding: '8px 12px', marginBottom: 4 },
   resultLabel: { fontSize: 13, color: 'var(--text-dim)' },
-  resultValue: { fontSize: 14, color: '#cbd5e1', fontWeight: 500 },
-  placeholder: { color: '#475569', fontSize: 14, textAlign: 'center', padding: '32px 0' },
+  resultValue: { fontSize: 14, color: 'var(--text-dim)', fontWeight: 500 },
+  placeholder: { color: 'var(--text-faint)', fontSize: 14, textAlign: 'center', padding: '32px 0' },
   vizWrap: { padding: '16px 0' },
   vizBar: {
     position: 'relative',
     height: 240,
-    background: '#0f172a',
+    background: 'var(--surface)',
     borderRadius: 8,
-    border: '1px solid #334155',
+    border: '1px solid var(--border-strong)',
     overflow: 'hidden',
   },
   vizZone: { position: 'absolute', left: 0, right: 0 },

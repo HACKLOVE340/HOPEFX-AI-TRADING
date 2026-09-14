@@ -109,7 +109,7 @@ const AdminSettingsSection: React.FC = () => {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading admin settings…
     </div>
   );
@@ -207,7 +207,7 @@ const AdminSettingsSection: React.FC = () => {
                 {form.ip_whitelist.map((ip) => (
                   <div key={ip} style={{
                     display: 'flex', alignItems: 'center', gap: 6,
-                    background: '#0f172a', border: '1px solid #334155',
+                    background: 'var(--surface)', border: '1px solid var(--border-strong)',
                     borderRadius: 6, padding: '4px 10px', fontSize: 13, color: 'var(--text-dim)',
                   }}>
                     {ip}

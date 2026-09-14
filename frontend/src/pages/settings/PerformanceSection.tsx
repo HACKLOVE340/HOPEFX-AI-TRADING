@@ -117,7 +117,7 @@ function pctColor(pct: number, warn = 70, danger = 90): string {
 const GaugeBar: React.FC<{ pct: number; warn?: number; danger?: number }> = ({
   pct, warn = 70, danger = 90,
 }) => (
-  <div style={{ height: 6, background: '#0f172a', borderRadius: 3, overflow: 'hidden', marginTop: 6 }}>
+  <div style={{ height: 6, background: 'var(--surface)', borderRadius: 3, overflow: 'hidden', marginTop: 6 }}>
     <div style={{
       height: '100%',
       width: `${Math.min(pct, 100)}%`,
@@ -131,7 +131,7 @@ const GaugeBar: React.FC<{ pct: number; warn?: number; danger?: number }> = ({
 const MetricRow: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({
   label, value, sub, color,
 }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: '1px solid #1e293b' }}>
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
     <span style={{ fontSize: 13, fontWeight: 600, color: color ?? 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>
       {value}
@@ -141,8 +141,8 @@ const MetricRow: React.FC<{ label: string; value: string; sub?: string; color?: 
 );
 
 const StatTile: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color }) => (
-  <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
-    <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
+  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
+    <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 16, fontWeight: 700, color: color ?? 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
   </div>
 );
@@ -187,7 +187,7 @@ const PerformanceSection: React.FC = () => {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading performance metrics…
     </div>
   );
@@ -228,7 +228,7 @@ const PerformanceSection: React.FC = () => {
           ↻ Refresh now
         </Button>
         {lastRefresh && (
-          <span style={{ fontSize: 11, color: '#475569' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
             Last updated: {lastRefresh.toLocaleTimeString()}
           </span>
         )}
@@ -407,7 +407,7 @@ const PerformanceSection: React.FC = () => {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '7px 0',
-                  borderBottom: '1px solid #1e293b',
+                  borderBottom: '1px solid var(--border)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -425,7 +425,7 @@ const PerformanceSection: React.FC = () => {
                 <span style={{
                   fontSize: 12,
                   fontFamily: 'JetBrains Mono, monospace',
-                  color: c.latency_ms == null ? '#475569'
+                  color: c.latency_ms == null ? 'var(--text-faint)'
                     : c.latency_ms < 10 ? 'var(--gain)'
                     : c.latency_ms < 100 ? 'var(--warn)'
                     : 'var(--loss)',

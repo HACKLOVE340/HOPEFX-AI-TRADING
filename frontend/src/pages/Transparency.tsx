@@ -81,7 +81,7 @@ const Transparency: React.FC = () => {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
             {tiles.map((t) => (
-              <div key={t.label} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' }}>
+              <div key={t.label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
                 <div style={{ fontSize: 22, fontWeight: 700 }}>{t.value}</div>
               </div>
@@ -89,13 +89,13 @@ const Transparency: React.FC = () => {
           </div>
 
           <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Recent Decisions</h2>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12, marginBottom: 20 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12, marginBottom: 20 }}>
             {decisions.length === 0 ? (
               <div style={{ color: 'var(--text-muted)', padding: 8 }}>No decisions recorded yet.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {decisions.map((d, i) => (
-                  <div key={d.trade_id ?? i} style={{ padding: '10px 12px', background: '#0f172a', borderRadius: 8 }}>
+                  <div key={d.trade_id ?? i} style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                       <span style={{ fontWeight: 700 }}>{d.symbol ?? '—'}</span>
                       <span style={{ fontSize: 12, color: d.direction === 'short' || d.direction === 'sell' ? 'var(--loss)' : 'var(--gain)', fontWeight: 600 }}>{(d.direction ?? '').toUpperCase()}</span>
@@ -103,7 +103,7 @@ const Transparency: React.FC = () => {
                       {d.outcome && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: OUTCOME_COLOR[d.outcome.toLowerCase()] ?? 'var(--text-dim)' }}>{d.outcome}</span>}
                     </div>
                     {d.reasoning && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{d.reasoning}</div>}
-                    {d.timestamp && <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{d.timestamp}</div>}
+                    {d.timestamp && <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{d.timestamp}</div>}
                   </div>
                 ))}
               </div>
@@ -111,15 +111,15 @@ const Transparency: React.FC = () => {
           </div>
 
           <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Audit Log</h2>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12 }}>
             {audit.length === 0 ? (
               <div style={{ color: 'var(--text-muted)', padding: 8 }}>No audit entries.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {audit.map((e, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '6px 10px', background: '#0f172a', borderRadius: 6, fontSize: 12 }}>
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 12 }}>
                     <span style={{ fontWeight: 600 }}>{e.action_type ?? 'event'}</span>
-                    <span style={{ color: '#475569' }}>{e.timestamp ?? ''}</span>
+                    <span style={{ color: 'var(--text-faint)' }}>{e.timestamp ?? ''}</span>
                   </div>
                 ))}
               </div>

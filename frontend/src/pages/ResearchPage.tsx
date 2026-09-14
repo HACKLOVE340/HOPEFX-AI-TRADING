@@ -100,7 +100,7 @@ function StatusBadge({ status }: { status: string }) {
 function SignalCard({ signal }: { signal: Signal }) {
   return (
     <div style={{
-      background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8,
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
       padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12,
     }}>
       <div style={{
@@ -130,7 +130,7 @@ function MetricsGrid({ metrics }: { metrics: Record<string, number> }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
       {entries.map(([key, val]) => (
         <div key={key} style={{
-          background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 12px',
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px',
         }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'capitalize' }}>
             {key.replace(/_/g, ' ')}
@@ -169,7 +169,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
     }}>
       <div style={{
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
         padding: 24, width: '100%', maxWidth: 480,
       }}>
         <h2 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
@@ -179,13 +179,13 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
           <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
             Title
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. XAUUSD Weekly Analysis"
-              style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a', border: '1px solid #334155',
+              style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                 borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }} />
           </label>
           <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
             Template
             <select value={template} onChange={e => setTemplate(e.target.value)}
-              style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a', border: '1px solid #334155',
+              style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                 borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
               {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
@@ -194,7 +194,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
             <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
               Symbol
               <select value={symbol} onChange={e => setSymbol(e.target.value)}
-                style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a', border: '1px solid #334155',
+                style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                   borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -202,7 +202,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
             <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
               Timeframe
               <select value={timeframe} onChange={e => setTimeframe(e.target.value)}
-                style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a', border: '1px solid #334155',
+                style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                   borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
                 {TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
               </select>
@@ -211,7 +211,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
           <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
             Description (optional)
             <textarea value={description} onChange={e => setDesc(e.target.value)} rows={2}
-              style={{ display: 'block', width: '100%', marginTop: 4, background: '#0f172a', border: '1px solid #334155',
+              style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                 borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
           </label>
         </div>
@@ -224,7 +224,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
             {creating ? 'Creating…' : 'Create Notebook'}
           </button>
           <button onClick={onClose}
-            style={{ padding: '9px 16px', background: '#334155', color: 'var(--text-dim)', border: 'none',
+            style={{ padding: '9px 16px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
               borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
             Cancel
           </button>
@@ -299,9 +299,9 @@ const ResearchPage: React.FC = () => {
             <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading notebooks…</div>
           )}
           {!nbLoading && notebooks.length === 0 && (
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+            <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
-              <Microscope size={30} strokeWidth={1.5} aria-hidden style={{ marginBottom: 12, color: '#475569' }} />
+              <Microscope size={30} strokeWidth={1.5} aria-hidden style={{ marginBottom: 12, color: 'var(--text-faint)' }} />
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No research notebooks yet</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Create one to start AI-powered market analysis</div>
               <button onClick={() => navigate('/ai-strategy')}
@@ -315,7 +315,7 @@ const ResearchPage: React.FC = () => {
               <div key={nb.notebook_id}
                 onClick={() => setSelected(nb)}
                 style={{
-                  background: selected?.notebook_id === nb.notebook_id ? '#1e3a5f' : '#1e293b',
+                  background: selected?.notebook_id === nb.notebook_id ? '#1e3a5f' : 'var(--raised)',
                   border: `1px solid ${selected?.notebook_id === nb.notebook_id ? '#3b82f6' : '#334155'}`,
                   borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
                   transition: 'border-color 0.15s',
@@ -338,7 +338,7 @@ const ResearchPage: React.FC = () => {
 
         {/* Notebook detail */}
         {selected && (
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
                 <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{selected.title}</h2>
@@ -365,7 +365,7 @@ const ResearchPage: React.FC = () => {
                   Delete
                 </button>
                 <button onClick={() => setSelected(null)}
-                  style={{ padding: '7px 10px', background: '#334155', color: 'var(--text-dim)', border: 'none',
+                  style={{ padding: '7px 10px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
                     borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
                   ✕
                 </button>
@@ -379,11 +379,11 @@ const ResearchPage: React.FC = () => {
             {selected.results ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {/* Summary */}
-                <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: 16 }}>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Summary
                   </div>
-                  <p style={{ margin: 0, fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>{selected.results.summary}</p>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>{selected.results.summary}</p>
                 </div>
 
                 {/* Metrics */}
@@ -421,7 +421,7 @@ const ResearchPage: React.FC = () => {
                   </div>
                 )}
 
-                <div style={{ fontSize: 11, color: '#475569', textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'right' }}>
                   Generated {new Date(selected.results.generated_at).toLocaleString()}
                 </div>
               </div>

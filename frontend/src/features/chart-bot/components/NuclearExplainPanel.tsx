@@ -275,7 +275,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-dim)',
   },
   panelSubtitle: {
-    fontSize: 9, color: '#475569', letterSpacing: 1.5,
+    fontSize: 9, color: 'var(--text-faint)', letterSpacing: 1.5,
   },
   scrollArea: {
     flex: 1, overflowY: 'auto', padding: '12px',
@@ -287,10 +287,10 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 6, padding: '10px 12px',
   },
   explainLabel: {
-    fontSize: 9, color: '#475569', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
+    fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
   },
   explainText: {
-    fontSize: 12, color: '#cbd5e1', lineHeight: 1.7,
+    fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7,
   },
   card: {
     background: 'rgba(255,255,255,0.02)',
@@ -303,10 +303,10 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: 10,
   },
   cardTitle: {
-    fontSize: 9, color: '#475569', letterSpacing: 2, fontWeight: 700,
+    fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700,
   },
   cardSubtitle: {
-    fontSize: 9, color: '#334155',
+    fontSize: 9, color: 'var(--text-faint)',
   },
   rlBadge: {
     fontSize: 10, fontWeight: 800, padding: '2px 8px',
@@ -319,7 +319,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', gap: 2,
   },
   cellLabel: {
-    fontSize: 8, color: '#334155', letterSpacing: 1.5, fontWeight: 700,
+    fontSize: 8, color: 'var(--text-faint)', letterSpacing: 1.5, fontWeight: 700,
   },
   cellValue: {
     fontSize: 13, fontWeight: 700, color: 'var(--text-dim)', fontFamily: 'monospace',
@@ -357,13 +357,13 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 11, fontWeight: 600, fontFamily: 'monospace',
   },
   termCat: {
-    fontSize: 9, color: '#334155', textTransform: 'capitalize',
+    fontSize: 9, color: 'var(--text-faint)', textTransform: 'capitalize',
   },
   termRight: {
     display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1,
   },
   termWeight: {
-    fontSize: 9, color: '#475569', fontFamily: 'monospace',
+    fontSize: 9, color: 'var(--text-faint)', fontFamily: 'monospace',
   },
   termContrib: {
     fontSize: 11, fontWeight: 700, fontFamily: 'monospace',
@@ -376,7 +376,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: '3px 0', borderBottom: '1px solid #0a1628',
   },
   riskLabel: {
-    fontSize: 10, color: '#475569',
+    fontSize: 10, color: 'var(--text-faint)',
   },
   riskValue: {
     fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
@@ -402,7 +402,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1,
   },
   eventTime: {
-    fontSize: 9, color: '#334155', marginLeft: 'auto', fontFamily: 'monospace',
+    fontSize: 9, color: 'var(--text-faint)', marginLeft: 'auto', fontFamily: 'monospace',
   },
   eventText: {
     fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5,
@@ -412,6 +412,6 @@ const s: Record<string, React.CSSProperties> = {
     padding: '32px 16px', gap: 8,
   },
   emptyIcon: { fontSize: 32 },
-  emptyText: { fontSize: 13, color: '#475569', fontWeight: 600 },
-  emptySubtext: { fontSize: 11, color: '#334155' },
+  emptyText: { fontSize: 13, color: 'var(--text-faint)', fontWeight: 600 },
+  emptySubtext: { fontSize: 11, color: 'var(--text-faint)' },
 };

@@ -201,7 +201,7 @@ const BillingSection: React.FC = () => {
             <div key={id} style={{
               padding: '14px', borderRadius: 10,
               border: `1px solid ${highlight ? '#3b82f6' : '#334155'}`,
-              background: highlight ? '#0c1a2e' : '#0f172a',
+              background: highlight ? '#0c1a2e' : 'var(--surface)',
               position: 'relative',
             }}>
               {highlight && (
@@ -213,7 +213,7 @@ const BillingSection: React.FC = () => {
                   MOST POPULAR
                 </div>
               )}
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{name}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>{name}</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: PLAN_COLORS[id] ?? 'var(--text-dim)', marginBottom: 10 }}>
                 {price}<span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>/mo</span>
               </div>
@@ -255,7 +255,7 @@ const BillingSection: React.FC = () => {
           transactions.map((tx) => (
             <div key={tx.id} style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '12px 0', borderBottom: '1px solid #1e293b',
+              padding: '12px 0', borderBottom: '1px solid var(--border)',
             }}>
               <div>
                 <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{tx.description}</div>

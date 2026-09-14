@@ -171,7 +171,7 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
           aria-label="Answer so far"
           aria-busy={live}
           style={{
-            background: '#0b1220', border: '1px solid #1e2d44', borderRadius: 8,
+            background: 'var(--surface)', border: '1px solid #1e2d44', borderRadius: 8,
             padding: 10, color: COLOR.text, fontSize: 12, lineHeight: 1.6,
             maxHeight: 260, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
             boxSizing: 'border-box',
@@ -191,7 +191,7 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
         <>
           <div
             style={{
-              background: '#0b1220', border: '1px solid #1e2d44', borderRadius: 8,
+              background: 'var(--surface)', border: '1px solid #1e2d44', borderRadius: 8,
               padding: 10, color: COLOR.text, fontSize: 12, lineHeight: 1.6,
               maxHeight: 260, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
             }}
@@ -322,7 +322,7 @@ export const GenerationWorkbench: React.FC = () => {
             // a container class, not `*`, so width:100% plus padding would
             // overflow by 20px and scroll the page sideways on a narrow screen.
             width: '100%', boxSizing: 'border-box',
-            resize: 'vertical', background: '#0b1220',
+            resize: 'vertical', background: 'var(--surface)',
             border: '1px solid #1e2d44', borderRadius: 8, padding: 10,
             color: COLOR.text, fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit',
           }}
@@ -335,7 +335,7 @@ export const GenerationWorkbench: React.FC = () => {
             value={role}
             onChange={(e) => setRole(e.target.value)}
             style={{
-              minHeight: 44, background: '#0b1220', border: '1px solid #1e2d44',
+              minHeight: 44, background: 'var(--surface)', border: '1px solid #1e2d44',
               borderRadius: 8, color: COLOR.text, fontSize: 12, padding: '0 10px',
               cursor: 'pointer',
             }}

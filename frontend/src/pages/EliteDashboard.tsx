@@ -33,16 +33,16 @@ const s = {
   heading: { fontSize: 26, fontWeight: 800, color: '#f59e0b', marginBottom: 4 } as React.CSSProperties,
   sub:     { fontSize: 14, color: 'var(--text-dim)', marginBottom: 32 } as React.CSSProperties,
   grid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 } as React.CSSProperties,
-  card:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 12, padding: 24 } as React.CSSProperties,
+  card:    { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24 } as React.CSSProperties,
   cardH:   { fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 } as React.CSSProperties,
   label:   { fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block' } as React.CSSProperties,
-  input:   { width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
-  textarea:{ width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', resize: 'vertical', minHeight: 100, boxSizing: 'border-box' } as React.CSSProperties,
-  select:  { width: '100%', padding: '9px 12px', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none' } as React.CSSProperties,
+  input:   { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
+  textarea:{ width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', resize: 'vertical', minHeight: 100, boxSizing: 'border-box' } as React.CSSProperties,
+  select:  { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none' } as React.CSSProperties,
   btn:     { padding: '10px 20px', background: '#f59e0b', color: '#0a0e1a', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer' } as React.CSSProperties,
-  btnSec:  { padding: '10px 20px', background: 'transparent', color: 'var(--text-dim)', border: '1px solid #334155', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' } as React.CSSProperties,
+  btnSec:  { padding: '10px 20px', background: 'transparent', color: 'var(--text-dim)', border: '1px solid var(--border-strong)', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' } as React.CSSProperties,
   field:   { marginBottom: 14 } as React.CSSProperties,
-  row:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px solid #1e293b' } as React.CSSProperties,
+  row:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px solid var(--border)' } as React.CSSProperties,
   amRow:   { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, fontSize: 13, color: 'var(--text-dim)' } as React.CSSProperties,
   amVal:   { color: 'var(--text)', fontWeight: 500 } as React.CSSProperties,
   success: { background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--gain)', marginBottom: 16 } as React.CSSProperties,
@@ -138,7 +138,7 @@ function AccountManagerCard() {
               <span style={s.amVal}>{am.slack_channel}</span>
             </div>
           )}
-          <div style={{ marginTop: 16, padding: '12px', background: '#1e293b', borderRadius: 8 }}>
+          <div style={{ marginTop: 16, padding: '12px', background: 'var(--raised)', borderRadius: 8 }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>RESPONSE SLA</div>
             {Object.entries(am.response_sla ?? {}).map(([priority, time]) => (
               <div key={priority} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
@@ -285,12 +285,12 @@ function TicketList({ refresh }: { refresh: number }) {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={badgeStyle(PRIORITY_COLORS[t.priority] ?? 'var(--text-muted)')}>{t.priority}</span>
                 <span style={badgeStyle(STATUS_COLORS[t.status] ?? 'var(--text-muted)')}>{t.status}</span>
-                <span style={{ fontSize: 11, color: '#475569' }}>{t.category}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{t.category}</span>
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{t.ticket_id}</div>
-              <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{t.ticket_id}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
                 {new Date(t.created_at).toLocaleDateString()}
               </div>
             </div>
@@ -473,13 +473,13 @@ function CustomDevList({ refresh }: { refresh: number }) {
                 <span style={badgeStyle('#8b5cf6')}>{r.request_type}</span>
                 <span style={badgeStyle(STATUS_COLORS[r.status] ?? 'var(--text-muted)')}>{r.status}</span>
                 {r.budget_usd != null && (
-                  <span style={{ fontSize: 11, color: '#475569' }}>${r.budget_usd.toLocaleString()}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>${r.budget_usd.toLocaleString()}</span>
                 )}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{r.request_id}</div>
-              <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{r.request_id}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
                 {new Date(r.created_at).toLocaleDateString()}
               </div>
             </div>

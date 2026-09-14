@@ -150,7 +150,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
         <div>
-          <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>Patch Diff — {patch.file}</div>
+          <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 14 }}>Patch Diff — {patch.file}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {patch.endpoint} · {new Date(patch.applied_at).toLocaleString()}
           </div>
@@ -164,7 +164,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
       </div>
       <div style={{ overflowY: 'auto', padding: '16px 20px', flex: 1 }}>
         {patch.message && (
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--text-dim)', marginBottom: 12 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--text-dim)', marginBottom: 12 }}>
             {patch.message}
           </div>
         )}
@@ -181,7 +181,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
             ))}
           </pre>
         ) : (
-          <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No diff available for this patch.</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No diff available for this patch.</div>
         )}
       </div>
     </div>
@@ -374,7 +374,7 @@ const AutoHealDashboard: React.FC = () => {
             {scanning ? '🔍 Scanning…' : '🔍 Integrity Scan'}
           </button>
           {scanning && (
-            <div style={{ position: 'relative', width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+            <div style={{ position: 'relative', width: '100%', background: 'var(--raised)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, height: '100%', background: '#3b82f6', borderRadius: 4, animation: 'indeterminate 1.1s ease-in-out infinite' }} />
             </div>
           )}
@@ -387,7 +387,7 @@ const AutoHealDashboard: React.FC = () => {
             {avScanning ? '🛡️ AV Scan…' : '🛡️ AV Full Scan'}
           </button>
           {avScanning && (
-            <div style={{ position: 'relative', width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+            <div style={{ position: 'relative', width: '100%', background: 'var(--raised)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, height: '100%', background: '#7c3aed', borderRadius: 4, animation: 'indeterminate 1.1s ease-in-out infinite' }} />
             </div>
           )}
@@ -515,22 +515,22 @@ const mainGridStyle: React.CSSProperties = {
 };
 
 const panelStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
+  background: 'var(--surface, var(--raised))',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 10, display: 'flex', flexDirection: 'column', overflow: 'hidden',
 };
 
 const panelHeaderStyle: React.CSSProperties = {
-  alignItems: 'center', borderBottom: '1px solid var(--border, #334155)',
+  alignItems: 'center', borderBottom: '1px solid var(--border, var(--border-strong))',
   display: 'flex', justifyContent: 'space-between', padding: '12px 16px',
 };
 
 const panelTitleStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)', fontSize: 13, fontWeight: 700,
+  color: 'var(--text, var(--text-strong))', fontSize: 13, fontWeight: 700,
 };
 
 const panelCountStyle: React.CSSProperties = {
-  background: '#334155', borderRadius: 10, color: 'var(--text-dim)',
+  background: 'var(--surface-hover)', borderRadius: 10, color: 'var(--text-dim)',
   fontSize: 11, fontWeight: 700, padding: '2px 8px',
 };
 
@@ -543,12 +543,12 @@ const tableWrapStyle: React.CSSProperties = {
 };
 
 const tableRowStyle: React.CSSProperties = {
-  alignItems: 'center', borderBottom: '1px solid #1e293b',
+  alignItems: 'center', borderBottom: '1px solid var(--border)',
   display: 'flex', gap: 10, padding: '8px 16px',
 };
 
 const monoStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)', fontFamily: 'monospace',
+  color: 'var(--text, var(--text-strong))', fontFamily: 'monospace',
   fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 };
 
@@ -557,7 +557,7 @@ const timeStyle: React.CSSProperties = {
 };
 
 const diffStyle: React.CSSProperties = {
-  background: '#0f172a', color: 'var(--text-dim)', fontFamily: 'monospace',
+  background: 'var(--surface)', color: 'var(--text-dim)', fontFamily: 'monospace',
   fontSize: 10, margin: 0, maxHeight: 200, overflowY: 'auto',
   padding: '8px 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
 };
@@ -603,7 +603,7 @@ const quarantineBtnStyle: React.CSSProperties = {
 };
 
 const quarantinedBadgeStyle: React.CSSProperties = {
-  background: '#33415522', border: '1px solid #475569', borderRadius: 10,
+  background: '#33415522', border: '1px solid var(--border-strong)', borderRadius: 10,
   color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, padding: '2px 7px', flexShrink: 0,
 };
 

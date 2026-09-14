@@ -154,7 +154,7 @@ const SystemHealthSection: React.FC = () => {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
         {(['services', 'backups', 'jobs', 'apikeys'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            background: tab === t ? '#1e293b' : 'transparent',
+            background: tab === t ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
             padding: '7px 14px', fontSize: 13, cursor: 'pointer',
@@ -169,7 +169,7 @@ const SystemHealthSection: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
           {services.map(svc => (
             <div key={svc.name} style={{
-              background: '#0f172a', border: `1px solid ${svc.status === 'healthy' ? '#16a34a33' : svc.status === 'down' ? '#7f1d1d' : '#334155'}`,
+              background: 'var(--surface)', border: `1px solid ${svc.status === 'healthy' ? '#16a34a33' : svc.status === 'down' ? '#7f1d1d' : '#334155'}`,
               borderRadius: 12, padding: '16px 18px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -181,13 +181,13 @@ const SystemHealthSection: React.FC = () => {
               </div>
               <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
                 <div>
-                  <div style={{ color: '#475569', marginBottom: 2 }}>Latency</div>
+                  <div style={{ color: 'var(--text-faint)', marginBottom: 2 }}>Latency</div>
                   <div style={{ color: svc.latency_ms > 500 ? 'var(--loss)' : svc.latency_ms > 100 ? 'var(--warn)' : 'var(--gain)', fontWeight: 700 }}>
                     {svc.latency_ms}ms
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: '#475569', marginBottom: 2 }}>Last Check</div>
+                  <div style={{ color: 'var(--text-faint)', marginBottom: 2 }}>Last Check</div>
                   <div style={{ color: 'var(--text-muted)' }}>{fmtDate(svc.last_check)}</div>
                 </div>
               </div>
@@ -207,7 +207,7 @@ const SystemHealthSection: React.FC = () => {
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               {(['full', 'incremental', 'snapshot'] as const).map(t => (
                 <button key={t} onClick={() => setBackupType(t)} style={{
-                  background: backupType === t ? '#1e3a5f' : '#0f172a',
+                  background: backupType === t ? '#1e3a5f' : 'var(--surface)',
                   border: `1px solid ${backupType === t ? '#3b82f6' : '#334155'}`,
                   borderRadius: 8, color: backupType === t ? 'var(--link)' : 'var(--text-muted)',
                   padding: '7px 16px', fontSize: 13, cursor: 'pointer', textTransform: 'capitalize',
@@ -227,13 +227,13 @@ const SystemHealthSection: React.FC = () => {
                 <thead>
                   <tr>
                     {['Backup ID', 'Type', 'Status', 'Size', 'Created'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {backups.map(b => (
-                    <tr key={b.backup_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                    <tr key={b.backup_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                       <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--link)' }}>{b.backup_id}</td>
                       <td style={{ padding: '10px 16px', textTransform: 'capitalize', color: 'var(--text-dim)' }}>{b.type}</td>
                       <td style={{ padding: '10px 16px' }}><StatusBadge status={b.status} /></td>
@@ -254,16 +254,16 @@ const SystemHealthSection: React.FC = () => {
             <thead>
               <tr>
                 {['Job', 'Schedule', 'Status', 'Last Run', 'Duration', 'Actions'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {jobs.map(job => (
-                <tr key={job.job_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                <tr key={job.job_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 16px' }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{job.name}</div>
-                    <div style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{job.job_id}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{job.job_id}</div>
                   </td>
                   <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--ai-model)' }}>{job.schedule}</td>
                   <td style={{ padding: '10px 16px' }}><StatusBadge status={job.status} /></td>
@@ -297,21 +297,21 @@ const SystemHealthSection: React.FC = () => {
               <thead>
                 <tr>
                   {['Key', 'User', 'Scopes', 'Created', 'Last Used', 'Active', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {apiKeys.map(k => (
-                  <tr key={k.key_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <tr key={k.key_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 16px' }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--ai-model)' }}>{k.prefix}…</div>
-                      <div style={{ fontSize: 11, color: '#475569' }}>{k.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{k.name}</div>
                     </td>
                     <td style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-dim)', fontFamily: 'monospace' }}>{k.user_id.slice(0, 12)}…</td>
                     <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{k.scopes?.join(', ') || 'all'}</td>
                     <td style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(k.created_at)}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 12, color: k.last_used ? 'var(--text-dim)' : '#334155' }}>{fmtDate(k.last_used)}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 12, color: k.last_used ? 'var(--text-dim)' : 'var(--text-faint)' }}>{fmtDate(k.last_used)}</td>
                     <td style={{ padding: '10px 16px' }}>
                       <span style={{ color: k.active ? 'var(--gain)' : 'var(--loss)', fontSize: 12, fontWeight: 700 }}>
                         {k.active ? 'Active' : 'Revoked'}

@@ -172,7 +172,7 @@ const GroupLabel: React.FC<{
   groupCollapsed?: boolean;
   onToggle?: () => void;
 }> = ({ label, collapsed, groupCollapsed, onToggle }) => {
-  if (collapsed) return <div style={{ height: 1, background: '#1e293b', margin: '6px 8px' }} />;
+  if (collapsed) return <div style={{ height: 1, background: 'var(--raised)', margin: '6px 8px' }} />;
   return (
     <button
       onClick={onToggle}
@@ -180,7 +180,7 @@ const GroupLabel: React.FC<{
       style={{
         display: 'flex', alignItems: 'center', gap: 6, width: '100%',
         background: 'transparent', border: 'none', cursor: 'pointer',
-        fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
+        fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
         letterSpacing: '0.08em', padding: '14px 14px 4px', textAlign: 'left',
         fontFamily: 'inherit',
       }}
@@ -285,7 +285,7 @@ const NavItemRow: React.FC<NavItemRowProps> = ({
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(item.path); }}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
-              color: isFavorite ? 'var(--warn)' : '#475569',
+              color: isFavorite ? 'var(--warn)' : 'var(--text-faint)',
               lineHeight: 1, padding: 2, flexShrink: 0,
               display: 'flex', alignItems: 'center',
             }}
@@ -309,14 +309,14 @@ const NavItemRow: React.FC<NavItemRowProps> = ({
 const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => (
   <div style={{
     padding: '6px 10px',
-    borderBottom: '1px solid #1e293b',
+    borderBottom: '1px solid var(--border)',
   }}>
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
-      background: '#0f172a', border: '1px solid #1e293b',
+      background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: 6, padding: '5px 8px',
     }}>
-      <Search size={12} strokeWidth={2} aria-hidden style={{ color: '#475569', flexShrink: 0 }} />
+      <Search size={12} strokeWidth={2} aria-hidden style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
       <input aria-label="Search"
         type="text"
         placeholder="Search…"
@@ -335,7 +335,7 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({
           title="Clear search"
           style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: '#475569', padding: 0, lineHeight: 1,
+            color: 'var(--text-faint)', padding: 0, lineHeight: 1,
             display: 'flex', alignItems: 'center',
           }}
         >
@@ -484,8 +484,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
   return (
     <aside style={{
       width: collapsed ? 60 : 224,
-      background: 'var(--surface, #1e293b)',
-      borderRight: '1px solid var(--border, #334155)',
+      background: 'var(--surface, var(--raised))',
+      borderRight: '1px solid var(--border, var(--border-strong))',
       display: 'flex', flexDirection: 'column', flexShrink: 0,
       transition: 'width 0.2s ease', overflow: 'hidden',
       height: '100%',
@@ -494,7 +494,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
       {/* Logo / header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 14px', borderBottom: '1px solid var(--border, #334155)',
+        padding: '0 14px', borderBottom: '1px solid var(--border, var(--border-strong))',
         minHeight: 56, flexShrink: 0,
         paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
@@ -553,13 +553,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
         {/* ── Search results mode ── */}
         {filteredItems && !collapsed ? (
           filteredItems.length === 0 ? (
-            <div style={{ padding: '16px 14px', fontSize: 12, color: '#475569', textAlign: 'center' }}>
+            <div style={{ padding: '16px 14px', fontSize: 12, color: 'var(--text-faint)', textAlign: 'center' }}>
               No results for "{search}"
             </div>
           ) : (
             <div>
               <div style={{
-                fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
+                fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
                 letterSpacing: '0.08em', padding: '8px 14px 4px',
               }}>
                 {filteredItems.length} result{filteredItems.length !== 1 ? 's' : ''}
@@ -586,7 +586,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
             {!collapsed && favoriteItems.length > 0 && (
               <div>
                 <div style={{
-                  fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
+                  fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
                   letterSpacing: '0.08em', padding: '8px 14px 4px',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
@@ -612,7 +612,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
             {!collapsed && recentItems.length > 0 && (
               <div>
                 <div style={{
-                  fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
+                  fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
                   letterSpacing: '0.08em', padding: '8px 14px 4px',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
@@ -676,7 +676,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
 
       {/* Footer */}
       <div style={{
-        borderTop: '1px solid var(--border, #334155)',
+        borderTop: '1px solid var(--border, var(--border-strong))',
         padding: collapsed ? '10px 0' : '12px 14px',
         display: 'flex',
         flexDirection: 'column',
@@ -697,7 +697,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                 aria-label="Sign out"
                 style={{
                   background: 'transparent', border: 'none', cursor: 'pointer',
-                  color: '#475569', lineHeight: 1,
+                  color: 'var(--text-faint)', lineHeight: 1,
                   padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   borderRadius: 6,
                 }}
@@ -739,7 +739,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                 <button
                   onClick={handleSignOut}
                   style={{
-                    background: 'transparent', border: '1px solid #334155',
+                    background: 'transparent', border: '1px solid var(--border-strong)',
                     borderRadius: 6, color: 'var(--text-muted)', fontSize: 12,
                     cursor: 'pointer', padding: '4px 8px', textAlign: 'left',
                   }}
@@ -763,14 +763,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
             )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <NavLink to="/" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <NavLink to="/" onClick={onNavigate} style={{ fontSize: 12, color: 'var(--text-faint)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <ArrowLeft size={12} strokeWidth={2} aria-hidden />
                   Landing
                 </NavLink>
-                <NavLink to="/docs" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
+                <NavLink to="/docs" onClick={onNavigate} style={{ fontSize: 12, color: 'var(--text-faint)', textDecoration: 'none' }} title="Documentation">
                   Docs
                 </NavLink>
-                <NavLink to="/system-status" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="System status">
+                <NavLink to="/system-status" onClick={onNavigate} style={{ fontSize: 12, color: 'var(--text-faint)', textDecoration: 'none' }} title="System status">
                   Status
                 </NavLink>
               </div>

@@ -95,7 +95,7 @@ const CorrelationDashboard: React.FC = () => {
           {[14,30,60,90].map(w => (
             <button key={w} style={{ ...s.wBtn, ...(window===w ? s.wBtnActive : {}) }} onClick={() => setWindow(w)}>{w}d</button>
           ))}
-          <div style={{ width:1, height:24, background:'#334155', margin:'0 4px' }} />
+          <div style={{ width:1, height:24, background:'var(--surface-hover)', margin:'0 4px' }} />
           <button
             onClick={() => navigate('/ai-strategy')}
             style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize:12, fontWeight:700, padding:'5px 12px', cursor:'pointer' }}
@@ -109,7 +109,7 @@ const CorrelationDashboard: React.FC = () => {
       {loading ? <div style={s.dim}>Loading…</div> : loadErr ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span style={{ color: 'var(--loss)' }}>⚠ {loadErr}</span>
-          <button onClick={load} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 16px' }}>Retry</button>
+          <button onClick={load} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 16px' }}>Retry</button>
         </div>
       ) : (!corr && !cot) ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
@@ -178,7 +178,7 @@ const CorrelationDashboard: React.FC = () => {
                           const raw = corr.matrix?.[row]?.[col];
                           const v = Number.isFinite(raw) ? (raw as number) : 0;
                           return (
-                            <td key={col} style={{ ...s.mtd, background: row===col ? '#334155' : `${corrColor(v)}22`, color: corrColor(v), fontWeight: row===col ? 700 : 400 }}>
+                            <td key={col} style={{ ...s.mtd, background: row===col ? 'var(--surface-hover)' : `${corrColor(v)}22`, color: corrColor(v), fontWeight: row===col ? 700 : 400 }}>
                               {v.toFixed(2)}
                             </td>
                           );
@@ -200,7 +200,7 @@ const CorrelationDashboard: React.FC = () => {
                   </button>
                 </div>
                 {(corr.insights ?? []).map((ins, i) => (
-                  <div key={i} style={{ fontSize:13, color:'var(--text-dim)', padding:'4px 0', borderBottom:'1px solid #0f172a' }}>
+                  <div key={i} style={{ fontSize:13, color:'var(--text-dim)', padding:'4px 0', borderBottom:'1px solid var(--hairline)' }}>
                     • {ins}
                   </div>
                 ))}
@@ -267,8 +267,8 @@ const CorrelationDashboard: React.FC = () => {
                 <span style={s.cotLabel}>Report Date</span>
                 <span style={{ color:'var(--text-dim)' }}>{cot.report_date}</span>
               </div>
-              <div style={{ fontSize:12, color:'#475569', marginTop:12, lineHeight:1.5 }}>{cot.note}</div>
-              <div style={{ fontSize:11, color:'#334155', marginTop:8 }}>Source: {cot.source}</div>
+              <div style={{ fontSize:12, color:'var(--text-faint)', marginTop:12, lineHeight:1.5 }}>{cot.note}</div>
+              <div style={{ fontSize:11, color:'var(--text-faint)', marginTop:8 }}>Source: {cot.source}</div>
               <button
                 onClick={() => navigate('/trade', {
                   state: { signal: { symbol: 'XAU/USD', direction: cot.sentiment === 'BULLISH' ? 'BUY' : 'SELL' } }
@@ -291,20 +291,20 @@ const CorrelationDashboard: React.FC = () => {
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight:'100vh', background:'#0f172a', color:'var(--text-strong)', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
+  page: { minHeight:'100vh', background:'var(--surface)', color:'var(--text-strong)', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
   header: { display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 },
   title: { fontSize:28, fontWeight:700, margin:0 },
   subtitle: { fontSize:14, color:'var(--text-dim)', marginTop:4 },
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20 },
-  card: { background:'#1e293b', borderRadius:12, padding:24, border:'1px solid #334155' },
+  card: { background:'var(--raised)', borderRadius:12, padding:24, border:'1px solid var(--border-strong)' },
   cardTitle: { fontSize:13, fontWeight:600, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },
-  mth: { padding:'8px 12px', color:'var(--text-muted)', fontWeight:600, textAlign:'center', whiteSpace:'nowrap', borderBottom:'1px solid #334155' },
-  mtd: { padding:'8px 12px', textAlign:'center', borderBottom:'1px solid #0f172a' },
-  cotRow: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #0f172a', fontSize:14 },
+  mth: { padding:'8px 12px', color:'var(--text-muted)', fontWeight:600, textAlign:'center', whiteSpace:'nowrap', borderBottom:'1px solid var(--border-strong)' },
+  mtd: { padding:'8px 12px', textAlign:'center', borderBottom:'1px solid var(--hairline)' },
+  cotRow: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid var(--hairline)', fontSize:14 },
   cotLabel: { color:'var(--text-muted)', fontSize:13 },
-  wBtn: { background:'#1e293b', border:'1px solid #334155', borderRadius:6, color:'var(--text-muted)', padding:'5px 10px', fontSize:12, cursor:'pointer' },
+  wBtn: { background:'var(--raised)', border:'1px solid var(--border-strong)', borderRadius:6, color:'var(--text-muted)', padding:'5px 10px', fontSize:12, cursor:'pointer' },
   wBtnActive: { background:'#3b82f6', border:'1px solid #3b82f6', color:'#fff' },
-  dim: { color:'#475569', textAlign:'center', padding:48 },
+  dim: { color:'var(--text-faint)', textAlign:'center', padding:48 },
 };
 
 export default CorrelationDashboard;

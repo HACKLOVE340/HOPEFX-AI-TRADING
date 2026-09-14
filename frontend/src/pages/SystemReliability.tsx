@@ -32,7 +32,7 @@ const Fallback: React.FC = () => (
     fontFamily: 'Inter, system-ui, sans-serif',
   }}>
     <div style={{
-      width: 20, height: 20, border: '2px solid #334155',
+      width: 20, height: 20, border: '2px solid var(--border-strong)',
       borderTopColor: '#3b82f6', borderRadius: '50%',
       animation: 'spin 0.7s linear infinite',
     }} />

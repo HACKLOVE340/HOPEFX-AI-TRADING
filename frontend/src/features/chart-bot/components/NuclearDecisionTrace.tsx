@@ -177,7 +177,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', gap: 6,
   },
   sectionTitle: {
-    fontSize: 9, color: '#475569', letterSpacing: 2, fontWeight: 700, marginBottom: 4,
+    fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700, marginBottom: 4,
   },
   featureRow: {
     display: 'flex', alignItems: 'center', gap: 6,
@@ -201,7 +201,7 @@ const s: Record<string, React.CSSProperties> = {
     position: 'absolute', bottom: '100%', left: 0, right: 0,
     background: '#0f1f35', border: '1px solid #1a2e4a',
     borderRadius: 4, padding: '6px 8px',
-    fontSize: 10, color: '#cbd5e1', lineHeight: 1.5,
+    fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.5,
     zIndex: 10, pointerEvents: 'none',
     whiteSpace: 'normal',
   },
@@ -223,7 +223,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', gap: 1,
   },
   confLabel: {
-    fontSize: 8, color: '#334155', letterSpacing: 1, textTransform: 'capitalize',
+    fontSize: 8, color: 'var(--text-faint)', letterSpacing: 1, textTransform: 'capitalize',
   },
   confValue: {
     fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
@@ -234,7 +234,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'border-color 0.4s ease',
   },
   narrativeText: {
-    fontSize: 11, color: '#cbd5e1', lineHeight: 1.7, margin: 0,
+    fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.7, margin: 0,
   },
   adviceBox: {
     border: '1px solid', borderRadius: 6, padding: '8px 10px',

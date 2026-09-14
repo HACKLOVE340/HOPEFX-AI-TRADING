@@ -32,7 +32,7 @@ const Pill: React.FC<{
       background: colors.bg, border: `1px solid ${colors.bd}`,
       minWidth: 110,
     }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {label}
       </span>
       <span style={{ fontSize: 14, fontWeight: 700, color: colors.fg }}>{value}</span>
@@ -53,7 +53,7 @@ export const MlSafetyStrip: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div style={{ padding: '14px 16px', fontSize: 13, color: '#475569' }}>
+      <div style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-faint)' }}>
         Loading model health…
       </div>
     );
@@ -63,7 +63,7 @@ export const MlSafetyStrip: React.FC = () => {
     return (
       <div style={{
         padding: '12px 16px', fontSize: 13, color: 'var(--text-dim)',
-        background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 10,
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
       }}>
         Model health unavailable.
       </div>
@@ -80,11 +80,11 @@ export const MlSafetyStrip: React.FC = () => {
 
   return (
     <div style={{
-      background: 'var(--surface)', border: '1px solid #1e293b', borderRadius: 12,
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
       padding: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>🧠 Model Health &amp; Safety Gates</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>🧠 Model Health &amp; Safety Gates</span>
         <span style={{
           fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',
@@ -95,11 +95,11 @@ export const MlSafetyStrip: React.FC = () => {
           {data.status}
         </span>
         {data.model_id && (
-          <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>
             {data.model_id}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#334155' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
           {data.predict_count.toLocaleString()} inferences
         </span>
       </div>
@@ -147,7 +147,7 @@ export const MlSafetyStrip: React.FC = () => {
         />
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 11, color: '#334155', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-faint)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <span>Long threshold: <strong style={{ color: 'var(--text-muted)' }}>{data.threshold_long.toFixed(3)}</strong></span>
         <span>Short threshold: <strong style={{ color: 'var(--text-muted)' }}>{data.threshold_short.toFixed(3)}</strong></span>
         {data.last_trained_at && (

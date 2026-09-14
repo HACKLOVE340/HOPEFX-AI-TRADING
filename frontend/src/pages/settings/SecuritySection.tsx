@@ -185,7 +185,7 @@ const SecuritySection: React.FC = () => {
             </p>
           </div>
           {twoFALoading
-            ? <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+            ? <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
             : is2FA === null
             ? <StatusBadge status="warning" label="Unknown" />
             : <StatusBadge status={is2FA ? 'ok' : 'warning'} label={is2FA ? 'Enabled' : 'Disabled'} />
@@ -267,7 +267,7 @@ const SecuritySection: React.FC = () => {
           sessions.map((session) => (
             <div key={session.session_id} style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '12px 0', borderBottom: '1px solid #1e293b',
+              padding: '12px 0', borderBottom: '1px solid var(--border)',
             }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>

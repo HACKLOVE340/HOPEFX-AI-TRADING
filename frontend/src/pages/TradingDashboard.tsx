@@ -79,7 +79,7 @@ const QuickActionBar: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginRight: 4 }}>
         <Link
           to="/dashboard"
-          style={{ fontSize: 10, color: '#475569', textDecoration: 'none', fontWeight: 600, letterSpacing: 0.5 }}
+          style={{ fontSize: 10, color: 'var(--text-faint)', textDecoration: 'none', fontWeight: 600, letterSpacing: 0.5 }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#64748b'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
         >
@@ -89,7 +89,7 @@ const QuickActionBar: React.FC = () => {
         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
       </div>
 
-      <div style={{ width: 1, height: 20, background: '#1e293b', flexShrink: 0 }} />
+      <div style={{ width: 1, height: 20, background: 'var(--raised)', flexShrink: 0 }} />
 
       {/* Today P&L */}
       <div style={{
@@ -104,11 +104,11 @@ const QuickActionBar: React.FC = () => {
           {unrealisedPnl >= 0 ? '+' : ''}{Number(unrealisedPnl).toFixed(2)}
         </span>
         {positions.length > 0 && (
-          <span style={{ fontSize: 10, color: '#475569' }}>{positions.length} pos</span>
+          <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{positions.length} pos</span>
         )}
       </div>
 
-      <div style={{ width: 1, height: 20, background: '#1e293b', flexShrink: 0 }} />
+      <div style={{ width: 1, height: 20, background: 'var(--raised)', flexShrink: 0 }} />
 
       {/* Quick nav buttons */}
       {actions.map(({ label, path, color }) => (

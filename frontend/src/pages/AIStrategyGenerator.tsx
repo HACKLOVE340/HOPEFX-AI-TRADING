@@ -177,7 +177,7 @@ const AIStrategyGenerator: React.FC = () => {
     <div className="page-content">
       {/* LLM health banner — shown while checking and when unavailable */}
       {llmStatus === 'checking' && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: 'var(--text-dim)' }}>
+        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: 'var(--text-dim)' }}>
           Checking AI backend availability…
         </div>
       )}
@@ -209,7 +209,7 @@ const AIStrategyGenerator: React.FC = () => {
               {t === 'generate' ? '✨ Generate' : `📋 History (${history.length})`}
             </button>
           ))}
-          <div style={{ width: 1, height: 20, background: '#334155' }} />
+          <div style={{ width: 1, height: 20, background: 'var(--surface-hover)' }} />
           <button onClick={() => navigate('/pattern-detector')}
             style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             🔍 Patterns
@@ -225,21 +225,21 @@ const AIStrategyGenerator: React.FC = () => {
       {activeTab === 'history' && (
         <div style={s.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Strategy History</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Strategy History</h3>
             <button onClick={loadHistory} disabled={histLoading} style={{ ...s.btn, width: 'auto', padding: '6px 14px', fontSize: 13 }}>
               {histLoading ? '⟳' : '↻'} Refresh
             </button>
           </div>
           {histLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>}
           {!histLoading && history.length === 0 && (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>
+            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>
               No strategies generated yet. Use the Generate tab to create your first strategy.
             </div>
           )}
           {history.map(str => (
             <div key={str.strategy_id} style={{ ...s.histRow }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>{str.strategy_name}</div>
+                <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 14 }}>{str.strategy_name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                   {str.symbol} · {str.timeframe} · {new Date(str.created_at).toLocaleDateString()}
                 </div>
@@ -256,7 +256,7 @@ const AIStrategyGenerator: React.FC = () => {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{
                   fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                  background: str.status === 'active' ? '#14532d' : '#1e293b',
+                  background: str.status === 'active' ? '#14532d' : 'var(--raised)',
                   color: str.status === 'active' ? 'var(--gain)' : 'var(--text-muted)',
                 }}>
                   {str.status}
@@ -445,31 +445,31 @@ const MetricCard: React.FC<{ label: string; value: string; positive: boolean }> 
 const s: Record<string, React.CSSProperties> = {
   page:          { padding: '24px', maxWidth: 900, margin: '0 auto' },
   header:        { marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 },
-  title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
+  title:         { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' },
   subtitle:      { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
-  card:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 },
+  card:          { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24, marginBottom: 20 },
   row:           { display: 'flex', gap: 16, marginBottom: 16 },
   label:         { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
-  select:        { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
-  textarea:      { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' },
+  select:        { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
+  textarea:      { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '10px 12px', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' },
   examples:      { display: 'flex', flexDirection: 'column', gap: 6, margin: '12px 0 16px' },
-  examplesLabel: { fontSize: 12, color: '#475569', marginBottom: 4 },
-  exampleBtn:    { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', padding: '6px 10px', textAlign: 'left' },
+  examplesLabel: { fontSize: 12, color: 'var(--text-faint)', marginBottom: 4 },
+  exampleBtn:    { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', padding: '6px 10px', textAlign: 'left' },
   btn:           { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer', padding: '12px 24px', width: '100%' },
   resultHeader:  { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
-  strategyName:  { fontSize: 18, fontWeight: 700, color: '#f1f5f9' },
+  strategyName:  { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' },
   badge:         { background: '#166534', color: 'var(--gain)', fontSize: 12, padding: '3px 10px', borderRadius: 20 },
   metricsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 20 },
-  metricCard:    { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' },
+  metricCard:    { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' },
   codeDetails:   { marginBottom: 20 },
   codeSummary:   { cursor: 'pointer', color: 'var(--link)', fontSize: 14, padding: '8px 0' },
-  code:          { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: 16, fontSize: 12, color: 'var(--text-dim)', overflowX: 'auto', marginTop: 8 },
+  code:          { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8, padding: 16, fontSize: 12, color: 'var(--text-dim)', overflowX: 'auto', marginTop: 8 },
   deployRow:     { display: 'flex', alignItems: 'center', gap: 16 },
   deployBtn:     { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 20px' },
   errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: 16, color: 'var(--loss)' },
-  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
+  tabBtn:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
   tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
-  histRow:       { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 0', borderBottom: '1px solid #1e293b' },
+  histRow:       { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--border)' },
   delBtn:        { background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
 };
 

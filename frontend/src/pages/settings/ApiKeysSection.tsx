@@ -115,8 +115,8 @@ const ApiKeysSection: React.FC = () => {
             ✅ API key created — copy it now. It will not be shown again.
           </div>
           <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#f1f5f9',
-            background: '#0f172a', padding: '10px 14px', borderRadius: 8,
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--text-strong)',
+            background: 'var(--surface)', padding: '10px 14px', borderRadius: 8,
             wordBreak: 'break-all', letterSpacing: '0.02em',
           }}>
             {revealedKey.api_key}
@@ -163,7 +163,7 @@ const ApiKeysSection: React.FC = () => {
                 style={{
                   padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
                   cursor: 'pointer', transition: 'all 0.15s',
-                  background: newKeyScopes.includes(scope) ? '#1e3a5f' : '#0f172a',
+                  background: newKeyScopes.includes(scope) ? '#1e3a5f' : 'var(--surface)',
                   border: `1px solid ${newKeyScopes.includes(scope) ? '#3b82f6' : '#334155'}`,
                   color: newKeyScopes.includes(scope) ? 'var(--link)' : 'var(--text-muted)',
                 }}
@@ -198,7 +198,7 @@ const ApiKeysSection: React.FC = () => {
           keys.map((key) => (
             <div key={key.key_id} style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-              padding: '14px 0', borderBottom: '1px solid #1e293b',
+              padding: '14px 0', borderBottom: '1px solid var(--border)',
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -208,7 +208,7 @@ const ApiKeysSection: React.FC = () => {
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
                   {key.key_prefix}
                 </div>
-                <div style={{ fontSize: 11, color: '#475569' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
                   Created {new Date(key.created_at).toLocaleDateString()}
                   {key.last_used && ` · Last used ${new Date(key.last_used).toLocaleDateString()}`}
                 </div>

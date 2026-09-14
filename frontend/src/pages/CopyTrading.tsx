@@ -99,7 +99,7 @@ const LeaderCard: React.FC<{
         <div style={{ fontSize: 24, fontWeight: 700, color: leader.return_3m >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
           {fmtPctRaw(leader.return_3m, 1)}
         </div>
-        <div style={{ fontSize: 11, color: '#475569' }}>3M Return</div>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>3M Return</div>
       </div>
     </div>
 
@@ -284,7 +284,7 @@ const CopyTrading: React.FC = () => {
               {t === 'browse' ? '🔍 Browse Traders' : `📋 Active Sessions (${sessions.length})`}
             </button>
           ))}
-          <div style={{ width: 1, height: 24, background: '#334155' }} />
+          <div style={{ width: 1, height: 24, background: 'var(--surface-hover)' }} />
           <button
             onClick={() => navigate('/leaderboard')}
             style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
@@ -307,7 +307,7 @@ const CopyTrading: React.FC = () => {
           )}
           {sessionsLoading && <p style={{ color: 'var(--text-muted)' }}>Loading sessions…</p>}
           {!sessionsLoading && sessions.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#475569', padding: 48 }}>
+            <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 48 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
               <div style={{ fontSize: 15, color: 'var(--text-dim)', marginBottom: 8 }}>No active copy sessions</div>
               <div style={{ fontSize: 13, marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
@@ -325,7 +325,7 @@ const CopyTrading: React.FC = () => {
               <div key={sess.trader_id} style={{ ...s.allocationCard, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{sess.trader_name}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>{sess.trader_name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                       Started {new Date(sess.started_at).toLocaleDateString()} ·{' '}
                       <span style={{ color: sess.status === 'active' ? 'var(--gain)' : '#f59e0b' }}>{sess.status}</span>
@@ -342,7 +342,7 @@ const CopyTrading: React.FC = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, margin: '16px 0' }}>
                   <div style={s.sessMetric}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Allocation</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>${fmtPrice(sess.allocation_amount)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>${fmtPrice(sess.allocation_amount)}</div>
                   </div>
                   <div style={s.sessMetric}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Unrealised P&L</div>
@@ -508,31 +508,31 @@ const CopyTrading: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:          { padding: 24, maxWidth: 1100, margin: '0 auto' },
   header:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: 0 },
-  select:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13 },
+  title:         { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: 0 },
+  select:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 13 },
   grid:          { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginBottom: 24 },
-  leaderCard:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, transition: 'border-color 0.15s' },
+  leaderCard:    { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 16, transition: 'border-color 0.15s' },
   leaderTop:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  leaderName:    { fontSize: 16, fontWeight: 700, color: '#f1f5f9' },
+  leaderName:    { fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' },
   metricsRow:    { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 },
   metric:        { textAlign: 'center' },
-  metricVal:     { fontSize: 18, fontWeight: 700, color: '#f1f5f9' },
-  metricLbl:     { fontSize: 11, color: '#475569', marginTop: 2 },
-  leaderFooter:  { display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid #334155' },
-  allocationCard:{ background: '#1e293b', border: '1px solid #f59e0b55', borderRadius: 12, padding: 24 },
-  cardTitle:     { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 20px' },
+  metricVal:     { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' },
+  metricLbl:     { fontSize: 11, color: 'var(--text-faint)', marginTop: 2 },
+  leaderFooter:  { display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border-strong)' },
+  allocationCard:{ background: 'var(--raised)', border: '1px solid #f59e0b55', borderRadius: 12, padding: 24 },
+  cardTitle:     { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 20px' },
   allocationGrid:{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 },
   label:         { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 },
-  input:         { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
-  summaryBox:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: 16 },
+  input:         { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
+  summaryBox:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 16 },
   summaryRow:    { display: 'flex', justifyContent: 'space-between', marginBottom: 10 },
   summaryLabel:  { fontSize: 13, color: 'var(--text-muted)' },
-  summaryVal:    { fontSize: 13, fontWeight: 600, color: '#f1f5f9' },
+  summaryVal:    { fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' },
   copyBtn:       { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '12px 24px' },
-  cancelBtn:     { background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-dim)', fontSize: 14, cursor: 'pointer', padding: '12px 20px' },
-  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
+  cancelBtn:     { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 14, cursor: 'pointer', padding: '12px 20px' },
+  tabBtn:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
   tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
-  sessMetric:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' },
+  sessMetric:    { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' },
 };
 
 export default CopyTrading;

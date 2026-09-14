@@ -228,7 +228,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
   },
   dismissBtn: {
-    background: 'transparent', border: '1px solid #334155',
+    background: 'transparent', border: '1px solid var(--border-strong)',
     borderRadius: 4, color: 'var(--text-muted)', fontSize: 14,
     cursor: 'pointer', padding: '4px 8px', flexShrink: 0,
   },
@@ -238,7 +238,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 6, padding: '10px 14px',
   },
   explanationLabel: {
-    fontSize: 9, color: '#475569', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
+    fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
   },
   explanationText: {
     fontSize: 13, color: 'var(--text)', lineHeight: 1.6,
@@ -252,7 +252,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--warn)', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
   },
   analogText: {
-    fontSize: 12, color: '#cbd5e1', lineHeight: 1.6,
+    fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6,
   },
   lockNotice: {
     display: 'flex', alignItems: 'center', gap: 8,

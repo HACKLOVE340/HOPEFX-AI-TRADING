@@ -243,8 +243,8 @@ function buildPopupHTML(ip: string, record: AttackRecord): string {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const wrapperStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
+  background: 'var(--surface, var(--raised))',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 10,
   overflow: 'hidden',
   display: 'flex',
@@ -257,11 +257,11 @@ const headerStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '12px 16px',
-  borderBottom: '1px solid var(--border, #334155)',
+  borderBottom: '1px solid var(--border, var(--border-strong))',
 };
 
 const titleStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
+  color: 'var(--text, var(--text-strong))',
   fontSize: 13,
   fontWeight: 700,
   letterSpacing: 0.3,
@@ -289,7 +289,7 @@ const legendStyle: React.CSSProperties = {
   flexWrap: 'wrap',
   gap: '8px 16px',
   padding: '10px 16px',
-  borderTop: '1px solid var(--border, #334155)',
+  borderTop: '1px solid var(--border, var(--border-strong))',
 };
 
 const legendItemStyle: React.CSSProperties = {

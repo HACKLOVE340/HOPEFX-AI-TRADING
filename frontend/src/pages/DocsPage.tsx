@@ -208,19 +208,19 @@ const DocsPage: React.FC = () => {
       {/* Header */}
       <div
         style={{
-          borderBottom: '1px solid #1e293b',
-          background: '#0a0f1a',
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--bg)',
           padding: '48px 24px 40px',
         }}
       >
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           {/* Breadcrumb */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}>
-            <Link to="/home" style={{ color: '#475569', fontSize: 13, textDecoration: 'none' }}
+            <Link to="/home" style={{ color: 'var(--text-faint)', fontSize: 13, textDecoration: 'none' }}
               onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
             >Home</Link>
-            <ChevronRight size={12} style={{ color: '#334155' }} />
+            <ChevronRight size={12} style={{ color: 'var(--text-faint)' }} />
             <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>Documentation</span>
           </div>
 
@@ -261,7 +261,7 @@ const DocsPage: React.FC = () => {
               size={15}
               style={{
                 position: 'absolute', left: 14, top: '50%',
-                transform: 'translateY(-50%)', color: '#475569',
+                transform: 'translateY(-50%)', color: 'var(--text-faint)',
               }}
             />
             <input aria-label="Search documentation"
@@ -271,7 +271,7 @@ const DocsPage: React.FC = () => {
               onChange={e => setQuery(e.target.value)}
               style={{
                 width: '100%', boxSizing: 'border-box',
-                background: '#0f172a', border: '1px solid #1e293b',
+                background: 'var(--surface)', border: '1px solid var(--border)',
                 borderRadius: 10, color: 'var(--text)', fontSize: 14,
                 padding: '10px 14px 10px 40px', outline: 'none',
               }}
@@ -292,8 +292,8 @@ const DocsPage: React.FC = () => {
             <div
               key={section.id}
               style={{
-                background: '#0f172a',
-                border: '1px solid #1e293b',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 14,
                 padding: '20px 22px',
               }}
@@ -331,10 +331,10 @@ const DocsPage: React.FC = () => {
                       onMouseOver={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#e2e8f0'; }}
                       onMouseOut={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
                     >
-                      <ChevronRight size={12} style={{ color: '#334155', flexShrink: 0 }} />
+                      <ChevronRight size={12} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
                       {entry.label}
                       {entry.external && (
-                        <ExternalLink size={10} style={{ color: '#334155', marginLeft: 'auto' }} />
+                        <ExternalLink size={10} style={{ color: 'var(--text-faint)', marginLeft: 'auto' }} />
                       )}
                     </a>
                   </li>
@@ -347,7 +347,7 @@ const DocsPage: React.FC = () => {
         {/* FAQ section */}
         <div style={{ marginBottom: 56 }}>
           <h2 style={{
-            fontSize: 20, fontWeight: 700, color: '#f1f5f9',
+            fontSize: 20, fontWeight: 700, color: 'var(--text-strong)',
             marginBottom: 20, letterSpacing: '-0.3px',
           }}>
             Frequently Asked Questions
@@ -357,7 +357,7 @@ const DocsPage: React.FC = () => {
               <FAQItem key={item.q} q={item.q} a={item.a} />
             ))}
           </div>
-          <p style={{ marginTop: 16, fontSize: 13, color: '#475569' }}>
+          <p style={{ marginTop: 16, fontSize: 13, color: 'var(--text-faint)' }}>
             More questions?{' '}
             <a
               href={`${GITHUB_BASE}/FAQ.md`}
@@ -382,7 +382,7 @@ const DocsPage: React.FC = () => {
 
         {/* Footer links */}
         <div style={{
-          borderTop: '1px solid #1e293b',
+          borderTop: '1px solid var(--border)',
           paddingTop: 28,
           display: 'flex',
           flexWrap: 'wrap',
@@ -402,7 +402,7 @@ const DocsPage: React.FC = () => {
               <Link
                 key={l.label}
                 to={l.to}
-                style={{ color: '#475569', fontSize: 13, textDecoration: 'none' }}
+                style={{ color: 'var(--text-faint)', fontSize: 13, textDecoration: 'none' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
               >
@@ -416,7 +416,7 @@ const DocsPage: React.FC = () => {
             rel="noopener noreferrer"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              color: '#475569', fontSize: 13, textDecoration: 'none',
+              color: 'var(--text-faint)', fontSize: 13, textDecoration: 'none',
             }}
             onMouseOver={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
             onMouseOut={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}

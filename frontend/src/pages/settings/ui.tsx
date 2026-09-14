@@ -135,8 +135,8 @@ export const Input: React.FC<InputProps> = ({ icon, style, ...props }) => (
       {...props}
       style={{
         width: '100%', padding: icon ? '10px 12px 10px 36px' : '10px 12px',
-        background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-        color: '#f1f5f9', fontSize: 14, boxSizing: 'border-box', outline: 'none',
+        background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
+        color: 'var(--text-strong)', fontSize: 14, boxSizing: 'border-box', outline: 'none',
         transition: 'border-color 0.15s',
         ...style,
       }}
@@ -157,8 +157,8 @@ export const Select: React.FC<SelectProps> = ({ options, style, ...props }) => (
     {...props}
     style={{
       width: '100%', padding: '10px 12px',
-      background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-      color: '#f1f5f9', fontSize: 14, boxSizing: 'border-box', outline: 'none',
+      background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
+      color: 'var(--text-strong)', fontSize: 14, boxSizing: 'border-box', outline: 'none',
       cursor: 'pointer', appearance: 'none',
       backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
       backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center',
@@ -181,7 +181,7 @@ interface CardProps {
 
 export const Card: React.FC<CardProps> = ({ children, style, danger }) => (
   <div style={{
-    background: '#1e293b',
+    background: 'var(--raised)',
     border: `1px solid ${danger ? '#7f1d1d' : '#334155'}`,
     borderRadius: 12, padding: '20px 24px', marginBottom: 16,
     ...style,
@@ -295,7 +295,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, label }) => {
 // ── Divider ───────────────────────────────────────────────────────────────────
 
 export const Divider: React.FC = () => (
-  <hr style={{ border: 'none', borderTop: '1px solid #1e293b', margin: '16px 0' }} />
+  <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
 );
 
 // ── SaveBar ───────────────────────────────────────────────────────────────────
@@ -310,7 +310,7 @@ interface SaveBarProps {
 export const SaveBar: React.FC<SaveBarProps> = ({ onSave, saving, saved, error }) => (
   <div style={{
     display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-    gap: 12, marginTop: 24, paddingTop: 20, borderTop: '1px solid #1e293b',
+    gap: 12, marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border)',
   }}>
     {error && (
       <span role="alert" style={{ fontSize: 13, color: 'var(--warn)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>

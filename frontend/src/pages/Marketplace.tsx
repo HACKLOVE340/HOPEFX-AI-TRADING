@@ -69,7 +69,7 @@ const ReviewModal: React.FC<{strategyId:string;onClose:()=>void;onSubmitted:()=>
         <button onClick={onClose} style={st.closeBtn}>✕</button>
         <h2 style={{fontSize:18,fontWeight:700,color:'var(--text-strong)',marginBottom:16}}>Write a Review</h2>
         <label style={st.label}>Rating</label>
-        <div style={{display:'flex',gap:6,marginBottom:12}}>{[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:24,color:n<=rating?'#f59e0b':'#334155'}}>★</button>)}</div>
+        <div style={{display:'flex',gap:6,marginBottom:12}}>{[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:24,color:n<=rating?'#f59e0b':'var(--text-faint)'}}>★</button>)}</div>
         <label style={st.label}>Title</label>
         <input aria-label="Summary of your experience" value={title} onChange={e=>setTitle(e.target.value)} style={st.input} placeholder="Summary of your experience"/>
         <label style={{...st.label,marginTop:10}}>Review</label>
@@ -95,11 +95,11 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
         {p&&<div style={{...st.perfRow,marginBottom:24}}>{p.total_return_pct!=null&&<PerfBadge label="Total return" value={fmtPctRaw(p.total_return_pct, 1)} positive={p.total_return_pct>=0}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe ratio" value={fmt(p.sharpe_ratio)} positive={p.sharpe_ratio>=0}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max drawdown" value={`-${fmt(Math.abs(p.max_drawdown_pct))}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
         <div style={{display:'flex',gap:10,marginBottom:16}}>
           <button onClick={()=>onSubscribe(strategy)} disabled={subscribed} style={{...st.subscribeBtn,flex:1,opacity:subscribed?0.6:1}}>{subscribed?'✅ Subscribed':strategy.price===0?'Add to my strategies':`Subscribe — $${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}</button>
-          {subscribed&&<button onClick={onReview} style={{...st.subscribeBtn,background:'#334155',flex:'0 0 auto',padding:'14px 16px'}}>✍ Review</button>}
+          {subscribed&&<button onClick={onReview} style={{...st.subscribeBtn,background:'var(--surface-hover)',flex:'0 0 auto',padding:'14px 16px'}}>✍ Review</button>}
         </div>
         {purchaseError&&<div style={st.purchaseError}>{purchaseError}</div>}
         {reviewsErr&&<div style={{...st.purchaseError,marginTop:12}}>{reviewsErr}</div>}
-        {reviews.length>0&&<div style={{marginTop:28}}><h3 style={st.reviewsTitle}>Reviews</h3>{reviews.map(r=><div key={r.review_id} style={st.reviewCard}><div style={st.reviewHeader}><Stars rating={r.rating}/><strong style={{color:'var(--text)',marginLeft:8}}>{r.title}</strong><span style={{color:'#475569',fontSize:12,marginLeft:'auto'}}>{new Date(r.created_at).toLocaleDateString()}</span></div><p style={{color:'var(--text-dim)',fontSize:14,margin:'6px 0 0'}}>{r.content}</p></div>)}</div>}
+        {reviews.length>0&&<div style={{marginTop:28}}><h3 style={st.reviewsTitle}>Reviews</h3>{reviews.map(r=><div key={r.review_id} style={st.reviewCard}><div style={st.reviewHeader}><Stars rating={r.rating}/><strong style={{color:'var(--text)',marginLeft:8}}>{r.title}</strong><span style={{color:'var(--text-faint)',fontSize:12,marginLeft:'auto'}}>{new Date(r.created_at).toLocaleDateString()}</span></div><p style={{color:'var(--text-dim)',fontSize:14,margin:'6px 0 0'}}>{r.content}</p></div>)}</div>}
       </div>
     </div>
   );
@@ -233,7 +233,7 @@ const Marketplace: React.FC = () => {
       }
     >
 
-      <div style={{display:'flex',gap:4,marginBottom:20,borderBottom:'1px solid #1e293b'}}>
+      <div style={{display:'flex',gap:4,marginBottom:20,borderBottom:'1px solid var(--border)'}}>
         {(['browse','my-listings'] as MainTab[]).map(tab=>(
           <button key={tab} onClick={()=>setMainTab(tab)} style={{padding:'10px 20px',background:'transparent',border:'none',color:mainTab===tab?'#3b82f6':'var(--text-muted)',fontSize:14,cursor:'pointer',borderBottom:`2px solid ${mainTab===tab?'#3b82f6':'transparent'}`,fontWeight:500}}>
             {tab==='browse'?'Browse':'My Listings'}
@@ -247,7 +247,7 @@ const Marketplace: React.FC = () => {
             <input aria-label="Search strategies" type="search" placeholder="Search strategies…" value={search} onChange={e=>setSearch(e.target.value)} style={st.searchInput}/>
             <select aria-label="Sort strategies" value={sortBy} onChange={e=>setSortBy(e.target.value as SortOption)} style={st.select}><option value="popular">Most popular</option><option value="rating">Highest rated</option><option value="newest">Newest</option><option value="price_low">Price: low → high</option><option value="price_high">Price: high → low</option></select>
           </div>
-          <div style={st.categoryRow}>{CATEGORIES.map(c=><button key={c} onClick={()=>setCategory(c)} style={{...st.categoryPill,background:category===c?'#3b82f6':'#1e293b',color:category===c?'#fff':'var(--text-dim)',border:`1px solid ${category===c?'#3b82f6':'#334155'}`}}>{c==='all'?'All':c.replace('_',' ')}</button>)}</div>
+          <div style={st.categoryRow}>{CATEGORIES.map(c=><button key={c} onClick={()=>setCategory(c)} style={{...st.categoryPill,background:category===c?'#3b82f6':'var(--raised)',color:category===c?'#fff':'var(--text-dim)',border:`1px solid ${category===c?'#3b82f6':'#334155'}`}}>{c==='all'?'All':c.replace('_',' ')}</button>)}</div>
           {loadErr&&<div style={st.errorBox}>{loadErr}</div>}
           {loading?<p style={{color:'var(--text-muted)',padding:'40px 0'}}>Loading strategies…</p>:!loadErr&&visible.length===0?(<div style={{padding:'40px 0',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}><div style={{fontSize:36}}>🛒</div><p style={{color:'var(--text-dim)',fontSize:15,fontWeight:600,margin:0}}>No strategies match your filters.</p><p style={{color:'var(--text-muted)',fontSize:13,margin:0}}>Try clearing your filters or browse all categories.</p><button onClick={()=>{setSearch('');setCategory('all');}} style={{padding:'7px 18px',background:'rgba(59,130,246,0.15)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:8,color:'var(--link)',fontSize:13,fontWeight:700,cursor:'pointer',marginTop:4}}>Clear Filters</button></div>):(
             <div style={st.grid}>{visible.map(s=><StrategyCard key={s.strategy_id} strategy={s} onSelect={handleSelect}/>)}</div>
@@ -280,29 +280,29 @@ const Marketplace: React.FC = () => {
 };
 
 const st: Record<string,React.CSSProperties> = {
-  page:{maxWidth:1100,margin:'0 auto',padding:'32px 16px',fontFamily:'system-ui,-apple-system,sans-serif',color:'#f1f5f9',background:'#0f172a',minHeight:'100vh'},
+  page:{maxWidth:1100,margin:'0 auto',padding:'32px 16px',fontFamily:'system-ui,-apple-system,sans-serif',color:'var(--text-strong)',background:'var(--surface)',minHeight:'100vh'},
   pageHeader:{marginBottom:24,display:'flex',justifyContent:'space-between',alignItems:'flex-start'},heading:{fontSize:28,fontWeight:700,color:'var(--text-strong)',marginBottom:4},
   statsLine:{color:'var(--text-muted)',fontSize:14,margin:0},
   filterBar:{display:'flex',gap:12,marginBottom:16},
-  searchInput:{flex:1,padding:'10px 14px',background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',fontSize:14,outline:'none'},
-  select:{padding:'10px 14px',background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',fontSize:14,cursor:'pointer'},
+  searchInput:{flex:1,padding:'10px 14px',background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',fontSize:14,outline:'none'},
+  select:{padding:'10px 14px',background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',fontSize:14,cursor:'pointer'},
   categoryRow:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:24},
   categoryPill:{padding:'6px 14px',borderRadius:20,fontSize:13,cursor:'pointer',fontWeight:500,textTransform:'capitalize'},
   grid:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:16},
-  card:{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:20,cursor:'pointer'},
+  card:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:12,padding:20,cursor:'pointer'},
   cardTop:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10},
   cardMeta:{display:'flex',gap:6,flexWrap:'wrap'},
   categoryTag:{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,background:'#1e3a5f',color:'var(--link)',textTransform:'capitalize'},
-  tag:{fontSize:11,padding:'2px 8px',borderRadius:4,background:'#1e293b',color:'var(--text-muted)',border:'1px solid #334155'},
+  tag:{fontSize:11,padding:'2px 8px',borderRadius:4,background:'var(--raised)',color:'var(--text-muted)',border:'1px solid var(--border-strong)'},
   priceTag:{fontSize:15,whiteSpace:'nowrap'},
   cardTitle:{fontSize:16,fontWeight:700,color:'var(--text-strong)',margin:'0 0 8px'},
   cardDesc:{fontSize:13,color:'var(--text-dim)',lineHeight:1.6,margin:'0 0 14px',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'},
   perfRow:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:14},
-  perfBadge:{background:'#0f172a',border:'1px solid #334155',borderRadius:6,padding:'6px 10px',textAlign:'center',minWidth:64},
+  perfBadge:{background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:6,padding:'6px 10px',textAlign:'center',minWidth:64},
   perfValue:{fontSize:14,fontWeight:700},perfLabel:{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.3},
   cardFooter:{display:'flex',justifyContent:'space-between',alignItems:'center'},
   overlay:{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16},
-  modal:{background:'#1e293b',border:'1px solid #334155',borderRadius:14,padding:'28px',maxWidth:680,width:'100%',maxHeight:'90vh',overflowY:'auto',position:'relative'},
+  modal:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:14,padding:'28px',maxWidth:680,width:'100%',maxHeight:'90vh',overflowY:'auto',position:'relative'},
   closeBtn:{position:'absolute',top:16,right:16,background:'transparent',border:'none',color:'var(--text-muted)',fontSize:18,cursor:'pointer'},
   modalHeader:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16},
   modalTitle:{fontSize:22,fontWeight:700,color:'var(--text-strong)',margin:0},
@@ -311,11 +311,11 @@ const st: Record<string,React.CSSProperties> = {
   purchaseError:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:6,padding:'8px 12px',marginTop:10,fontSize:13,color:'var(--loss)'},
   errorBox:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:13,color:'var(--loss)'},
   reviewsTitle:{fontSize:16,fontWeight:600,color:'var(--text)',marginBottom:12},
-  reviewCard:{background:'#0f172a',border:'1px solid #1e293b',borderRadius:8,padding:'12px 14px',marginBottom:10},
+  reviewCard:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:10},
   reviewHeader:{display:'flex',alignItems:'center'},
   label:{display:'block',fontSize:13,color:'var(--text-dim)',marginBottom:6},
-  input:{width:'100%',background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box'},
-  textarea:{width:'100%',background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'},
+  input:{width:'100%',background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box'},
+  textarea:{width:'100%',background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'},
 };
 
 export default Marketplace;

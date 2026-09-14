@@ -161,7 +161,7 @@ const TradingEngineSection: React.FC = () => {
             <span style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
               Engine {label}
             </span>
-            <span style={{ fontSize: 12, color: '#475569', marginLeft: 4 }}>{status.mode}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-faint)', marginLeft: 4 }}>{status.mode}</span>
           </div>
           {[
             { label: 'Uptime',         value: `${Math.floor(status.uptime_seconds / 3600)}h ${Math.floor((status.uptime_seconds % 3600) / 60)}m` },
@@ -170,8 +170,8 @@ const TradingEngineSection: React.FC = () => {
             { label: 'Heartbeat',      value: status.heartbeat_ok ? '✅ OK' : '❌ Miss' },
           ].map(s => (
             <div key={s.label} style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-              <span style={{ color: '#475569' }}>{s.label}: </span>
-              <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{s.value}</span>
+              <span style={{ color: 'var(--text-faint)' }}>{s.label}: </span>
+              <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{s.value}</span>
             </div>
           ))}
 
@@ -189,7 +189,7 @@ const TradingEngineSection: React.FC = () => {
               </span>
               {typeof status.last_signal_confidence === 'number' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 60, height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: 60, height: 5, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{
                       width: `${Math.round(status.last_signal_confidence * 100)}%`,
                       height: '100%',
@@ -373,19 +373,19 @@ const DecisionEnginePanel: React.FC = () => {
       <SectionCard title="Decision Engine Pipeline" icon="⚡" accent="#f59e0b">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
-          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
+          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
             {loading ? '…' : '↻'}
           </button>
         </div>
         {loadErr && <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {phases.map(p => (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
+            <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--link)', flexShrink: 0 }}>
                 {p.id}
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{p.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>{p.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{p.desc}</div>
               </div>
             </div>
@@ -394,9 +394,9 @@ const DecisionEnginePanel: React.FC = () => {
         {status && (
           <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
             {Object.entries(status as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
-              <div key={key} style={{ background: '#1e293b', borderRadius: 6, padding: '8px 12px' }}>
+              <div key={key} style={{ background: 'var(--raised)', borderRadius: 6, padding: '8px 12px' }}>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
               </div>
             ))}
           </div>
@@ -411,17 +411,17 @@ const DecisionEnginePanel: React.FC = () => {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
           {gatekeeperChecks.map((check, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b' }}>
-              <span style={{ color: '#475569', fontSize: 14 }}>•</span>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>•</span>
               <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{check}</span>
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>Decision Outcomes</div>
+        <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 6 }}>Decision Outcomes</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {['NO_SIGNAL', 'ML_FILTERED', 'RISK_BLOCKED', 'SIZING_REJECTED', 'EXECUTED', 'EXECUTION_ERROR'].map(o => (
-              <span key={o} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#1e293b', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{o}</span>
+              <span key={o} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--raised)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{o}</span>
             ))}
           </div>
         </div>

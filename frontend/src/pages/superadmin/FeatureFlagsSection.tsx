@@ -105,7 +105,7 @@ const FeatureFlagsSection: React.FC = () => {
           { label: 'With Overrides', value: flags.filter(f => f.user_overrides > 0).length, color: '#f59e0b' },
         ].map(s => (
           <div key={s.label} style={{
-            flex: 1, background: '#0f172a', border: '1px solid #1e293b',
+            flex: 1, background: 'var(--surface)', border: '1px solid var(--border)',
             borderTop: `3px solid ${s.color}`, borderRadius: 10, padding: '14px 16px',
           }}>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
@@ -121,11 +121,11 @@ const FeatureFlagsSection: React.FC = () => {
         {flags.map(flag => (
           <div key={flag.name} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 0', borderBottom: '1px solid #1e293b',
+            padding: '12px 0', borderBottom: '1px solid var(--border)',
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{flag.name}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{flag.name}</span>
                 {flag.user_overrides > 0 && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: 'var(--warn)',
@@ -145,12 +145,12 @@ const FeatureFlagsSection: React.FC = () => {
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{flag.description}</div>
-              <div style={{ fontSize: 10, color: '#334155', marginTop: 1, fontFamily: 'monospace' }}>{flag.env_var}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{flag.description}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1, fontFamily: 'monospace' }}>{flag.env_var}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 16 }}>
               {busy === flag.name && (
-                <div style={{ width: 14, height: 14, border: '2px solid #334155', borderTopColor: 'var(--link)', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
+                <div style={{ width: 14, height: 14, border: '2px solid var(--border-strong)', borderTopColor: 'var(--link)', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
               )}
               <div
                 role="switch"
@@ -177,7 +177,7 @@ const FeatureFlagsSection: React.FC = () => {
           </div>
         ))}
         {flags.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No feature flags configured.</div>
+          <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No feature flags configured.</div>
         )}
         <ActionBanner message={msg} ok={msgOk} />
       </SectionCard>
@@ -213,14 +213,14 @@ const FeatureFlagsSection: React.FC = () => {
               return (
                 <div key={flag.name} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 0', borderBottom: '1px solid #1e293b',
+                  padding: '10px 0', borderBottom: '1px solid var(--border)',
                 }}>
                   <div>
-                    <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 500 }}>{flag.name}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-strong)', fontWeight: 500 }}>{flag.name}</span>
                     {hasOverride && (
                       <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--warn)', fontWeight: 700 }}>OVERRIDDEN</span>
                     )}
-                    <div style={{ fontSize: 11, color: '#475569' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
                       Global: {flag.enabled ? 'on' : 'off'} → User: {effectiveValue ? 'on' : 'off'}
                     </div>
                   </div>

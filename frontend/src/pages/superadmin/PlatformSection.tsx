@@ -216,7 +216,7 @@ const PlatformSection: React.FC = () => {
             ]}
           />
         </div>
-        <div style={{ marginTop: 14, borderTop: '1px solid #1e293b', paddingTop: 14 }}>
+        <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
           <Toggle label="Allow New Registrations"     checked={cfg.allow_registrations}          onChange={v => set('allow_registrations', v)} />
           <Toggle label="Require Email Verification"  checked={cfg.require_email_verification}   onChange={v => set('require_email_verification', v)} />
           <Toggle label="Force 2FA for Admins"        checked={cfg.force_2fa_for_admins}         onChange={v => set('force_2fa_for_admins', v)} accent="#f59e0b" />
@@ -316,8 +316,8 @@ const PlatformSection: React.FC = () => {
             placeholder="Message body…"
             rows={3}
             style={{
-              width: '100%', background: '#1e293b', border: '1px solid #334155',
-              borderRadius: 7, color: '#f1f5f9', fontSize: 13, padding: '8px 12px',
+              width: '100%', background: 'var(--raised)', border: '1px solid var(--border-strong)',
+              borderRadius: 7, color: 'var(--text-strong)', fontSize: 13, padding: '8px 12px',
               resize: 'vertical', outline: 'none', boxSizing: 'border-box',
             }}
           />

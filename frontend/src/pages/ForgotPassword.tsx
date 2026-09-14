@@ -120,11 +120,11 @@ const ForgotPassword: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: 'radial-gradient(ellipse at 50% 0%,rgba(59,130,246,0.06) 0%,#0f172a 60%)',
+    background: 'radial-gradient(ellipse at 50% 0%,rgba(59,130,246,0.06) 0%,var(--surface) 60%)',
     padding: 'clamp(12px, 4vw, 24px)',
   },
   card: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 16,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 16,
     padding: 'clamp(20px, 6vw, 40px) clamp(16px, 5vw, 36px)',
     width: '100%', maxWidth: 420,
     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
@@ -137,13 +137,13 @@ const s: Record<string, React.CSSProperties> = {
   },
   logo:        { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
   successIcon: { display: 'flex', justifyContent: 'center', marginBottom: 16 },
-  heading:     { fontSize: 20, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', margin: '0 0 8px' },
+  heading:     { fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', textAlign: 'center', margin: '0 0 8px' },
   subtext:     { fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
   form:        { display: 'flex', flexDirection: 'column', gap: 16 },
   field:       { display: 'flex', flexDirection: 'column' },
   label:       { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   input: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     padding: '12px 14px', fontSize: 16, /* prevents iOS zoom */
     color: 'var(--text-strong)', outline: 'none',
     transition: 'border-color 0.15s,box-shadow 0.15s', width: '100%', boxSizing: 'border-box',
