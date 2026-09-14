@@ -170,10 +170,10 @@ const Profile: React.FC = () => {
           }
           {isOwn && (
             <>
-              <button onClick={()=>fileRef.current?.click()} style={s.avatarEditBtn} title="Change avatar">
+              <button onClick={()=>fileRef.current?.click()} style={s.avatarEditBtn} title="Change avatar" aria-label="Change avatar">
                 {avatarUploading ? '…' : '📷'}
               </button>
-              <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleAvatarChange}/>
+              <input ref={fileRef} type="file" accept="image/*" aria-label="Upload a new avatar image" style={{display:'none'}} onChange={handleAvatarChange}/>
             </>
           )}
         </div>
@@ -222,12 +222,12 @@ const Profile: React.FC = () => {
       {editing && isOwn && (
         <div style={s.editCard}>
           <h3 style={s.cardTitle}>Edit Profile</h3>
-          <label style={s.label}>Display Name</label>
-          <input value={editForm.display_name} onChange={e=>setEditForm(f=>({...f,display_name:e.target.value}))} style={s.input} placeholder="Your display name"/>
-          <label style={{...s.label,marginTop:12}}>Bio</label>
-          <textarea value={editForm.bio} onChange={e=>setEditForm(f=>({...f,bio:e.target.value}))} style={s.textarea} rows={3} placeholder="Tell the community about yourself…"/>
-          <label style={{...s.label,marginTop:12}}>Country</label>
-          <input value={editForm.country} onChange={e=>setEditForm(f=>({...f,country:e.target.value}))} style={s.input} placeholder="e.g. United States"/>
+          <label style={s.label} id="profile-display-name-label" htmlFor="profile-display-name">Display Name</label>
+          <input id="profile-display-name" aria-labelledby="profile-display-name-label" value={editForm.display_name} onChange={e=>setEditForm(f=>({...f,display_name:e.target.value}))} style={s.input} placeholder="Your display name"/>
+          <label style={{...s.label,marginTop:12}} id="profile-bio-label" htmlFor="profile-bio">Bio</label>
+          <textarea id="profile-bio" aria-labelledby="profile-bio-label" value={editForm.bio} onChange={e=>setEditForm(f=>({...f,bio:e.target.value}))} style={s.textarea} rows={3} placeholder="Tell the community about yourself…"/>
+          <label style={{...s.label,marginTop:12}} id="profile-country-label" htmlFor="profile-country">Country</label>
+          <input id="profile-country" aria-labelledby="profile-country-label" value={editForm.country} onChange={e=>setEditForm(f=>({...f,country:e.target.value}))} style={s.input} placeholder="e.g. United States"/>
           {saveErr && <div style={s.inlineError}>{saveErr}</div>}
           {saveOk  && <div style={s.successMsg}>Profile saved successfully.</div>}
           <div style={{display:'flex',gap:10,marginTop:16}}>

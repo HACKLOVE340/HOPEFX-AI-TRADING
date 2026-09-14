@@ -8,7 +8,15 @@
  * a regex — an attribute may contain `>`, and `onClick={() => nav('/x')}` ends
  * the match at the arrow.
  *
- * A real parser answers it: **138 violations across 67 files**.
+ * A real parser answers it: **138 violations across 67 files**. Classified by
+ * the same parser a day later, only ONE of those 138 is a button — input 108,
+ * textarea 17, div 5, td 4, th 2, button 1, option 1 — so the entry's name
+ * describes 1/138 of what it measures. See `a11y-debt.json`'s `_shape`.
+ *
+ * This file asserts that the LIST matches the tree. It cannot assert that a
+ * cleared file is accessible: the rule going quiet and a screen reader getting
+ * a name are different claims, and `auth_flow_controls_have_names.test.tsx`
+ * makes the second one by rendering.
  *
  * `eslint.config.js` sets `jsx-a11y/control-has-associated-label` to `error`
  * everywhere and downgrades it to `warn` for exactly the files in

@@ -102,6 +102,16 @@ export default tseslint.config(
       // A real parser answers it: 138 violations across 67 files. The rule is
       // the fix and the count came with it.
       //
+      // Classified with that same parser on 2026-09-14, the NAME was wrong even
+      // though the count was right: by tag the 138 were input 108, textarea 17,
+      // div 5, td 4, th 2, **button 1**, option 1. Sixteen more were controls
+      // carrying id="x" beside a <label htmlFor="x"> — correctly labelled at
+      // runtime, and unresolvable by this rule, which reads one element's own
+      // props and children and cannot follow a reference to a sibling. Clear one
+      // of those by giving the label an id and the control an aria-labelledby,
+      // never by copying the text into an aria-label that can drift from what is
+      // on screen (WCAG 2.5.3). See a11y-debt.json's `_shape`.
+      //
       // Only this rule is on. `jsx-a11y`'s recommended set produces a wall on
       // an established codebase, and the config above already refuses that
       // trade twice (no-use-before-define at 1,990, no-explicit-any).
@@ -147,7 +157,9 @@ export default tseslint.config(
 
   // ── The a11y debt list, and the rule that makes it a ratchet ────────────
   //
-  // 67 files carried the 138 violations the parser found on 2026-09-13. Turning
+  // 67 files carried the 138 violations the parser found on 2026-09-13 (64 and
+  // 127 after the sign-in/register/profile flow was cleared on 2026-09-14; the
+  // file itself is the current figure, this comment is not). Turning
   // the rule on at `error` across all of them would be a wall nobody adopts,
   // and at `warn` everywhere it would bury the hook rules above. So it is an
   // ERROR everywhere EXCEPT these files, which means a violation in any file

@@ -185,9 +185,9 @@ const Login: React.FC = () => {
 
             {/* Email or Username */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="identifier">Email or Username</label>
+              <label style={s.label} htmlFor="identifier" id="identifier-label">Email or Username</label>
               <input
-                id="identifier"
+                id="identifier" aria-labelledby="identifier-label"
                 type="text"
                 value={identifier}
                 onChange={(e) => { setIdentifier(e.target.value); setError(''); setShowTotp(false); }}
@@ -205,12 +205,12 @@ const Login: React.FC = () => {
             {/* Password */}
             <div style={s.field}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <label style={s.label} htmlFor="password">Password</label>
+                <label style={s.label} htmlFor="password" id="password-label">Password</label>
                 <Link to="/forgot-password" style={s.forgotLink}>Forgot password?</Link>
               </div>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="password"
+                  id="password" aria-labelledby="password-label"
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(''); }}
@@ -238,12 +238,12 @@ const Login: React.FC = () => {
             {/* TOTP — revealed when server signals 2FA is required */}
             {showTotp && (
               <div style={s.field}>
-                <label style={s.label} htmlFor="totp">
+                <label style={s.label} htmlFor="totp" id="totp-label">
                   <ShieldCheck size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
                   Authenticator Code
                 </label>
                 <input
-                  id="totp"
+                  id="totp" aria-labelledby="totp-label"
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]{6,8}"
@@ -255,7 +255,12 @@ const Login: React.FC = () => {
                   style={{ ...inputStyle('totp'), letterSpacing: 4, fontFamily: 'monospace', fontSize: 18 }}
                   placeholder="000000"
                   autoComplete="one-time-code"
-                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  // autoFocus is deliberate here: this field is revealed only
+                  // after the server asks for 2FA, so focus follows the step the
+                  // user was just moved to rather than stealing it on page load.
+                  // (The `eslint-disable` that stood here named
+                  // jsx-a11y/no-autofocus, a rule this config never enabled —
+                  // eslint reported it as an unused directive on every run.)
                   autoFocus
                   disabled={loading}
                 />

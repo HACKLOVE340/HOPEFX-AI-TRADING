@@ -2505,6 +2505,17 @@ def _p_f172() -> tuple[str, str]:
     This probe reads that committed measurement rather than re-running eslint,
     which needs node_modules and twelve seconds. `a11y_debt_is_accurate.test.ts`
     is what holds the file to the tree.
+
+    The 138 were classified with the same parser on 2026-09-14, because "icon-only
+    buttons" is not what they are: by tag, input 108, textarea 17, div 5, td 4,
+    th 2, **button 1**, option 1. Sixteen more were controls carrying ``id="x"``
+    beside a ``<label htmlFor="x">`` — correctly labelled at runtime, and
+    unresolvable by this rule, which inspects one element's own props and
+    children (``mayHaveAccessibleLabel.js``) and cannot follow a reference to a
+    sibling. Clearing one of those means giving the label an ``id`` and the
+    control an ``aria-labelledby``, never copying the text into an ``aria-label``
+    that can then drift from what is on screen (WCAG 2.5.3). The remaining 121
+    are controls with no accessible name at all, and are real.
     """
     debt = _read("frontend/a11y-debt.json")
     if not debt:
@@ -2526,12 +2537,12 @@ def _p_f172() -> tuple[str, str]:
     if not wired:
         return OPEN, "a11y-debt.json exists but eslint.config.js does not enforce the rule against it"
     if not total:
-        return FIXED, "no button lacks an accessible name"
+        return FIXED, "no control lacks an accessible name"
     return PARTIAL, (
         f"{total} violation(s) across {len(files)} file(s), measured by a parser rather than a "
         "regex and capped: the rule is an error everywhere except these files, so new debt "
         "fails `npm run lint`, and a11y_debt_is_accurate.test.ts refuses an entry that no "
-        "longer describes anything. Fixing the 67 is follow-up work"
+        "longer describes anything. Fixing the rest is follow-up work"
     )
 
 
@@ -4329,7 +4340,7 @@ FINDINGS: list[Finding] = [
     ),
     Finding(
         "F172",
-        "Icon-only buttons without an accessible name",
+        "Controls without an accessible name",
         "P2",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
@@ -4342,8 +4353,17 @@ FINDINGS: list[Finding] = [
         "`jsx-a11y/control-has-associated-label` is an ERROR in eslint.config.js, downgraded "
         "to `warn` only for the files listed in `frontend/a11y-debt.json` — so a violation in "
         "any other file fails `npm run lint` and new debt cannot arrive quietly, while the "
-        "existing 67 do not wall off a codebase nobody could then adopt the rule in. Fixing "
-        "those 67 is follow-up work and is not this entry.",
+        "existing 67 do not wall off a codebase nobody could then adopt the rule in. "
+        "**Classified 2026-09-14, and the original framing was wrong:** exactly ONE of the "
+        "138 is a button (input 108, textarea 17, div 5, td 4, th 2, button 1, option 1), and "
+        "16 are controls already labelled by a sibling `<label htmlFor>` that a static rule "
+        "cannot resolve. The title said icon-only buttons, so a successor would have gone "
+        "looking for buttons and found one. **Auth flow cleared 2026-09-14** — Login (3), "
+        "Register (4) and Profile (4) are off the list, 138 -> 127 across 64 files. Profile's "
+        "three edit-form labels were bound to nothing and its avatar upload had no name at "
+        "all; Login and Register were the false-positive shape and were made resolvable with "
+        "`aria-labelledby`, not with a duplicated `aria-label`. The rest is follow-up work "
+        "and is not this entry.",
         "src/test/a11y_debt_is_accurate.test.ts runs eslint and compares it to the list "
         "entry by entry. Three refusals proven by injection: a listed file with no violations "
         "left must be DELETED from the list (otherwise the entry is a standing permission), a "
@@ -4351,8 +4371,15 @@ FINDINGS: list[Finding] = [
         "file is downgraded), and a new violating file (which eslint also errors on "
         "independently). It uses spawnSync rather than execFileSync because eslint exits "
         "non-zero on this tree's 14 pre-existing errors from other rules, and a throwing call "
-        "discarded the JSON and failed with 'Command failed' — a red for the wrong reason.",
-        "npm run lint · npx vitest run src/test/a11y_debt_is_accurate.test.ts",
+        "discarded the JSON and failed with 'Command failed' — a red for the wrong reason. "
+        "src/test/auth_flow_controls_have_names.test.tsx asserts the other half, which the "
+        "ratchet cannot: that the names RESOLVE in a DOM. A cleared debt entry only says the "
+        "rule went quiet. Red-green — the Profile assertions fail on the pre-fix tree "
+        "(git stash of the three pages), while Login and Register pass on it, which is the "
+        "honest split: those two were already labelled and the change made the association "
+        "machine-checkable.",
+        "npm run lint · npx vitest run src/test/a11y_debt_is_accurate.test.ts "
+        "src/test/auth_flow_controls_have_names.test.tsx",
         _p_f172,
         [S_UI],
     ),

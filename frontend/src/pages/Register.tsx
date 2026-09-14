@@ -299,9 +299,9 @@ const Register: React.FC = () => {
           <form onSubmit={handleSubmit} style={s.form} noValidate>
             {/* Email */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="email">Email</label>
+              <label style={s.label} htmlFor="email" id="email-label">Email</label>
               <input
-                id="email" type="email" value={email}
+                id="email" aria-labelledby="email-label" type="email" value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 onFocus={() => setFocusField('email')}
                 onBlur={() => setFocusField(null)}
@@ -313,9 +313,9 @@ const Register: React.FC = () => {
 
             {/* Username */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="username">Username</label>
+              <label style={s.label} htmlFor="username" id="username-label">Username</label>
               <input
-                id="username" type="text" value={username}
+                id="username" aria-labelledby="username-label" type="text" value={username}
                 onChange={(e) => { setUsername(e.target.value); setError(''); }}
                 onFocus={() => setFocusField('username')}
                 onBlur={() => setFocusField(null)}
@@ -330,10 +330,10 @@ const Register: React.FC = () => {
 
             {/* Password */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="password">Password</label>
+              <label style={s.label} htmlFor="password" id="password-label">Password</label>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="password"
+                  id="password" aria-labelledby="password-label"
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(''); }}
@@ -356,10 +356,10 @@ const Register: React.FC = () => {
 
             {/* Confirm password */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="confirm">Confirm Password</label>
+              <label style={s.label} htmlFor="confirm" id="confirm-label">Confirm Password</label>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="confirm"
+                  id="confirm" aria-labelledby="confirm-label"
                   type={showConf ? 'text' : 'password'}
                   value={confirm}
                   onChange={(e) => { setConfirm(e.target.value); setError(''); }}

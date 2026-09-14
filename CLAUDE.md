@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 594 commits and 1,329 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 596 commits and 1,329 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
 | What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |
@@ -47,7 +47,7 @@ is always today's. Everything below is the shape; that command is the state.
 | Do we know the identity of the model artifacts we ship? | `python scripts/model_provenance_report.py` · `ml/saved_models/model_checksums.json` |
 | Which model loaders reach no integrity check at all? | `python scripts/model_provenance_report.py --check` · `docs/MODEL_PROVENANCE_DEBT.json` |
 | Does every ORM table have a migration, or only `create_all()`? | `python scripts/schema_migration_check.py --check` |
-| Which buttons have no accessible name? | `cd frontend && npm run lint` · `frontend/a11y-debt.json` |
+| Which controls have no accessible name? | `cd frontend && npm run lint` · `frontend/a11y-debt.json` |
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 | A document states a figure — is it still true? | `python scripts/doc_metrics.py --check` · `--sync` (what `pre-commit` runs) maintains the two per-commit figures and checks the rest |
