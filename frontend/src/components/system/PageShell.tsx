@@ -19,9 +19,12 @@
  * `superadmin/*Section`, which render as tab content inside Settings and
  * SuperAdminDashboard and must NEVER be on this shell — a panel with its own
  * page header, its own width and a "Where to next" footer in the middle of a
- * tab is worse than one without. `scripts/frontend_page_shell_ratchet.py` now
- * scopes itself to what the router mounts and reports 38 of 66 off the shell;
- * it read 80 of 108 while counting panels as pages.
+ * tab is worse than one without. Nor do the pages mounted outside <AppShell/>
+ * — /privacy, /terms, /pricing — belong here: this footer is the AUTHENTICATED
+ * navigation, and offering it to a signed-out reader is worse than offering
+ * nothing. `scripts/frontend_page_shell_ratchet.py` scopes itself to what the
+ * router mounts behind the app shell and reports 35 of 63 off the shell; it
+ * read 80 of 108 while counting panels and public pages as pages.
  *
  * Three widths replace twelve, and they are chosen by what the page IS rather
  * than by how much happened to fit:

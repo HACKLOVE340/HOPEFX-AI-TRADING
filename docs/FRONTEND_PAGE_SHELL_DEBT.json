@@ -1,6 +1,6 @@
 {
  "_comment": "Page components not yet built on components/system/PageShell.tsx, as of 2026-09-14. This list may only SHRINK. A page that reaches the shell must have its line DELETED \u2014 an entry that no longer describes anything is how a ratchet quietly stops being one. A page NOT on this list and not on the shell blocks: a new page is where new inconsistency arrives, and PageShell is one import. See scripts/frontend_page_shell_ratchet.py.",
- "_total": 38,
+ "_total": 35,
  "files": {
   "frontend/src/pages/AIAssistant.tsx": 1,
   "frontend/src/pages/AIChartDashboard.tsx": 1,
@@ -22,8 +22,6 @@
   "frontend/src/pages/Performance.tsx": 1,
   "frontend/src/pages/PnLDashboard.tsx": 1,
   "frontend/src/pages/Portfolio.tsx": 1,
-  "frontend/src/pages/PricingPage.tsx": 1,
-  "frontend/src/pages/PrivacyPolicy.tsx": 1,
   "frontend/src/pages/Profile.tsx": 1,
   "frontend/src/pages/PropFirmTracker.tsx": 1,
   "frontend/src/pages/Settings.tsx": 1,
@@ -32,7 +30,6 @@
   "frontend/src/pages/SuperAdminDashboard.tsx": 1,
   "frontend/src/pages/Support.tsx": 1,
   "frontend/src/pages/SupportConsole.tsx": 1,
-  "frontend/src/pages/TermsAndRiskDisclosure.tsx": 1,
   "frontend/src/pages/Trade.tsx": 1,
   "frontend/src/pages/Trading.tsx": 1,
   "frontend/src/pages/TradingDashboard.tsx": 1,

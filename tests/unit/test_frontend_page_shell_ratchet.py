@@ -100,6 +100,59 @@ def test_a_file_that_is_not_routed_is_not_a_page(tree):
     assert sorted(measured) == ["pages/Alpha.tsx", "pages/Beta.tsx"], measured
 
 
+def test_a_page_reachable_signed_out_is_not_measured(tmp_path: Path):
+    """PageShell's footer is the authenticated navigation.
+
+    `/privacy`, `/terms`, `/risk-disclosure` and `/pricing` are mounted outside
+    `<AppShell />` — App.tsx's own comment says "anonymous visitors still reach
+    the page". Offering such a reader "Where to next: Portfolio, Risk
+    Calculator" is worse than offering nothing, so these must never be counted
+    as debt. Three of them were, because the exemption was a hand-typed list
+    that had fallen behind.
+    """
+    pages = tmp_path / "pages"
+    pages.mkdir()
+    (pages / "Alpha.tsx").write_text(OFF_SHELL, encoding="utf-8")
+    (pages / "Legal.tsx").write_text(OFF_SHELL, encoding="utf-8")
+    _router(
+        tmp_path,
+        "const Alpha = lazy(() => import('./pages/Alpha'));\n"
+        "const Legal = lazy(() => import('./pages/Legal'));\n"
+        "<Routes>\n"
+        '  <Route path="/legal" element={<Legal />} />\n'
+        '  <Route path="/*" element={<AppShell />} />\n'
+        "</Routes>\n",
+    )
+    mod = _load(pages, tmp_path / "record.json")
+    assert mod._public_pages() == {"Legal"}
+    measured = mod.measure()
+    assert "pages/Legal.tsx" not in measured, "a signed-out page was counted as debt"
+    assert "pages/Alpha.tsx" in measured
+
+
+def test_the_ratio_counts_the_same_population_it_measures(tmp_path: Path):
+    """Numerator and denominator were two comprehensions, and drifted.
+
+    The printed ratio read `37 of 72` while the real population was 63: one had
+    been corrected and the other had not. They share one predicate now.
+    """
+    pages = tmp_path / "pages"
+    pages.mkdir()
+    (pages / "Alpha.tsx").write_text(OFF_SHELL, encoding="utf-8")
+    (pages / "Gamma.tsx").write_text(ON_SHELL, encoding="utf-8")
+    (pages / "Panel.tsx").write_text(OFF_SHELL, encoding="utf-8")  # not routed
+    _router(
+        tmp_path,
+        "const Alpha = lazy(() => import('./pages/Alpha'));\nconst Gamma = lazy(() => import('./pages/Gamma'));\n",
+    )
+    mod = _load(pages, tmp_path / "record.json")
+    routed, public = mod._routed_pages(), mod._public_pages()
+    counted = [p for p in pages.rglob("*.tsx") if mod._is_page(p, routed, public)]
+    assert {p.name for p in counted} == {"Alpha.tsx", "Gamma.tsx"}
+    assert set(mod.measure()) == {"pages/Alpha.tsx"}
+    assert len(mod.measure()) <= len(counted), "more pages off the shell than pages"
+
+
 def test_it_refuses_to_report_a_figure_when_it_can_find_no_router(tmp_path: Path):
     """A scan that matches nothing agrees with every assertion.
 

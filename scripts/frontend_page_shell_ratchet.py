@@ -89,18 +89,57 @@ def _routed_pages() -> set[str]:
     return {m.split("/")[-1] for m in mods}
 
 
+def _public_pages() -> set[str]:
+    """Pages mounted OUTSIDE `<AppShell />` — reachable without signing in.
+
+    PageShell derives its footer from navConfig, which is the authenticated
+    navigation, and renders a breadcrumb that assumes the app chrome. Neither
+    belongs on a page an anonymous visitor reads: the privacy policy offering
+    "Where to next: Portfolio, Risk Calculator" to someone who is not signed in
+    is worse than offering nothing.
+
+    App.tsx states this structurally — the public routes sit in the outer
+    `<Routes>` block, ahead of `<Route path="/*" element={<AppShell />} />`, and
+    that file's own comment says "anonymous visitors still reach the page". So
+    read it from there rather than maintaining a second list by hand: the eight
+    names that were hardcoded here had already fallen behind by three
+    (PrivacyPolicy, TermsAndRiskDisclosure, PricingPage).
+    """
+    app = REPO / "frontend" / "src" / "App.tsx"
+    if not app.exists():
+        return set()
+    text = app.read_text(encoding="utf-8")
+    catch_all = text.find('path="/*"')
+    if catch_all == -1:
+        return set()
+    start = text.rfind("<Routes>", 0, catch_all)
+    if start == -1:
+        return set()
+    block = text[start:catch_all]
+    return set(re.findall(r"element=\{<(\w+)\s*/?>", block))
+
+
 # Routed, but deliberately not on the shell: a full-bleed surface, or a page
 # where a breadcrumb and a "where to next" footer would be wrong.
+# Six of the eight names that used to live here — LandingPage, Login, Register,
+# ForgotPassword, ResetPassword and Onboarding — are now DERIVED by
+# _public_pages(), along with the three the list had missed. What is left is the
+# pair the router cannot tell you about.
 EXEMPT = {
     "NotFound.tsx",  # a bare message; a breadcrumb to nowhere is worse
-    "LandingPage.tsx",  # marketing, full-bleed, its own composition
-    "Login.tsx",
-    "Register.tsx",
-    "ForgotPassword.tsx",
-    "ResetPassword.tsx",
-    "Onboarding.tsx",  # a flow, not a page
-    "MobilePage.tsx",
+    "MobilePage.tsx",  # a full-bleed surface with no header by design
 }
+
+
+def _is_page(path: Path, routed: set[str], public: set[str]) -> bool:
+    """One predicate for what this gate measures, used by BOTH the numerator and
+    the denominator. They were two comprehensions and drifted apart at the first
+    edit: the ratio printed 37 of 72 while the real population was 63."""
+    if path.name in EXEMPT or path.name.endswith(".test.tsx"):
+        return False
+    if path.stem not in routed:
+        return False  # renders inside another page's frame; see _routed_pages
+    return path.stem not in public  # reachable signed-out; see _public_pages
 
 
 def _on_shell(text: str) -> bool:
@@ -113,6 +152,7 @@ def measure() -> dict[str, int]:
     tooling reads it."""
     out: dict[str, int] = {}
     routed = _routed_pages()
+    public = _public_pages()
     if not routed:
         # A scan that matches nothing agrees with every assertion. Refuse rather
         # than report zero pages off the shell.
@@ -121,10 +161,8 @@ def measure() -> dict[str, int]:
             "wrong, or the router moved. Refusing to report a figure."
         )
     for path in sorted(PAGES.rglob("*.tsx")):
-        if path.name in EXEMPT or path.name.endswith(".test.tsx"):
+        if not _is_page(path, routed, public):
             continue
-        if path.stem not in routed:
-            continue  # renders inside another page's frame; see _routed_pages
         rel = path.relative_to(REPO).as_posix()
         if not _on_shell(path.read_text(encoding="utf-8")):
             out[rel] = 1
@@ -170,14 +208,8 @@ def main() -> int:
     # The denominator is the same population the numerator measures: routed
     # pages. Counting every file under `pages/` made the ratio flatter than the
     # truth by including 40 panels that must never be on the shell.
-    _routed = _routed_pages()
-    total_pages = len(
-        [
-            p
-            for p in PAGES.rglob("*.tsx")
-            if p.name not in EXEMPT and not p.name.endswith(".test.tsx") and p.stem in _routed
-        ]
-    )
+    _routed, _public = _routed_pages(), _public_pages()
+    total_pages = len([p for p in PAGES.rglob("*.tsx") if _is_page(p, _routed, _public)])
 
     if args.adopt or not recorded:
         save(now)
