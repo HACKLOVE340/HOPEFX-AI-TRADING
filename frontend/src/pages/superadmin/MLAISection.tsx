@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
-  SectionCard, StatusBadge, ActionBtn,
+  SectionCard, StatusBadge, ActionBtn, Input,
   ErrorState, LoadingRows, ConfirmDialog, KpiTile,
 } from './ui';
 import type { MLModel } from './types';
@@ -165,6 +165,27 @@ const MLAISection: React.FC = () => {
         />
       )}
 
+      {deployTarget && (
+        <ConfirmDialog
+          title={`Deploy ${deployTarget.model}`}
+          message="The named version starts serving inference immediately. Predictions in flight are unaffected; everything after the switch comes from this version."
+          confirmLabel={busy === `${deployTarget.model}-deploy` ? 'Deploying…' : 'Deploy'}
+          variant="warning"
+          onConfirm={() => doAction(deployTarget.model, 'deploy', deployTarget.version.trim())}
+          onCancel={() => setDeployTarget(null)}
+        >
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-dim)' }}>
+            Version to serve
+            <Input
+              aria-label={`Version of ${deployTarget.model} to deploy`}
+              value={deployTarget.version}
+              onChange={e => setDeployTarget(t => (t ? { ...t, version: e.target.value } : t))}
+              style={{ marginTop: 6 }}
+            />
+          </label>
+        </ConfirmDialog>
+      )}
+
       {/* ── ML System Status banner ── */}
       {mlStatus && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20, padding: '14px 18px', background: mlStatus.status === 'healthy' ? '#052e16' : '#450a0a', borderRadius: 12, border: `1px solid ${mlStatus.status === 'healthy' ? '#16a34a44' : '#dc262644'}` }}>
@@ -283,6 +304,18 @@ const MLAISection: React.FC = () => {
                         onClick={() => setConfirm({ model: m.name, action: 'rollback' })}
                         variant="danger" size="sm"
                         loading={busy === `${m.name}-rollback`}
+                        disabled={m.status === 'training'}
+                      />
+                      {/* `doAction` has handled 'deploy' with a version since
+                          it was written, `deployModel` is in the API, and
+                          `deployTarget` existed to carry the choice — there was
+                          simply no control, so promoting a specific version was
+                          unreachable from the product. */}
+                      <ActionBtn
+                        label="Deploy version"
+                        onClick={() => setDeployTarget({ model: m.name, version: String(m.version ?? '') })}
+                        variant="primary" size="sm"
+                        loading={busy === `${m.name}-deploy`}
                         disabled={m.status === 'training'}
                       />
                     </div>

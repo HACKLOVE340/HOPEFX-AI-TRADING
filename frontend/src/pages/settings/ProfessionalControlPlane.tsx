@@ -1,9 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../hooks/useApi';
 import type { SettingsTab } from './types';
+import { extractApiError } from '../../lib/utils';
 
 type Readiness = { status: string; active_model: string; components: Record<string, string>; degraded_reasons: string[]; configuration_revision: number; paper_mode: boolean };
 type Props = { tab: SettingsTab };
+/** Shape read off the audit renderer below rather than inferred from `any[]`. */
+type AuditEntry = {
+  id: string;
+  action: string;
+  result: string;
+  reason: string;
+  created_at: string;
+};
 type SafeOverview = { paper_mode: boolean; human_approval_required: boolean; agents: Array<{ id: string; name: string; mission: string; risk: string; status: string }>; models: Array<{ id: string; role: string; health: string; route: string; secret_status: string }>; integrations: Array<{ id: string; name: string; category: string; status: string; scopes: string[]; token: string }>; pending_proposals: number; capabilities: Record<string, boolean | string> };
 
 const domains: Record<string, string> = {
@@ -13,8 +22,8 @@ const domains: Record<string, string> = {
 
 export default function ProfessionalControlPlane({ tab }: Props) {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
-  const [configuration, setConfiguration] = useState<Record<string, any> | null>(null);
-  const [audit, setAudit] = useState<any[]>([]);
+  const [configuration, setConfiguration] = useState<Record<string, unknown> | null>(null);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [safe, setSafe] = useState<SafeOverview | null>(null);
@@ -31,17 +40,20 @@ export default function ProfessionalControlPlane({ tab }: Props) {
       if (isSafeTab) setSafe((await api.get<SafeOverview>('/safe-platform/overview')).data);
       setReadiness(ready.data);
       setConfiguration(config.data.configuration);
-      if (tab === 'control-audit') setAudit((await api.get('/control-plane/audit')).data.items ?? []);
-    } catch (e: any) { setError(e?.response?.data?.detail ?? 'Control plane is unavailable'); }
-  }, [tab]);
+      if (tab === 'control-audit') setAudit((await api.get<{ items?: AuditEntry[] }>('/control-plane/audit')).data.items ?? []);
+    } catch (e: unknown) { setError(extractApiError(e, 'Control plane is unavailable')); }
+    // `isSafeTab` is derived from `tab`, so listing it changes nothing about
+    // when this reloads — but leaving it out is the shape that becomes a stale
+    // closure the moment the derivation grows a second input.
+  }, [tab, isSafeTab]);
   useEffect(() => { void load(); }, [load]);
 
   const reprobe = async () => { setBusy(true); try { await api.post('/control-plane/readiness/reprobe'); await load(); } finally { setBusy(false); } };
-  const runSandboxTest = async () => { setBusy(true); try { await api.post('/control-plane/sandbox/test', { command: 'python --version', timeout_seconds: 5 }); await load(); } catch (e: any) { setError(e?.response?.data?.detail ?? 'Sandbox test rejected'); } finally { setBusy(false); } };
-  const createTask = async () => { if (taskPrompt.trim().length < 3) { setTaskMessage('Describe the task in at least three characters.'); return; } setBusy(true); setTaskMessage('Submitting a read-only plan request…'); try { await api.post('/safe-platform/supervisor/tasks', { prompt: taskPrompt.trim(), requested_agents: [], allow_external_read: false }); setTaskPrompt(''); setTaskMessage('Task accepted for planning. No tools or external calls were executed.'); await load(); } catch (e: any) { setTaskMessage(e?.response?.data?.detail ?? 'Task request rejected'); } finally { setBusy(false); } };
-  const integrationAction = async (integrationId: string, action: 'authorize' | 'revoke' | 'rotate' | 'health_probe') => { setBusy(true); setIntegrationMessage(`Requesting ${action.replace('_', ' ')}…`); try { await api.post('/safe-platform/integrations/action', { integration_id: integrationId, action, scopes: [], reason: `Operator requested ${action.replace('_', ' ')}` }); setIntegrationMessage(`${action.replace('_', ' ')} recorded. Secret values were not submitted or exposed.`); await load(); } catch (e: any) { setIntegrationMessage(e?.response?.data?.detail ?? 'Integration action rejected'); } finally { setBusy(false); } };
-  const runDiagnosticReview = async () => { setBusy(true); setRepairMessage('Collecting read-only evidence…'); try { const response = await api.post('/safe-platform/diagnostics/run', { scope: 'platform', include_external: false }); const findings = response.data.findings ?? []; setRepairMessage(`${findings.length} findings collected. No repair was applied.`); } catch (e: any) { setRepairMessage(e?.response?.data?.detail ?? 'Diagnostics unavailable'); } finally { setBusy(false); } };
-  const createRepairProposal = async () => { setBusy(true); setRepairMessage('Creating reversible proposal…'); try { await api.post('/safe-platform/proposals', { title: 'Review platform readiness findings', kind: 'repair', scope: 'safe-platform', reason: 'Operator requested a reviewable remediation plan', changes: { mode: 'sandbox_only', live_mutation: false }, evidence_ids: ['paper-boundary', 'model-readiness'], rollback_plan: 'Restore last-known-good checkpoint and rerun sandbox health gates.' }); setRepairMessage('Proposal created for human review. No repair was applied.'); } catch (e: any) { setRepairMessage(e?.response?.data?.detail ?? 'Proposal creation rejected'); } finally { setBusy(false); } };
+  const runSandboxTest = async () => { setBusy(true); try { await api.post('/control-plane/sandbox/test', { command: 'python --version', timeout_seconds: 5 }); await load(); } catch (e: unknown) { setError(extractApiError(e, 'Sandbox test rejected')); } finally { setBusy(false); } };
+  const createTask = async () => { if (taskPrompt.trim().length < 3) { setTaskMessage('Describe the task in at least three characters.'); return; } setBusy(true); setTaskMessage('Submitting a read-only plan request…'); try { await api.post('/safe-platform/supervisor/tasks', { prompt: taskPrompt.trim(), requested_agents: [], allow_external_read: false }); setTaskPrompt(''); setTaskMessage('Task accepted for planning. No tools or external calls were executed.'); await load(); } catch (e: unknown) { setTaskMessage(extractApiError(e, 'Task request rejected')); } finally { setBusy(false); } };
+  const integrationAction = async (integrationId: string, action: 'authorize' | 'revoke' | 'rotate' | 'health_probe') => { setBusy(true); setIntegrationMessage(`Requesting ${action.replace('_', ' ')}…`); try { await api.post('/safe-platform/integrations/action', { integration_id: integrationId, action, scopes: [], reason: `Operator requested ${action.replace('_', ' ')}` }); setIntegrationMessage(`${action.replace('_', ' ')} recorded. Secret values were not submitted or exposed.`); await load(); } catch (e: unknown) { setIntegrationMessage(extractApiError(e, 'Integration action rejected')); } finally { setBusy(false); } };
+  const runDiagnosticReview = async () => { setBusy(true); setRepairMessage('Collecting read-only evidence…'); try { const response = await api.post('/safe-platform/diagnostics/run', { scope: 'platform', include_external: false }); const findings = response.data.findings ?? []; setRepairMessage(`${findings.length} findings collected. No repair was applied.`); } catch (e: unknown) { setRepairMessage(extractApiError(e, 'Diagnostics unavailable')); } finally { setBusy(false); } };
+  const createRepairProposal = async () => { setBusy(true); setRepairMessage('Creating reversible proposal…'); try { await api.post('/safe-platform/proposals', { title: 'Review platform readiness findings', kind: 'repair', scope: 'safe-platform', reason: 'Operator requested a reviewable remediation plan', changes: { mode: 'sandbox_only', live_mutation: false }, evidence_ids: ['paper-boundary', 'model-readiness'], rollback_plan: 'Restore last-known-good checkpoint and rerun sandbox health gates.' }); setRepairMessage('Proposal created for human review. No repair was applied.'); } catch (e: unknown) { setRepairMessage(extractApiError(e, 'Proposal creation rejected')); } finally { setBusy(false); } };
 
   if (error) return <div style={styles.alert}><strong>Control plane unavailable</strong><p>{error}</p><button style={styles.button} onClick={() => void load()}>Retry</button></div>;
   if (!readiness || !configuration) return <div style={styles.card}>Loading professional configuration…</div>;

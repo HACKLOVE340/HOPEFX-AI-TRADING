@@ -81,7 +81,6 @@ OFIBar.displayName = 'OFIBar';
 
 const TradePressureGauge = memo(({ pressure }: { pressure: number }) => {
   // pressure: 0–100
-  const angle = (pressure / 100) * 180 - 90; // -90 to +90 degrees
   const color = pressure > 70 ? COLORS.profit.base
               : pressure < 30 ? COLORS.loss.base
               : COLORS.neon.gold;

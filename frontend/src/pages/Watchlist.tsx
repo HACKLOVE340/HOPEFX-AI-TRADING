@@ -108,6 +108,11 @@ const WatchlistPage: React.FC = () => {
   // rendered its default symbol list — under the banner "Live prices refresh
   // every 5 seconds" — identically whether the backend was healthy or dead.
   const freshness = useDataFreshness('the watchlist');
+  // The markers, not the object. `freshness` is memoised on [failed, what, ...],
+  // so it changes identity the instant a load fails — and `fetchWatchlist` (or
+  // the poll effect) listing it would then be rebuilt by its own failure and
+  // fetch again, unbounded. Both markers are useCallback(..., []) and stable.
+  const { markOk, markFailed } = freshness;
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
@@ -118,16 +123,16 @@ const WatchlistPage: React.FC = () => {
       if (res.data.items?.length) {
         setItems(res.data.items.map(normalise));
       }
-      if (mountedRef.current) freshness.markOk();
+      if (mountedRef.current) markOk();
     } catch {
       // API unavailable. Keep whatever is on screen, but say so — rendering the
       // default list silently is what made this page indistinguishable from a
       // working one (F1-01).
-      if (mountedRef.current) freshness.markFailed('the watchlist');
+      if (mountedRef.current) markFailed('the watchlist');
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [markOk, markFailed]);
 
   useEffect(() => {
     fetchWatchlist();
@@ -137,14 +142,14 @@ const WatchlistPage: React.FC = () => {
         if (Array.isArray(res.data) && res.data.length > 0) {
           setItems(res.data.map(normalise));
         }
-        if (mountedRef.current) freshness.markOk();
+        if (mountedRef.current) markOk();
       } catch {
         // Keep the last prices — but stop calling them live (F1-01).
-        if (mountedRef.current) freshness.markFailed('live prices');
+        if (mountedRef.current) markFailed('live prices');
       }
     }, 5000);
     return () => clearInterval(id);
-  }, [fetchWatchlist, freshness]);
+  }, [fetchWatchlist, markOk, markFailed]);
 
   // Live tick history per symbol, accumulated across renders. Capped at 60
   // points, which is what the sparkline draws.

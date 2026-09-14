@@ -251,6 +251,12 @@ const RiskCalculator: React.FC = () => {
   // F1-01: the price fetch below fell back to store prices invisibly, while
   // that price is the input to position sizing.
   const freshness = useDataFreshness('the live price');
+  // Depend on the marker, never on the whole object. `freshness` is memoised on
+  // [failed, what, ...], so it takes a new identity the moment a load fails —
+  // and an effect that lists it therefore re-runs on its own failure, refetches,
+  // fails again, and loops (the 138-request loop the hook's own comment records).
+  // `markFailed` is useCallback(..., []) and so is stable for the page's life.
+  const { markFailed } = freshness;
   const [history, setHistory]       = useState<SavedCalc[]>([]);
   const [saving, setSaving]         = useState(false);
   const [saveMsg, setSaveMsg]       = useState('');
@@ -285,7 +291,7 @@ const RiskCalculator: React.FC = () => {
         // F1-01: this silently fell back to store prices while the page went on
         // computing a position size from them. The number the trader sizes
         // against must never look current when the fetch failed.
-        freshness.markFailed('the live price');
+        markFailed('the live price');
       }
     };
     fetchPrice();
@@ -296,7 +302,7 @@ const RiskCalculator: React.FC = () => {
       if (priceTimerRef.current) clearInterval(priceTimerRef.current);
       if (ageTimerRef.current)   clearInterval(ageTimerRef.current);
     };
-  }, [state.symbol]);
+  }, [state.symbol, markFailed]);
 
   // Fallback: use store prices if API unavailable.
   //
@@ -307,8 +313,8 @@ const RiskCalculator: React.FC = () => {
   // it falls back to is no longer live.
   useEffect(() => {
     if (livePrice) return;
-    if (!feedLive && prices[state.symbol]) freshness.markFailed('a live price');
-  }, [feedLive, prices, state.symbol, livePrice, freshness]);
+    if (!feedLive && prices[state.symbol]) markFailed('a live price');
+  }, [feedLive, prices, state.symbol, livePrice, markFailed]);
 
   useEffect(() => {
     if (livePrice) return;

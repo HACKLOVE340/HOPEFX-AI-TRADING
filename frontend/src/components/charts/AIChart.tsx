@@ -280,7 +280,7 @@ export function AIChart({
         setChartError(extractApiError(err, 'Failed to load chart'));
       })
       .finally(() => { if (initial) setLoading(false); });
-  }, [symbol, timeframe, hydrated, isAuth]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [symbol, timeframe, hydrated, isAuth]);
 
   useEffect(() => {
     loadOhlcv(true);

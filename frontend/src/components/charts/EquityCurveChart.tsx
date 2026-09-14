@@ -103,7 +103,7 @@ export function EquityCurveChart() {
       ddSerRef.current     = null;
       priceLineRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Data update ────────────────────────────────────────────────────────────
   useEffect(() => {

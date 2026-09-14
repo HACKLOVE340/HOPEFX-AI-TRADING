@@ -244,6 +244,13 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   // One warning per mount when the tick and the OHLCV disagree on instrument.
   const offScaleWarnedRef = useRef(false);
   const rafRef       = useRef<number>(0);
+  // The selected symbol, reachable without being a dependency. The tick-update
+  // effect below names the instrument in its off-scale warning, and that is the
+  // ONLY thing it reads `symbol` for — so listing it there would re-run a tick
+  // write against a series the tick does not belong to, which is the very fault
+  // the warning exists to report. A ref is current without re-running anything.
+  const symbolRef = useRef(symbol);
+  symbolRef.current = symbol;
 
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
@@ -337,6 +344,12 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
       volRef.current    = null;
       maRef.current     = null;
     };
+    // `symbol` is read once, to seed priceFormat at construction. Listing it
+    // would tear down and rebuild the whole chart on every instrument switch —
+    // losing the viewport, re-creating the ResizeObserver and re-subscribing
+    // the series. The effect immediately below keeps priceFormat in sync with
+    // `symbol` instead, which is the whole reason it exists.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep per-instrument precision in sync with the selected symbol.
@@ -451,7 +464,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
     if (tickIsOffScale(mid, last.close)) {
       if (!offScaleWarnedRef.current) {
         console.warn(
-          `[Trading] ignoring off-scale tick for ${symbol}: tick mid=${mid} vs last bar close=${last.close}. ` +
+          `[Trading] ignoring off-scale tick for ${symbolRef.current}: tick mid=${mid} vs last bar close=${last.close}. ` +
           'The live feed and the OHLCV history disagree about this instrument.',
         );
         offScaleWarnedRef.current = true;

@@ -588,7 +588,7 @@ const Trade: React.FC = () => {
 
       {/* Symbol selector strip — numbers 1-6 select via keyboard */}
       <div className="stagger flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[var(--border)]">
-        {SYMBOLS.map((sym, i) => (
+        {SYMBOLS.map((sym, _i) => (
           <SymbolCard
             key={sym}
             symbol={sym}

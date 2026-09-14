@@ -157,7 +157,6 @@ const WalkForward: React.FC = () => {
   const [loading, setLoading]      = useState(true);
   const [apiError, setApiError]    = useState<string | null>(null);
   const [visibleFolds, setVisible] = useState<Set<number>>(new Set());
-  const [runId, setRunId]          = useState('');
   const [inputId, setInputId]      = useState('');
 
   const mountedRef = useRef(true);

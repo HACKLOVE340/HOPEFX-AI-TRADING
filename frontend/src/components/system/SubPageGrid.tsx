@@ -43,7 +43,8 @@ export const SubPageGrid: React.FC<{
       const Icon = item.icon;
       return (
         <Link
-          key={item.to}
+          // Destination AND label — see CrossLinkBar.
+          key={`${item.to}|${item.title}`}
           to={item.to}
           className="group flex flex-col gap-s2 rounded-md2 border border-edge bg-surface p-card
                      no-underline shadow-e1 transition-colors duration-fast ease-out

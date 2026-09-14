@@ -506,7 +506,7 @@ const TwoFactorSetup: React.FC = () => {
       <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
         { label: '⚙️ Settings',  href: '/settings',  color: '#60a5fa' },
         { label: '👤 Profile',   href: '/profile',   color: '#a78bfa' },
-        { label: '🔑 API Keys',  href: '/settings',  color: '#fbbf24' },
+        { label: '🔑 API Keys',  href: '/settings?tab=api-keys', color: '#fbbf24' },
         { label: '📊 Dashboard', href: '/dashboard', color: '#34d399' },
       ]}/>
     </div>

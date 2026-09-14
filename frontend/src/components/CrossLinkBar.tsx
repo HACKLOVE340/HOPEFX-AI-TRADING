@@ -48,7 +48,14 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {links.map((link) => (
         <Link
-          key={link.href}
+          // Keyed on destination AND label. `href` alone is not unique: a bar
+          // may legitimately offer two routes to one page (Settings, and the
+          // API-keys tab of Settings). Measured, not assumed: on first mount
+          // React renders both, and on a re-render that reorders the list it
+          // DUPLICATES the shared key — a three-link bar becomes four anchors
+          // with a stale pill left behind, in the wrong order. Found at runtime
+          // on /2fa-setup, which listed '/settings' twice.
+          key={`${link.href}|${link.label}`}
           to={link.href}
           // 44px minimum target (rubric: touch-target-size, CRITICAL). These
           // pills were ~26px tall and appear at the foot of most pages, so the

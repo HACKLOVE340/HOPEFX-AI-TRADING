@@ -39,7 +39,6 @@ async function renderCore() {
 afterEach(() => {
   delete (import.meta.env as Record<string, unknown>).VITE_HUB_ENABLED;
   // The page reads the flag at mount, so the module must be re-evaluated.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).__vitest_resetModules?.();
 });
 

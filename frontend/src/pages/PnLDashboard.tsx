@@ -228,7 +228,7 @@ function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, [color]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [color]);
 
   useEffect(() => {
     if (!seriesRef.current || data.length < 2) return;
@@ -292,7 +292,7 @@ function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!seriesRef.current || data.length < 2) return;

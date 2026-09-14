@@ -99,7 +99,11 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       }}>
         {links.map((l) => (
           <Link
-            key={l.href}
+            // Destination AND label — see CrossLinkBar. Two ways out of an empty
+            // screen may share a destination; a repeated key duplicates a pill on
+            // re-render, so the one screen whose whole job is to offer a way out
+            // offers the same one twice.
+            key={`${l.href}|${l.label}`}
             to={l.href}
             // 44px minimum target (rubric: touch-target-size, CRITICAL).
             // These links were ~26px tall and are the primary way out of an

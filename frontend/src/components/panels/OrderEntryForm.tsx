@@ -100,7 +100,7 @@ function NumInput({
 // ── Risk preview ──────────────────────────────────────────────────────────────
 
 function RiskPreview({
-  side,
+  side: _side,
   entry,
   sl,
   tp,

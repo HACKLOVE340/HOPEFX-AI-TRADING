@@ -39,7 +39,10 @@ export const RelatedPages: React.FC<{ links: RelatedLink[]; title?: string }> = 
       </h2>
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {links.map((l) => (
-          <li key={l.to}>
+          // Destination AND label — see CrossLinkBar. `to` alone is not unique
+          // once a page passes two `extra` links that share a destination, and a
+          // repeated key leaves a stale duplicate behind on the next re-render.
+          <li key={`${l.to}|${l.label}`}>
             <Link
               to={l.to}
               className="group flex min-h-[44px] items-center gap-3 rounded-lg border

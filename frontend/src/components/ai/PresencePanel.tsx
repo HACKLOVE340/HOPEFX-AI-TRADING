@@ -46,32 +46,6 @@ import { useViewportWidth } from '../../hub/useViewportWidth';
 import { useStore, selectAiJobs, selectKillSwitch } from '../../store';
 import { useVoice } from '../../hooks/useVoice';
 
-const COLOR = {
-  edge: '#1e2d47',
-  edge2: '#2b3d5c',
-  text: '#e7edf7',
-  dim: '#a7b5c9',
-  quiet: '#70809a',
-  core: '#73a7ff',
-  bad: 'var(--failed)',
-} as const;
-
-const button: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 8,
-  minHeight: 44,
-  padding: '0 16px',
-  borderRadius: 9,
-  border: `1px solid ${COLOR.edge2}`,
-  background: 'linear-gradient(160deg, #182842, #121e33)',
-  color: COLOR.text,
-  fontSize: 12.5,
-  fontWeight: 700,
-  letterSpacing: '.04em',
-  cursor: 'pointer',
-};
-
 export interface PresencePanelProps {
   /** From the page's existing summary query — no second request for it. */
   providersReachable?: number;

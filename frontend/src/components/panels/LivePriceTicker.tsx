@@ -25,19 +25,23 @@ interface TickerCellProps {
 function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
   const prevMid  = useRef<number | null>(null);
   const [flash, setFlash] = useState<'bull' | 'bear' | null>(null);
+  const mid = tick?.mid;
 
   useEffect(() => {
-    if (!tick) return;
+    // Bound before the effect, so the dependency IS the value read rather than
+    // a narrowing of a wider object. Depending on `tick` would re-run this on
+    // every tick whose mid did not move, flashing the ticker for nothing.
+    if (mid === undefined) return;
     if (prevMid.current !== null) {
-      const dir = tick.mid > prevMid.current ? 'bull' : tick.mid < prevMid.current ? 'bear' : null;
+      const dir = mid > prevMid.current ? 'bull' : mid < prevMid.current ? 'bear' : null;
       if (dir) {
         setFlash(dir);
         const t = setTimeout(() => setFlash(null), 400);
         return () => clearTimeout(t);
       }
     }
-    prevMid.current = tick.mid;
-  }, [tick?.mid]);
+    prevMid.current = mid;
+  }, [mid]);
 
   const sparkData = history.slice(-40).map((t) => t.mid);
   const change    = tick?.change_pct ?? 0;

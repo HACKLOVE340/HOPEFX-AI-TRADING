@@ -75,12 +75,12 @@ async function fetchHealStatus(): Promise<HealStatus> {
   return data;
 }
 
-async function fetchDrift(limit = 50): Promise<DriftEvent[]> {
+async function fetchDrift(_limit = 50): Promise<DriftEvent[]> {
   const res = await securityHealingApi.drift() as { data: DriftEvent[] | { events?: DriftEvent[] } };
   return (Array.isArray(res.data) ? res.data : (res.data as { events?: DriftEvent[] }).events) ?? [];
 }
 
-async function fetchPatches(limit = 50): Promise<PatchRecord[]> {
+async function fetchPatches(_limit = 50): Promise<PatchRecord[]> {
   const res = await securityHealingApi.patches() as { data: PatchRecord[] | { patches?: PatchRecord[] } };
   return (Array.isArray(res.data) ? res.data : (res.data as { patches?: PatchRecord[] }).patches) ?? [];
 }
@@ -483,11 +483,6 @@ const AutoHealDashboard: React.FC = () => {
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-
-const pageStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 16,
-  padding: '20px 24px', maxWidth: 1400, margin: '0 auto',
-};
 
 const errorBannerStyle: React.CSSProperties = {
   background: '#f9731622', border: '1px solid #f97316',

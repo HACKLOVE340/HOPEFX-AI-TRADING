@@ -732,7 +732,6 @@ const RoutesPanel: React.FC = () => {
 
 const ValidatePanel: React.FC = () => {
   const [key, setKey]           = useState('');
-  const [expected, setExpected] = useState('');
   const [result, setResult]     = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading]   = useState(false);
   const [toggleKey, setToggleKey]       = useState('');
@@ -886,7 +885,6 @@ const SystemReliabilitySection: React.FC = () => {
   const [metricsErr, setMetricsErr] = useState('');
   const [envErr, setEnvErr] = useState('');
   const [historyErr, setHistoryErr] = useState('');
-  const [diagnosticsResults, setDiagnosticsResults] = useState<Record<string, unknown>[] | null>(null);
   const [activeTab, setActiveTab] = useState<'components' | 'health-engine' | 'traces' | 'selftest' | 'env' | 'metrics' | 'diagnostics' | 'routes' | 'validate' | 'history'>('components');
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);

@@ -394,15 +394,6 @@ function intentChipStyle(intent: string): React.CSSProperties {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const pageStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 16,
-  padding: '20px 24px',
-  maxWidth: 1400,
-  margin: '0 auto',
-};
-
 const lockdownBannerStyle: React.CSSProperties = {
   alignItems: 'center',
   background: '#ef444422',

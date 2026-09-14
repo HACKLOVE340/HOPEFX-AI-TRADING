@@ -14,13 +14,16 @@
  *     — now correctly parsed instead of treating flat keys as rates.
  *   - Confirmation polling: replaced setInterval counter with real
  *     GET /api/payments/crypto/status/{id} polling every 5 s.
- *   - Plan pre-selection: reads ?plan= and ?billing= from URL search params.
+ *   - Plan pre-selection: reads ?plan= from URL search params. It does NOT
+ *     read ?billing=: /api/billing/plans exposes price_usd_monthly and
+ *     nothing else, so a billing cycle is not a choice this page can honour,
+ *     and the parameter was read into a variable nothing used.
  *   - Plan list: fetched from /api/billing/plans at runtime; hardcoded
  *     constants are fallback-only while the request is in-flight.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import QRCode from '../components/QRCode';
@@ -223,13 +226,11 @@ const ExpiryCountdown: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
 // ── Main component ────────────────────────────────────────────────────────────
 
 const CryptoCheckout: React.FC = () => {
-  const navigate      = useNavigate();
   const refreshPlan   = useRefreshPlan();
   const [searchParams] = useSearchParams();
 
   // URL params: ?plan=starter&billing=monthly
   const urlPlanId  = searchParams.get('plan') ?? '';
-  const urlBilling = searchParams.get('billing') ?? 'monthly';
 
   const [plans, setPlans]                   = useState<Plan[]>(FALLBACK_PLANS);
   const [plansLoading, setPlansLoading]     = useState(true);

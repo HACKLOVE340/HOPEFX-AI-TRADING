@@ -459,7 +459,7 @@ export function useWebSocket(enabled = true) {
       reconnectAttempts.current = 0; // connected — reset the attempt counter
       stopRestPoll(); // WS is up — stop REST polling
       startHeartbeat(ws);
-        startFeedWatchdog();
+      startFeedWatchdog();
     };
 
     ws.onmessage = (event) => handleMessage(event.data as string);
@@ -495,7 +495,7 @@ export function useWebSocket(enabled = true) {
       // rather than the stale closure captured when this WebSocket was created.
       reconnectTimer.current = setTimeout(() => connectRef.current(), jitter);
     };
-  }, [handleMessage, getState, startHeartbeat, startRestPoll, stopRestPoll]);
+  }, [handleMessage, getState, startHeartbeat, startFeedWatchdog, startRestPoll, stopRestPoll]);
 
   // Keep connectRef current so onclose setTimeout always calls the latest version.
   useEffect(() => {

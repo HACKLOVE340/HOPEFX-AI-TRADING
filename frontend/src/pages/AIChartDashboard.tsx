@@ -53,7 +53,6 @@ interface MarketRegime {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function apiSym(s: string) { return s.replace('/', '_'); }
 
 function regimeColor(r?: string): string {
   if (!r) return '#64748b';

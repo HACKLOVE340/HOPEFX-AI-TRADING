@@ -201,7 +201,7 @@ const EquityCurve: React.FC = () => {
       sharpeSerRef.current  = null;
       sortinoSerRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Drawdown sub-chart init ────────────────────────────────────────────────
   useEffect(() => {
@@ -236,7 +236,7 @@ const EquityCurve: React.FC = () => {
       ddChartRef.current = null;
       ddSerRef.current   = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Data update ────────────────────────────────────────────────────────────
   useEffect(() => {

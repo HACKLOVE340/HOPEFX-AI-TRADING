@@ -440,7 +440,7 @@ describe('CryptoCheckout page', () => {
 // ─── App routing ──────────────────────────────────────────────────────────────
 
 describe('App routing', () => {
-  async function renderApp(path: string) {
+  async function renderApp(_path: string) {
     const App = (await import('../App')).default;
     return render(<App />);
   }

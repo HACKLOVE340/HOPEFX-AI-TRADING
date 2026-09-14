@@ -150,7 +150,7 @@ function DeltaChart({ history }: { history: number[] }) {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, [color]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [color]);
 
   useEffect(() => {
     if (!seriesRef.current || history.length < 2) return;

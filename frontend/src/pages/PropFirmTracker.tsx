@@ -105,7 +105,7 @@ const DailyPnlChart: React.FC<{ data: DailyStat[] }> = ({ data }) => {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!seriesRef.current || !data.length) return;

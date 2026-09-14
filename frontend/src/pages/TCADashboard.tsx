@@ -260,7 +260,7 @@ const SlippageTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!seriesRef.current || !points.length) return;
@@ -316,7 +316,7 @@ const LatencyTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!seriesRef.current || !points.length) return;
