@@ -2761,7 +2761,189 @@ S_DEBUG = "systematic-debugging"
 S_UI = "ui-ux-pro-max"
 S_DOC = "doc-freshness-review"
 
+# ── Frontend correctness, found by driving the app rather than reading it ───
+
+
+def _p_link_dup_key() -> tuple[str, str]:
+    """A link list keyed by destination duplicates one of its links.
+
+    Measured, not asserted: on first mount React renders both, and on the next
+    re-render that reorders the list it duplicates the shared key — a
+    three-link bar becomes four anchors with a stale pill in the wrong order.
+    """
+    renderers = {
+        "frontend/src/components/CrossLinkBar.tsx": "link.href",
+        "frontend/src/components/RelatedPages.tsx": "l.to",
+        "frontend/src/components/EmptyState.tsx": "l.href",
+        "frontend/src/components/system/SubPageGrid.tsx": "item.to",
+    }
+    bare = []
+    for rel, expr in renderers.items():
+        text = _read(rel)
+        if not text:
+            return UNVERIFIED, f"{rel} is not readable"
+        if f"key={{{expr}}}" in text:
+            bare.append(rel.rsplit("/", 1)[-1])
+    if bare:
+        return OPEN, f"keyed on destination alone, so a repeat drops a link: {', '.join(bare)}"
+
+    # A repeat only matters WITHIN one list: a page may hold several bars, and
+    # each may legitimately link to /settings once. Counting file-wide called a
+    # correct page broken.
+    for rel in ("frontend/src/pages/TwoFactorSetup.tsx",):
+        page = _read(rel)
+        for block in re.findall(r"links=\{\[(.*?)\]\}", page, re.S):
+            hrefs = re.findall(r"href:\s*'([^']+)'", block)
+            dupes = {h for h in hrefs if hrefs.count(h) > 1}
+            if dupes:
+                return PARTIAL, (f"renderers fixed, but one list in {rel.rsplit('/', 1)[-1]} repeats {sorted(dupes)}")
+    return FIXED, (
+        f"all {len(renderers)} link renderers key on destination AND label, and the "
+        "call site that failed points at a tab that pill could not previously reach"
+    )
+
+
+def _p_chart_gate_vacuous() -> tuple[str, str]:
+    """The suite guarding the deployed safety posture emptied itself.
+
+    Its assertions iterated only synced paths containing a Chart.yaml, so
+    repointing ArgoCD at anything else left the list empty and every
+    `assert not missing` passed over nothing — which is the original P0.
+    """
+    text = _read("tests/unit/test_the_deployed_chart_carries_the_safety_posture.py")
+    if not text:
+        return UNVERIFIED, "the deployed-chart suite is not readable"
+    # Strip docstrings and comments FIRST. This file names both `_charts()` and
+    # the new control in the prose that explains what was wrong, so every check
+    # below must read code only — a probe that reads prose is the defect this
+    # register calls F255, and the first draft of this one hit it twice.
+    code = re.sub(r'"""[\s\S]*?"""', "", text)
+    code = re.sub(r"(?m)^\s*#.*$", "", code)
+    if "_deployed_targets(" not in code:
+        return OPEN, "assertions still iterate charts only; a non-chart sync path empties them"
+    if not re.search(r"(?m)^def test_every_synced_path_is_checkable\b", code):
+        return PARTIAL, "non-chart paths are read, but nothing fails when a path yields nothing"
+    if re.search(r"\b_charts\s*\(", code):
+        return PARTIAL, "_charts() still called — some assertion may still skip a synced path"
+    return FIXED, (
+        "every synced path is resolved to (env, manifests) whether or not it is a chart, "
+        "and a second positive control fails when a synced path yields neither"
+    )
+
+
+def _p_field_has_no_label() -> tuple[str, str]:
+    """Settings fields showed a label and had no accessible name.
+
+    `Field` rendered `<label>` as a SIBLING with no `for` and no id, in ~60
+    places; `RiskCalculator`'s `Label` was a styled `<div>`, so the page where
+    a mistyped number becomes a position size had no association at all.
+    """
+    ui = _read("frontend/src/pages/settings/ui.tsx")
+    calc = _read("frontend/src/pages/RiskCalculator.tsx")
+    if not ui or not calc:
+        return UNVERIFIED, "the settings ui module or RiskCalculator is not readable"
+
+    problems = []
+    # The label must ENCLOSE the control; a sibling label with no `for` names nothing.
+    head = ui.split("export const Field")[-1][:900]
+    if "<label" not in head or "{children}" not in head:
+        problems.append("settings Field does not wrap its control")
+    elif head.index("<label") > head.index("{children}"):
+        problems.append("settings Field renders its label after the control")
+    if "const Label: React.FC<{ text: string }> = ({ text }) => (\n  <div" in calc:
+        problems.append("RiskCalculator Label is still a <div>")
+    if "htmlFor" not in calc:
+        problems.append("RiskCalculator fields are not tied to their labels")
+    if problems:
+        return OPEN, "; ".join(problems)
+    return FIXED, (
+        "the settings Field label encloses its control, so every call site is named "
+        "without an id; RiskCalculator's Label is a real <label> carrying htmlFor"
+    )
+
+
 FINDINGS: list[Finding] = [
+    # ── Frontend correctness ───────────────────────────────────────────────
+    Finding(
+        "LINK-DUP-KEY",
+        "A link list rendered what its source did not say",
+        "P1",
+        "Frontend",
+        "This session, 2026-09-14 — found by driving all 93 routes in a browser",
+        '`/2fa-setup` listed `/settings` twice in one CrossLinkBar, once as "Settings" and '
+        'once as "API Keys", and the four link renderers keyed on destination alone. What a '
+        "repeated key does here was MEASURED rather than inferred from React's warning, and "
+        "the warning misleads: on first mount both links render and nothing is wrong; on the "
+        "next re-render that reorders the list React DUPLICATES the shared key, so a "
+        "three-link bar becomes four anchors with a stale pill and the wrong order. It does "
+        "not drop anything. Nothing throws, and a test that only mounts sees nothing — which "
+        'is why this survived a suite of 2,809. Two separate defects: the DATA ("API Keys" '
+        "pointed at /settings, not at its tab, so that pill could never reach the page it "
+        "names) and the CLASS (CrossLinkBar, RelatedPages, EmptyState and SubPageGrid all "
+        "keyed on destination, so any caller passing two routes to one page hits it). Both "
+        "fixed; an AST scan of all 482 source files found only two other arrays with a "
+        "repeated destination, both already keyed correctly.",
+        "frontend/src/test/no_link_is_silently_dropped.test.tsx — five, all red on the "
+        "pre-fix tree. They RE-RENDER with a reorder, because a mount-only assertion passes "
+        "on the broken tree: the first draft of this test passed against the defect.",
+        "npx vitest run src/test/no_link_is_silently_dropped.test.tsx",
+        _p_link_dup_key,
+        [S_TDD, S_VBC],
+    ),
+    Finding(
+        "CHART-GATE-VACUOUS",
+        "The deployed-chart safety gate emptied itself on the repoint it exists to catch",
+        "P0",
+        "Config",
+        "This session, 2026-09-14 — found while confirming DEPLOY-CHART by injection",
+        "DEPLOY-CHART's suite proves the chart ArgoCD syncs states all three safety keys and "
+        "ships the kill switch. Its header claimed it 'follows `spec.source.path` rather than "
+        "naming a directory, so repointing ArgoCD moves the assertions with it instead of "
+        "silently emptying them'. It did not: `_charts()` filtered synced paths to those "
+        "containing a `Chart.yaml`, and every assertion iterated that list, so a path without "
+        "one produced an EMPTY list and each `assert not missing` passed over nothing. "
+        "Measured by repointing `spec.source.path` — `docs` (no manifest, no posture) and "
+        "`invariants` (no yaml at all) BOTH left all seven tests green, and those are the "
+        "original P0 exactly: ArgoCD syncing a path that carries none of the safety posture. "
+        "`deployments/k8s` also passed, having checked nothing. Fixed by resolving every "
+        "synced path to (env, manifests) — from values.yaml for a chart, from ConfigMap data "
+        "and container env for a plain directory — and adding a second positive control, "
+        "because the first asserts only that some Application names a directory and `docs` "
+        "satisfies that.",
+        "tests/unit/test_the_deployed_chart_carries_the_safety_posture.py — "
+        "`test_every_synced_path_is_checkable` is the new control. Red-green by repointing at "
+        "the fixed revision: docs 7 pass -> 5 fail, invariants 7 pass -> 6 fail, "
+        "deployments/k8s 7 pass -> 8 pass and now actually read. Every repoint was injected, "
+        "measured and reverted; the two deployment files are byte-identical to before.",
+        "python scripts/correction_register.py --id CHART-GATE-VACUOUS",
+        _p_chart_gate_vacuous,
+        [S_DEAD, S_VBC],
+    ),
+    Finding(
+        "FIELD-NO-LABEL",
+        "Every settings field showed a label and had no accessible name",
+        "P1",
+        "Frontend",
+        "This session, 2026-09-14 — measured with eslint-plugin-jsx-a11y and Chromium's AX tree",
+        "`frontend/src/pages/settings/ui.tsx`'s `Field` rendered `<label>Protected Paths</label>` "
+        "and then the control as a SIBLING, with no `for` and no id. It is used in ~60 places, "
+        "so across every settings page a label was on screen and the control had no name; "
+        "clicking the label did nothing. `RiskCalculator`'s `Label` was worse — a styled "
+        "`<div>`, no association possible at all — on the page where a mistyped number becomes "
+        "a position size. Fixed by making the settings label WRAP its control, which needs no "
+        "ids and corrects all ~60 call sites without touching one of them, and by making "
+        "RiskCalculator's Label a real `<label>` with `htmlFor` (plus `display:block`, since "
+        "`<label>` is inline and the `<div>` it replaces was not). Part of 82 -> 18 on the "
+        "jsx-a11y rule, with 29 files leaving a11y-debt.json.",
+        "frontend/a11y-debt.json is the ratchet and `src/test/a11y_debt_is_accurate.test.ts` "
+        "fails on an entry that no longer describes anything — it caught 29 stale entries the "
+        "moment these were fixed. Verified at runtime too: Chromium's accessibility tree "
+        "reports 0 controls without an accessible name across all 93 routes, and that probe "
+        "was itself injection-tested before being believed.",
+        "python scripts/correction_register.py --id FIELD-NO-LABEL",
+        _p_field_has_no_label,
+        [S_DEAD, S_VBC],
+    ),
     # ── Verification capability ────────────────────────────────────────────
     Finding(
         "DRIFT-ABSENCE",

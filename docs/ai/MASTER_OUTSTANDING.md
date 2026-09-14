@@ -3181,7 +3181,7 @@ of the UI exactly as it applies to the engine.
 
 | Signal | Count |
 |---|---:|
-| Hardcoded hex literals in `frontend/src` | **8,021** (202 files) |
+| Hardcoded hex literals in `frontend/src` | **3,564** (189 files) — 8,021 across 202 at the audit |
 | …in `pages/` + `components/` alone | 7,340 (210 distinct) |
 | `var(--…)` uses in `pages/` + `components/` | **58** |
 | Inline `style={{…}}` blocks in `pages/` | 4,000 |
@@ -3261,6 +3261,13 @@ The plan recorded this as done for `frontend/src`: *"no source file carries
 emoji"*. Measured 2026-09-13: **1,389 across 145 files**, concentrated exactly
 where icons live — `PlatformConfiguration.tsx` 136, `SystemReliabilitySection.tsx`
 62, `Settings.tsx` 52.
+
+Measured again 2026-09-14: **772 across 129 files**. The 629 that sat in an
+`icon=` attribute or an `icon:` field — the positions where the glyph IS the
+interface — are Lucide components now. What remains is prose, copy and test
+fixtures, where an emoji is text rather than an icon and replacing it would
+change what the product says. `python scripts/frontend_emoji_ratchet.py --check`
+is the current figure; these two are snapshots.
 
 `navConfig.ts` already carries the reasoning, written when the *sidebar* was
 converted (F170): emoji cannot inherit `currentColor`, so they ignore theme,

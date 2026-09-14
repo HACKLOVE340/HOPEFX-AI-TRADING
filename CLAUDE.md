@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 598 commits and 1,469 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 609 commits and 1,498 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
 | What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |
@@ -37,7 +37,7 @@ is always today's. Everything below is the shape; that command is the state.
 | What does the AI OS specification require that this repo does not yet enforce? | `python scripts/aos_conformance.py` · `docs/ai/specs/AOS_INVARIANT_REGISTER.toml` |
 | What can the spatial/3D system claim, and what must it refuse to? | `docs/ai/specs/SPATIAL_INTELLIGENCE.md` · `ai/spatial/assurance.py` · `invariants/spatial.py` |
 | Which spatial capabilities actually exist, measured? | `python scripts/spatial_capabilities.py` · `docs/ai/specs/SPATIAL_CAPABILITIES.toml` |
-| Why does the light/dark toggle change nothing *yet*? | `frontend/src/index.css` now defines both themes and the document ground follows them; the 201 files that still paint their own literals do not. `python scripts/frontend_colour_ratchet.py --check` · `docs/FRONTEND_COLOUR_DEBT.json` |
+| Why does the light/dark toggle change nothing *yet*? | `frontend/src/index.css` now defines both themes and the document ground follows them; the 189 files that still paint their own literals do not (201 at the audit; 1,777 literals reached the token layer on 2026-09-14). `python scripts/frontend_colour_ratchet.py --check` · `docs/FRONTEND_COLOUR_DEBT.json` |
 | Why are there still emoji where icons belong? | `python scripts/frontend_emoji_ratchet.py --check` · `docs/FRONTEND_EMOJI_DEBT.json` |
 | How are the four specification groups organised? | `docs/ai/BACKLOG_GROUPS.md` |
 | What binds every group? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — T0, twelve Articles, INV-01…21 |
