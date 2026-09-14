@@ -5,6 +5,7 @@
  * with confidence bars, entry/target/stop prices, and R:R ratio.
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
@@ -228,14 +229,10 @@ const PatternDetector: React.FC = () => {
   useEffect(() => { scan(); }, [scan]);
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Pattern Detector</h1>
-          <p style={s.subtitle}>AI-powered chart pattern recognition for XAU/USD and major instruments</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+    <PageShell
+      width="wide" title="Pattern Detector"
+      subtitle="AI-powered chart pattern recognition for XAU/USD and major instruments"
+      actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => navigate('/ai-chart')} style={s.navBtn}>
             🧠 AI Chart
           </button>
@@ -303,8 +300,10 @@ const PatternDetector: React.FC = () => {
           >
             {loading ? 'Scanning…' : <><ScanSearch size={14} strokeWidth={2} aria-hidden /> Scan</>}
           </button>
-        </div>
-      </div>
+        </div></>}
+    >
+      {/* Header */}
+
 
       {/* Body */}
       {loading ? (
@@ -366,7 +365,7 @@ const PatternDetector: React.FC = () => {
         ]}
       />
 
-    </div>
+    </PageShell>
   );
 };
 

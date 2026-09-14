@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -348,8 +348,7 @@ const AutoHealDashboard: React.FC = () => {
   const highThreats = threats.filter(t => t.severity === 'high' && !t.quarantined).length;
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Auto-Heal & Antivirus"
         subtitle="Code integrity monitor · Self-healing engine · Malware scanner"
         actions={
@@ -364,7 +363,7 @@ const AutoHealDashboard: React.FC = () => {
             </button>
           </div>
         }
-      />
+    >
 
       {error && <div style={errorBannerStyle}>{error}</div>}
 
@@ -479,7 +478,7 @@ const AutoHealDashboard: React.FC = () => {
       {/* LLM fix approval queue */}
       <div style={sectionLabelStyle}>LLM Fix Approval Queue</div>
       <FixApprovalQueue />
-    </div>
+    </PageShell>
   );
 };
 

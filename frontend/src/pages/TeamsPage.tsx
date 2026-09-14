@@ -12,6 +12,7 @@
  * Requires: enterprise plan
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -298,16 +299,10 @@ const TeamsPage: React.FC = () => {
   const teams = data?.teams ?? [];
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>Teams</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Collaborative trading with shared strategies and P&L — enterprise tier
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    <PageShell
+      width="wide" title="Teams"
+      subtitle="Collaborative trading with shared strategies and P&L — enterprise tier"
+      actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/leaderboard')}
             style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 8, color: '#f59e0b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             🏆 Leaderboard
@@ -321,8 +316,10 @@ const TeamsPage: React.FC = () => {
               borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             + New Team
           </button>
-        </div>
-      </div>
+        </div></>}
+    >
+      {/* Header */}
+
 
       {/* Create form */}
       {showCreate && (
@@ -438,7 +435,7 @@ const TeamsPage: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 };
 

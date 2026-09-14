@@ -9,7 +9,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -231,8 +231,7 @@ const MobilePage: React.FC = () => {
     : DEFAULT_FEATURES;
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Mobile App"
         subtitle="Trade on the go with the HOPEFX mobile app for iOS and Android."
         breadcrumbs={[
@@ -254,7 +253,7 @@ const MobilePage: React.FC = () => {
             {loading ? <Spinner size="sm" /> : '↻'} Refresh
           </button>
         }
-      />
+    >
 
       {error && <ErrorBanner message={error} style={{ marginBottom: 20 }} />}
 
@@ -386,7 +385,7 @@ const MobilePage: React.FC = () => {
         { label: 'Settings',      href: '/settings',              icon: '⚙️', color: '#94a3b8' },
         { label: 'Dashboard',     href: '/dashboard',             icon: '📊', color: '#4ade80' },
       ]} />
-    </div>
+    </PageShell>
   );
 };
 

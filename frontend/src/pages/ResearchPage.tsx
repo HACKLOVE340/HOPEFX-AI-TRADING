@@ -11,6 +11,7 @@
  * Requires: enterprise plan
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -279,21 +280,17 @@ const ResearchPage: React.FC = () => {
   }, [createMut]);
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>Research</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            AI-powered market analysis notebooks — enterprise tier
-          </p>
-        </div>
-        <button onClick={() => setShowCreate(true)}
+    <PageShell
+      width="wide" title="Research"
+      subtitle="AI-powered market analysis notebooks — enterprise tier"
+      actions={<><button onClick={() => setShowCreate(true)}
           style={{ padding: '9px 18px', background: '#8b5cf6', color: '#fff', border: 'none',
             borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           + New Notebook
-        </button>
-      </div>
+        </button></>}
+    >
+      {/* Header */}
+
 
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '320px 1fr' : '1fr', gap: 20 }}>
         {/* Notebook list */}
@@ -456,7 +453,7 @@ const ResearchPage: React.FC = () => {
         ]}
       />
 
-    </div>
+    </PageShell>
   );
 };
 

@@ -2,6 +2,7 @@
  * Strategy A/B Testing (Task 42)
  * Run two strategies in parallel on paper, auto-select winner.
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
@@ -102,13 +103,10 @@ const ABTesting: React.FC = () => {
   const sel = selected || tests[0];
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Strategy A/B Testing</h1>
-          <p style={s.subtitle}>Run two strategies in parallel on paper. Auto-select winner after N days.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    <PageShell
+      width="wide" title="Strategy A/B Testing"
+      subtitle="Run two strategies in parallel on paper. Auto-select winner after N days."
+      actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/ai-strategy')}
             style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             🤖 AI Strategy
@@ -117,8 +115,9 @@ const ABTesting: React.FC = () => {
             style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             📈 Walk-Forward
           </button>
-        </div>
-      </div>
+        </div></>}
+    >
+
 
       <div style={s.grid}>
         {/* Config */}
@@ -212,7 +211,7 @@ const ABTesting: React.FC = () => {
         ]}
       />
 
-    </div>
+    </PageShell>
   );
 };
 

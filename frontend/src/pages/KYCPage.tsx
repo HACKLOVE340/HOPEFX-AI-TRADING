@@ -9,7 +9,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { kycApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -225,8 +225,7 @@ const KYCPage: React.FC = () => {
   const canSubmitDocs = missing.length === 0;
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Identity Verification (KYC)"
         icon="🪪"
         subtitle="Complete verification to unlock full trading features and higher withdrawal limits."
@@ -253,7 +252,7 @@ const KYCPage: React.FC = () => {
             {loading ? <Spinner size="sm" /> : '↻'} Refresh
           </button>
         }
-      />
+    >
 
       {error && <ErrorBanner message={error} style={{ marginBottom: 20 }} />}
 
@@ -488,7 +487,7 @@ const KYCPage: React.FC = () => {
           ]} />
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

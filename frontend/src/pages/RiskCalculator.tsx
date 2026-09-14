@@ -8,6 +8,7 @@
  *   DELETE /api/risk/calculator/history/:id — delete saved calc
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
@@ -15,7 +16,7 @@ import {
   Zap, BookOpen, Shield,
    Briefcase,
 } from 'lucide-react';
-import { PageHeader, EmptyState } from '../components';
+import { EmptyState } from '../components';
 import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
 import { useDataFreshness } from '../hooks/useDataFreshness';
@@ -381,8 +382,7 @@ const RiskCalculator: React.FC = () => {
     '#f87171';
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Risk / Reward Calculator"
         icon="🧮"
         subtitle="Calculate position size, pip value, and margin before every trade."
@@ -416,7 +416,7 @@ const RiskCalculator: React.FC = () => {
             </Link>
           </div>
         }
-      />
+    >
 
       <StaleDataNotice failed={freshness.failed} what={freshness.what} />
       {instruments.source === 'builtin' && !instruments.loading && (
@@ -627,7 +627,7 @@ const RiskCalculator: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

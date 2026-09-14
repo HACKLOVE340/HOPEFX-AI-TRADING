@@ -13,7 +13,7 @@ import { adminApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
 import { openAuthenticatedWebSocket } from '../lib/ws';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
@@ -230,8 +230,7 @@ const AuditLog: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Audit Log"
         subtitle={`${total.toLocaleString()} events total${liveCount > 0 ? ` · ${liveCount} live` : ''}`}
         actions={
@@ -253,7 +252,7 @@ const AuditLog: React.FC = () => {
             </button>
           </div>
         }
-      />
+    >
 
       {/* Filters */}
       <div style={s.filters}>
@@ -337,7 +336,7 @@ const AuditLog: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

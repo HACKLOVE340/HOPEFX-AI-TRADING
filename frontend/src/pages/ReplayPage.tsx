@@ -18,6 +18,7 @@ import { PageHeader } from '../components';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { PageShell } from '../components/system/PageShell';
 
 // Playback speed options (ms between auto-step ticks)
 /** 1× — the speed used if an index somehow falls outside SPEED_OPTIONS. */
@@ -277,8 +278,7 @@ const ReplayPage: React.FC = () => {
   const sessions = data?.sessions ?? [];
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Market Replay"
         icon="⏪"
         subtitle="Bar-by-bar historical replay with live strategy testing — enterprise tier"
@@ -308,7 +308,7 @@ const ReplayPage: React.FC = () => {
             </button>
           </div>
         }
-      />
+    >
 
       {/* Create form */}
       {showCreate && (
@@ -533,7 +533,7 @@ const ReplayPage: React.FC = () => {
         <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
         <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

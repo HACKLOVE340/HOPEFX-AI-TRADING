@@ -10,10 +10,11 @@
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, CrossLinkBar } from '../components';
+import { CrossLinkBar } from '../components';
 import { createChart, LineSeries, type UTCTimestamp } from 'lightweight-charts';
 import { indicatorsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { PageShell } from '../components/system/PageShell';
 
 interface Indicator { id: string; name: string; formula: string; symbol: string; color: string; created_at: string; }
 interface PreviewPoint { index: number; value: number; }
@@ -189,8 +190,7 @@ const CustomIndicators: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Custom Indicator Builder"
         icon="📐"
         subtitle="Define indicator formulas using EMA, SMA, RSI. Preview on chart. Save for use in strategies."
@@ -219,7 +219,7 @@ const CustomIndicators: React.FC = () => {
             </Link>
           </div>
         }
-      />
+    >
 
       <div style={s.grid}>
         {/* Builder */}
@@ -318,7 +318,7 @@ const CustomIndicators: React.FC = () => {
         { label: 'Walk-Forward',    href: '/walk-forward',     icon: '📊', color: '#60a5fa' },
         { label: 'Marketplace',     href: '/marketplace',      icon: '🛒', color: '#f97316' },
       ]} />
-    </div>
+    </PageShell>
   );
 };
 

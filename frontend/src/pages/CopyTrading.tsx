@@ -7,6 +7,7 @@
  *           DELETE /api/social/copy/{trader_id}
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { copyTradingApi } from '../hooks/useApi';
@@ -271,15 +272,10 @@ const CopyTrading: React.FC = () => {
       : 'Not published';
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Copy Trading Marketplace</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-            Mirror top traders automatically. Allocate capital and start earning.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    <PageShell
+      width="wide" title="Copy Trading Marketplace"
+      subtitle="Mirror top traders automatically. Allocate capital and start earning."
+      actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {(['browse', 'active'] as const).map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
               ...s.tabBtn,
@@ -295,8 +291,9 @@ const CopyTrading: React.FC = () => {
           >
             🏆 Leaderboard
           </button>
-        </div>
-      </div>
+        </div></>}
+    >
+
 
       {/* ── Active Sessions Tab ── */}
       {activeTab === 'active' && (
@@ -500,7 +497,7 @@ const CopyTrading: React.FC = () => {
       )}
       </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

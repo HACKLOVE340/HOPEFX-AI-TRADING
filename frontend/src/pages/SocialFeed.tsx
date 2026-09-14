@@ -3,13 +3,14 @@
  * Features: opt-in/out toggle, real-time WS signal injection, pagination,
  * reactions (👍/👎), comments, copy counts.
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError, fmtPrice, fmtPctRaw, fmtTime } from '../lib/utils';
 import { openAuthenticatedWebSocket } from '../lib/ws';
-import { PageHeader, EmptyState, RelatedPages } from '../components';
+import { EmptyState, RelatedPages } from '../components';
 import {
   Radio,
   Check,
@@ -183,8 +184,7 @@ const SocialFeed: React.FC = () => {
   });
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Community signal feed"
         icon={Radio}
         subtitle="High-confidence AI signals shared by the community — 70% confidence and above."
@@ -209,7 +209,7 @@ const SocialFeed: React.FC = () => {
                 : 'Share my signals'}
           </button>
         }
-      />
+    >
 
       {/* Symbol filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -388,7 +388,7 @@ const SocialFeed: React.FC = () => {
                 Share your AI signals with the community to build your reputation.</>}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

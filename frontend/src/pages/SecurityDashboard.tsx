@@ -18,7 +18,7 @@ import { api } from '../hooks/useApi';
 import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../components/GlobalAttackMap';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -188,8 +188,7 @@ const SecurityDashboard: React.FC = () => {
   }, {});
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Security Operations"
         subtitle="HOPEFXBrain — 24/7 autonomous threat monitoring"
         actions={
@@ -204,7 +203,7 @@ const SecurityDashboard: React.FC = () => {
             </button>
           </div>
         }
-      />
+    >
 
       {/* Lockdown banner + toggle */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -365,7 +364,7 @@ const SecurityDashboard: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

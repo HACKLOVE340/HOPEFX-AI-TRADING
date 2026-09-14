@@ -18,7 +18,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, superadminApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 
@@ -371,8 +371,7 @@ const AdminPanel: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="🔧 Admin Panel"
         subtitle="Platform operations, user management, and system health"
         actions={
@@ -383,7 +382,7 @@ const AdminPanel: React.FC = () => {
             ↻ Refresh
           </button>
         }
-      />
+    >
 
       {error && <div style={{ padding: '0 24px 16px' }}><ErrorBanner message={error} /></div>}
 
@@ -467,7 +466,7 @@ const AdminPanel: React.FC = () => {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

@@ -11,7 +11,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
 import { Modal } from '../components/Modal';
@@ -355,8 +355,7 @@ const SubAccounts: React.FC = () => {
   const currentMembers = selectedTeam?.members ?? [];
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Sub-Accounts & Teams"
         subtitle="Manage trading accounts and team access"
         actions={
@@ -369,7 +368,7 @@ const SubAccounts: React.FC = () => {
             <button onClick={() => setShowCreateTeam(true)} style={s.secondaryBtn}>+ Team</button>
           </div>
         }
-      />
+    >
 
       {error && <ErrorBanner message={error} onDismiss={() => setError(null)} style={{ marginBottom: 16 }} />}
 
@@ -583,7 +582,7 @@ const SubAccounts: React.FC = () => {
           </select>
         </div>
       </Modal>
-    </div>
+    </PageShell>
   );
 };
 

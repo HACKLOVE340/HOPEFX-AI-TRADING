@@ -8,7 +8,7 @@
 
 import React, { Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 
@@ -43,8 +43,7 @@ const Fallback: React.FC = () => (
 const SystemReliability: React.FC = () => (
   <>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    <div className="page-content">
-        <PageHeader
+    <PageShell width="wide"
           title="System Reliability Dashboard"
         icon="🔬"
           subtitle="Real-time end-to-end connectivity, OTel tracing, self-test suite, environment audit, and system metrics for every platform component."
@@ -67,7 +66,7 @@ const SystemReliability: React.FC = () => (
               </Link>
             </div>
           }
-        />
+    >
 
         {/* Section content */}
         <Suspense fallback={<Fallback />}>
@@ -75,7 +74,7 @@ const SystemReliability: React.FC = () => (
         </Suspense>
 
         <CrossLinkBar links={SR_CROSS_LINKS} title="Related" style={{ marginTop: 32 }} />
-    </div>
+    </PageShell>
   </>
 );
 

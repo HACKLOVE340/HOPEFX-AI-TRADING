@@ -2,6 +2,8 @@
  * Strategy Marketplace — browse, purchase, review, and manage your listings.
  * Tabs: Browse · My Listings
  */
+import { PageShell } from '../components/system/PageShell';
+import { Store, Bot } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
@@ -208,16 +210,28 @@ const Marketplace: React.FC = () => {
   });
 
   return (
-    <div className="page-content">
-      <div style={st.pageHeader}>
-        <div><h1 style={st.heading}>Strategy Marketplace</h1>{stats&&<p style={st.statsLine}>{stats.total_strategies ?? 0} strategies · {(stats.total_subscribers ?? 0).toLocaleString()} subscribers</p>}</div>
+    <PageShell
+      width="wide"
+      title="Strategy Marketplace"
+      icon={Store}
+      /* Conditional, so it stays a node rather than becoming a string: the
+         counts are absent until the stats request returns, and "0 strategies"
+         before it lands is a measurement nobody made. */
+      badge={stats ? (
+        <span style={st.statsLine}>
+          {stats.total_strategies ?? 0} strategies · {(stats.total_subscribers ?? 0).toLocaleString()} subscribers
+        </span>
+      ) : undefined}
+      actions={
         <button
           onClick={() => navigate('/ai-strategy')}
-          style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:8, color:'var(--ai-model)', fontSize:13, fontWeight:700, padding:'8px 18px', cursor:'pointer' }}
+          style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:8, color:'var(--ai-model)', fontSize:13, fontWeight:700, padding:'8px 18px', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}
         >
-          🤖 Build Your Own Strategy
+          <Bot size={14} aria-hidden />
+          Build Your Own Strategy
         </button>
-      </div>
+      }
+    >
 
       <div style={{display:'flex',gap:4,marginBottom:20,borderBottom:'1px solid #1e293b'}}>
         {(['browse','my-listings'] as MainTab[]).map(tab=>(
@@ -261,7 +275,7 @@ const Marketplace: React.FC = () => {
       {showReviewModal&&selected&&(
         <ReviewModal strategyId={selected.strategy_id} onClose={()=>setShowReviewModal(false)} onSubmitted={()=>handleSelect(selected)}/>
       )}
-    </div>
+    </PageShell>
   );
 };
 

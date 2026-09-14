@@ -9,6 +9,7 @@
  *                   live layer selector, embedded iframe deep-links
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
@@ -16,7 +17,7 @@ import {
    Newspaper,
   Radiation, CalendarDays, LineChart,
 } from 'lucide-react';
-import { PageHeader, CrossLinkBar } from '../components';
+import { CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
 import {
@@ -305,8 +306,7 @@ const GeopoliticalRiskPage: React.FC = () => {
   });
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Geopolitical Risk Intelligence"
         icon="🌍"
         subtitle="Live conflict, sanctions, nuclear, infrastructure and instability data — XAU/USD safe-haven impact"
@@ -339,7 +339,7 @@ const GeopoliticalRiskPage: React.FC = () => {
             </Link>
           </div>
         }
-      />
+    >
 
       <div style={s.grid}>
         <div style={s.leftCol}>
@@ -373,7 +373,7 @@ const GeopoliticalRiskPage: React.FC = () => {
         ]}
       />
 
-    </div>
+    </PageShell>
   );
 };
 

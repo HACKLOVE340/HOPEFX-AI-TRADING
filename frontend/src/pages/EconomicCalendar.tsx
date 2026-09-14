@@ -15,6 +15,8 @@
  *   GET  /api/data-layer/macro         — MacroResponse (via useMacro hook)
  */
 
+import { CalendarDays } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calendarApi } from '../hooks/useApi';
@@ -280,15 +282,12 @@ const EconomicCalendar: React.FC = () => {
   }, {});
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>📅 Economic Calendar</h1>
-          <p style={s.subtitle}>Upcoming market-moving events. Red = high impact on gold/USD.</p>
-        </div>
-
-        {/* Auto-pause toggle */}
+    <PageShell
+      width="wide"
+      icon={CalendarDays}
+      title="Economic Calendar"
+      subtitle="Upcoming market-moving events. Red = high impact on gold/USD."
+      actions={<>{/* Auto-pause toggle */}
         <div style={s.autoPauseCard}>
           <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 4 }}>Auto-pause trading</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -313,8 +312,10 @@ const EconomicCalendar: React.FC = () => {
           {pauseErr && (
             <div style={{ fontSize: 12, color: 'var(--loss)', marginTop: 6 }}>{pauseErr}</div>
           )}
-        </div>
-      </div>
+        </div></>}
+    >
+      {/* Header */}
+
 
       {/* Blackout banner */}
       {macro?.is_blackout && (
@@ -395,7 +396,7 @@ const EconomicCalendar: React.FC = () => {
           <MacroCalendar />
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

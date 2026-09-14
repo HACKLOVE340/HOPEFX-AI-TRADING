@@ -32,7 +32,7 @@ import {
 import { createChart, AreaSeries, LineSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { MetricCard } from '../components/MetricCard';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { useStore, selectUser } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -430,8 +430,7 @@ const TCADashboard: React.FC = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Transaction Cost Analysis"
         subtitle="Signal-price vs fill-price slippage across all brokers and sessions"
         actions={
@@ -465,7 +464,7 @@ const TCADashboard: React.FC = () => {
             )}
           </div>
         }
-      />
+    >
 
       {/* Alert banner */}
       {alerts.length > 0 && (
@@ -754,7 +753,7 @@ const TCADashboard: React.FC = () => {
           { to: '/performance', label: 'Performance',   hint: 'Cost impact on returns',          icon: Trophy },
         ]}
       />
-    </div>
+    </PageShell>
   );
 };
 

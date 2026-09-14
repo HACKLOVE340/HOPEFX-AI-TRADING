@@ -86,7 +86,10 @@ export const PageShell: React.FC<PageShellProps> = ({
       : relatedFor(pathname, Array.isArray(related) ? related : []);
 
   return (
-    <div className={`mx-auto w-full ${WIDTH[width]} px-card pb-s8 pt-s5 ${className}`}>
+    <div
+      className={`mx-auto flex w-full flex-col ${WIDTH[width]} px-s4 pb-s8 pt-s4
+                  sm:px-s5 md:px-s6 md:pt-s5 ${className}`}
+    >
       <PageHeader
         title={title}
         subtitle={subtitle}

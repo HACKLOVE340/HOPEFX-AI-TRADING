@@ -8,6 +8,7 @@
  * - Preview branded dashboard
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
@@ -302,22 +303,10 @@ const WhitelabelAdmin: React.FC = () => {
   const filtered = filter === 'all' ? tenants : tenants.filter((t) => t.status === filter);
 
   return (
-    <div className="page-content">
-      {creating && (
-        <CreateModal
-          onCreated={(t) => { setTenants((prev) => [t, ...prev]); setCreating(false); }}
-          onClose={() => setCreating(false)}
-        />
-      )}
-      {preview && <PreviewPanel tenant={preview} onClose={() => setPreview(null)} />}
-
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Whitelabel Tenants</h1>
-          <p style={s.subtitle}>Manage prop-firm and reseller branded deployments.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    <PageShell
+      width="wide" title="Whitelabel Tenants"
+      subtitle="Manage prop-firm and reseller branded deployments."
+      actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/trade')}
             style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ⚡ Trade
@@ -327,8 +316,18 @@ const WhitelabelAdmin: React.FC = () => {
             📊 Performance
           </button>
           <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
-        </div>
-      </div>
+        </div></>}
+    >
+      {creating && (
+        <CreateModal
+          onCreated={(t) => { setTenants((prev) => [t, ...prev]); setCreating(false); }}
+          onClose={() => setCreating(false)}
+        />
+      )}
+      {preview && <PreviewPanel tenant={preview} onClose={() => setPreview(null)} />}
+
+      {/* Header */}
+
 
       {/* API key message */}
       {apiKeyMsg && (
@@ -392,7 +391,7 @@ const WhitelabelAdmin: React.FC = () => {
         {' '}Each tenant gets a branded dashboard, their own API key, and configurable feature flags.
         Email FTMO / The5ers / Funded Next with the preview link to close deals.
       </div>
-    </div>
+    </PageShell>
   );
 };
 

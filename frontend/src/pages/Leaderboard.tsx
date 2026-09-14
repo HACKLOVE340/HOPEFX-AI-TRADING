@@ -6,11 +6,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { EmptyState, CrossLinkBar } from '../components';
 import { RelatedPages } from '../components';
 import { Medal, Trophy, BadgeCheck, Users, Radar, BookOpen, LineChart } from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { extractApiError, fmtPctRaw, fmtRatio } from '../lib/utils';
+import { PageShell } from '../components/system/PageShell';
 
 /** Guarded sort value / integer formatter for possibly missing trader fields. */
 const sv = (v: number | null | undefined) => (Number.isFinite(v as number) ? (v as number) : 0);
@@ -129,8 +130,7 @@ const Leaderboard: React.FC = () => {
   const top3 = sorted.slice(0, 3);
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Global Leaderboard"
         icon={Medal}
         subtitle="Top traders ranked by performance. Click a trader to copy their strategy."
@@ -156,7 +156,7 @@ const Leaderboard: React.FC = () => {
             <Link to="/signals"      className="px-3 py-1.5 bg-violet-500/10 border border-violet-500/30 rounded-lg text-violet-400 text-xs font-semibold no-underline hover:bg-violet-500/20 transition-colors">📡 Signals</Link>
           </div>
         }
-      />
+    >
 
       {loading ? (
         <div className="space-y-3">
@@ -332,7 +332,7 @@ const Leaderboard: React.FC = () => {
           { to: '/journal',      label: 'Trade journal', hint: 'Your own record',                  icon: BookOpen },
         ]}
       />
-    </div>
+    </PageShell>
   );
 };
 

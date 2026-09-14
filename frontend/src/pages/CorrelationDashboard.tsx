@@ -2,6 +2,7 @@
  * Multi-Symbol Correlation Dashboard (Task 45)
  * + CFTC COT Gold Sentiment (Task 46)
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
@@ -86,13 +87,10 @@ const CorrelationDashboard: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Correlation & Sentiment</h1>
-          <p style={s.subtitle}>Rolling correlations between gold, FX, equities, and macro indicators.</p>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+    <PageShell
+      width="wide" title="Correlation & Sentiment"
+      subtitle="Rolling correlations between gold, FX, equities, and macro indicators."
+      actions={<><div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <span style={{ fontSize:13, color:'var(--text-dim)' }}>Window:</span>
           {[14,30,60,90].map(w => (
             <button key={w} style={{ ...s.wBtn, ...(window===w ? s.wBtnActive : {}) }} onClick={() => setWindow(w)}>{w}d</button>
@@ -104,8 +102,9 @@ const CorrelationDashboard: React.FC = () => {
           >
             🤖 Generate Strategy
           </button>
-        </div>
-      </div>
+        </div></>}
+    >
+
 
       {loading ? <div style={s.dim}>Loading…</div> : loadErr ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -287,7 +286,7 @@ const CorrelationDashboard: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

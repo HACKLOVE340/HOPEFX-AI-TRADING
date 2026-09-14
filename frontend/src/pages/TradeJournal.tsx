@@ -17,13 +17,14 @@ import { useNavigate } from 'react-router-dom';
 import { journalApi } from '../hooks/useApi';
 import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
-import { PageHeader, Section, RelatedPages } from '../components';
+import { Section, RelatedPages } from '../components';
 import { EmptyState } from '../components/EmptyState';
 import {
   BookOpen, TrendingUp, Shield, Brain, CalendarDays, Download,
   AlertTriangle, Zap, Target, LineChart,
 } from 'lucide-react';
 import { extractApiError, fmtPnl } from '../lib/utils';
+import { PageShell } from '../components/system/PageShell';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -229,8 +230,7 @@ const TradeJournal: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Trade journal"
         icon={BookOpen}
         subtitle="Every trade logged automatically. Add notes, emotions and tags to find what you keep repeating."
@@ -260,7 +260,7 @@ const TradeJournal: React.FC = () => {
             </button>
           </>
         }
-      />
+    >
 
       {extraErr && (tab === 'emotions' || tab === 'weekly') && (
         <p role="alert" className="mx-4 mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-[12.5px]
@@ -550,7 +550,7 @@ const TradeJournal: React.FC = () => {
           { to: '/trade',           label: 'Trading ticket',  hint: 'Place the next order',                  icon: Zap },
         ]}
       />
-    </div>
+    </PageShell>
   );
 };
 

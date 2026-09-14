@@ -16,7 +16,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { RelatedPages } from '../components';
 import {
   Wallet as WalletIcon, ArrowDownToLine, ArrowUpFromLine,
@@ -297,8 +297,7 @@ const Wallet: React.FC = () => {
   ];
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Wallet & Payments"
         icon={WalletIcon}
         subtitle="Manage your balance, transactions, subscriptions, and payment methods"
@@ -319,7 +318,7 @@ const Wallet: React.FC = () => {
             </Link>
           </div>
         }
-      />
+    >
 
       <CrossLinkBar links={[
         { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
@@ -640,7 +639,7 @@ const Wallet: React.FC = () => {
           { to: '/kyc',       label: 'Verification',   hint: 'Required before withdrawal',      icon: ShieldCheck },
         ]}
       />
-    </div>
+    </PageShell>
   );
 };
 

@@ -12,6 +12,7 @@
  *           GET    /api/alerts/history/triggers
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
@@ -179,16 +180,14 @@ const PriceAlerts: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Price Alerts</h1>
-          <p style={s.subtitle}>Get notified via Discord, Telegram, or email when price conditions are met.</p>
-        </div>
-        <button onClick={() => setShowForm(!showForm)} style={s.createBtn}>
+    <PageShell
+      width="wide" title="Price Alerts"
+      subtitle="Get notified via Discord, Telegram, or email when price conditions are met."
+      actions={<><button onClick={() => setShowForm(!showForm)} style={s.createBtn}>
           {showForm ? '✕ Cancel' : '+ Create Alert'}
-        </button>
-      </div>
+        </button></>}
+    >
+
 
       {/* Create form */}
       {showForm && (
@@ -373,7 +372,7 @@ const PriceAlerts: React.FC = () => {
           </div>
         ))
       )}
-    </div>
+    </PageShell>
   );
 };
 
