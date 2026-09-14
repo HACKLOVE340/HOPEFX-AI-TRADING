@@ -48,6 +48,20 @@ does not use, so they report full coverage of a posture that is not deployed.
 These tests follow `spec.source.path` rather than naming a directory, so
 repointing ArgoCD moves the assertions with it instead of silently emptying
 them.
+
+That sentence was written before it was true, and the gap was the same defect
+one level up. The assertions iterated synced paths that contain a `Chart.yaml`;
+a path without one produced an EMPTY list, and every `assert not missing` then
+passed over nothing. Measured by repointing `spec.source.path`:
+
+    docs         one yaml, no manifest, no posture  ->  all 7 tests passed
+    invariants   no yaml at all                     ->  all 7 tests passed
+
+Both are the original P0 exactly — ArgoCD syncing a path that carries none of
+the safety posture — and the suite written to catch it reported success. It now
+reads a plain directory of manifests as well as a chart, and
+`test_every_synced_path_is_checkable` fails when a synced path yields neither.
+The same repoints now fail 5 and 6 of 8.
 """
 
 from __future__ import annotations
@@ -125,8 +139,81 @@ def _chart_env(chart: Path) -> dict[str, str]:
     return {str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else {}
 
 
-def _charts() -> list[tuple[str, Path]]:
-    return [(p, REPO_ROOT / p) for p in _deployed_paths() if (REPO_ROOT / p / "Chart.yaml").is_file()]
+def _plain_env(root: Path) -> dict[str, str]:
+    """Env from ordinary manifests: ConfigMap `data`, and literal container env."""
+    env: dict[str, str] = {}
+    for candidate in sorted(root.rglob("*.yaml")):
+        try:
+            docs = _yaml(candidate)
+        except Exception:
+            continue
+        for doc in docs:
+            if not isinstance(doc, dict):
+                continue
+            if doc.get("kind") == "ConfigMap" and isinstance(doc.get("data"), dict):
+                env.update({str(k): str(v) for k, v in doc["data"].items()})
+            for container in _containers(doc):
+                for item in container.get("env") or []:
+                    if isinstance(item, dict) and "name" in item and "value" in item:
+                        env[str(item["name"])] = str(item["value"])
+    return env
+
+
+def _containers(doc: dict) -> list[dict]:
+    spec = (doc.get("spec") or {}).get("template", {}).get("spec", {})
+    out = [c for c in (spec.get("containers") or []) if isinstance(c, dict)]
+    return out
+
+
+def _deployed_targets() -> list[tuple[str, dict[str, str], str]]:
+    """Every synced path as (path, resolved env, the text of its manifests).
+
+    A synced path is checked whether or not it is a Helm chart. `_charts()`
+    filtered to paths containing a Chart.yaml, and every assertion below then
+    iterated that list — so pointing ArgoCD at anything without one left the
+    list EMPTY and each `assert not missing` passed over nothing. Repointing
+    `spec.source.path` to `docs`, which holds no manifest at all, kept all
+    seven tests green: the suite emptied itself in exactly the situation it
+    exists to catch, since the original P0 *was* ArgoCD syncing a path that
+    carried none of the posture. `test_every_synced_path_is_checkable` below
+    now refuses that, and the two paths this repo can actually be pointed at
+    (a chart, or a directory of manifests) are both read.
+    """
+    targets = []
+    for rel in _deployed_paths():
+        root = REPO_ROOT / rel
+        if not root.is_dir():
+            targets.append((rel, {}, ""))
+            continue
+        if (root / "Chart.yaml").is_file():
+            env = _chart_env(root)
+            search = root / "templates"
+        else:
+            env = _plain_env(root)
+            search = root
+        text = "\n".join(
+            f.read_text(encoding="utf-8", errors="replace") for f in sorted(search.rglob("*.yaml")) if f.is_file()
+        )
+        targets.append((rel, env, text))
+    return targets
+
+
+def test_every_synced_path_is_checkable():
+    """Nothing below may pass by having found nothing to look at.
+
+    This is the second positive control, and it exists because the first was
+    not enough: `test_the_scan_finds_what_the_deployer_syncs` asserts only that
+    some Application names a path and that the path is a directory. `docs`
+    satisfies both and carries no manifest, so the safety assertions ran over
+    an empty list and reported success.
+    """
+    targets = _deployed_targets()
+    assert targets, "no ArgoCD Application declares a source path"
+    blind = [rel for rel, env, text in targets if not env and not text.strip()]
+    assert not blind, (
+        f"ArgoCD syncs {blind}, from which no environment or manifest could be read. "
+        "Every assertion about the deployed safety posture would pass over nothing."
+    )
 
 
 @pytest.mark.parametrize("key", SAFETY_KEYS)
@@ -138,7 +225,7 @@ def test_the_deployed_chart_states_each_safety_key(key):
     `false`, so inference continues on a drifted feature distribution. Neither
     is visible in any diff, because there is no line to diff.
     """
-    missing = [path for path, chart in _charts() if key not in _chart_env(chart)]
+    missing = [path for path, env, _ in _deployed_targets() if key not in env]
     assert not missing, (
         f"{key} is not declared by the chart(s) the deployer syncs: {missing}. "
         f"It falls back to a code default nobody reading the chart can see."
@@ -148,8 +235,7 @@ def test_the_deployed_chart_states_each_safety_key(key):
 def test_the_deployed_chart_does_not_ship_a_weakened_safety_value():
     """Stating a key is half of it; stating it at a safe value is the other."""
     weak = []
-    for path, chart in _charts():
-        env = _chart_env(chart)
+    for path, env, _ in _deployed_targets():
         mode = env.get("HOPEFX_INVARIANT_MODE", "").strip().lower()
         if mode and mode != "enforce" and not env.get("HOPEFX_INVARIANT_ENFORCE_KINDS", "").strip():
             weak.append(f"{path}: HOPEFX_INVARIANT_MODE={mode} enforces no kinds")
@@ -168,10 +254,7 @@ def test_the_deployed_chart_gives_the_kill_switch_layer_five():
     not declare it. Applying `k8s/` by hand does not survive the next sync.
     """
     missing = []
-    for path, chart in _charts():
-        rendered = "\n".join(
-            p.read_text(encoding="utf-8") for p in sorted((chart / "templates").glob("*.yaml")) if p.is_file()
-        )
+    for path, _, rendered in _deployed_targets():
         if KILL_SWITCH_CONFIGMAP not in rendered:
             missing.append(f"{path}: no template declares the {KILL_SWITCH_CONFIGMAP} ConfigMap")
     assert not missing, "the deployed chart omits the kill switch's Redis-outage fallback:\n  " + "\n  ".join(missing)
@@ -185,9 +268,7 @@ def test_the_deployed_chart_grants_rbac_for_the_kill_switch():
     RoleBinding named, so every get/patch was refused.
     """
     problems = []
-    for path, chart in _charts():
-        templates = sorted((chart / "templates").glob("*.yaml"))
-        rendered = "\n".join(p.read_text(encoding="utf-8") for p in templates if p.is_file())
+    for path, _, rendered in _deployed_targets():
         if "kind: Role" not in rendered or "kind: RoleBinding" not in rendered:
             problems.append(f"{path}: no Role/RoleBinding for the kill-switch ConfigMap")
         if "kind: ServiceAccount" not in rendered:
