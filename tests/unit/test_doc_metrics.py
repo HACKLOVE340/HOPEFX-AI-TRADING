@@ -521,3 +521,60 @@ class TestRefreshRewritesRatherThanNags:
         from scripts.doc_metrics import check
 
         assert check().drift == []
+
+
+class TestTheCommitBoundaryDoesNotMakeItPermanentlyRed:
+    """A figure written during commit N states the distance as of N-1.
+
+    `pre-commit` runs before the commit exists, so `git rev-list --count
+    origin/main..HEAD` cannot include the commit being written. The document is
+    therefore correct when the hook checks it and one stale the instant it
+    lands — and the next doc-touching commit reports drift of exactly 1, is
+    refreshed, lands, and is off by one again. An exact check is red forever,
+    which is the check this module's docstring warns about.
+
+    So a branch-distance figure is accepted if it matches the distance at HEAD
+    **or** at HEAD's parent. That is not a fudge factor: it is the commit
+    boundary stated in git's own terms, and it tolerates exactly one commit of
+    staleness and no more.
+    """
+
+    def test_the_distance_one_commit_ago_is_also_accepted(self, tmp_path: Path) -> None:
+        from scripts.doc_metrics import REPO, _branch_distance_at, check
+
+        here = _branch_distance_at(REPO, "HEAD")
+        before = _branch_distance_at(REPO, "HEAD~1")
+        if not here or not before:
+            pytest.skip("origin/main or HEAD~1 is not available in this checkout")
+        assert before["commits_ahead"] == here["commits_ahead"] - 1
+
+        doc = tmp_path / "PLAN.md"
+        doc.write_text(
+            f"is **{before['commits_ahead']} commits and {before['files_ahead']} files ahead of `main`**\n",
+            encoding="utf-8",
+        )
+        drift = [d for d in check(extra_documents=[doc]).drift if d.path == doc]
+        assert not drift, f"a figure one commit stale was reported as drift: {drift}"
+
+    def test_two_commits_of_staleness_is_still_drift(self, tmp_path: Path) -> None:
+        """The tolerance is the commit boundary, not a licence to go stale."""
+        from scripts.doc_metrics import measure
+
+        measured = measure()
+        if "commits_ahead" not in measured:
+            pytest.skip("origin/main is not available in this checkout")
+
+        doc = tmp_path / "PLAN.md"
+        doc.write_text(
+            f"is **{measured['commits_ahead'] - 2} commits and 9 files ahead of `main`**\n",
+            encoding="utf-8",
+        )
+        drift = [d for d in check(extra_documents=[doc]).drift if d.path == doc and d.metric == "commits_ahead"]
+        assert drift, "a figure two commits stale was accepted"
+
+    def test_the_committed_tree_is_green_right_now(self) -> None:
+        """The point of the whole class: this must hold immediately after a
+        commit lands, or the gate is red for everyone until someone refreshes."""
+        from scripts.doc_metrics import check
+
+        assert check().drift == []

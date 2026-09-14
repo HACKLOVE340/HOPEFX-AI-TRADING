@@ -6,7 +6,12 @@
 `scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —
 until 2026-09-14 nothing measured them, which is exactly why they drifted twice.
 They move with every commit, so fix them with `python scripts/doc_metrics.py
---refresh` rather than by hand.
+--refresh` rather than by hand. The check tolerates exactly one commit of
+staleness and no more — `pre-commit` runs before the commit exists, so a figure
+written during commit N states the distance as of N-1 and is one behind the
+moment it lands. Checked exactly, the gate would be red forever and answered
+with `--no-verify`; the tolerance is the commit boundary in git's own terms,
+not a fudge factor, and two commits stale is still drift.
 The branch contains all of `main` — `git rev-list --count HEAD..origin/main` is
 **0** — so this is a fast-forward relationship, not a divergence. Nothing on it has been merged, and no CI run has
 ever executed against any of it.

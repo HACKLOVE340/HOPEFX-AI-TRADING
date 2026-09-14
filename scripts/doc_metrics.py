@@ -260,13 +260,13 @@ def measure(repo: Path | None = None) -> dict[str, int]:
     }
 
 
-def _branch_distance(repo: Path) -> dict[str, int]:
-    """How far this branch is from `origin/main`, or nothing at all.
+def _branch_distance_at(repo: Path, rev: str) -> dict[str, int]:
+    """The branch distance measured at *rev*, or nothing at all.
 
-    Returns an EMPTY dict when `origin/main` does not resolve — a shallow or
-    single-branch clone has no such ref. Zero would be the rule-2 defect (an
-    unmeasured value is absent, never zero) and would read as drift against
-    every document stating a real number.
+    Returns an EMPTY dict when `origin/main` or *rev* does not resolve — a
+    shallow or single-branch clone has no such ref. Zero would be the rule-2
+    defect (an unmeasured value is absent, never zero) and would read as drift
+    against every document stating a real number.
 
     Deliberately does not raise. `measure()` raising here would take the whole
     doc-metrics gate down in any checkout without the ref, turning a working
@@ -283,12 +283,13 @@ def _branch_distance(repo: Path) -> dict[str, int]:
             return None
         return done.stdout if done.returncode == 0 else None
 
-    if _git("rev-parse", "--verify", "--quiet", "origin/main") is None:
-        return {}
+    for ref in ("origin/main", rev):
+        if _git("rev-parse", "--verify", "--quiet", ref) is None:
+            return {}
 
-    ahead = _git("rev-list", "--count", "origin/main..HEAD")
-    behind = _git("rev-list", "--count", "HEAD..origin/main")
-    files = _git("diff", "--name-only", "origin/main...HEAD")
+    ahead = _git("rev-list", "--count", f"origin/main..{rev}")
+    behind = _git("rev-list", "--count", f"{rev}..origin/main")
+    files = _git("diff", "--name-only", f"origin/main...{rev}")
     if ahead is None or behind is None or files is None:
         return {}
 
@@ -297,6 +298,40 @@ def _branch_distance(repo: Path) -> dict[str, int]:
         "commits_behind": int(behind.strip()),
         "files_ahead": len([line for line in files.splitlines() if line.strip()]),
     }
+
+
+#: Metrics whose stated value may also be the value one commit ago — see
+#: :func:`_accepted`.
+_COMMIT_BOUNDARY: Final = frozenset({"commits_ahead", "files_ahead", "commits_behind"})
+
+
+def _accepted(metric: str, measured: int, repo: Path) -> set[int]:
+    """Every value a document may correctly state for *metric*.
+
+    For most claims this is exactly one number. The branch-distance figures are
+    different, and the difference is structural rather than a matter of taste:
+    `pre-commit` runs BEFORE the commit exists, so a figure written during commit
+    N states the distance as of N-1. It is correct when the hook checks it and
+    one commit stale the instant it lands.
+
+    Checked exactly, the gate is therefore red forever — every doc-touching
+    commit reports a drift of one, gets refreshed, lands, and is off by one
+    again. That is the check this module's docstring warns about, the one
+    answered with `--no-verify`.
+
+    So the distance at HEAD's parent is accepted too: exactly one commit of
+    staleness, expressed in git's own terms rather than as a ±1 fudge, and
+    nothing beyond it. Two commits stale is still drift.
+    """
+    if metric not in _COMMIT_BOUNDARY:
+        return {measured}
+    previous = _branch_distance_at(repo, "HEAD~1")
+    return {measured} | ({previous[metric]} if metric in previous else set())
+
+
+def _branch_distance(repo: Path) -> dict[str, int]:
+    """The branch distance as of HEAD."""
+    return _branch_distance_at(repo, "HEAD")
 
 
 def _count_owner_decisions(repo: Path) -> int:
@@ -343,7 +378,7 @@ def check(
             report.unmeasured.append(hit)
             continue
         expected = measured[hit.metric]
-        if hit.stated != expected:
+        if hit.stated not in _accepted(hit.metric, expected, repo):
             report.drift.append(Drift(hit.path, hit.line, hit.metric, hit.stated, expected))
     return report
 
