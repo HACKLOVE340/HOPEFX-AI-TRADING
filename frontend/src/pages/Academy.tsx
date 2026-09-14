@@ -13,12 +13,12 @@
  * the plan is insufficient).
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clapperboard, GraduationCap, Lock, Play } from 'lucide-react';
 import { tutorialsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Modal } from '../components/Modal';
 import { PLAN_LABELS, PLAN_COLORS, type Plan } from '../lib/subscription';
@@ -286,22 +286,22 @@ const Academy: React.FC = () => {
   const watchableCount = episodes.filter((e) => !e.locked && e.published).length;
 
   return (
-    <div className="page-content" style={{ flexDirection: 'column', overflow: 'auto', padding: 0 }}>
-      <div style={{ padding: '12px 16px 0', flexShrink: 0 }}>
-        <PageHeader
-          title="🎓 HOPEFX Academy"
-          icon={GraduationCap}
-          subtitle="Step-by-step video tutorials — from your first backtest to production deployment"
-          breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Academy' }]}
-          badge={
-            <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: `${PLAN_COLORS[userPlan]}18`, color: PLAN_COLORS[userPlan], border: `1px solid ${PLAN_COLORS[userPlan]}40`, letterSpacing: 1 }}>
-              {PLAN_LABELS[userPlan]}
-            </span>
-          }
-        />
-      </div>
-
-      <div style={{ padding: 16, flex: 1, minHeight: 0 }}>
+    <PageShell
+      // The graduation cap was in the title AND in `icon`. One of them is the
+      // icon; the other rendered from a different font and could not take the
+      // heading's colour.
+      title="HOPEFX Academy"
+      icon={GraduationCap}
+      subtitle="Step-by-step video tutorials — from your first backtest to production deployment"
+      breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Academy' }]}
+      width="wide"
+      badge={
+        <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: `${PLAN_COLORS[userPlan]}18`, color: PLAN_COLORS[userPlan], border: `1px solid ${PLAN_COLORS[userPlan]}40`, letterSpacing: 1 }}>
+          {PLAN_LABELS[userPlan]}
+        </span>
+      }
+    >
+      <div style={{ flex: 1, minHeight: 0 }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: 'var(--text-muted)', fontSize: 13 }}>
             Loading tutorials…
@@ -346,7 +346,7 @@ const Academy: React.FC = () => {
       </div>
 
       {selected && <EpisodeDetail ep={selected} onClose={() => setSelected(null)} />}
-    </div>
+    </PageShell>
   );
 };
 

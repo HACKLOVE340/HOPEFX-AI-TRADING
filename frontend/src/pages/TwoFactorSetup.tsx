@@ -19,6 +19,7 @@
  * URI carries the TOTP shared secret, so it must not leave the client.
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store';
@@ -281,25 +282,29 @@ const TwoFactorSetup: React.FC = () => {
   }
 
   return (
-    <div className="page-content">
-      <PageHeader
-        title="Two-Factor Authentication"
-        icon={ShieldCheck}
-        subtitle="Add an extra layer of security using an authenticator app."
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Settings', href: '/settings' },
-          { label: '2FA Setup' },
-        ]}
-        actions={
-          <Link to="/settings" style={{
-            fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
-            padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
-          }}>
-            ← Settings
-          </Link>
-        }
-      />
+    <PageShell
+      title="Two-Factor Authentication"
+      icon={ShieldCheck}
+      subtitle="Add an extra layer of security using an authenticator app."
+      breadcrumbs={[
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Settings', href: '/settings' },
+        { label: '2FA Setup' },
+      ]}
+      width="standard"
+      // Mid-enrolment, a "Where to next" row invites the reader to leave with a
+      // half-configured authenticator and no backup codes. PageShell's own note
+      // names this case: suppress it where leaving would lose the user's work.
+      related={false}
+      actions={
+        <Link to="/settings" style={{
+          fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
+          padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
+        }}>
+          ← Settings
+        </Link>
+      }
+    >
 
       {/* Status banner */}
       <div style={{
@@ -517,7 +522,7 @@ const TwoFactorSetup: React.FC = () => {
         { label: '🔑 API Keys',  href: '/settings?tab=api-keys', color: '#fbbf24' },
         { label: '📊 Dashboard', href: '/dashboard', color: '#34d399' },
       ]}/>
-    </div>
+    </PageShell>
   );
 };
 
