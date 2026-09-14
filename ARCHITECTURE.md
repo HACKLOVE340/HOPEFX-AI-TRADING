@@ -203,7 +203,7 @@ and, on its twelve Articles, above code.
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `BROKER_TYPE` | `paper` | `paper` / `live` — controls execution routing |
-| `STALE_MODEL_BLOCK` | `true` | Block inference when model > `MODEL_MAX_AGE_DAYS` old |
+| `STALE_MODEL_BLOCK` | `true` | Block inference when the model was TRAINED more than `MODEL_MAX_AGE_DAYS` ago. Age comes from a sha256-bound timestamp in `ml/saved_models/registry.json`, not the artifact's mtime — copying or touching a file is not retraining it (see AGENTS.md) |
 | `DRIFT_BLOCK` | `true` | Block signals when feature drift detected |
 | `ENFORCE_MULTIDAY_VAR` | `true` | Raise on sqrt(t) VaR scaling in production |
 | `WS_AUTH_REQUIRED` | `true` | Require JWT on WebSocket connections |

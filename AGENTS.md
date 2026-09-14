@@ -238,7 +238,21 @@ python ml/train_advanced.py --years 50 --oos-years 4 --stacking
 
 Model staleness and drift are enforced at inference time. `STALE_MODEL_BLOCK=true`
 blocks inference when the model exceeds `MODEL_MAX_AGE_DAYS`, and it is the code
-default. `DRIFT_BLOCK=true` blocks signals when feature drift is detected, and it is
+default.
+
+**A model's age is when it was TRAINED, not when its file was written.** Until
+2026-09-14 `_check_model_staleness()` read the artifact's filesystem mtime, so
+`git checkout`, `docker build`, `cp -r` or a restored backup reset it — deploying
+a stale model was how the staleness gate got cleared. Age now comes from a
+timestamp bound to the artifact's **sha256** in `ml/saved_models/registry.json`
+(`trained_at`, falling back to `registered_at`; earliest wins where several
+versions share a digest), so it is a property of the bytes. Provenance that is
+absent, malformed, not matching the bytes or future-dated reports **stale** —
+fail-closed, because "I cannot tell you how old this model is" is not
+"this model is current". When you register a retrained artifact, record its
+`sha256` and a `trained_at`, or the gate will correctly refuse it.
+Turning this on revealed that the committed model is **167 days old** against a
+30-day limit: see MASTER_OUTSTANDING §A0, which is an owner decision. `DRIFT_BLOCK=true` blocks signals when feature drift is detected, and it is
 **not** the code default — it defaults `false` and every deployment surface overrides
 it. Whether that changes is an owner decision recorded in ADR 0019, which also measures
 what the guard is comparing: `python scripts/drift_guard_report.py`.
@@ -251,7 +265,7 @@ what the guard is comparing: `python scripts/drift_guard_report.py`.
 |----------|---------|-------|
 | `APP_ENV` | `production` | Set `development` in devcontainer |
 | `BROKER_TYPE` | `paper` | `paper` / `oanda` / `ibkr` / `mt5` |
-| `STALE_MODEL_BLOCK` | `true` | Block inference on stale model |
+| `STALE_MODEL_BLOCK` | `true` | Block inference on stale model. Age is read from sha256-bound provenance in `registry.json`, not the file's mtime — see above |
 | `DRIFT_BLOCK` | **`false`** | Block signals on feature drift. This row said `true` until 2026-09-13; the CODE default is `false` (`ml/inference_engine.py:120`), and the `true` came from `.env.example`. Every deployment surface sets `true`, so a container or CI run that sets neither trades a drifted model while this table says otherwise — see ADR 0019 |
 | `WS_AUTH_REQUIRED` | `true` | Require JWT on WebSocket |
 | `REDIS_FORCE_TLS` | `false` | Auto-upgrade to `rediss://` |

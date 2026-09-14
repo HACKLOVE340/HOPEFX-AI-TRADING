@@ -258,6 +258,12 @@ export interface MlHealth {
   readonly feature_count:           number;
   readonly oos_accuracy:            number | null;
   readonly last_trained_at:         string | null;
+  /** The sha256-bound training timestamp the freshness gate measured, from
+   *  ml/saved_models/registry.json. Differs from last_trained_at, which comes
+   *  from advanced_oos_meta.json — see MODEL-PROVENANCE-DISAGREES. Null when the
+   *  gate could not read provenance; model_provenance_reason then says why. */
+  readonly model_provenance_at?:    string | null;
+  readonly model_provenance_reason?: string;
   readonly predict_count:           number;
   readonly fallback_count:          number;
   readonly fallback_rate:           number;

@@ -106,6 +106,12 @@ class LoopContext:
     #: that treats a line here as callable gets the allowlist refusal below,
     #: which is the correct outcome and is asserted in the loop's tests.
     platform_context: str = ""
+    #: Seconds left before this run's deadline, refreshed before every call.
+    #: The loop can only REFUSE an overrun after the fact — Python cannot
+    #: interrupt arbitrary synchronous code — so this is how an overrun is
+    #: avoided rather than merely detected: a planner that knows it has 0.2s
+    #: left can return a smaller plan instead of being discarded for being late.
+    remaining_seconds: float = 0.0
 
 
 @dataclass
@@ -183,16 +189,27 @@ def run_loop(
         permitted=permitted,
         platform_context=_platform_context(goal),
     )
-    started = time.monotonic()
+    # ONE absolute deadline for the whole run, computed once. Re-deriving a
+    # remaining budget per step would let N steps of just-under-the-limit each
+    # pass while the run as a whole ran N times over it.
+    deadline = time.monotonic() + budget.max_seconds
+
+    def _expired() -> bool:
+        return time.monotonic() >= deadline
 
     for _ in range(budget.max_steps):
-        # Time is checked at the top of every step rather than only at the end:
-        # a ceiling that can only be noticed after the work is a report.
-        if time.monotonic() - started >= budget.max_seconds:
+        # Checked at the top of every step, and again after each operation
+        # below. Checking only here bounded when work was allowed to START, not
+        # when it had to be finished: a planner that took 2s against a 1s budget
+        # returned `completed=True, stopped_reason="planner_finished"`, and
+        # `_remember` wrote that success into memory as a precedent. A ceiling
+        # that is only consulted before the work is a report, not a limit.
+        if _expired():
             run.stopped_reason = "time_budget_exhausted"
             break
 
         # ── Think ────────────────────────────────────────────────────────────
+        context.remaining_seconds = max(0.0, deadline - time.monotonic())
         try:
             plan = planner(context)
         except Exception as exc:
@@ -201,6 +218,14 @@ def run_loop(
             run.stopped_reason = "planner_failed"
             break
         run.record("think", plan.rationale or "(no rationale given)")
+
+        # Before ACCEPTING the plan, not only before asking for one. A planner
+        # that overran has produced an answer the run was not entitled to, and
+        # `completed` is what a caller reads to decide whether to act on it.
+        if _expired():
+            run.record("think", "the run's deadline passed while planning")
+            run.stopped_reason = "time_budget_exhausted"
+            break
 
         if plan.action is None:
             run.completed = True
@@ -236,6 +261,34 @@ def run_loop(
         run.tool_calls += 1
         run.tools_called.append(plan.action)
         run.record("execute", f"called {plan.action}")
+
+        # Rechecked after the call. The result is kept — the work happened and
+        # discarding the record of it would make the run less auditable, not
+        # more — but the run is over, and it did not complete.
+        #
+        # What this does NOT do is cancel an overrunning handler. Python cannot
+        # interrupt arbitrary synchronous code, and a thread timeout only
+        # abandons the waiter while the work carries on; on this platform a tool
+        # handler may be mid-way through a broker or database call, so
+        # abandoning one is worse than waiting for it. The loop bounds what it
+        # STARTS and what it ACCEPTS.
+        #
+        # Nor is the remaining time passed to the HANDLER, and that is
+        # deliberate rather than missed: `ToolBus.invoke` forwards `**context`
+        # straight to `registered.handler(**context)`, so an extra keyword would
+        # raise TypeError in every handler that does not declare it — every tool
+        # on the platform. Giving a handler its deadline needs an opt-in on the
+        # registration, the way `wants_operator` already works, and that is a
+        # change to the tool contract rather than to this loop. Until then the
+        # planner is the only thing told (`LoopContext.remaining_seconds`), and
+        # it is the thing that chooses what to start.
+        if _expired():
+            run.observations.append({"tool": plan.action, "value": getattr(result, "value", None)})
+            context.observations.append(run.observations[-1])
+            run.record("monitor", f"observed {plan.action}")
+            run.record("execute", f"{plan.action} returned after the run's deadline")
+            run.stopped_reason = "time_budget_exhausted"
+            break
 
         # ── Monitor ──────────────────────────────────────────────────────────
         observation = {"tool": plan.action, "value": getattr(result, "value", None)}

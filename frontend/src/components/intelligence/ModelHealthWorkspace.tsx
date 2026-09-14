@@ -24,6 +24,7 @@ interface EngineHealth {
   feature_count?: number;
   oos_accuracy?: number;
   last_trained_at?: string;
+  model_provenance_at?: string | null;
 }
 
 /** GET /api/ml/feature-importance/{model}. `method` is load-bearing: when it
@@ -162,7 +163,11 @@ export const ModelHealthWorkspace: React.FC = () => {
                   { k: 'Model version',   v: engine.model_version ?? '—' },
                   { k: 'Features',        v: engine.feature_count != null ? String(engine.feature_count) : '—' },
                   { k: 'OOS accuracy',    v: engine.oos_accuracy != null ? `${(engine.oos_accuracy * 100).toFixed(2)}%` : '—' },
-                  { k: 'Last trained',    v: engine.last_trained_at ? new Date(engine.last_trained_at).toLocaleDateString() : '—' },
+                  // Same rule as MlSafetyStrip: show the date the freshness gate
+                  // measured (sha256-bound, from registry.json), falling back to
+                  // the meta file's. The two disagree by nearly three months on
+                  // the committed artifact — see MODEL-PROVENANCE-DISAGREES.
+                  { k: 'Last trained',    v: (engine.model_provenance_at ?? engine.last_trained_at) ? new Date((engine.model_provenance_at ?? engine.last_trained_at) as string).toLocaleDateString() : '—' },
                 ].map(({ k, v }) => (
                   <div key={k} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>{k}</div>

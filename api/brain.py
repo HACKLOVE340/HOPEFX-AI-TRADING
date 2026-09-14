@@ -20,6 +20,9 @@ from __future__ import annotations
 import logging
 import asyncio
 import os
+import time
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone as _tz
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -175,6 +178,11 @@ class DeployResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
+    # A label for ONE of this user's conversations — a tab, a thread. It is not
+    # an identity and cannot select another user's history: the conversation key
+    # is (authenticated sub, this label). Deliberately no user/user_id/sub field
+    # here; an identity in the body is an identity the caller chooses.
+    session_id: str | None = Field(default=None, max_length=64)
 
 
 class ChatResponse(BaseModel):
@@ -430,6 +438,108 @@ def _keyless_chat_reply(message: str) -> str:
     )
 
 
+# ── Per-user chat conversations ───────────────────────────────────────────────
+#
+# This was ONE module-level `_chat_agent`, built on first use and reused for
+# every request in the worker. `LLMAgent` keeps the conversation on the
+# instance, and nothing about the caller chose which instance answered — so one
+# worker had one conversation, shared by everyone on it. Reproduced before the
+# fix by calling this endpoint with two identities and a recording backend:
+# user A's "my account number is 9137-SECRET-ALPHA" appeared verbatim in the
+# prompt sent on behalf of user B. On this platform that box holds balances,
+# positions and intent, so it is a confidentiality defect, not untidiness.
+#
+# Four properties the replacement has to hold at once:
+#
+#   * the key starts with the AUTHENTICATED subject. A session id is a label the
+#     client picks, so keying on it alone would let anyone read another user's
+#     conversation by guessing one — or by two clients both defaulting to the
+#     same string. `ChatRequest` carries no user field for the same reason: an
+#     identity in the body is an identity the caller chooses.
+#   * one request at a time per conversation. `LLMAgent.chat` appends the user
+#     turn, awaits the model, then appends the reply; two concurrent requests on
+#     one conversation interleave those appends and produce a history whose
+#     turns do not alternate. A lock per conversation, not a global one, so two
+#     users never wait on each other.
+#   * bounded. An agent per user per session, kept forever, is a memory leak
+#     with a user-controlled key. Least-recently-used eviction with a cap, plus
+#     an idle expiry, so an abandoned conversation does not hold a slot.
+#   * clearing affects one conversation. Evicting or resetting must never reach
+#     another user's entry.
+
+
+_CHAT_MAX_CONVERSATIONS = int(os.getenv("CHAT_MAX_CONVERSATIONS", "500"))
+_CHAT_IDLE_EXPIRY_S = float(os.getenv("CHAT_IDLE_EXPIRY_SECONDS", str(2 * 60 * 60)))
+
+
+@dataclass
+class _Conversation:
+    """One agent, the lock that serialises it, and when it was last used."""
+
+    agent: object
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    last_used: float = field(default_factory=time.monotonic)
+
+
+# Ordered by least-recently-used first, so eviction is `popitem(last=False)`.
+_chat_conversations: OrderedDict[tuple[str, str], _Conversation] = OrderedDict()
+# Guards the REGISTRY only (lookup, insert, evict) — never held across a model
+# call. The per-conversation lock is what serialises the model calls.
+_chat_registry_lock = asyncio.Lock()
+
+
+def _chat_key(user: TokenPayload, session_id: str | None) -> tuple[str, str]:
+    """The authenticated subject first; the client's session label second.
+
+    `sub` is the only part a caller cannot choose. Anything the client sends can
+    at most partition that user's own conversations.
+    """
+    sub = (user.sub or "").strip()
+    if not sub:
+        # No subject means no isolation is possible. Refuse rather than fall
+        # back to a shared conversation, which is the defect this replaced.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Chat requires an identified user.",
+        )
+    label = (session_id or "default").strip()[:64] or "default"
+    return (sub, label)
+
+
+def _expire_idle_conversations(now: float) -> None:
+    """Drop conversations untouched for longer than the idle window.
+
+    Caller holds `_chat_registry_lock`.
+    """
+    if _CHAT_IDLE_EXPIRY_S <= 0:
+        return
+    stale = [k for k, c in _chat_conversations.items() if now - c.last_used > _CHAT_IDLE_EXPIRY_S]
+    for k in stale:
+        _chat_conversations.pop(k, None)
+
+
+async def _get_conversation(key: tuple[str, str], make_agent) -> _Conversation:
+    """The conversation for one key, creating it if this is its first message."""
+    async with _chat_registry_lock:
+        now = time.monotonic()
+        _expire_idle_conversations(now)
+        convo = _chat_conversations.get(key)
+        if convo is None:
+            convo = _Conversation(agent=make_agent())
+            _chat_conversations[key] = convo
+        convo.last_used = now
+        _chat_conversations.move_to_end(key)
+        # Evict the least recently used, which is never the one just touched.
+        while len(_chat_conversations) > max(1, _CHAT_MAX_CONVERSATIONS):
+            _chat_conversations.popitem(last=False)
+        return convo
+
+
+def _reset_chat_agents_for_test() -> None:
+    """Drop every conversation. For tests only — never called by a route."""
+    _chat_conversations.clear()
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
@@ -438,34 +548,37 @@ async def chat(
     """
     Free-form chat with the HOPEFX AI trading assistant.
 
-    Maintains per-process conversation history (LLMAgent is module-level
-    singleton per worker).  Requires role >= 'starter'.  When no LLM backend is
-    configured, falls back to a rule-based offline assistant instead of erroring.
+    Conversation history is kept per (authenticated user, session label), so a
+    user continues their own conversation across requests and never sees another
+    user's. Requires role >= 'starter'. When no LLM backend is configured, falls
+    back to a rule-based offline assistant instead of erroring.
     """
     backend, api_key = _detect_llm_backend()
 
     if not backend:
         return ChatResponse(reply=_keyless_chat_reply(req.message))
 
+    # Outside the try: a missing subject is a 401, not something to degrade into
+    # the offline assistant, and never a reason to answer from a shared agent.
+    key = _chat_key(user, req.session_id)
+
     try:
         from brain.llm_agent import LLMAgent
 
-        # Module-level singleton so conversation history persists across requests
-        # within the same worker process.
-        global _chat_agent
-        if "_chat_agent" not in globals() or _chat_agent is None:
-            _chat_agent = LLMAgent(api_key=api_key, backend=backend)
-
-        reply = await _chat_agent.chat(req.message)
+        convo = await _get_conversation(key, lambda: LLMAgent(api_key=api_key, backend=backend))
+        # One model call at a time within this conversation. `LLMAgent.chat`
+        # appends the user turn, awaits the model, then appends the reply;
+        # concurrent calls interleave those appends into a history whose turns
+        # do not alternate. The lock is per conversation, so two users never
+        # wait on each other.
+        async with convo.lock:
+            reply = await convo.agent.chat(req.message)
         return ChatResponse(reply=reply)
     except Exception as exc:
         # LLM backend errored (bad key, timeout, rate limit). Degrade to the
         # offline assistant so the user still gets a useful response.
         logger.warning("Chat agent error: %s — falling back to offline assistant", exc, exc_info=True)
         return ChatResponse(reply=_keyless_chat_reply(req.message))
-
-
-_chat_agent: object | None = None
 
 
 # ── Strategy history & management ─────────────────────────────────────────────

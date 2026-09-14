@@ -9,7 +9,7 @@
 This is the single place that answers "what is outstanding". It has two halves and
 they are not equally trustworthy, so they are separated:
 
-* **§A — Decisions only the owner can make.** 18 of them. Nothing below them
+* **§A — Decisions only the owner can make.** 19 of them. Nothing below them
   moves until they are picked, and each is stated with what it costs either way.
   This read "Four of them" until 2026-09-13, when there were already seventeen —
   a reader who trusted it would have believed the owner's queue was a quarter of
@@ -29,6 +29,51 @@ they are not equally trustworthy, so they are separated:
 ## §A — Decisions to pick
 
 These are not blocked on engineering. They are blocked on someone deciding.
+
+### A0. The model the platform ships is 167 days old, and the gate now blocks it *(new, 2026-09-14)*
+
+**Not a new defect — a fact the old gate was hiding, and it is now load-bearing.**
+
+`_check_model_staleness()` measured the artifact's filesystem **mtime**. That made
+deploying a stale model the way the staleness gate got cleared: a clone, a
+`docker build`, a `cp -r` or a restored backup all rewrite the timestamp, so the
+check that exists to stop the platform trading on an out-of-date model passed
+*because the out-of-date model had just been copied*. Reproduced on a disposable
+file before the fix:
+
+```
+90-day-old artifact           -> stale=True   age=90.0
+same bytes, timestamp touched -> stale=False  age=0.0        (no retraining)
+```
+
+Age now comes from a timestamp bound to the artifact's **sha256** in
+`ml/saved_models/registry.json`, so it is a property of the bytes. Measured
+against the committed artifact:
+
+| | |
+|---|---|
+| provenance (earliest version carrying this sha256) | **2026-04-01** |
+| measured age | **167 days** |
+| `MODEL_MAX_AGE_DAYS` | 30 (default) |
+| what the old gate read from mtime | **0.69 days** |
+| `STALE_MODEL_BLOCK` | true (default) — so **inference is refused** |
+
+Four registry versions — `advanced_oos_v1`, `advanced_oos_v2`, `xgb_horizon5_v1`,
+`xgb_horizon5_v3` — carry the **same sha256**, so the bytes have not changed since
+April whatever they were re-registered as. Even taking the latest of the four
+(2026-06-26) the model is 80 days old: it is past the limit on any reading.
+
+**Three ways out, and all three are yours:**
+
+| Option | What it means |
+|---|---|
+| **Retrain and register** | The intended path. `python scripts/correction_register.py --id MODEL-166-DAYS-OLD` measures the shipped artifact, so it closes itself |
+| **Change the limit deliberately** | 30 days may be wrong for this strategy. Change it *with the reason recorded* — an ADR, not an env var nobody can trace |
+| **Run with `MODEL_MAX_AGE_DAYS=0`** | Only in a deployment that is not trading. It disables the check, it does not satisfy it |
+
+**What is not an option:** raising the limit or weakening the check to get
+trading back. That restores exactly the behaviour the fix removed, and the next
+person to read the gate will believe it.
 
 ### A1. Backup and restore — how much recovery is enough? *(partly delivered)*
 

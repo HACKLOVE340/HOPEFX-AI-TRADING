@@ -52,6 +52,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import io
 import json
@@ -2775,6 +2776,164 @@ S_DOC = "doc-freshness-review"
 # ── Frontend correctness, found by driving the app rather than reading it ───
 
 
+def _p_meta_registry_agree() -> tuple[str, str]:
+    """Do the meta file and the registry agree on when the model was trained?
+
+    Measured from both records, not stated: they are the two places this repo
+    keeps a training date, and nothing had ever compared them.
+    """
+    try:
+        from datetime import datetime
+
+        import ml.inference_engine as ie
+
+        path = ie._saved("advanced_oos.pkl")
+        if not path.exists():
+            return UNVERIFIED, "the active artifact is not on disk here"
+        provenance, why = ie._model_training_time(path)
+        if provenance is None:
+            return UNVERIFIED, f"no sha-bound provenance to compare against: {why}"
+        meta = ie.InferenceEngine()._load_meta() or {}
+        raw = meta.get("validated_at") or meta.get("trained_at")
+        if not raw:
+            return UNVERIFIED, "the meta file states no training date — nothing to compare"
+        meta_at = datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp()
+        gap_days = abs(meta_at - provenance) / 86_400.0
+        if gap_days <= 1.0:
+            return FIXED, f"the meta file and the registry agree to within {gap_days:.1f} day(s)"
+        return OWNER, (f"the meta file and the registry disagree by {gap_days:.0f} days about the same bytes")
+    except Exception as exc:
+        return UNVERIFIED, f"could not compare the two records ({type(exc).__name__}: {exc})"
+
+
+def _p_shipped_model_age() -> tuple[str, str]:
+    """How old the committed model actually is, measured, not stated.
+
+    This probe reports OWNER work while the shipped artifact is past
+    MODEL_MAX_AGE_DAYS. It is deliberately not satisfiable by editing a document
+    — only by retraining and registering a model, or by the owner deciding the
+    limit should be different.
+    """
+    try:
+        import time as _time
+
+        import ml.inference_engine as ie
+
+        path = ie._saved("advanced_oos.pkl")
+        if not path.exists():
+            return UNVERIFIED, "the active artifact is not on disk here"
+        trained_at, why = ie._model_training_time(path)
+        if trained_at is None:
+            return OPEN, f"the shipped model has no usable provenance: {why}"
+        age = (_time.time() - trained_at) / 86_400.0
+        limit = ie._MODEL_MAX_AGE_DAYS
+        if limit <= 0:
+            return UNVERIFIED, "MODEL_MAX_AGE_DAYS is 0 here, so the gate is off — re-measure"
+        if age > limit:
+            return OWNER, f"the shipped model is {age:.0f} days old against a {limit:.0f}-day limit"
+        return FIXED, f"the shipped model is {age:.0f} days old, within the {limit:.0f}-day limit"
+    except Exception as exc:
+        return UNVERIFIED, f"could not measure the shipped model's age ({type(exc).__name__}: {exc})"
+
+
+def _p_chat_per_user() -> tuple[str, str]:
+    """Chat conversations are keyed by the authenticated subject."""
+    # `_code`, not `_read`: this module's own comments explain the singleton it
+    # replaced, so a raw-text probe would find the defect quoted inside the note
+    # describing its fix. That is F255, and this register has already shipped it
+    # twice.
+    body = _code("api/brain.py")
+    if not body:
+        return UNVERIFIED, "api/brain.py is not readable"
+    if "_chat_agent: object | None = None" in body or "global _chat_agent" in body:
+        return OPEN, "one module-level agent serves every user of the worker"
+    if "_chat_key(" not in body:
+        return OPEN, "no conversation key function"
+    # Parse it. A substring search for "user.sub" reported FIXED against a tree
+    # where `_chat_key` computed `sub` and then returned a constant instead —
+    # the exact defect — because the name still APPEARED. Presence is not use,
+    # and this is the property the whole finding rests on, so read the return.
+    try:
+        tree = ast.parse(body)
+    except SyntaxError as exc:
+        return UNVERIFIED, f"api/brain.py does not parse ({exc})"
+    fn = next(
+        (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_chat_key"),
+        None,
+    )
+    if fn is None:
+        return UNVERIFIED, "_chat_key is gone — re-measure"
+    subject_bound = any(
+        isinstance(t, ast.Name)
+        and t.id == "sub"
+        and isinstance(getattr(a, "value", None), ast.Attribute | ast.Call | ast.BinOp | ast.Name)
+        for a in ast.walk(fn)
+        if isinstance(a, ast.Assign)
+        for t in a.targets
+    )
+    returns_subject = any(
+        isinstance(n, ast.Return) and any(isinstance(x, ast.Name) and x.id == "sub" for x in ast.walk(n))
+        for n in ast.walk(fn)
+    )
+    if not (subject_bound and returns_subject):
+        return OPEN, "the conversation key does not derive from the authenticated subject"
+    if "convo.lock" not in body:
+        return OPEN, "concurrent requests on one conversation are not serialised"
+    if "_CHAT_MAX_CONVERSATIONS" not in body:
+        return OPEN, "retained conversations are unbounded"
+    return FIXED, "keyed on (authenticated sub, session label), serialised, bounded and expiring"
+
+
+def _p_model_age_from_provenance() -> tuple[str, str]:
+    """Model staleness is measured from training provenance, not file mtime."""
+    text = _code("ml/inference_engine.py")
+    if not text:
+        return UNVERIFIED, "ml/inference_engine.py is not readable"
+    if "_model_training_time" not in text:
+        return OPEN, "no provenance lookup exists"
+    # Prose is already stripped by `_code`; narrow to the call site as well, so
+    # an `st_mtime` read somewhere else in this 1,400-line module cannot be
+    # mistaken for this gate's input.
+    start = text.find("def _check_model_staleness")
+    if start == -1:
+        return UNVERIFIED, "_check_model_staleness is gone — re-measure"
+    window = text[start : text.find("\n    def ", start + 10)]
+    call = re.search(r"trained_at, reason = (.+)", window)
+    if not call:
+        return OPEN, "the staleness check does not read a provenance timestamp"
+    if "st_mtime" in call.group(1):
+        return OPEN, "the staleness check still reads the artifact's mtime"
+    if "_model_training_time" not in call.group(1):
+        return OPEN, f"the staleness check reads {call.group(1).strip()}, not provenance"
+    return FIXED, "age comes from a sha256-bound timestamp in registry.json"
+
+
+def _p_agent_deadline() -> tuple[str, str]:
+    """An agent run that overran its budget cannot report completion."""
+    text = _code("ai/agent/loop.py")
+    if not text:
+        return UNVERIFIED, "ai/agent/loop.py is not readable"
+    start = text.find("def run_loop(")
+    if start == -1:
+        return UNVERIFIED, "run_loop is gone — re-measure"
+    body = text[start:]
+    if "deadline = time.monotonic() + budget.max_seconds" not in body:
+        return OPEN, "no absolute deadline is computed for the run"
+    # The deadline must be consulted more than once, and one of those must come
+    # AFTER the planner returns — that is the whole defect.
+    planner_call = body.find("plan = planner(context)")
+    finished = body.find('run.stopped_reason = "planner_finished"')
+    if planner_call == -1 or finished == -1:
+        return UNVERIFIED, "the loop's shape changed — re-measure"
+    if "_expired()" not in body[planner_call:finished]:
+        return OPEN, "completion is accepted without rechecking the deadline"
+    if body.count("_expired()") < 3:
+        return OPEN, f"the deadline is consulted only {body.count('_expired()')} time(s)"
+    if "remaining_seconds" not in body:
+        return OPEN, "the planner is not told how long it has left"
+    return FIXED, "one absolute deadline, rechecked after planning and after each tool call"
+
+
 def _p_shell_fills_scroller() -> tuple[str, str]:
     """PageShell grows to fill `.app-shell-scroller`, as `.page-content` did.
 
@@ -2919,6 +3078,173 @@ def _p_field_has_no_label() -> tuple[str, str]:
 
 
 FINDINGS: list[Finding] = [
+    Finding(
+        "MODEL-PROVENANCE-DISAGREES",
+        "Two records disagree by nearly three months about when the same bytes were trained",
+        "OWNER",
+        "ML",
+        "This session, 2026-09-14 — surfaced by fixing MODEL-AGE-IS-MTIME",
+        "`advanced_oos_meta.json` gives `validated_at` 2026-06-26; the earliest `registry.json` "
+        "version carrying the artifact's sha256 gives 2026-04-01 — the same bytes, and the probe "
+        "above states today's gap rather than a figure typed here that would drift. "
+        "Nothing had ever compared them, and the mtime the staleness gate used to read (0.69 "
+        "days) agreed with neither, which is why the disagreement was invisible. It is now "
+        "visible in one payload: `health()` reports `last_trained_at` 2026-06-26 from the meta "
+        "file beside `model_age_days` 166.75 from the registry, and `MlSafetyStrip.tsx` renders "
+        'the former as "Trained: 26/06/2026" next to a stale badge — an operator reading that '
+        "screen saw a model trained twelve weeks ago flagged stale at twenty-four. Engineering "
+        "has done what it can without deciding: `health()` now also reports "
+        "`model_provenance_at`, the timestamp the gate actually blocked on, so the age it "
+        "enforces is attributable rather than a third unexplained figure — and both screens that "
+        "render a training date (`MlSafetyStrip.tsx`, `ModelHealthWorkspace.tsx`) now show THAT "
+        "date, falling back to the meta file's only when the gate reports no provenance, so the "
+        "date on screen is the one the platform acted on. Which record is right "
+        "is an ML-side call — most likely `validated_at` means validated rather than trained, in "
+        "which case the artifact needs a real `trained_at` — and picking one silently would be "
+        "engineering deciding what a model's age means.",
+        "tests/unit/test_health_states_one_model_age.py — three tests, red before the fix: the "
+        "payload must name the timestamp the gate used, the age must be arithmetic on it, and "
+        "unusable provenance must be reported as unknown WITH a reason rather than omitted. "
+        "frontend/src/test/the_trained_date_matches_the_staleness_claim.test.tsx — three more, "
+        "for the screen: it must prefer the gate's date, fall back to the meta file's when there "
+        "is none, and show nothing rather than a wrong date when neither is known.",
+        "python scripts/correction_register.py --id MODEL-PROVENANCE-DISAGREES",
+        _p_meta_registry_agree,
+        [S_TDD, S_VBC],
+    ),
+    Finding(
+        "MODEL-166-DAYS-OLD",
+        "The model the platform ships is months past its own freshness limit",
+        "OWNER",
+        "ML",
+        "This session, 2026-09-14 — surfaced by fixing MODEL-AGE-IS-MTIME",
+        "Not a new defect; a fact the old gate was hiding. With age read from the artifact's "
+        "sha256-bound provenance rather than its mtime, the committed advanced_oos.pkl measures "
+        "166 days old against MODEL_MAX_AGE_DAYS=30, while the mtime the gate used to read said "
+        "0.69 days — the file having been written by the clone. Four registry versions "
+        "(advanced_oos_v1/v2, xgb_horizon5_v1/v3) carry the SAME sha256, so the bytes have not "
+        "changed since 2026-04-01 whatever they were re-registered as; even taking the latest of "
+        "those four (2026-06-26) the model is 80 days old, so it is past the limit on any "
+        "reading. STALE_MODEL_BLOCK defaults to true, so with this fix in place inference is "
+        "refused until the situation is resolved. That is the gate doing its job, and it is why "
+        "this is recorded rather than quietly worked around: lowering the check or raising "
+        "MODEL_MAX_AGE_DAYS to make the platform trade again would restore exactly the behaviour "
+        "the fix removed. Three ways out, and all three are the owner's to choose: retrain and "
+        "register a model; decide 30 days is the wrong limit for this strategy and change it "
+        "deliberately, with the reason recorded; or run with MODEL_MAX_AGE_DAYS=0 in a "
+        "non-trading deployment. This entry reports OWNER until the measured age is inside the "
+        "limit, and it cannot be closed by editing a document.",
+        "No test — a test asserting the model is fresh would fail for a true reason and be "
+        "deleted. The probe measures the shipped artifact directly, so it closes itself when a "
+        "current model is registered.",
+        "python scripts/correction_register.py --id MODEL-166-DAYS-OLD",
+        _p_shipped_model_age,
+        [S_VBC],
+    ),
+    Finding(
+        "CHAT-SHARED-HISTORY",
+        "One conversation per worker, shared by every user on it",
+        "P0",
+        "Security",
+        "External audit of 40cb9419, 2026-09-14 — reproduced here before the fix",
+        "POST /api/brain/chat held a module-level `_chat_agent`, built on first use and reused "
+        "for every request in the worker. LLMAgent keeps the conversation on the instance, and "
+        "nothing about the authenticated caller chose which instance answered, so one worker had "
+        "one history shared by everyone on it. Reproduced by calling the endpoint function with "
+        "two identities and a recording backend: user A's \"my account number is "
+        '9137-SECRET-ALPHA" appeared verbatim in the outgoing prompt sent on behalf of user B. '
+        "On this platform that box holds balances, positions, strategy and intent, so it is a "
+        "confidentiality defect rather than untidiness. Conversations are now keyed on "
+        "(authenticated `sub`, client session label) — the subject first, because a session id is "
+        "a label the client picks and keying on it alone would let anyone read another user's "
+        "history by guessing one, or by two clients both defaulting to the same string. "
+        "`ChatRequest` still carries no user field, for the same reason. Each conversation has "
+        "its own lock (LLMAgent.chat appends the user turn, awaits, then appends the reply, so "
+        "concurrent requests interleave into a history whose turns do not alternate), the "
+        "registry is LRU-bounded, idle conversations expire, and a token with no subject is "
+        "refused rather than falling back to a shared agent.",
+        "tests/unit/test_chat_history_is_per_user.py — ten tests, each injection-proven. Two of "
+        "them were rewritten for proving nothing: the concurrency test took the lock inside the "
+        "TEST body, so it still passed with the lock deleted from the endpoint (it was proving "
+        "that asyncio.Lock works), and the clearing test popped a key from the registry dict and "
+        "asserted the other was still there, which tests dict.pop. Both now drive the endpoint. A "
+        "tenth walks the route's dependency chain to `get_current_user`, because every other test "
+        "supplies a TokenPayload directly and would keep passing if the route were ever handed a "
+        "shared or body-supplied identity.",
+        "pytest tests/unit/test_chat_history_is_per_user.py -q",
+        _p_chat_per_user,
+        [S_TDD, S_VBC, S_DEAD],
+    ),
+    Finding(
+        "MODEL-AGE-IS-MTIME",
+        "Deploying a stale model was how the staleness gate got cleared",
+        "P0",
+        "ML",
+        "External audit of 40cb9419, 2026-09-14 — reproduced here before the fix",
+        "`_check_model_staleness()` measured the artifact's filesystem mtime. Reproduced against "
+        "a disposable file: a 90-day-old artifact reported stale=True age=90.0; the SAME BYTES "
+        "with the timestamp touched reported stale=False age=0.0, with no retraining. Every "
+        "ordinary operational act writes that timestamp — git checkout, docker build, cp -r, "
+        "rsync without -t, restoring a backup — so the gate that exists to stop the platform "
+        "trading on an out-of-date model was cleared by the act of deploying the out-of-date "
+        "model. It failed in the unsafe direction and silently. Age now comes from a timestamp "
+        "bound to the artifact's sha256 in registry.json, which makes it a property of the BYTES: "
+        "`trained_at` preferred, `registered_at` as the fallback (today's registry records only "
+        "the latter, and it is still sha-bound and still immune to a touch). Where several "
+        "versions carry the same digest the EARLIEST wins — re-registering unchanged bytes under "
+        "a new version is the same defect wearing a different hat, and the earliest date can only "
+        "make a model look older. Every way provenance can be unusable — absent, malformed, not "
+        "matching the bytes, or future-dated beyond clock skew — reports STALE, so "
+        'STALE_MODEL_BLOCK blocks, which is the right answer to "I cannot tell you how old this '
+        'model is". SEE MODEL-166-DAYS-OLD: turning this on revealed that the committed model '
+        "is well past the limit, which the mtime had been hiding.",
+        "tests/unit/test_model_age_is_training_age.py — fifteen tests, twelve of which fail when "
+        "the mtime read is put back. Two existing tests asserted the defect "
+        "(test_fresh_file_returns_false, test_fresh_model_not_stale: a just-written file with no "
+        'provenance was "fresh") and were rewritten with what they used to claim recorded in '
+        "the docstring, not deleted.",
+        "pytest tests/unit/test_model_age_is_training_age.py tests/unit/test_inference_engine.py "
+        "tests/unit/test_ml_inference_engine.py -q",
+        _p_model_age_from_provenance,
+        [S_TDD, S_VBC, S_DEAD, S_DEBUG],
+    ),
+    Finding(
+        "AGENT-DEADLINE-UNENFORCED",
+        "An agent run that blew its deadline reported success",
+        "P1",
+        "AI",
+        "External audit of 40cb9419, 2026-09-14 — reproduced here before the fix",
+        "`run_loop` checked the clock at the TOP of each step and nowhere else, so the budget "
+        "bounded when work was allowed to START rather than when it had to be finished. "
+        "Reproduced with a planner that consumed 2s against a 1s budget: completed=True, "
+        'stopped_reason="planner_finished". That is worse than a late answer — `completed` is '
+        "what a caller reads to decide whether to act on the run, and `_remember()` writes it to "
+        "memory, so a run that blew its deadline became a successful precedent for the next one. "
+        "There is now one absolute deadline computed once (not re-derived per step, which would "
+        "let N steps of just-under-the-limit each pass while the run ran N times over), rechecked "
+        "after the planner returns and after every tool call, and `LoopContext.remaining_seconds` "
+        "tells the planner how long it has so an overrun can be avoided rather than only "
+        "detected. What it deliberately does NOT claim is cancellation: Python cannot interrupt "
+        "arbitrary synchronous code, and a thread timeout only abandons the waiter while the work "
+        "continues — and a tool handler here may be mid-way through a broker or database call, so "
+        "abandoning one is worse than waiting. The loop bounds what it STARTS and what it "
+        "ACCEPTS, and says so. The remaining time is NOT given to tool handlers, which is a "
+        "deliberate gap: `ToolBus.invoke` forwards `**context` straight to "
+        "`registered.handler(**context)`, so an extra keyword raises TypeError in every handler "
+        "that does not declare it — every tool on the platform. Doing it properly needs an opt-in "
+        "on the registration the way `wants_operator` already works, which is a change to the "
+        "tool contract rather than to this loop. An earlier draft of the fix CLAIMED in a comment "
+        "that handlers were told; that comment was false and is corrected, because a note "
+        "describing a mechanism that does not exist is the same defect class as a gate that does "
+        "not run.",
+        "tests/unit/test_agent_deadline_is_enforced.py — nine tests. Four injections were run; "
+        "one of them (removing the post-tool recheck) initially passed all of them, which made "
+        "that branch a control no test held, so a ninth test was added for what it actually "
+        "changes: the audit record. It now fails under that injection.",
+        "pytest tests/unit/test_agent_deadline_is_enforced.py tests/unit/test_agentic_loop.py -q",
+        _p_agent_deadline,
+        [S_TDD, S_VBC, S_DEAD],
+    ),
     Finding(
         "SHELL-NO-GROW",
         "The standard page stopped where its content stopped",

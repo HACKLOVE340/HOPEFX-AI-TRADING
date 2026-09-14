@@ -432,6 +432,28 @@ they are the ones most often skipped under time pressure:
   the overall verdict — an API-only deployment has no engine by design, and a
   permanently "degraded" field is one operators learn to ignore.
   `ENGINE_AUTOSTART` was documented nowhere until 2026-09-14 (audit F58/F118).
+- **The committed model is 167 days old and the freshness gate now blocks on
+  it.** `_check_model_staleness()` used to read the artifact's filesystem
+  mtime, so deploying a stale model was how the staleness gate got cleared: the
+  clone rewrites the timestamp, the gate read "0.69 days", and the check that
+  exists to stop the platform trading on an out-of-date model passed because the
+  out-of-date model had just been copied. Age now comes from a timestamp bound
+  to the artifact's sha256 in `ml/saved_models/registry.json`, which is a
+  property of the bytes — copying, touching or re-registering cannot change it.
+  With `MODEL_MAX_AGE_DAYS=30` and `STALE_MODEL_BLOCK=true` (both defaults),
+  **inference is now refused** until a current model is registered. That is the
+  gate working. Do not raise the limit or disable the check to get trading back:
+  that restores exactly the behaviour the fix removed. See
+  `python scripts/correction_register.py --id MODEL-166-DAYS-OLD` — it measures
+  the shipped artifact, so it closes itself when a current model is registered —
+  and `--id MODEL-AGE-IS-MTIME` for the defect.
+- **Chat history is per user, not per worker.** `POST /api/brain/chat` held one
+  module-level `LLMAgent` for the whole process, so every user of a worker
+  shared one conversation — reproduced with two identities, where user A's
+  account number appeared verbatim in user B's outgoing prompt. Conversations
+  are keyed on (authenticated `sub`, client session label); `ChatRequest`
+  carries no user field, because an identity in the body is an identity the
+  caller chooses. `--id CHAT-SHARED-HISTORY`.
 - `test-results.xml` is a CI-generated artifact — never commit it.
 </content>
 </invoke>

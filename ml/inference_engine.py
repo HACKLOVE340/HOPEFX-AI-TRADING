@@ -33,6 +33,7 @@ Usage
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import json
 import math
@@ -268,6 +269,120 @@ def _init_prometheus():
 _PROM = _init_prometheus()
 
 
+# ── Model provenance: how old is this model, really? ──────────────────────────
+#
+# This was `model_path.stat().st_mtime`. Reproduced on a disposable file before
+# the fix:
+#
+#     90-day-old artifact           -> stale=True   age=90.0
+#     same bytes, timestamp touched -> stale=False  age=0.0
+#
+# No retraining occurred. Every ordinary operational act writes that timestamp —
+# `git checkout`, `docker build`, `cp -r`, `rsync` without `-t`, restoring a
+# backup — so the gate that exists to stop the platform trading on an
+# out-of-date model was cleared by the act of deploying the out-of-date model.
+# It failed in the unsafe direction and said nothing.
+#
+# Age is now read from a timestamp bound to the artifact's SHA-256 in
+# `registry.json`, which makes it a property of the BYTES: nothing that copies
+# or rewrites the file can change it, and the only thing that can is training a
+# new model and registering it.
+
+# A future date beyond this is a broken clock or a forged record, not a model
+# trained tomorrow. Without the check the subtraction yields a negative age and
+# the model is fresh forever — the same unsafe direction as the mtime.
+_PROVENANCE_FUTURE_TOLERANCE_S = 300.0
+
+
+@functools.lru_cache(maxsize=32)
+def _model_sha256(path_str: str, size: int, mtime_ns: int) -> str:
+    """The artifact's digest, cached.
+
+    `size` and `mtime_ns` are cache-invalidation inputs ONLY — never an answer.
+    A touch changes mtime, so the digest is recomputed, and the recomputation
+    returns the same digest and therefore the same age. That is the point.
+    """
+    h = hashlib.sha256()
+    with open(path_str, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _parse_provenance_time(raw: object) -> float | None:
+    """An ISO-8601 instant as epoch seconds, or None if it is not one."""
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except (ValueError, TypeError):
+        return None
+    if parsed.tzinfo is None:
+        # A naive stamp is ambiguous; read it as UTC rather than as local time,
+        # which would shift a model's age by the deployment's offset.
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _model_training_time(model_path: Path) -> tuple[float | None, str]:
+    """When the model in `model_path` was trained, and why if that is unknown.
+
+    Returns `(epoch_seconds, "")` when a registry entry's `sha256` matches the
+    artifact's actual digest and carries a usable timestamp; otherwise
+    `(None, reason)`. Every caller treats a reason as STALE — see the fail-closed
+    note in `_check_model_staleness`.
+
+    `trained_at` is preferred and `registered_at` is the fallback: today's
+    registry records only the latter, and it is still sha-bound and still immune
+    to a touch, so the gate is not disabled for want of a better field.
+
+    Where several versions carry the same digest, the EARLIEST timestamp wins.
+    Re-registering unchanged bytes under a new version is the touch defect in
+    another form, and the earliest date is also the conservative one — it can
+    only make a model look older.
+    """
+    registry_path = _saved("registry.json")
+    if not registry_path.exists():
+        return None, f"no provenance registry at {registry_path}"
+
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        versions = registry["versions"]
+        if not isinstance(versions, dict):
+            raise TypeError("versions is not an object")
+    except Exception as exc:
+        return None, f"provenance registry is unreadable ({exc})"
+
+    try:
+        stat = model_path.stat()
+        digest = _model_sha256(str(model_path), stat.st_size, stat.st_mtime_ns)
+    except OSError as exc:
+        return None, f"the model artifact could not be read ({exc})"
+
+    stamps: list[float] = []
+    matched = False
+    for entry in versions.values():
+        if not isinstance(entry, dict) or entry.get("sha256") != digest:
+            continue
+        matched = True
+        for field_name in ("trained_at", "registered_at"):
+            when = _parse_provenance_time(entry.get(field_name))
+            if when is not None:
+                stamps.append(when)
+                break
+
+    if not matched:
+        return None, f"no registry entry matches this artifact's sha256 {digest[:12]}…"
+    if not stamps:
+        return None, "the matching registry entry records no usable trained_at/registered_at"
+
+    earliest = min(stamps)
+    if earliest > time.time() + _PROVENANCE_FUTURE_TOLERANCE_S:
+        return None, "the recorded training time is in the future"
+    return earliest, ""
+
+
 class InferenceEngine:
     """
     Full-stack live inference engine.
@@ -319,6 +434,12 @@ class InferenceEngine:
         # Cached result of the last staleness check (re-evaluated each call).
         self._model_stale: bool = False
         self._model_age_days: float | None = None
+        #: The sha256-bound timestamp the last staleness check read, and — when
+        #: there was none — why. Declared here rather than relied on via getattr,
+        #: so `health()` on an engine that has never run the check reports
+        #: "not measured yet" instead of raising or inventing a value.
+        self._model_provenance_at: str | None = None
+        self._model_provenance_reason: str = "the freshness check has not run yet"
 
         # ── Live accuracy monitoring (rolling 50-prediction window) ────────
         # Tracks (predicted_direction, actual_outcome) pairs; compared against
@@ -804,9 +925,13 @@ class InferenceEngine:
 
     def _check_model_staleness(self) -> bool:
         """
-        Return True when the active model file is older than MODEL_MAX_AGE_DAYS.
+        Return True when the active model was TRAINED more than
+        MODEL_MAX_AGE_DAYS ago.
 
-        Uses the mtime of advanced_oos.pkl (or the active model path if set).
+        Age comes from `_model_training_time()`, which reads a timestamp bound to
+        the artifact's sha256 in registry.json. It used to come from the file's
+        mtime, which meant copying or touching the artifact reset its age without
+        retraining anything — see the note above that function.
         When MODEL_MAX_AGE_DAYS=0 the check is disabled and always returns False.
 
         When STALE_MODEL_BLOCK=true (default) the caller raises RuntimeError
@@ -818,6 +943,8 @@ class InferenceEngine:
         if _MODEL_MAX_AGE_DAYS <= 0:
             self._model_stale = False
             self._model_age_days = None
+            self._model_provenance_at = None
+            self._model_provenance_reason = "the freshness check is disabled (MODEL_MAX_AGE_DAYS=0)"
             return False
 
         model_path = self._active_model_path or (_saved("advanced_oos.pkl"))
@@ -825,26 +952,60 @@ class InferenceEngine:
             # No model file — not stale (just unavailable; handled elsewhere)
             self._model_stale = False
             self._model_age_days = None
+            self._model_provenance_at = None
+            self._model_provenance_reason = "no model artifact on disk"
             return False
 
         try:
-            age_seconds = time.time() - model_path.stat().st_mtime
-            age_days = age_seconds / 86_400.0
+            trained_at, reason = _model_training_time(model_path)
+            # Kept so `health()` can say WHERE the age came from. `health` also
+            # reports `last_trained_at` from advanced_oos_meta.json, and the two
+            # disagree by 86 days on the committed artifact (meta 2026-06-26,
+            # earliest registry version carrying this sha256 2026-04-01). That
+            # disagreement is real and predates this gate — the mtime it used to
+            # read, 0.69 days, agreed with neither, which is why nobody saw it.
+            # Reconciling them is an ML-side decision; what this owes an operator
+            # is that the number it BLOCKS on is attributable rather than a third
+            # unexplained figure on the same screen.
+            self._model_provenance_at = (
+                datetime.fromtimestamp(trained_at, timezone.utc).isoformat() if trained_at is not None else None
+            )
+            self._model_provenance_reason = reason
+            if trained_at is None:
+                # Fail CLOSED. "I cannot tell you how old this model is" and
+                # "this model is current" are different answers, and only one of
+                # them is safe to trade on. Logged at ERROR, not DEBUG: a gate
+                # refusing for a reason nobody reads is the shape this
+                # repository calls a dead control.
+                logger.error(
+                    "STALE MODEL (provenance): %s — %s. Treating as stale; "
+                    "register the artifact in registry.json with its sha256 and a "
+                    "trained_at, or set MODEL_MAX_AGE_DAYS=0 to disable the check deliberately.",
+                    model_path.name,
+                    reason,
+                )
+                self._model_age_days = None
+                self._model_stale = True
+                return True
+
+            age_days = (time.time() - trained_at) / 86_400.0
             self._model_age_days = round(age_days, 2)
             self._model_stale = age_days > _MODEL_MAX_AGE_DAYS
             if self._model_stale:
                 logger.warning(
-                    "STALE MODEL: %s is %.1f days old (max=%s days). Retrain or set MODEL_MAX_AGE_DAYS=0 to suppress.",
+                    "STALE MODEL: %s was trained %.1f days ago (max=%s days). Retrain or set MODEL_MAX_AGE_DAYS=0 to suppress.",
                     model_path.name,
                     age_days,
                     _MODEL_MAX_AGE_DAYS,
                 )
             return self._model_stale
         except Exception as exc:
-            # Fail CLOSED: if model age cannot be determined, treat the model as
-            # stale so the STALE_MODEL_BLOCK gate (when enabled) blocks rather
-            # than trading on a model of unknown freshness.
-            logger.warning("Staleness check failed; treating model as STALE: %s", exc)
+            # Fail CLOSED here too: an unexpected failure in the freshness check
+            # is not evidence of freshness.
+            logger.error("Staleness check failed; treating model as STALE: %s", exc, exc_info=True)
+            self._model_age_days = None
+            self._model_provenance_at = None
+            self._model_provenance_reason = f"the freshness check itself failed ({exc})"
             self._model_stale = True
             return True
 
@@ -1959,6 +2120,12 @@ class InferenceEngine:
             # ── Stale model ────────────────────────────────────────────────
             "stale_model": self._model_stale,
             "model_age_days": self._model_age_days,
+            # Where `model_age_days` came from — the sha256-bound timestamp this
+            # gate read. Reported next to the age so the two are arithmetic on
+            # each other rather than two unattributed numbers, and so an operator
+            # can see why it differs from `last_trained_at` (the meta file's).
+            "model_provenance_at": self._model_provenance_at,
+            "model_provenance_reason": self._model_provenance_reason,
             "model_max_age_days": _MODEL_MAX_AGE_DAYS if _MODEL_MAX_AGE_DAYS > 0 else None,
             "stale_model_block": _STALE_MODEL_BLOCK,
             # ── Feature drift ──────────────────────────────────────────────
