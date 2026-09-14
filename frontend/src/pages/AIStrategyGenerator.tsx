@@ -6,9 +6,10 @@
  *           POST /api/brain/deploy-strategy
  */
 
+import { ClipboardList } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RelatedPages } from '../components';
 import {
   Sparkles, Radar, FlaskConical, LineChart, Loader2,
    Activity,
@@ -174,7 +175,37 @@ const AIStrategyGenerator: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
+    <PageShell
+      title="AI Strategy Generator"
+      subtitle="Describe your trading idea in plain English. The AI generates Python strategy code, runs a backtest, and lets you deploy it to paper trading in one click."
+      icon={Sparkles}
+      width="standard"
+      tabs={[
+        { key: 'generate', label: 'Generate', icon: Sparkles },
+        { key: 'history',  label: 'History',  icon: ClipboardList, badge: history.length || undefined },
+      ]}
+      activeTab={activeTab}
+      related={[
+        { to: '/backtest', label: 'Backtest', hint: 'Test the generated strategy', icon: FlaskConical },
+        { to: '/intelligence', label: 'AI intelligence', hint: 'What the live model knows', icon: Sparkles },
+        { to: '/ab-testing', label: 'A/B testing', hint: 'Run two strategies side by side', icon: Activity },
+        { to: '/signals', label: 'Signal feed', hint: 'Signals the engine is publishing', icon: Radar },
+        { to: '/walk-forward', label: 'Walk-forward', hint: 'Validate out of sample', icon: LineChart },
+      ]}
+      onTabChange={(k) => setActiveTab(k as typeof activeTab)}
+      actions={
+        <>
+          <button onClick={() => navigate('/pattern-detector')}
+            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            Patterns
+          </button>
+          <button onClick={() => navigate('/ab-testing')}
+            style={{ padding: '6px 13px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            A/B Test
+          </button>
+        </>
+      }
+    >
       {/* LLM health banner — shown while checking and when unavailable */}
       {llmStatus === 'checking' && (
         <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: 'var(--text-dim)' }}>
@@ -192,35 +223,6 @@ const AIStrategyGenerator: React.FC = () => {
           AI backend: <strong>{llmBackend}</strong> — ready
         </div>
       )}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>AI Strategy Generator</h1>
-          <p style={s.subtitle}>
-            Describe your trading idea in plain English. The AI generates Python strategy code,
-            runs a backtest, and lets you deploy it to paper trading in one click.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {(['generate', 'history'] as const).map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} style={{
-              ...s.tabBtn,
-              ...(activeTab === t ? s.tabBtnActive : {}),
-            }}>
-              {t === 'generate' ? '✨ Generate' : `📋 History (${history.length})`}
-            </button>
-          ))}
-          <div style={{ width: 1, height: 20, background: 'var(--surface-hover)' }} />
-          <button onClick={() => navigate('/pattern-detector')}
-            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🔍 Patterns
-          </button>
-          <button onClick={() => navigate('/ab-testing')}
-            style={{ padding: '6px 13px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ⚡ A/B Test
-          </button>
-        </div>
-      </div>
-
       {/* ── History tab ── */}
       {activeTab === 'history' && (
         <div style={s.card}>
@@ -417,16 +419,7 @@ const AIStrategyGenerator: React.FC = () => {
       )}
       </>
       )}
-    <RelatedPages
-      links={[
-        { to: '/backtest', label: 'Backtest', hint: 'Test the generated strategy', icon: FlaskConical },
-        { to: '/intelligence', label: 'AI intelligence', hint: 'What the live model knows', icon: Sparkles },
-        { to: '/ab-testing', label: 'A/B testing', hint: 'Run two strategies side by side', icon: Activity },
-        { to: '/signals', label: 'Signal feed', hint: 'Signals the engine is publishing', icon: Radar },
-        { to: '/walk-forward', label: 'Walk-forward', hint: 'Validate out of sample', icon: LineChart },
-      ]}
-    />
-    </div>
+    </PageShell>
   );
 };
 
