@@ -460,3 +460,25 @@ strategies/strategy_brain.py
 utils/config.py
 utils/database.py
 whitelabel/config.py
+
+# hopefx_engine.py - the ROOT engine, not execution/hopefx_engine.py already
+# listed above. Two different files share the basename; the substring check I
+# first wrote matched the wrong one.
+#
+# Recorded 2026-09-14 under ADR 0017, all four conditions evidenced rather than
+# asserted:
+#   1. already below the floor BEFORE the change: 19% measured on a clean
+#      worktree at HEAD (git worktree add --detach; 15 test files resolved),
+#      not on the working tree;
+#   2. the change does not lower it - 19% -> 28%, the new test file being the
+#      16th, so this records pre-existing debt and adds none;
+#   3. measured numbers: 19% before, 28% after, floor 80%;
+#   4. ADR 0017 cited as the standing agreement.
+#
+# The change recorded is ROUTER-OVERRULE: on the ExecutionEngine-unavailable
+# fallback, a router POLICY denial was followed by a direct broker.place_order,
+# overruling the authorization gate, the spread guard, the news and macro
+# blackouts and the FIA throttle. 1,808 lines at 19% is a real gap and a
+# separate job; refusing a one-branch safety fix until it is closed is the
+# outcome ADR 0017 exists to prevent.
+hopefx_engine.py

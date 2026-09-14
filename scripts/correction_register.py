@@ -1599,6 +1599,47 @@ def _WALLET_CONSUMER_FILES() -> list[str]:
     return [rel for rel in _production_python() if rel not in plumbing and _WALLET_CONSUMER.search(_code(rel) or "")]
 
 
+def _p_router_overrule() -> tuple[str, str]:
+    """Does the engine's fallback overrule a router policy denial?
+
+    `hopefx_engine._execute_decision` falls back to a direct `broker.place_order`
+    when ExecutionEngine is unavailable. It consulted SmartRouter and then placed
+    the order regardless of the answer.
+    """
+    body = _code("hopefx_engine.py")
+    if not body:
+        return UNVERIFIED, "hopefx_engine.py not found"
+    if "route_and_execute" not in body:
+        return UNVERIFIED, "the engine no longer routes — this probe no longer measures it"
+
+    # Counted, not merely present. The first version of this probe asked
+    # whether `_router_refusal_is_terminal` APPEARED in the file — which it
+    # still does when the branch that calls it is neutered to `elif False:`,
+    # because the definition remains. Injection-tested and it read FIXED
+    # against a tree with the defect fully restored. That is F208's weak shape
+    # reproduced inside the register itself: evidence that resolves is not
+    # evidence that runs. It now requires a definition AND at least one call.
+    classified = body.count("_router_refusal_is_terminal") >= 2
+    allow_list = "_ROUTER_TRANSPORT_GAPS" in body
+    # The exception path must refuse too: a router that raised may have
+    # transmitted the order, so falling through to place another is the
+    # duplicate fill ROUTER-TO exists to prevent.
+    unknown_refused = "outcome UNKNOWN, no order placed" in body
+    if classified and allow_list and unknown_refused:
+        return _named(
+            FIXED,
+            "a router policy denial is terminal on the fallback path; only an allow-listed "
+            "transport gap may still place directly",
+        )
+    return _named(
+        OPEN,
+        f"classified={classified} allow_list={allow_list} unknown_refused={unknown_refused} — "
+        "the fallback treats a router refusal as a reason to call broker.place_order "
+        "directly — an authorization block, a spread guard, a news or macro blackout and the "
+        "FIA throttle are all overruled",
+    )
+
+
 def _p_wallet_dead() -> tuple[str, str]:
     """Does anything in production actually use the wallet ledger?
 
@@ -3290,6 +3331,42 @@ FINDINGS: list[Finding] = [
         "python scripts/correction_register.py --id ADR-LEDGER",
         _p_adr_ledger,
         [S_DOC, S_TDD],
+    ),
+    Finding(
+        "ROUTER-OVERRULE",
+        "A router policy denial was overruled by the engine that asked for it",
+        "P0",
+        "Brokers",
+        "Found 2026-09-14 from an external source-inspection review (M03), then reproduced here",
+        "`hopefx_engine._execute_decision` falls back to a direct `broker.place_order` when "
+        "ExecutionEngine is unavailable. On that path it called SmartRouter and then did this: if "
+        "the status was `rejected` or `error`, log a warning and place the order anyway. "
+        "`rejected` is not only 'no venue was reachable' — `execution/smart_router.py` returns it "
+        "for five POLICY denials: `unauthorized:…` (enforce_order_authorization refused, logged "
+        "CRITICAL as 'Router BLOCKED order', under a comment reading *no order may reach a broker "
+        "without a risk-approval token + decision id*), `spread_too_wide:…`, "
+        "`sentiment_blackout:…`, `macro_impact_blackout:…` and `fia_throttle:…` (FIA 3.4). All "
+        "five were followed by the order reaching the broker. The purest `hopefx-dead-controls` "
+        "shape: the control fires correctly and the caller ignores it. The path runs only when "
+        "ExecutionEngine is unavailable, which makes it rare rather than safe — the 12-check "
+        "pre-trade gate is absent there too, so the router's verdict was the last policy control "
+        "standing. Fixed by classifying the refusal: `_router_refusal_is_terminal` allow-lists "
+        "the transport GAPS (`no_brokers_available` — nothing transmitted, and the pre-route "
+        "gates already passed to reach it) and treats everything else as terminal. An allow-list, "
+        "not a deny-list, so a policy reason added to the router later is terminal by default "
+        "rather than silently overruled. `all_brokers_failed:…`, `timeout:…` and an exception out "
+        "of the router are terminal too: a broker was reached, so an order may be in flight and "
+        "sending another is the duplicate fill ROUTER-TO exists to prevent — recovering those "
+        "needs order-identity reconciliation, not a retry.",
+        "`tests/unit/test_router_policy_denial_is_terminal.py` — 17 of its 20 tests fail on the "
+        "pre-fix tree. They drive the real `_execute_decision` with a spy broker rather than "
+        "re-implementing its branch. The 3 that pass both ways are controls: a policy-clean "
+        "transport gap must STILL be able to place (otherwise 'never trade' passes every other "
+        "test), a routed fill must not be sent twice, and the reason strings asserted here are "
+        "checked to be strings the router really produces rather than fiction.",
+        "python scripts/correction_register.py --id ROUTER-OVERRULE",
+        _p_router_overrule,
+        [S_DEAD, S_TDD],
     ),
     Finding(
         "WALLET-DEAD",
