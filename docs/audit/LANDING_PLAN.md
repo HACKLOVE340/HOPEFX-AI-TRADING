@@ -1,17 +1,20 @@
 # Landing the audit branch
 
-`claude/add-new-skills-lys862` is **588 commits and 1,321 files ahead of `main`**
+`claude/add-new-skills-lys862` is **590 commits and 1,321 files ahead of `main`**
 (measured 2026-09-14; this read 551 and 1,227 when the plan was written, and 565 and
 1,246 on 2026-09-13). Both figures are now measured by
 `scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —
 until 2026-09-14 nothing measured them, which is exactly why they drifted twice.
-They move with every commit, so fix them with `python scripts/doc_metrics.py
---refresh` rather than by hand. The check tolerates exactly one commit of
-staleness and no more — `pre-commit` runs before the commit exists, so a figure
-written during commit N states the distance as of N-1 and is one behind the
-moment it lands. Checked exactly, the gate would be red forever and answered
-with `--no-verify`; the tolerance is the commit boundary in git's own terms,
-not a fudge factor, and two commits stale is still drift.
+These two move with every commit, so they are **maintained rather than
+policed**: `pre-commit` runs `doc_metrics.py --sync`, which rewrites them and
+then checks every other figure normally. Enforcing them by hand cannot work —
+the hook only fires on documentation changes, so a run of code-only commits
+takes them several commits stale and blocks the next documentation commit
+through no fault of its author, which is how a gate teaches `--no-verify`.
+
+Every other figure still fails hard. `gates_total` drifts because something
+real changed, and quietly rewriting it would destroy the only signal that it
+did; the split is deliberate.
 The branch contains all of `main` — `git rev-list --count HEAD..origin/main` is
 **0** — so this is a fast-forward relationship, not a divergence. Nothing on it has been merged, and no CI run has
 ever executed against any of it.

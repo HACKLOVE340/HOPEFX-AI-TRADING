@@ -578,3 +578,73 @@ class TestTheCommitBoundaryDoesNotMakeItPermanentlyRed:
         from scripts.doc_metrics import check
 
         assert check().drift == []
+
+
+class TestSyncKeepsTheVolatileFiguresTrueWithoutNagging:
+    """`commits_ahead` and `files_ahead` change on EVERY commit, and the hook
+    runs only when a document or a measuring script changes. So a run of
+    code-only commits silently takes the figures several commits stale, and the
+    next doc-touching commit is blocked through no fault of its author — which
+    is how a gate teaches `--no-verify`.
+
+    `--sync` rewrites those two figures and then checks everything else. The
+    volatile pair is maintained rather than policed; every other claim still
+    fails hard, because `gates_total` drifting is a fact someone must look at,
+    not something a script should quietly paper over.
+    """
+
+    def test_sync_rewrites_a_volatile_figure(self, tmp_path: Path, monkeypatch) -> None:
+        from scripts import doc_metrics as dm
+
+        doc = tmp_path / "PLAN.md"
+        doc.write_text("is **100 commits and 9 files ahead of `main`**\n", encoding="utf-8")
+        monkeypatch.setattr(dm, "_documents", lambda repo, extra=None: [doc])
+        monkeypatch.setattr(dm, "measure", lambda repo=None: {"commits_ahead": 590, "files_ahead": 9})
+
+        assert dm.main(["--sync"]) == 0
+        assert "590 commits" in doc.read_text(encoding="utf-8")
+
+    def test_sync_does_not_paper_over_a_real_metric(self, tmp_path: Path, monkeypatch) -> None:
+        """The whole point of the split. A wrong gate count must still fail."""
+        from scripts import doc_metrics as dm
+
+        doc = tmp_path / "GATES.md"
+        doc.write_text("34 gates · 34 proven\n", encoding="utf-8")
+        monkeypatch.setattr(dm, "_documents", lambda repo, extra=None: [doc])
+        monkeypatch.setattr(dm, "measure", lambda repo=None: {"gates_total": 41, "gates_proven": 41})
+
+        assert dm.main(["--sync"]) == 1
+        assert "34 gates" in doc.read_text(encoding="utf-8"), "sync rewrote a figure it must only report"
+
+    def test_refresh_only_volatile_leaves_the_rest_alone(self, tmp_path: Path, monkeypatch) -> None:
+        from scripts import doc_metrics as dm
+
+        doc = tmp_path / "BOTH.md"
+        doc.write_text("34 gates · 34 proven\nis **100 commits and 9 files ahead of `main`**\n", encoding="utf-8")
+        monkeypatch.setattr(dm, "_documents", lambda repo, extra=None: [doc])
+        monkeypatch.setattr(
+            dm,
+            "measure",
+            lambda repo=None: {"gates_total": 41, "gates_proven": 41, "commits_ahead": 590, "files_ahead": 9},
+        )
+
+        changed = dm.refresh(only=dm._COMMIT_BOUNDARY)
+        assert {c.metric for c in changed} == {"commits_ahead"}
+        text = doc.read_text(encoding="utf-8")
+        assert "590 commits" in text and "34 gates" in text
+
+    def test_sync_is_what_pre_commit_runs(self) -> None:
+        """A flag nothing invokes maintains nothing.
+
+        The hook entry is the wiring; without this, `--sync` could be correct
+        and never run, which is the dead-control shape this repository keeps
+        finding.
+        """
+        from pathlib import Path as _Path
+
+        from scripts.doc_metrics import REPO
+
+        config = _Path(REPO, ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        assert "doc_metrics.py --sync" in config, (
+            "pre-commit still runs --check, so the figures are policed not maintained"
+        )

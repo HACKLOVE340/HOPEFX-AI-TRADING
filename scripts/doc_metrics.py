@@ -342,6 +342,16 @@ def _count_owner_decisions(repo: Path) -> int:
     return len(_OWNER_HEADING.findall(path.read_text(encoding="utf-8")))
 
 
+def _shown(path: Path) -> str:
+    """A path to print. Falls back to the absolute form for documents outside
+    the repository — `extra_documents` accepts any path, and `relative_to`
+    raises rather than returning something useful when given one."""
+    try:
+        return str(path.relative_to(REPO))
+    except ValueError:
+        return str(path)
+
+
 def _documents(repo: Path, extra: list[Path] | None = None) -> list[Path]:
     found = [repo / name for name in _LIVING if (repo / name).exists()]
     return found + list(extra or [])
@@ -383,7 +393,7 @@ def check(
     return report
 
 
-def refresh(repo: Path | None = None) -> list[Drift]:
+def refresh(repo: Path | None = None, only: frozenset[str] | None = None) -> list[Drift]:
     """Rewrite every drifted figure to what the code measures. Returns what changed.
 
     Most claims here move rarely — a gate is added, a document is registered —
@@ -397,7 +407,7 @@ def refresh(repo: Path | None = None) -> list[Drift]:
     rewriting `1,246` as `1321` would quietly restyle prose the author chose.
     """
     repo = repo or REPO
-    drifted = check(repo).drift
+    drifted = [d for d in check(repo).drift if only is None or d.metric in only]
     by_path: dict[Path, list[Drift]] = {}
     for d in drifted:
         by_path.setdefault(d.path, []).append(d)
@@ -428,7 +438,29 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Rewrite drifted figures to the measured values, then report what changed",
     )
+    parser.add_argument(
+        "--sync",
+        action="store_true",
+        help="Maintain the per-commit figures, then check the rest (what pre-commit runs)",
+    )
     args = parser.parse_args(argv)
+
+    if args.sync:
+        # The volatile pair is maintained; everything else is policed. A figure
+        # that changes on every commit cannot be enforced by hand — the hook
+        # only runs on doc changes, so a run of code-only commits takes it
+        # several commits stale and blocks the next doc commit through no fault
+        # of its author. `gates_total` is the opposite: it drifts because
+        # something real changed, and quietly rewriting it would destroy the
+        # only signal that it did.
+        try:
+            synced = refresh(only=_COMMIT_BOUNDARY)
+        except MetricsBroken as exc:
+            print(f"REFUSED — {exc}", file=sys.stderr)
+            return 2
+        for d in synced:
+            print(f"  SYNCED {_shown(d.path)}:{d.line} {d.metric}: {d.stated} -> {d.measured}")
+        return main(["--check"])
 
     if args.refresh:
         try:
@@ -437,7 +469,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"REFUSED — {exc}", file=sys.stderr)
             return 2
         for d in changed:
-            print(f"  UPDATED {d.path.relative_to(REPO)}:{d.line} {d.metric}: {d.stated} -> {d.measured}")
+            print(f"  UPDATED {_shown(d.path)}:{d.line} {d.metric}: {d.stated} -> {d.measured}")
         print(f"doc metrics: {len(changed)} figure(s) rewritten")
         return 0
 
@@ -466,7 +498,7 @@ def main(argv: list[str] | None = None) -> int:
             )
     for d in report.drift:
         print(
-            f"  DRIFT {d.path.relative_to(REPO)}:{d.line} states {d.metric}={d.stated}, measured {d.measured}",
+            f"  DRIFT {_shown(d.path)}:{d.line} states {d.metric}={d.stated}, measured {d.measured}",
             file=sys.stderr,
         )
     if report.drift:

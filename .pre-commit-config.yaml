@@ -258,7 +258,7 @@ repos:
       - id: doc-metrics
         name: Documents state the measured figures
         language: system
-        entry: python scripts/doc_metrics.py --check
+        entry: python scripts/doc_metrics.py --sync
         files: '^(docs/.*\.(md|toml)$|[A-Z_-]+\.md$|scripts/(gate_evidence|group4_preservation|docs_registry|doc_metrics|aos_conformance|spatial_capabilities)\.py$)'
         pass_filenames: false
         stages: [pre-commit]
