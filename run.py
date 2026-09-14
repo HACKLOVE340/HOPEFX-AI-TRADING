@@ -228,9 +228,10 @@ def _setup_env(args: argparse.Namespace) -> None:
     # user configured in .env (defaulting to the safe "paper") so launching the
     # API server never silently clobbers a deliberate TRADING_MODE=live.
     if args.mode not in ("paper", "live"):
-        # api/backtest preserve a deliberate TRADING_MODE from .env; the
-        # resolution only pins it for the two trading modes.
-        os.environ.setdefault("TRADING_MODE", os.environ.get("TRADING_MODE", "paper"))
+        # api/backtest preserve a deliberate TRADING_MODE from .env — the
+        # resolution reports it but publishes no override for these modes, so
+        # the safe default applies only when nothing is configured.
+        os.environ.setdefault("TRADING_MODE", "paper")
 
     # Symbol override
     if getattr(args, "symbol", None):

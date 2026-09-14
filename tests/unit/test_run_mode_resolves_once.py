@@ -269,3 +269,73 @@ class TestTheDocumentedModesAreTheRealModes:
         sys.modules["runmod_modes"] = m
         spec.loader.exec_module(m)
         assert tuple(m.MODES) == tuple(MODES)
+
+
+class TestApiAndBacktestDoNotClobberADeliberateTradingMode:
+    """`--mode api` must not silently rewrite a deliberate `TRADING_MODE=live`.
+
+    The pre-resolver `run.py` was explicit about this::
+
+        # For api/backtest we preserve whatever the user configured in .env
+        # (defaulting to the safe "paper") so launching the API server never
+        # silently clobbers a deliberate TRADING_MODE=live.
+        if args.mode in ("paper", "live"):
+            os.environ["TRADING_MODE"] = args.mode
+        else:
+            os.environ.setdefault("TRADING_MODE", "paper")
+
+    The first version of the resolver published `TRADING_MODE` unconditionally,
+    so `--mode api` rewrote a configured `live` to `paper`. Safer-sounding and
+    still wrong: it is the operator's setting, the API is the production serving
+    process, and a deployment that quietly stops trading is as much a surprise
+    as one that quietly starts.
+
+    `TRADING_MODE` is the paper/live TRADING concept. The run mode is a
+    different axis, and only the two trading run modes may pin it.
+    """
+
+    def test_api_mode_reports_a_configured_live_without_overriding_it(self):
+        r = _resolve(mode="api", broker="oanda", TRADING_MODE="live")
+        assert r.trading_mode == "live", "the resolution must report what is actually configured"
+        assert "TRADING_MODE" not in r.env_overrides, (
+            "publishing TRADING_MODE for api mode rewrites the operator's setting"
+        )
+
+    def test_backtest_mode_does_the_same(self):
+        r = _resolve(mode="backtest", broker="oanda", TRADING_MODE="live")
+        assert r.trading_mode == "live"
+        assert "TRADING_MODE" not in r.env_overrides
+
+    def test_api_mode_with_nothing_configured_is_paper(self):
+        """The safe default survives — it just is not an override."""
+        r = _resolve(mode="api", broker="oanda")
+        assert r.trading_mode == "paper"
+
+    @pytest.mark.parametrize("mode", ["paper", "live"])
+    def test_the_two_trading_modes_still_pin_it(self, mode):
+        """They are the modes that legitimately decide it."""
+        env = {"TRADING_MODE": "live" if mode == "paper" else "paper"}
+        if mode == "live":
+            env |= {"OANDA_PRACTICE": "false", "OANDA_ENVIRONMENT": "live"}
+        r = _resolve(mode=mode, broker="oanda", **env)
+        assert r.env_overrides["TRADING_MODE"] == mode
+        assert r.trading_mode == mode
+
+    def test_setup_env_leaves_a_configured_trading_mode_alone(self, monkeypatch):
+        import argparse
+        import importlib.util
+        import os
+        import sys
+
+        spec = importlib.util.spec_from_file_location("runmod_tm", "run.py")
+        m = importlib.util.module_from_spec(spec)
+        sys.modules["runmod_tm"] = m
+        spec.loader.exec_module(m)
+
+        monkeypatch.delenv("PAPER_TRADING", raising=False)
+        monkeypatch.setenv("TRADING_MODE", "live")
+        m._setup_env(argparse.Namespace(mode="api", broker="oanda", config="prop_firm_mode.json"))
+
+        assert os.environ["TRADING_MODE"] == "live", (
+            "launching the API server rewrote a deliberate TRADING_MODE=live to paper"
+        )

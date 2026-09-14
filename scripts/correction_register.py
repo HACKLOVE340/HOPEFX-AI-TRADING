@@ -1647,6 +1647,37 @@ def _p_gate_unmeasured() -> tuple[str, str]:
     )
 
 
+def _p_api_trading_role() -> tuple[str, str]:
+    """Can an operator see whether this API process is trading?"""
+    health = _code("core/health.py")
+    if not health:
+        return UNVERIFIED, "core/health.py not found"
+    if "_probe_components" not in health:
+        return UNVERIFIED, "the health probe moved — this no longer measures it"
+
+    # The decisive LINE, not the token. Checking `'"engine"' in health` passed
+    # against a tree where the engine was hard-wired to None — the third time
+    # today a probe of mine measured vocabulary instead of behaviour.
+    reports = 'getattr(app_state, "engine", None)' in health and '"healthy" if running else "stopped"' in health
+    # Reported but NOT folded into the overall verdict: an API-only deployment
+    # has no engine by design, and a permanently degraded field is ignored.
+    not_critical = 'critical = ["api", "config", "database"]' in health
+    documented = "ENGINE_AUTOSTART" in (_read("CLAUDE.md") or "")
+
+    if reports and not_critical and documented:
+        return _named(
+            FIXED,
+            "/health reports the engine as unavailable/stopped/healthy without folding it "
+            "into the overall verdict, and ENGINE_AUTOSTART — the API-only switch — is "
+            "documented",
+        )
+    return _named(
+        OPEN,
+        f"reports={reports} not_critical={not_critical} documented={documented} — /health "
+        "answers identically whether or not this process is running a trading engine",
+    )
+
+
 def _p_mode_resolver() -> tuple[str, str]:
     """Do the displayed plan and the dispatch read ONE resolution?"""
     runner = _code("run.py")
@@ -1666,10 +1697,18 @@ def _p_mode_resolver() -> tuple[str, str]:
     wired = runner.count("resolve_run_mode") >= 2
     # The old second derivation must be gone from the dispatch.
     second_derivation = 'args.broker == "paper"' in runner
+    # And the resolver must not PIN TRADING_MODE for api/backtest. The first
+    # version published it unconditionally, so `--mode api` rewrote a deliberate
+    # TRADING_MODE=live to paper — behaviour the pre-resolver run.py preserved
+    # on purpose, with a comment saying why. Shipped in 20acc2a5 and caught the
+    # next day while grounding M04.
+    # The api/backtest BRANCH, not the flag's name: flipping the branch to True
+    # restores the regression while leaving the identifier in place.
+    preserves_trading_mode = "pins_trading_mode = False" in resolver
     publishes_broker_type = "BROKER_TYPE" in resolver
     publishes_venue = "OANDA_ENVIRONMENT" in resolver
 
-    if wired and not second_derivation and publishes_broker_type and publishes_venue:
+    if wired and not second_derivation and publishes_broker_type and publishes_venue and preserves_trading_mode:
         return _named(
             FIXED,
             "run.py resolves the mode once (core/run_mode.py) and both the printed plan and the "
@@ -1679,7 +1718,8 @@ def _p_mode_resolver() -> tuple[str, str]:
     return _named(
         OPEN,
         f"wired={wired} second_derivation={second_derivation} "
-        f"broker_type={publishes_broker_type} venue={publishes_venue}",
+        f"broker_type={publishes_broker_type} venue={publishes_venue} "
+        f"preserves_trading_mode={preserves_trading_mode}",
     )
 
 
@@ -3478,6 +3518,41 @@ FINDINGS: list[Finding] = [
         [S_DEAD, S_TDD],
     ),
     Finding(
+        "API-TRADING-ROLE",
+        "`/health` could not say whether the API process was running a trading engine",
+        "P2",
+        "Runtime",
+        "Found 2026-09-14 from an external source-inspection review (M04), grounded here",
+        "Production runs `python app.py` — the Dockerfile's CMD — not `run.py`, so the run-mode "
+        "resolver is not in that path at all. `app.py` builds the component registry, the "
+        "registry registers `engine`, and `init_trading_engine` auto-starts it whenever "
+        "`TRADING_MODE` is not live: `ENGINE_AUTOSTART` defaults to **true** on that branch. "
+        "Live is properly gated (it needs ENGINE_AUTOSTART and LIVE_TRADING_ENABLED both), so "
+        "the exposure is paper rather than real money. Two things were missing rather than "
+        "wrong. `core/health.py::_probe_components` reported api, config, database, cache, auth, "
+        "risk_manager, compliance, prop_enforcer, strategy_brain, websocket, email, broker and "
+        "kill_switch — and not the engine, so `/health` answered identically whether or not this "
+        "process was trading. And `ComponentRegistry.status_summary()` / `all_required_ok()` "
+        "carry the docstring 'for health endpoints' with ZERO consumers, written for a caller "
+        "that never arrived. `/health` now reports the engine as unavailable / stopped / "
+        "healthy. It is deliberately NOT in the `critical` list that decides the overall "
+        "verdict: an API-only deployment has no engine by design, and a permanently degraded "
+        "field is one operators learn to ignore. `ENGINE_AUTOSTART=false` IS the API-only "
+        "profile and already worked — it is reused rather than replaced with a new name, "
+        "because a fourth spelling of one run-configuration concept is the defect MODE-SPLIT "
+        "was about. What it lacked was documentation (audit F58 said 'documented nowhere'; F118 "
+        "downgraded the gating half and left that one standing) and any way to see its effect "
+        "from outside the process. Both are now closed.",
+        "`tests/unit/test_api_process_declares_its_trading_role.py` — seven of its nine fail on "
+        "the pre-fix tree. The two that pass both ways are the API-only profile itself, which "
+        "already worked: ENGINE_AUTOSTART=false schedules no engine, and the default paper "
+        "deployment still does — the second is the positive control, because 'never trade' "
+        "would otherwise pass the first while removing the product.",
+        "python scripts/correction_register.py --id API-TRADING-ROLE",
+        _p_api_trading_role,
+        [S_DEAD, S_TDD, S_DOC],
+    ),
+    Finding(
         "MODE-SPLIT",
         "The startup plan that is printed is not the system that is started",
         "P1",
@@ -3499,7 +3574,13 @@ FINDINGS: list[Finding] = [
         "carrying requested mode, effective mode, engine, broker, venue, trading mode, the "
         "environment it implies, its reasons and its conflicts — and `run.py` reads it for both "
         "the printed plan and the dispatch, publishes every name from that one decision, and "
-        "exits 2 on a contradiction rather than picking a side. M05 travelled with it: CLAUDE.md "
+        "exits 2 on a contradiction rather than picking a side. **One regression shipped with the "
+        "first version and was caught the next day**: it published TRADING_MODE unconditionally, "
+        "so `--mode api` rewrote a deliberate `TRADING_MODE=live` to paper — exactly what the "
+        "pre-resolver run.py preserved on purpose, with a comment saying why. Safer-sounding and "
+        "still wrong: it is the operator's setting and the API is the production serving "
+        "process. Only the two trading run modes pin it now; api and backtest report it and "
+        "publish no override, and the probe checks that. M05 travelled with it: CLAUDE.md "
         "and AGENTS.md both documented `--mode api | engine | backtest`, and `engine` has never "
         "been a mode — `python run.py --mode engine` is an argparse error, so an agent following "
         "the two files it is told to read first issued a command that cannot run.",

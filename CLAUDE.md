@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 594 commits and 1,324 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 594 commits and 1,329 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | What is outstanding, and what must the owner decide? | `docs/ai/MASTER_OUTSTANDING.md` — §A is decisions only the owner can make |
 | What is left, in what order, and how long? | `docs/ai/PROGRAMME_PLAN.md` — audit, sequence and effort, measured 2026-09-09 |
@@ -406,6 +406,26 @@ they are the ones most often skipped under time pressure:
   putting real credentials in a tracked file. Keep credentials in environment
   variables. Note it also ships `enabled: true` with the FTMO ruleset, so a
   fresh deployment starts with those prop-firm limits active.
+- **An API deployment carries a trading engine unless you say otherwise.**
+  Production runs `python app.py` (the Dockerfile's CMD), which builds the
+  component registry; the registry registers `engine`, and
+  `init_trading_engine` auto-starts it whenever `TRADING_MODE` is not `live` —
+  `ENGINE_AUTOSTART` defaults to **true** on that branch. Live is properly
+  gated and needs `ENGINE_AUTOSTART=true` **and** `LIVE_TRADING_ENABLED=true`,
+  so the exposure is paper rather than real money, but "the API process is
+  healthy" has never meant "the engine is or is not running".
+
+  | Want | Set |
+  |---|---|
+  | API only — serve HTTP, trade nothing | `ENGINE_AUTOSTART=false` |
+  | API + paper engine (the default) | leave `ENGINE_AUTOSTART` unset |
+  | Live | `ENGINE_AUTOSTART=true` **and** `LIVE_TRADING_ENABLED=true`, plus the kill switch and deployment gates |
+
+  `GET /health` reports `engine` as `unavailable` / `stopped` / `healthy`, so
+  the choice is visible from outside the process. It is deliberately NOT part of
+  the overall verdict — an API-only deployment has no engine by design, and a
+  permanently "degraded" field is one operators learn to ignore.
+  `ENGINE_AUTOSTART` was documented nowhere until 2026-09-14 (audit F58/F118).
 - `test-results.xml` is a CI-generated artifact — never commit it.
 </content>
 </invoke>

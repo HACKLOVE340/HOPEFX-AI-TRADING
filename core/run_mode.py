@@ -145,7 +145,24 @@ def resolve_run_mode(
     }.get(effective, "PaperRunner")
     reasons.append(f"mode {effective!r} selects {engine}")
 
-    trading_mode = effective if effective in ("paper", "live") else "paper"
+    # TRADING_MODE is the paper/live TRADING concept; the run mode is a
+    # different axis. Only the two trading run modes may PIN it. For api and
+    # backtest the resolution REPORTS what is configured and publishes no
+    # override — the first version of this resolver published it
+    # unconditionally, so `--mode api` rewrote a deliberate TRADING_MODE=live to
+    # paper. Safer-sounding and still wrong: it is the operator's setting, the
+    # API is the production serving process, and a deployment that quietly
+    # stops trading is as much a surprise as one that quietly starts. The
+    # pre-resolver run.py said so in a comment; this restores it.
+    if effective in ("paper", "live"):
+        trading_mode = effective
+        pins_trading_mode = True
+    else:
+        configured = str(env.get("TRADING_MODE", "")).strip().lower()
+        trading_mode = configured if configured in ("paper", "live") else "paper"
+        pins_trading_mode = False
+        if configured in ("paper", "live"):
+            reasons.append(f"TRADING_MODE={configured!r} is the operator's, and {effective} mode leaves it alone")
 
     # ── Broker. The explicit flag wins because nothing is left to disagree ───
     ambient = str(env.get("BROKER_TYPE", "")).strip().lower()
@@ -185,7 +202,8 @@ def resolve_run_mode(
         overrides["OANDA_PRACTICE"] = "true" if venue == "practice" else "false"
         overrides["OANDA_ENVIRONMENT"] = venue
 
-    overrides["TRADING_MODE"] = trading_mode
+    if pins_trading_mode:
+        overrides["TRADING_MODE"] = trading_mode
 
     return ResolvedRunMode(
         requested_mode=mode,
