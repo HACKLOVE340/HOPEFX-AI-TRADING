@@ -16,6 +16,7 @@
  *   GET  /custom-dev/requests
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -525,7 +526,7 @@ const EliteDashboard: React.FC = () => {
   }
 
   return (
-    <div className="page-content">
+    <PageShell title="Elite Hub" width="standard">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 4 }}>
         <div style={s.heading}>⭐ Elite Dashboard</div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -561,7 +562,7 @@ const EliteDashboard: React.FC = () => {
 
       {/* Custom dev request list — full width */}
       <CustomDevList refresh={devRefresh} />
-    </div>
+    </PageShell>
   );
 };
 

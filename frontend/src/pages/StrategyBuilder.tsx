@@ -9,6 +9,7 @@
  * Pick a template, tune its parameters + symbol/timeframe, and deploy it as a
  * live dynamic strategy. The node-type catalogue is shown for reference.
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { nocodeApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
@@ -77,9 +78,9 @@ const StrategyBuilder: React.FC = () => {
   const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' };
 
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', color: 'var(--text)' }}>
+    <PageShell title="Strategy Builder" width="standard">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>🧩 Strategy Builder</h1>
+
         <button onClick={() => setShowCatalog((v) => !v)} style={{ padding: '6px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
           {showCatalog ? 'Hide' : 'Show'} node catalogue
         </button>
@@ -163,7 +164,7 @@ const StrategyBuilder: React.FC = () => {
           </button>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

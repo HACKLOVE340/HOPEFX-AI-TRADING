@@ -69,7 +69,7 @@ beforeEach(() => {
 // ─── Observability ──────────────────────────────────────────────────────────────
 describe('Observability page', () => {
   it('shows a loading state before data resolves', () => {
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(screen.getByText('Loading telemetry…')).toBeInTheDocument();
   });
 
@@ -77,14 +77,14 @@ describe('Observability page', () => {
     mocks.observabilityApi.metrics.mockReturnValue(ok({ cpu_percent: 12.5, memory_percent: 40, error_rate: 0.01, active_connections: 7 }));
     mocks.observabilityApi.services.mockReturnValue(ok({ services: [{ name: 'api-gateway', status: 'healthy', uptime_seconds: 3600, version: '1.2.3' }] }));
     mocks.observabilityApi.alerts.mockReturnValue(ok({ alerts: [{ id: 'a1', severity: 'warning', message: 'High latency', service: 'oms' }] }));
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(await screen.findByText('12.5%')).toBeInTheDocument();
     expect(screen.getByText('api-gateway')).toBeInTheDocument();
     expect(screen.getByText('High latency')).toBeInTheDocument();
   });
 
   it('renders empty states when nothing is returned', async () => {
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(await screen.findByText('No service data.')).toBeInTheDocument();
     expect(screen.getByText('No active alerts. 🎉')).toBeInTheDocument();
   });
@@ -93,12 +93,12 @@ describe('Observability page', () => {
     mocks.observabilityApi.metrics.mockReturnValue(fail());
     mocks.observabilityApi.services.mockReturnValue(fail());
     mocks.observabilityApi.alerts.mockReturnValue(fail());
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(await screen.findByText('Failed to load observability data.')).toBeInTheDocument();
   });
 
   it('re-fetches when Refresh is clicked', async () => {
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     await screen.findByText('No service data.');
     const calls = mocks.observabilityApi.metrics.mock.calls.length;
     fireEvent.click(screen.getByText('↻ Refresh'));
@@ -218,7 +218,7 @@ describe('MLDashboard page', () => {
 // ─── Strategy Builder ───────────────────────────────────────────────────────────
 describe('StrategyBuilder page', () => {
   it('shows a loading state first', () => {
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     expect(screen.getByText('Loading templates…')).toBeInTheDocument();
   });
 
@@ -226,7 +226,7 @@ describe('StrategyBuilder page', () => {
     mocks.nocodeApi.templates.mockReturnValue(ok({ templates: [
       { id: 'tpl-momentum', name: 'Momentum', category: 'trend', complexity: 'beginner', parameters: { lookback: 14 } },
     ] }));
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     const card = await screen.findByText('Momentum');
     fireEvent.click(card);
     expect(await screen.findByText(/Configure/)).toBeInTheDocument();
@@ -239,7 +239,7 @@ describe('StrategyBuilder page', () => {
       { id: 'tpl-momentum', name: 'Momentum', parameters: {} },
     ] }));
     mocks.nocodeApi.deploy.mockReturnValue(ok({ message: 'Strategy deployed.' }));
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     fireEvent.click(await screen.findByText('Momentum'));
     fireEvent.click(await screen.findByText('🚀 Deploy Strategy'));
     await waitFor(() => expect(mocks.nocodeApi.deploy).toHaveBeenCalledTimes(1));
@@ -248,13 +248,13 @@ describe('StrategyBuilder page', () => {
   });
 
   it('renders the empty template state', async () => {
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     expect(await screen.findByText('No templates available.')).toBeInTheDocument();
   });
 
   it('shows an error banner when templates fail to load', async () => {
     mocks.nocodeApi.templates.mockReturnValue(fail());
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     expect(await screen.findByText('Failed to load strategy templates.')).toBeInTheDocument();
   });
 });

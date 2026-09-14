@@ -7,6 +7,7 @@
  *   POST /api/chat/rooms/:id/messages — send message
  *   WS   /ws/chat/:room_id          — real-time messages
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { chatApi } from '../hooks/useApi';
@@ -158,7 +159,7 @@ const ChatPage: React.FC = () => {
   const isOwn = (msg: ChatMessage) => msg.user_id === user?.id;
 
   return (
-    <div className="page-content" style={{ flexDirection: 'row', overflow: 'hidden', padding: 0 }}>
+    <PageShell title="Chat" width="standard">
       {/* Sidebar — room list */}
       <div style={{ width: 260, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--border)' }}>
@@ -288,7 +289,7 @@ const ChatPage: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 };
 

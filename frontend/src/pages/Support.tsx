@@ -22,6 +22,7 @@
  * light theme and white-label branding reach it.
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Bot, LifeBuoy, Plus, User, UserCheck } from 'lucide-react';
@@ -124,9 +125,9 @@ export default function Support(): React.ReactElement {
   const resolved = current?.status === 'resolved';
 
   return (
-    <div style={{ background: C.bg, color: C.text, minHeight: '100%', padding: 16 }}>
+    <PageShell title="Support" width="standard">
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Support</h1>
+
         <button
           type="button" data-testid="new-ticket"
           onClick={() => { setComposing(true); setSelected(null); setError(null); }}
@@ -360,6 +361,6 @@ export default function Support(): React.ReactElement {
           ) : null}
         </section>
       </div>
-    </div>
+    </PageShell>
   );
 }

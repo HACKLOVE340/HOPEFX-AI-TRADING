@@ -25,6 +25,7 @@
  * amber, held-by-you is the accent, held-by-someone-else is slate.
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -186,9 +187,9 @@ export default function SupportConsole(): React.ReactElement {
   const L = LIVE_LABEL[live.source];
 
   return (
-    <div style={{ background: C.bg, color: C.text, minHeight: '100%', padding: 16 }}>
+    <PageShell title="Support console" width="standard">
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Support console</h1>
+
         <span
           data-testid="live-source"
           style={{
@@ -465,6 +466,6 @@ export default function SupportConsole(): React.ReactElement {
         <CheckCircle2 size={12} aria-hidden="true" />
         Escalations reach this queue from the triage floor. The AI cannot resolve what the floor escalated.
       </p>
-    </div>
+    </PageShell>
   );
 }

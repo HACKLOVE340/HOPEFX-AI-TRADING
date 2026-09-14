@@ -7,6 +7,7 @@
  *   GET /api/observability/alerts
  * Admin/ops surface — gated at the route level.
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { observabilityApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
@@ -75,9 +76,9 @@ const Observability: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto', color: 'var(--text)' }}>
+    <PageShell title="Observability" width="standard">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>📡 Observability</h1>
+
         <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
           ↻ Refresh
         </button>
@@ -142,7 +143,7 @@ const Observability: React.FC = () => {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 
