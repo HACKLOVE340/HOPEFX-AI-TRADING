@@ -19,7 +19,8 @@ const SRC = path.resolve(__dirname, '..');
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf-8');
 
 /** Symbol/emoji code points, excluding the box-drawing chars used in comments. */
-const GLYPH = /[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
+const GLYPH =
+  /[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]|\u{FE0F}/u;
 
 describe('F170 — nav icons are SVG components', () => {
   it('every NAV_ITEMS icon is a renderable component, not a string', () => {

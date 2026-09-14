@@ -9,6 +9,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { securityFixesApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,10 @@ export const FixApprovalQueue: React.FC = () => {
       setFixes(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
-      setError('Failed to load fix queue');
+      // The server's own explanation, not a generic line over the top of it.
+      // Discarding it is F189: /correlation showed a blank card for ~20s while
+      // the API had already sent the remedy in plain English.
+      setError(extractApiError(err, 'Failed to load fix queue'));
     } finally {
       setLoading(false);
     }

@@ -4,7 +4,7 @@
  * Shows: bullish/bearish arc gauge, score, momentum, article feed.
  */
 
-import React, { useMemo } from 'react';
+import React, { } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';

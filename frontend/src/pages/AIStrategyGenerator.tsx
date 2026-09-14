@@ -10,10 +10,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart, Loader2,
-  Microscope, BarChart3, BookOpen, Activity,
+  Sparkles, Radar, FlaskConical, LineChart, Loader2,
+   Activity,
 } from 'lucide-react';
-import { useStore } from '../store';
 import { aiStrategyApi, llmApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { useConfirm } from '../components/ConfirmDialog';

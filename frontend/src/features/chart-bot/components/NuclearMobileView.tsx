@@ -4,7 +4,7 @@
  * Optimised for screens < 768px: touch-friendly, minimal chrome.
  */
 
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { useNuclearWS } from '../hooks/useNuclearWS';
 import { useStore } from '../../../store';

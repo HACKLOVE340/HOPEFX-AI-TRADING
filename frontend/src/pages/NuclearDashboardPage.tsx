@@ -8,8 +8,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Zap, Brain, Eye, BookOpen, Shield, Globe, Newspaper, Sparkles,
-  Radiation, CalendarDays, LineChart, Briefcase,
+  Zap, Globe, Newspaper, Sparkles,
+
 } from 'lucide-react';
 import { NuclearDashboard } from '../features/chart-bot';
 import { PageHeader } from '../components/PageHeader';

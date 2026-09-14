@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Circle, ShieldAlert, RefreshCw, LayoutDashboard } from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -190,7 +191,7 @@ const StatusPage: React.FC = () => {
       );
     } catch (err) {
       if (!mountedRef.current) return;
-      setError('Status API unavailable.');
+      setError(extractApiError(err, 'Status API unavailable.'));
     }
     if (mountedRef.current) { setLoading(false); setLastRefresh(new Date()); }
   }, []);

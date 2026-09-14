@@ -18,7 +18,7 @@ import {
   Trophy, BarChart3, ListOrdered, CalendarDays, RefreshCw, ChevronRight,
   LineChart, Briefcase, BookOpen, Shield,
 } from 'lucide-react';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError, positionSide } from '../lib/utils';
+import { fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError, positionSide } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

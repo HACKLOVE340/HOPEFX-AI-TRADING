@@ -7,8 +7,8 @@
 import React from 'react';
 import { RelatedPages } from '../components';
 import {
-  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
-  Microscope, BarChart3, BookOpen, Activity,
+  Sparkles, Brain, Radar, Cpu,
+   BookOpen,
 } from 'lucide-react';
 import AIChat from '../components/ai/AIChat';
 

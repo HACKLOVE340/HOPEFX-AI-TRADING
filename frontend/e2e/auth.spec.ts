@@ -12,7 +12,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAs, logout, captureConsoleErrors } from './helpers';
+import {  logout, captureConsoleErrors } from './helpers';
 
 test.describe('Landing page', () => {
   test('renders without JS errors', async ({ page }) => {

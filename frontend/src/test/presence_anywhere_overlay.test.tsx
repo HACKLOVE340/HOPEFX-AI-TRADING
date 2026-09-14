@@ -44,6 +44,8 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { PresenceAnywhere, DISMISS_KEY } from '../hub/PresenceAnywhere';
 
@@ -327,9 +329,7 @@ describe('presence overlay — wiring', () => {
   });
 
   it('is behind authentication, like every other AI surface', () => {
-    const fs = require('node:fs') as typeof import('node:fs');
-    const path = require('node:path') as typeof import('node:path');
-    const app = fs.readFileSync(path.resolve(__dirname, '../App.tsx'), 'utf8');
+    const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const line = app.split('\n').find((l) => l.includes('<PresenceAnywhereMount'));
     expect(line).toBeDefined();
     expect(line).toContain('isAuth');

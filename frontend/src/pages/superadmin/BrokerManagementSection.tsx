@@ -4,12 +4,13 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
-  SectionCard, StatusBadge, ActionBtn, KpiTile,
+  SectionCard, StatusBadge, ActionBtn, KpiTile, Input,
   ErrorState, LoadingRows,
 } from './ui';
 import type { BrokerHealth, TCAMetric } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Shuffle, Pencil } from 'lucide-react';
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -228,6 +229,90 @@ const BrokerManagementSection: React.FC = () => {
             </tbody>
           </table>
           {tca.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No TCA data available.</div>}
+        </div>
+      </SectionCard>
+
+      {/* Order routing.
+          This section's state, draft and save handler were all written and
+          nothing ever rendered a control for them: `routing` was fetched and
+          discarded, `routingDraft`/`setRoutingDraft` and `saveRouting` were
+          unreachable, and updateBrokerRouting could not be called from the
+          product at all. The rules decide which broker receives an order, so
+          the page that manages brokers is exactly where they belong. */}
+      <SectionCard
+        title="Order Routing"
+        icon={<Shuffle size={15} aria-hidden />}
+        accent="var(--ai-model)"
+        subtitle="Which broker receives an order, and in what proportion"
+        actions={
+          editRouting ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <ActionBtn label="Cancel" size="sm" variant="ghost"
+                onClick={() => { setEditRouting(false); setRoutingDraft(routing); }} />
+              <ActionBtn label={busy === 'routing' ? 'Saving…' : 'Save routing'} size="sm" variant="primary"
+                disabled={busy === 'routing'} onClick={saveRouting} />
+            </div>
+          ) : (
+            <ActionBtn label="Edit routing" size="sm" icon={<Pencil size={13} aria-hidden />}
+              onClick={() => { setRoutingDraft(routing); setEditRouting(true); }} />
+          )
+        }
+      >
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {['Broker', 'Symbol pattern', 'Weight', 'Active'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(editRouting ? routingDraft : routing).map((r, i) => (
+                <tr key={`${r.broker_id}-${r.symbol_pattern}-${i}`} style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.broker_id}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{r.symbol_pattern}</td>
+                  <td style={{ padding: '8px 12px', width: 160 }}>
+                    {editRouting ? (
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        aria-label={`Routing weight for ${r.broker_id} on ${r.symbol_pattern}`}
+                        value={String(r.weight)}
+                        onChange={e => setRoutingDraft(prev => prev.map((x, j) =>
+                          j === i ? { ...x, weight: Number(e.target.value) } : x))}
+                        style={{ width: 90 }}
+                      />
+                    ) : (
+                      <span style={{ fontFamily: 'monospace' }}>{r.weight}%</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '8px 12px' }}>
+                    {editRouting ? (
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)' }}>
+                        <input
+                          type="checkbox"
+                          checked={r.active}
+                          aria-label={`Route ${r.symbol_pattern} to ${r.broker_id}`}
+                          onChange={e => setRoutingDraft(prev => prev.map((x, j) =>
+                            j === i ? { ...x, active: e.target.checked } : x))}
+                        />
+                        {r.active ? 'Active' : 'Paused'}
+                      </label>
+                    ) : (
+                      <StatusBadge status={r.active ? 'active' : 'paused'} size="sm" />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {routing.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 13 }}>
+              No routing rules configured. Orders follow the smart router&apos;s default broker selection.
+            </div>
+          )}
         </div>
       </SectionCard>
 

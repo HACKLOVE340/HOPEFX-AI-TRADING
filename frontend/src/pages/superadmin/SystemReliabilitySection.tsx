@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
 import { asArray, extractApiError } from '../../lib/utils';
-import { Card, SectionHeader, Button, StatusBadge } from '../settings/ui';
+import { Card, SectionHeader, Button } from '../settings/ui';
 import { ActionBanner } from '../../components/ActionBanner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────

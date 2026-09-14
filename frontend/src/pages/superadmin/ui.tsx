@@ -215,7 +215,15 @@ interface ActionBtnProps {
   variant?: 'primary' | 'danger' | 'ghost' | 'warning' | 'success';
   disabled?: boolean;
   loading?: boolean;
-  icon?: string;
+  /**
+   * ReactNode, not string, for the same reason SectionCard's is: a button
+   * should be able to carry an SVG icon rather than an emoji glyph, which
+   * renders differently on every OS, cannot inherit currentColor so it ignores
+   * disabled and hover state, and is announced literally by a screen reader
+   * (F170). Widening is backward compatible — every existing caller passes a
+   * string, and a string is already a ReactNode.
+   */
+  icon?: React.ReactNode;
   size?: 'sm' | 'md';
   style?: React.CSSProperties;
   accent?: string;
@@ -426,12 +434,22 @@ interface ConfirmDialogProps {
   variant?: 'danger' | 'warning';
   /** @deprecated Use variant="danger" instead. Kept for backwards compat. */
   danger?: boolean;
+  /**
+   * Optional controls shown between the message and the buttons.
+   *
+   * Added because a confirm that only states a fixed value cannot let the
+   * operator change it: the alert-silence dialog said "for 60 minutes" with no
+   * way to pick a different number, which is why AlertingSection carried a
+   * `setSilenceDuration` that nothing ever called. Every existing call site is
+   * unaffected — omit it and the dialog is exactly what it was.
+   */
+  children?: React.ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
-  title, message, confirmLabel = 'Confirm', variant, danger, onConfirm, onCancel,
+  title, message, confirmLabel = 'Confirm', variant, danger, children, onConfirm, onCancel,
 }) => {
   // variant takes precedence; danger=false downgrades to 'warning' for backwards compat
   const resolvedVariant: 'danger' | 'warning' =
@@ -447,7 +465,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       borderRadius: 14, padding: '28px 32px', maxWidth: 420, width: '90%',
     }}>
       <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 10 }}>{title}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 24 }}>{message}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: children ? 16 : 24 }}>{message}</div>
+      {children && <div style={{ marginBottom: 24 }}>{children}</div>}
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <ActionBtn label="Cancel" onClick={onCancel} variant="ghost" />
         <ActionBtn label={confirmLabel} onClick={onConfirm} variant={resolvedVariant === 'danger' ? 'danger' : 'warning'} />

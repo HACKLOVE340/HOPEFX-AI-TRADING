@@ -7,7 +7,6 @@
  *   POST /api/kyc/upload          — upload document file (multipart)
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { kycApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';

@@ -47,7 +47,6 @@ import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { tradingApi } from '../hooks/useApi';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, positionSide } from '../lib/utils';
-import type { PerformanceSummary } from '../types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

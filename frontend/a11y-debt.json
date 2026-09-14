@@ -1,6 +1,6 @@
 {
   "_comment": "Files with jsx-a11y/control-has-associated-label violations. eslint.config.js reads this list and downgrades the rule to a warning FOR THESE FILES ONLY, so a violation in any other file is an error and fails `npm run lint`. The list may only SHRINK: src/test/a11y_debt_is_accurate.test.ts fails if a listed file has no violations left (delete its entry) or if a listed file no longer exists. An entry that describes nothing is how a ratchet stops being one. F172.",
-  "_total": 127,
+  "_total": 126,
   "_shape": "The 138 measured on 2026-09-13 were described as 'icon-only buttons without an accessible name'. Classified with the same parser eslint uses, exactly ONE was a button: input 108, textarea 17, div 5, td 4, th 2, button 1, option 1. Sixteen more were false positives of a kind worth knowing about - a control carrying id=\"x\" with a sibling <label htmlFor=\"x\">, which is correctly labelled at runtime and unresolvable by a static rule. Clear those by giving the label an id and the control aria-labelledby, never by copying the text into an aria-label that can drift from what is on screen (WCAG 2.5.3). The remaining 121 are controls with no accessible name at all, and are real.",
   "files": {
     "src/components/CommandPalette.tsx": 1,
@@ -55,7 +55,6 @@
     "src/pages/settings/PlatformConfiguration.tsx": 2,
     "src/pages/settings/ProfileSection.tsx": 1,
     "src/pages/superadmin/AutoHealingSection.tsx": 1,
-    "src/pages/superadmin/ComplianceSection.tsx": 1,
     "src/pages/superadmin/FeatureFlagsSection.tsx": 2,
     "src/pages/superadmin/FinancialSection.tsx": 3,
     "src/pages/superadmin/GDPRSection.tsx": 1,

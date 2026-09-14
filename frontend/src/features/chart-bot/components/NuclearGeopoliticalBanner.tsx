@@ -7,7 +7,7 @@
 import React, { memo, useEffect, useRef } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor, severityLabel } from '../types/nuclear';
-import type { NuclearState, GeopoliticalGauge } from '../types/nuclear';
+import type { NuclearState } from '../types/nuclear';
 
 // ─── Gauge bar ────────────────────────────────────────────────────────────────
 

@@ -12,13 +12,13 @@
  *   GET /api/pnl/open-positions  — current open positions
  */
 
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Activity, AlertTriangle, BarChart3, BookOpen, ChevronLeft, ChevronRight, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp, Zap,
+  Activity, AlertTriangle, ChevronLeft, ChevronRight, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';

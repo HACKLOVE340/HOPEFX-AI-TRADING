@@ -13,8 +13,8 @@ import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Zap, Brain, Eye, BookOpen, Shield, Globe, Newspaper, Sparkles,
-  Radiation, CalendarDays, LineChart, Briefcase,
+   Newspaper,
+  Radiation, CalendarDays, LineChart,
 } from 'lucide-react';
 import { PageHeader, CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';

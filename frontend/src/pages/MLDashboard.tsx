@@ -12,8 +12,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RelatedPages } from '../components';
 import {
-  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart, RefreshCw,
-  Microscope, BarChart3, BookOpen, Activity,
+  Sparkles, Radar, FlaskConical, Cpu, RefreshCw,
+   Activity,
 } from 'lucide-react';
 import { mlOpsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';

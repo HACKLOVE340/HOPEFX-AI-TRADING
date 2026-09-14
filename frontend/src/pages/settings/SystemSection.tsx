@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../hooks/useApi';
 import type { SystemSettings } from './types';
-import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
+import { Card, SectionHeader, Field, Input, Select, Toggle, Button, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
 

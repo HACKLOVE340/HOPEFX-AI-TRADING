@@ -4,7 +4,7 @@
  * Shows the latest headlines with sentiment color-coding.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useStore } from '../../store';
 
 interface NewsItem {

@@ -8,8 +8,8 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Zap, Brain, Eye, BookOpen, Shield, Globe, Newspaper, Sparkles,
-  Radiation, CalendarDays, LineChart, Briefcase,
+  Zap, Brain, Eye, BookOpen, Shield,
+
 } from 'lucide-react';
 import {
   createChart, IChartApi, ISeriesApi,

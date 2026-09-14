@@ -10,7 +10,7 @@
  */
 
 import React, {
-  useEffect, useRef, useCallback, useState, memo,
+  useEffect, useRef, memo,
 } from 'react';
 import {
   createChart,
@@ -31,8 +31,8 @@ import {
 } from 'lightweight-charts';
 import { useNuclearStore, selectActiveBars } from '../store/nuclear-store';
 import { fmtPrice, fmtPctRaw, fmtSpread } from '../../../lib/utils';
-import { severityColor, actionColor } from '../types/nuclear';
-import type { OHLCVBar, PredictionPoint, NuclearEvent } from '../types/nuclear';
+import { severityColor } from '../types/nuclear';
+import type { OHLCVBar } from '../types/nuclear';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

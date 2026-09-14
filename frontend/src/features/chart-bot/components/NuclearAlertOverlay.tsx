@@ -9,7 +9,7 @@
  * - "Protected view" lock when nuclear_mode active
  */
 
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor } from '../types/nuclear';
 import type { NuclearAlertMessage } from '../types/nuclear';

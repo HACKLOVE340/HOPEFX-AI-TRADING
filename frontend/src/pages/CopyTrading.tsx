@@ -9,7 +9,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
 import { extractApiError, fmtPrice, fmtPnl, fmtPctRaw } from '../lib/utils';
 import { ActionBanner } from '../components/ActionBanner';

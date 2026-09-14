@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
-  SectionCard, StatusBadge, ActionBtn, Select,
+  SectionCard, StatusBadge, ActionBtn,
   ErrorState, LoadingRows, ConfirmDialog, KpiTile,
 } from './ui';
 import type { MLModel } from './types';

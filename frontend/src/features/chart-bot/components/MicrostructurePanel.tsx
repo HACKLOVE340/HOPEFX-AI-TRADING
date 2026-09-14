@@ -4,11 +4,11 @@
  * trade pressure gauge, VWAP/TWAP, and market impact display.
  */
 
-import React, { useMemo, memo, useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef } from 'react';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { useMicrostructure } from '../hooks/useChartData';
 import { COLORS } from '../utils/design-tokens';
-import { formatPrice, formatSpread, clamp, normalise } from '../utils/formatters';
+import { formatPrice, formatSpread, clamp } from '../utils/formatters';
 import type { VolumeDeltaBar } from '../types';
 
 // ─── Spread Gauge ─────────────────────────────────────────────────────────────

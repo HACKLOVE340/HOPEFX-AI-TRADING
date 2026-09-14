@@ -16,8 +16,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
-  Microscope, BarChart3, BookOpen, Activity,
+  Sparkles, FlaskConical, Cpu, LineChart,
+  Microscope,
 } from 'lucide-react';
 import { researchApi } from '../hooks/useApi';
 

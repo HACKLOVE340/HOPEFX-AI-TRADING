@@ -40,7 +40,7 @@ const TD_CROSS_LINKS = [
 // both are managed globally in AppShell (App.tsx) to prevent duplicate
 // polling and duplicate WebSocket connections on page navigation.
 import { PanelErrorBoundary } from '../components/ui/PanelErrorBoundary';
-import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/Skeleton';
+import { PanelSkeleton, ChartSkeleton } from '../components/ui/Skeleton';
 
 // ── Eagerly loaded (above-the-fold, tiny) ─────────────────────────────────────
 import { LivePriceTicker }  from '../components/panels/LivePriceTicker';

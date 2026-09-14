@@ -8,9 +8,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';
-import { Badge } from '../ui/Badge';
 import { ConfidenceBar } from '../ui/ConfidenceBar';
-import { fmtPrice, fmtRelative, confColor, dirColor, cn } from '../../lib/utils';
+import { fmtPrice, fmtRelative, confColor } from '../../lib/utils';
 import type { Signal } from '../../types';
 
 type Filter = 'all' | 'long' | 'short' | 'active' | 'recent';
@@ -68,7 +67,12 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
               <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9', fontFamily: 'monospace' }}>
                 {signal.symbol.replace('_', '/')}
               </div>
-              <div style={{ fontSize: 11, color: accentColor, fontWeight: 700, letterSpacing: 1 }}>
+              <div style={{ fontSize: 11, color: accentColor, fontWeight: 700, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+                {/* Built and never rendered, so direction was carried by the
+                    word alone — and by a colour, which is not a channel a
+                    red-green-deficient reader has. The glyph is the second
+                    channel; aria-hidden because the word beside it says it. */}
+                <span aria-hidden><DirectionArrow direction={signal.direction} /></span>
                 {signal.direction.toUpperCase()} · {signal.status.toUpperCase()}
               </div>
             </div>

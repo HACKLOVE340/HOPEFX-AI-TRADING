@@ -92,6 +92,10 @@
     --border-strong: #2b3f56;   /* emphasis edge, above --border            */
     --accent-soft:   rgba(0, 212, 255, .12);
     --accent-ink:    #04212b;   /* text ON --accent                         */
+    /* Text on a saturated danger fill. Near-white in EVERY theme, because the
+       fill is red in every theme — reaching for --text-strong here puts
+       near-black on red the moment the light palette loads. */
+    --on-danger:     #fff6f6;
     --focus:         #38bdf8;   /* focus ring, never reused as decoration   */
     --overlay:       rgba(2, 6, 14, .62);
     --info:          #7dd3fc;   /* neutral notice, not a gain and not a loss */
@@ -201,6 +205,7 @@
     --accent:        #1063d0;
     --accent-soft:   rgba(16, 99, 208, .10);
     --accent-ink:    #ffffff;
+    --on-danger:     #fff6f6;
     --link:          #1058bd;
     --focus:         #1063d0;
     --overlay:       rgba(15, 23, 42, .38);

@@ -28,7 +28,7 @@
  * that works and one the operator has to read anyway.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 import { pronounce, PRONUNCIATIONS } from '../hub/pronunciation';
 import { VOICE_LIMITS, clampPreferences, describePreferences } from '../hub/voicePrefs';

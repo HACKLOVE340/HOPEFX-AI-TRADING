@@ -12,7 +12,7 @@
  * Requires: enterprise plan
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsApi } from '../hooks/useApi';
@@ -261,6 +261,7 @@ const TeamsPage: React.FC = () => {
   const toast = useToast();
   const qc = useQueryClient();
   const [selected, setSelected]   = useState<Team | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName]       = useState('');
   const [newDesc, setNewDesc]       = useState('');
@@ -395,10 +396,46 @@ const TeamsPage: React.FC = () => {
 
         {/* Team detail */}
         {selected && (
-          <TeamDetail
-            team={selected}
-            onClose={() => setSelected(null)}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <TeamDetail
+              team={selected}
+              onClose={() => setSelected(null)}
+            />
+
+            {/* Deleting a team was fully implemented — mutation, cache
+                invalidation, error toast — and no control ever called it, so
+                a team could be created and never removed. */}
+            <div style={{
+              border: '1px solid var(--loss)', borderRadius: 10, padding: '14px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 12, flexWrap: 'wrap',
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 14 }}>Delete this team</div>
+                <div style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 2 }}>
+                  Removes {selected.name} and every membership in it. Trades and journals are not affected.
+                </div>
+              </div>
+              {confirmDelete === selected.team_id ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={() => setConfirmDelete(null)}
+                    style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13 }}>
+                    Cancel
+                  </button>
+                  <button type="button" disabled={deleteMut.isPending}
+                    onClick={() => { deleteMut.mutate(selected.team_id); setConfirmDelete(null); }}
+                    style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--loss)', background: 'var(--loss)', color: 'var(--on-danger)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                    {deleteMut.isPending ? 'Deleting…' : `Delete ${selected.name}`}
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setConfirmDelete(selected.team_id)}
+                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--loss)', background: 'transparent', color: 'var(--loss)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  Delete team
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

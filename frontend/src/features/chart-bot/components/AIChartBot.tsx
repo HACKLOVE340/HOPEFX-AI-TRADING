@@ -13,7 +13,7 @@ import { COLORS } from '../utils/design-tokens';
 import { extractApiError } from '../../../lib/utils';
 import {
   formatPrice, formatDateTime, formatConfidence, confidenceLabel,
-  regimeLabel, regimeColor, confidenceColor,
+  regimeLabel, regimeColor,
 } from '../utils/formatters';
 import type { AIAnalysis, ChartClickContext } from '../types';
 

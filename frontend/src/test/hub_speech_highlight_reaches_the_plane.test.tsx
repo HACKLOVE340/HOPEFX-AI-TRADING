@@ -21,9 +21,14 @@ const voiceState = {
 };
 let rerenderVoice: (() => void) | null = null;
 
-vi.mock('../hooks/useVoice', () => ({
+// An async factory rather than require(): vi.mock factories are hoisted above
+// the import block, so a top-level import is not yet initialised inside one.
+// `await import` is the supported way to reach a module from a hoisted factory.
+vi.mock('../hooks/useVoice', async () => {
+  const reactRuntime = await import('react');
+  return {
   useVoice: () => {
-    const { useState, useEffect } = require('react') as typeof import('react');
+    const { useState, useEffect } = reactRuntime;
     const [, bump] = useState(0);
     useEffect(() => {
       rerenderVoice = () => bump((n) => n + 1);
@@ -39,7 +44,8 @@ vi.mock('../hooks/useVoice', () => ({
       speechProgress: voiceState.speechProgress,
     };
   },
-}));
+  };
+});
 
 async function renderPresence() {
   const { useStore } = await import('../store');

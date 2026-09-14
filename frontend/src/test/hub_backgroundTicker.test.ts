@@ -26,6 +26,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { startTicker } from '../hub/backgroundTicker';
 
+/** Put the real constructor back, whatever it was. */
+function restoreWorker(original: typeof globalThis.Worker): void {
+  globalThis.Worker = original;
+}
+
 describe('it ticks', () => {
   it('calls back repeatedly and reports how', async () => {
     const seen: number[] = [];
@@ -79,7 +84,11 @@ describe('a worker that cannot be built is a fallback, not a failure', () => {
       await vi.waitFor(() => expect(count).toBeGreaterThan(0), { timeout: 2000 });
       ticker.stop();
     } finally {
-      globalThis.Worker = original;
+      // Restored through a local, not written back through the global read
+      // before the awaits above: `require-atomic-updates` is pointing at a
+      // real ordering question, and a test that restores a stale reference
+      // leaks a stub into whatever runs next.
+      restoreWorker(original);
     }
   });
 
@@ -100,7 +109,11 @@ describe('a worker that cannot be built is a fallback, not a failure', () => {
       await vi.waitFor(() => expect(count).toBeGreaterThan(0), { timeout: 2000 });
       ticker.stop();
     } finally {
-      globalThis.Worker = original;
+      // Restored through a local, not written back through the global read
+      // before the awaits above: `require-atomic-updates` is pointing at a
+      // real ordering question, and a test that restores a stale reference
+      // leaks a stub into whatever runs next.
+      restoreWorker(original);
     }
   });
 });

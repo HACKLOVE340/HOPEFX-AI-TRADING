@@ -18,7 +18,6 @@
  * same thing.
  */
 
-import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

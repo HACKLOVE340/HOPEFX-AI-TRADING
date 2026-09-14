@@ -145,11 +145,32 @@ const AlertingSection: React.FC = () => {
       {silenceId && (
         <ConfirmDialog
           title="Silence Alert"
-          message={`Silence this alert for ${silenceDuration} minutes?`}
-          confirmLabel="Silence"
+          message="The rule keeps evaluating; it just stops notifying until the window ends."
+          confirmLabel={`Silence for ${silenceDuration} min`}
+          variant="warning"
           onConfirm={silenceRule}
           onCancel={() => setSilenceId(null)}
-        />
+        >
+          {/* The duration was hardcoded to 60 and the state that was meant to
+              change it had no control, so an operator could silence an alert
+              for exactly one length of time. */}
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-dim)' }}>
+            How long
+            <Select
+              value={silenceDuration}
+              onChange={e => setSilenceDuration(e.target.value)}
+              options={[
+                { value: '15',   label: '15 minutes' },
+                { value: '30',   label: '30 minutes' },
+                { value: '60',   label: '1 hour' },
+                { value: '240',  label: '4 hours' },
+                { value: '720',  label: '12 hours' },
+                { value: '1440', label: '24 hours' },
+              ]}
+              style={{ marginTop: 6 }}
+            />
+          </label>
+        </ConfirmDialog>
       )}
 
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />

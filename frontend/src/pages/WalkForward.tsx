@@ -196,7 +196,10 @@ const WalkForward: React.FC = () => {
   const toggleFold = (fold: number) => {
     setVisible((prev) => {
       const next = new Set(prev);
-      next.has(fold) ? next.delete(fold) : next.add(fold);
+      // A ternary evaluated for its side effects reads as a value and is not
+      // one; `no-unused-expressions` is flagging a real smell, not a style.
+      if (next.has(fold)) next.delete(fold);
+      else next.add(fold);
       return next;
     });
   };

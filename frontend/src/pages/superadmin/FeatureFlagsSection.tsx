@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
-  SectionCard, ActionBtn, Input, Toggle,
+  SectionCard, ActionBtn, Input,
   ErrorState, LoadingRows,
 } from './ui';
 import type { FeatureFlag } from './types';

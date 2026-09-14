@@ -10,11 +10,9 @@ import {
   createChart,
   IChartApi,
   ISeriesApi,
-  LineSeries,
   AreaSeries,
   HistogramSeries,
   AreaData,
-  LineData,
   HistogramData,
   createSeriesMarkers,
   ISeriesMarkersPluginApi,
@@ -24,7 +22,6 @@ import {
 } from 'lightweight-charts';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor } from '../types/nuclear';
-import type { NuclearEquityPoint, NuclearEvent } from '../types/nuclear';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

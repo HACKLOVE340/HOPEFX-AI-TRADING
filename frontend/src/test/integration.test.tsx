@@ -9,7 +9,6 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useStore } from '../store';
-import type { PriceTick, Position, Signal, AccountMetrics } from '../store';
 import * as useApiModule from '../hooks/useApi';
 
 /** Build a minimal valid JWT with exp 1 hour in the future. */

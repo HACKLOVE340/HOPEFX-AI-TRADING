@@ -8,7 +8,6 @@
  *   DELETE /api/mobile/sessions/:id   — revoke mobile session
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';

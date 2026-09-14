@@ -9,8 +9,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
-  Microscope, BarChart3, BookOpen, Activity,
+   Radar, ScanSearch, Cpu,
+   BarChart3, BookOpen,
 } from 'lucide-react';
 import { tradingApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';

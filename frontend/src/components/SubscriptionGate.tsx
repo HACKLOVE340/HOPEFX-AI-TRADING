@@ -7,7 +7,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, selectUser, selectPlan } from '../store';
-import { isAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS, requiredPlan } from '../lib/subscription';
+import { hasFeatureAccess, PLAN_LABELS, PLAN_COLORS, requiredPlan } from '../lib/subscription';
 import type { Plan } from '../lib/subscription';
 
 interface Props {

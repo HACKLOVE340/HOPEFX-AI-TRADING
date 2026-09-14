@@ -19,6 +19,7 @@ import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../component
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,7 +126,9 @@ const SecurityDashboard: React.FC = () => {
       setError(null);
     } catch (err) {
       if (!mountedRef.current) return;
-      setError('Failed to load security data. Retrying in 15 s…');
+      // Keep the retry promise, but lead with what the server actually said
+      // rather than replacing it (F189).
+      setError(`${extractApiError(err, 'Failed to load security data')} — retrying in 15 s.`);
     } finally {
       if (mountedRef.current) setLoading(false);
     }

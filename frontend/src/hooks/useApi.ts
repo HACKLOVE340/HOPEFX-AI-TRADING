@@ -174,7 +174,15 @@ api.interceptors.request.use(async (config) => {
 
   if (CSRF_PROTECTED_METHODS.has(method) && !isExempt) {
     const csrfToken = await _getCsrfToken();
-    if (csrfToken) config.headers[CSRF_HEADER] = csrfToken;
+    if (csrfToken) {
+      // Bound after the await, not written through the parameter.
+      // `require-atomic-updates` is right to flag the shorter form: between
+      // requesting the token and writing it, another interceptor can have
+      // replaced `config.headers`, and the header would land on an object
+      // this request no longer sends.
+      const headers = config.headers;
+      headers[CSRF_HEADER] = csrfToken;
+    }
   }
 
   return config;

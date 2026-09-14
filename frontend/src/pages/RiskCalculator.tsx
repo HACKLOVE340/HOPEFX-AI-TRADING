@@ -12,8 +12,8 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Zap, Brain, Eye, BookOpen, Shield, Globe, Newspaper, Sparkles,
-  Radiation, CalendarDays, LineChart, Briefcase,
+  Zap, BookOpen, Shield,
+   Briefcase,
 } from 'lucide-react';
 import { PageHeader, EmptyState } from '../components';
 import { useStore, selectAccount, selectFeedLive } from '../store';

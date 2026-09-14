@@ -6,8 +6,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
-  Microscope, BarChart3, BookOpen, Activity,
+  Sparkles, FlaskConical, LineChart,
+   BarChart3,
 } from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';

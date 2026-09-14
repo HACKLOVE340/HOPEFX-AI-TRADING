@@ -18,7 +18,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
-  ArrowRight, BookOpen, Brain, Briefcase, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, Trophy, Wallet, Zap,
+  ArrowRight, BookOpen, Brain, Briefcase, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, Trophy, Zap,
 } from 'lucide-react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import { PageHeader, EmptyState, CrossLinkBar, Spinner, RelatedPages } from '../components';

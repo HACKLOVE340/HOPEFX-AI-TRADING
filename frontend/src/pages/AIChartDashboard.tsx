@@ -14,13 +14,13 @@
  *   - tradingApi.regime() + brainState() for the header strip
  */
 
-import React, { useEffect, useState, Component } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
 import {
-  Sparkles, Brain, Radar, ScanSearch, FlaskConical, Cpu, LineChart,
-  Microscope, BarChart3, BookOpen, Activity,
+  Sparkles, Brain, Radar, ScanSearch, Cpu,
+
 } from 'lucide-react';
 import { AIChart } from '../components/charts/AIChart';
 import { cn, extractApiError } from '../lib/utils';
