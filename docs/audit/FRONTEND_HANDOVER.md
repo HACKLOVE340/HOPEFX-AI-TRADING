@@ -287,21 +287,41 @@ the page. `MLDashboard` did; its links moved to the shell's `related` prop,
 which puts hand-picked links ahead of the derived ones. All nine migrated pages
 were audited for this.
 
-**What is left, and why each is last:**
+**What is left, and all three are BLOCKED ON THE SAME DECISION.**
 
-* `Trading` (1,096 lines) — the `/terminal` page. A workspace; the fourth width
-  unblocks it, but it is large and owns a bespoke grid, so it wants a session of
-  its own.
-* `SuperAdminDashboard` (576 lines) — a tab shell whose children are the real
-  pages. It already has its own h1 at line 405; the migration is moving that
-  header into the shell, as `Settings` was.
-* `DocsPage` — **deliberately last, and possibly never.** It is a documentation
-  landing page with a designed hero: its own breadcrumb, a brand-styled h1 where
-  "FX" is accent-coloured, a subtitle and a live status badge, in a 48px band
-  above the fold. `PageShell`'s standard header cannot carry that, so migrating
-  it as-is would flatten the hero — which is removing what the page displays,
-  not improving it. Either give `PageShell` a hero affordance first, or leave
-  this one off the shell on purpose and say so here.
+Measured 2026-09-15 by inspecting each: every remaining page has a **designed
+header** that `PageHeader` cannot express. It is a bordered title bar with
+`title`, `subtitle`, `breadcrumbs`, `badge`, `actions`, `tabs` and `icon` — no
+tone, no hero, no slot for a page to supply its own.
+
+| Page | Its header | What flattening it would cost |
+|---|---|---|
+| `DocsPage` | A hero band: brand-styled h1 with "FX" accent-coloured, subtitle, live status badge, 48px above the fold | The brand treatment on the public documentation landing page |
+| `SuperAdminDashboard` | A danger card: red top border, gradient icon tile, `MASTER CONTROL` badge, the operator's name | The red is **functional** on the page that holds the kill switch, not decoration |
+| `Trading` (`/terminal`) | A terminal `TopBar`: symbol picker, timeframe, live tick, WS status, emergency stop | Vertical space on the order-entry screen, and the header band pushes the live tick down |
+
+So none of the three is "not done yet". Each is a page where the migration as it
+stands would **remove what the page displays**, which is the one thing this
+thread is not allowed to do. Do not force them.
+
+**The decision, and it is the owner's.** Three options, and the middle one is the
+recommendation:
+
+1. *Flatten them.* Cheapest, closes the ratchet, loses three designed headers
+   including a functional danger signal. Not recommended.
+2. *Give the shared header the capability.* A `tone?: 'default' | 'danger'` on
+   `PageHeader`, and a `hero?: React.ReactNode` slot on `PageShell` that
+   replaces the standard header while the page still gets the width, the
+   rhythm and the derived footer. Additive, nothing existing changes, and it
+   closes all three honestly. **Recommended.**
+3. *Leave them off on purpose.* Record the three as permanent, deliberate
+   exemptions here and stop counting them as debt.
+
+`Trading` carries a second constraint whatever is chosen: `flow-by-flow`'s risk
+floor puts `/terminal` at **R3** — an order-entry surface with an emergency stop
+— and §5 requires a `flow-prototype` approval surface and explicit owner
+approval before a major UI/UX change there. No post-hoc approval. Do not migrate
+it without that, however the header question is settled.
 
 **`TradingDashboard` is no longer counted, and that is a fix not an exemption.**
 `/observability` rendered `<><Observability /><TradingDashboard /></>` as
