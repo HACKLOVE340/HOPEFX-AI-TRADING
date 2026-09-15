@@ -139,7 +139,20 @@ class TestTheOrchestration:
         assert out["order_blocks"] == {"bullish": [], "bearish": []}
         assert out["market_structure"]["trend"] == "neutral"
 
-        failures = [r for r in caplog.records if "Error" in r.getMessage()]
+        # Filtered by LOGGER, not by message text. `caplog.records` holds every
+        # record the root handler saw, not only the logger named in
+        # `at_level`, so `"Error" in message` also matched anything else that
+        # happened to log during `analyze`. In the full suite that was
+        #
+        #   urllib3.connectionpool WARNING Retrying (...) after connection
+        #   broken by 'OSError('Tunnel connection failed: 403 Forbidden')'
+        #
+        # — Sentry's envelope upload retrying through the sandbox proxy — whose
+        # message contains "OSError". The test then reported "a failed
+        # component logged at ['ERROR', 'WARNING']" and was red for a reason
+        # that had nothing to do with the strategy. It passed when run alone,
+        # which is the shape that gets a real failure dismissed as a flake.
+        failures = [r for r in caplog.records if r.name == "strategies.smc_ict" and "Error" in r.getMessage()]
         assert failures, "six components failed and none of them said so"
         assert all(r.levelno >= logging.ERROR for r in failures), (
             f"a failed component logged at {sorted({r.levelname for r in failures})}"
@@ -543,3 +556,40 @@ class TestTheScoring:
 
     def test_a_broken_analysis_produces_nothing_rather_than_raising(self, smc):
         assert smc.generate_signal({"current_price": 2000.0}) is None
+
+
+class TestTheLogAssertionReadsTheRightLogger:
+    """The test above was order-dependent, and this is why it no longer is.
+
+    `caplog.records` is everything the root handler saw during the block, not
+    only the logger passed to `caplog.at_level`. Filtering the failures by the
+    substring "Error" therefore picked up any other library that logged during
+    `analyze` — in the full suite, `urllib3.connectionpool` warning that
+    Sentry's envelope upload was "broken by 'OSError(...)'". The assertion then
+    failed with "a failed component logged at ['ERROR', 'WARNING']", naming a
+    component that had done nothing wrong.
+
+    It passed when the file was run alone, which is exactly the shape that gets
+    a genuine failure waved away as a flake.
+    """
+
+    def test_a_foreign_warning_does_not_become_a_component_failure(self, smc, caplog):
+        import logging
+
+        bars = _flat(60)
+        bars[-1] = {"close": 2000.0}
+        with caplog.at_level(logging.DEBUG, logger="strategies.smc_ict"):
+            smc.analyze({"prices": bars})
+            # Exactly what leaked in the full suite, reproduced deterministically.
+            logging.getLogger("urllib3.connectionpool").warning(
+                "Retrying (...) after connection broken by 'OSError(\"Tunnel connection "
+                "failed: 403 Forbidden\")': /api/0/envelope/"
+            )
+
+        smc_failures = [r for r in caplog.records if r.name == "strategies.smc_ict" and "Error" in r.getMessage()]
+        assert smc_failures, "the strategy's own failures were filtered away too"
+        assert all(r.levelno >= logging.ERROR for r in smc_failures)
+
+        # And prove the foreign record really was captured, so this test is not
+        # passing because nothing was there to exclude.
+        assert any(r.name == "urllib3.connectionpool" for r in caplog.records)

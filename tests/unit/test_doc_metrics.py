@@ -90,10 +90,15 @@ class TestItActuallyReadsTheDocuments:
 
 class TestTheRepositoryIsCurrent:
     def test_no_document_states_a_stale_number(self) -> None:
+        # `policed_drift`, not `drift`: `commits_ahead` / `files_ahead` change
+        # on every commit and this module MAINTAINS them rather than policing
+        # them (see TestSyncKeepsTheVolatileFiguresTrueWithoutNagging, and
+        # TestTheVolatilePairIsMaintainedNotPoliced for why this assertion used
+        # to be red through nobody's fault). Everything else still fails hard.
         report = check()
-        assert not report.drift, "\n".join(
+        assert not report.policed_drift, "\n".join(
             f"{d.path.relative_to(REPO)}:{d.line} states {d.metric}={d.stated}, measured {d.measured}"
-            for d in report.drift
+            for d in report.policed_drift
         )
 
 
@@ -517,10 +522,14 @@ class TestRefreshRewritesRatherThanNags:
 
         This is what makes the ratchet real rather than aspirational — if it
         fails, a figure in a living document is stale right now.
+
+        `policed_drift`: the branch-distance pair is maintained by `--sync`, not
+        enforced, and asserting on it here made this test red after any
+        code-only commit.
         """
         from scripts.doc_metrics import check
 
-        assert check().drift == []
+        assert check().policed_drift == []
 
 
 class TestTheCommitBoundaryDoesNotMakeItPermanentlyRed:
@@ -574,10 +583,17 @@ class TestTheCommitBoundaryDoesNotMakeItPermanentlyRed:
 
     def test_the_committed_tree_is_green_right_now(self) -> None:
         """The point of the whole class: this must hold immediately after a
-        commit lands, or the gate is red for everyone until someone refreshes."""
+        commit lands, or the gate is red for everyone until someone refreshes.
+
+        It must also hold two commits later, which is why it reads
+        `policed_drift`. The one-commit tolerance above answers "is this figure
+        acceptable at the instant the hook runs"; it cannot answer "is this
+        tree in order", because the answer to that changes with every commit
+        whether or not anyone has touched a document.
+        """
         from scripts.doc_metrics import check
 
-        assert check().drift == []
+        assert check().policed_drift == []
 
 
 class TestSyncKeepsTheVolatileFiguresTrueWithoutNagging:
@@ -648,3 +664,91 @@ class TestSyncKeepsTheVolatileFiguresTrueWithoutNagging:
         assert "doc_metrics.py --sync" in config, (
             "pre-commit still runs --check, so the figures are policed not maintained"
         )
+
+
+class TestTheVolatilePairIsMaintainedNotPoliced:
+    """The suite contradicted its own design, and was red most of the time.
+
+    `TestSyncKeepsTheVolatileFiguresTrueWithoutNagging` states the rule: a
+    figure that changes on every commit "cannot be enforced by hand — the hook
+    only runs on doc changes, so a run of code-only commits takes it several
+    commits stale and blocks the next doc commit through no fault of its
+    author, which is how a gate teaches `--no-verify`."
+
+    Three tests in this file then asserted `check().drift == []` against the
+    LIVE tree, which polices exactly that pair. Measured 2026-09-15 they were
+    red, and the mechanism is structural rather than bad luck:
+
+      * `_accepted` tolerates the distance at HEAD~1 — correct, because the
+        hook runs BEFORE the commit exists.
+      * `refresh` selected its work from `check(repo).drift`, which applies the
+        same tolerance. So `--sync` REWROTE NOTHING while the figure was one
+        commit stale.
+      * The document therefore kept the oldest value tolerance allowed, the
+        commit landed, and one further commit made it two stale — hard drift,
+        with nothing scheduled to fix it until some later documentation commit.
+
+    Reproduced on the real tree: `LANDING_PLAN.md` was last written in
+    `b12df894`, stating 639 while the distance at that commit's parent was 639
+    and at HEAD was 640. Two commits later the measurement was 641 against a
+    stated 639, and three tests in this file were red through nobody's fault.
+
+    Two fixes, and both are needed:
+
+      1. `--sync` now rewrites the volatile pair to the MEASURED value rather
+         than only when it falls outside tolerance, so a documentation commit
+         always banks the freshest figure it can.
+      2. The live-tree assertions use `policed_drift`, which excludes the pair
+         the design says is maintained. A test that polices what the design
+         says must not be policed is a test that teaches people to ignore the
+         suite.
+    """
+
+    def test_sync_banks_the_freshest_figure_rather_than_the_oldest_allowed(self, tmp_path: Path, monkeypatch) -> None:
+        """The root cause. A figure one commit stale is ACCEPTED by the gate and
+        must still be rewritten, or it is two stale at the next commit."""
+        from scripts import doc_metrics as dm
+
+        measured = dm.measure()
+        if "commits_ahead" not in measured:
+            pytest.skip("origin/main is not available in this checkout")
+        previous = dm._branch_distance_at(dm.REPO, "HEAD~1")
+        if previous.get("commits_ahead") == measured["commits_ahead"]:
+            pytest.skip("HEAD and HEAD~1 are the same distance")
+
+        doc = tmp_path / "PLAN.md"
+        # Exactly the tolerated value: one commit stale, so `check` reports no
+        # drift for it. Before the fix, `refresh` therefore left it alone.
+        doc.write_text(
+            f"is **{previous['commits_ahead']} commits and 9 files ahead of `main`**\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(dm, "_documents", lambda repo, extra=None: [doc])
+        dm.refresh(only=dm._COMMIT_BOUNDARY)
+        assert f"{measured['commits_ahead']} commits" in doc.read_text(encoding="utf-8"), (
+            "sync left the document at the oldest figure tolerance allowed, "
+            "which is two commits stale the moment one more commit lands"
+        )
+
+    def test_policed_drift_excludes_the_pair_the_design_maintains(self) -> None:
+        from scripts.doc_metrics import _COMMIT_BOUNDARY, check
+
+        report = check()
+        assert all(d.metric not in _COMMIT_BOUNDARY for d in report.policed_drift)
+
+    def test_policed_drift_keeps_every_other_metric(self, tmp_path: Path) -> None:
+        """The floor. A `policed_drift` that filtered everything would make the
+        three live-tree assertions vacuous and this whole file decorative."""
+        from scripts.doc_metrics import check
+
+        doc = tmp_path / "OUT.md"
+        doc.write_text("`GATE_EVIDENCE.toml` (999 gates, 999 proven).\n", encoding="utf-8")
+        report = check(extra_documents=[doc])
+        assert any(d.path == doc and d.metric == "gates_total" for d in report.policed_drift)
+
+    def test_the_committed_tree_has_no_policed_drift(self) -> None:
+        """What `test_the_committed_tree_is_green_right_now` meant to assert,
+        stated so that a code-only commit cannot make it false."""
+        from scripts.doc_metrics import check
+
+        assert check().policed_drift == []

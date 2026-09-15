@@ -92,6 +92,22 @@ class Report:
     #: check is not a figure that matched.
     unmeasured: list[Hit] = field(default_factory=list)
 
+    @property
+    def policed_drift(self) -> list[Drift]:
+        """Drift in the figures this module ENFORCES, i.e. all but the pair it
+        maintains.
+
+        `commits_ahead` / `files_ahead` / `commits_behind` change on every
+        commit and the hook only runs on documentation changes, so a run of
+        code-only commits takes them stale through nobody's fault. `--sync`
+        maintains them; `--check` still SHOWS them, because a human reading the
+        report wants the whole picture. What must not depend on them is an
+        assertion about whether the tree is in order — that was three tests in
+        `tests/unit/test_doc_metrics.py`, red for most of the life of any
+        working tree. Use this for those.
+        """
+        return [d for d in self.drift if d.metric not in _COMMIT_BOUNDARY]
+
 
 #: Bound to the scripts that measure them. Each pattern captures exactly one
 #: integer, in a shape specific enough that ordinary prose does not match it.
@@ -378,7 +394,19 @@ def scan(repo: Path | None = None, extra_documents: list[Path] | None = None) ->
 def check(
     repo: Path | None = None,
     extra_documents: list[Path] | None = None,
+    exact: bool = False,
 ) -> Report:
+    """Compare every stated figure against what the code measures.
+
+    `exact` drops the one-commit tolerance in :func:`_accepted`. It exists for
+    `refresh(only=_COMMIT_BOUNDARY)`: the tolerance is right for JUDGING a
+    figure (the hook runs before the commit exists) and wrong for choosing what
+    to REWRITE. Selecting the rewrite set through the same tolerance banked the
+    oldest value the gate would accept, so the document went two commits stale
+    — hard drift — the moment one further commit landed, with nothing scheduled
+    to fix it. Measured on this repository 2026-09-15, that had three tests in
+    `tests/unit/test_doc_metrics.py` red through nobody's fault.
+    """
     repo = repo or REPO
     measured = measure(repo)
     hits = scan(repo, extra_documents)
@@ -388,7 +416,8 @@ def check(
             report.unmeasured.append(hit)
             continue
         expected = measured[hit.metric]
-        if hit.stated not in _accepted(hit.metric, expected, repo):
+        accepted = {expected} if exact else _accepted(hit.metric, expected, repo)
+        if hit.stated not in accepted:
             report.drift.append(Drift(hit.path, hit.line, hit.metric, hit.stated, expected))
     return report
 
@@ -407,7 +436,10 @@ def refresh(repo: Path | None = None, only: frozenset[str] | None = None) -> lis
     rewriting `1,246` as `1321` would quietly restyle prose the author chose.
     """
     repo = repo or REPO
-    drifted = [d for d in check(repo).drift if only is None or d.metric in only]
+    # `exact` when syncing the volatile pair: see check()'s docstring. Rewriting
+    # only what the gate would REFUSE leaves the document at the oldest figure
+    # tolerance allows, which is one commit from being refused.
+    drifted = [d for d in check(repo, exact=only is not None).drift if only is None or d.metric in only]
     by_path: dict[Path, list[Drift]] = {}
     for d in drifted:
         by_path.setdefault(d.path, []).append(d)
