@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Activity, Banknote, BarChart2, BarChart3, BookOpen, Bot, Brain, ChevronRight, CircleDot, Code2, ExternalLink, Globe, Search, Settings, Shield, Trophy, Users, Zap } from 'lucide-react';
 
@@ -200,82 +201,91 @@ const DocsPage: React.FC = () => {
     : SECTIONS;
 
   return (
-    <div className="page-content" style={{ padding: 0 }}>
-      {/* Header */}
-      <div
-        style={{
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--bg)',
-          padding: '48px 24px 40px',
-        }}
-      >
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          {/* Breadcrumb */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}>
-            <Link to="/home" style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
-            >Home</Link>
-            <ChevronRight size={12} style={{ color: 'var(--text-faint)' }} />
-            <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>Documentation</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 10,
-              background: '#00d4ff18', border: '1px solid #00d4ff40',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <BookOpen size={20} style={{ color: 'var(--accent)' }} />
+    <PageShell
+      // The brand band runs the width of the page and the sections keep their
+      // own 900px column, so a max-width here would letterbox the band — a
+      // migration that changes what the page displays. `full` is the width
+      // that does not. The band still sits inside the shell's horizontal
+      // padding (12-24px by breakpoint) rather than touching the viewport
+      // edge; that is the one visual difference, and it is the gutter every
+      // other page already has.
+      width="full"
+      hero={
+        <div
+          style={{
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg)',
+            padding: '48px 24px 40px',
+          }}
+        >
+          <div style={{ maxWidth: 900, margin: '0 auto' }}>
+            {/* Breadcrumb */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}>
+              <Link to="/home" style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
+              >Home</Link>
+              <ChevronRight size={12} style={{ color: 'var(--text-faint)' }} />
+              <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>Documentation</span>
             </div>
-            <h1 style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, letterSpacing: '-0.5px', margin: 0 }}>
-              HOPE<span style={{ color: 'var(--accent)' }}>FX</span> Documentation
-            </h1>
-          </div>
 
-          <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-value)', margin: '0 0 28px', lineHeight: 1.6 }}>
-            AI-powered gold and forex trading platform. Automated strategies, real-time signals,
-            and institutional-grade risk management.
-          </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                background: '#00d4ff18', border: '1px solid #00d4ff40',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <BookOpen size={20} style={{ color: 'var(--accent)' }} />
+              </div>
+              <h1 style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, letterSpacing: '-0.5px', margin: 0 }}>
+                HOPE<span style={{ color: 'var(--accent)' }}>FX</span> Documentation
+              </h1>
+            </div>
 
-          {/* System status badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28 }}>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: '#00ff8810', border: '1px solid #00ff8830',
-              color: '#00ff88', fontSize: 12, fontWeight: 600,
-              padding: '4px 12px', borderRadius: 20,
-            }}>
-              <Activity size={11} />
-              ML model: 66.4% OOS accuracy · 108 API endpoints · 2,560+ tests
-            </span>
-          </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-value)', margin: '0 0 28px', lineHeight: 1.6 }}>
+              AI-powered gold and forex trading platform. Automated strategies, real-time signals,
+              and institutional-grade risk management.
+            </p>
 
-          {/* Search */}
-          <div style={{ position: 'relative', maxWidth: 480 }}>
-            <Search
-              size={15}
-              style={{
-                position: 'absolute', left: 14, top: '50%',
-                transform: 'translateY(-50%)', color: 'var(--text-faint)',
-              }}
-            />
-            <input aria-label="Search documentation"
-              type="text"
-              placeholder="Search documentation…"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 10, color: 'var(--text)', fontSize: 14,
-                padding: '10px 14px 10px 40px', outline: 'none',
-              }}
-            />
+            {/* System status badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: '#00ff8810', border: '1px solid #00ff8830',
+                color: '#00ff88', fontSize: 12, fontWeight: 600,
+                padding: '4px 12px', borderRadius: 20,
+              }}>
+                <Activity size={11} />
+                ML model: 66.4% OOS accuracy · 108 API endpoints · 2,560+ tests
+              </span>
+            </div>
+
+            {/* Search */}
+            <div style={{ position: 'relative', maxWidth: 480 }}>
+              <Search
+                size={15}
+                style={{
+                  position: 'absolute', left: 14, top: '50%',
+                  transform: 'translateY(-50%)', color: 'var(--text-faint)',
+                }}
+              />
+              <input aria-label="Search documentation"
+                type="text"
+                placeholder="Search documentation…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: 10, color: 'var(--text)', fontSize: 14,
+                  padding: '10px 14px 10px 40px', outline: 'none',
+                }}
+              />
+            </div>
           </div>
         </div>
-      </div>
-
+      }
+    >
       {/* Doc sections grid */}
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
         <div style={{
@@ -422,7 +432,7 @@ const DocsPage: React.FC = () => {
           </a>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

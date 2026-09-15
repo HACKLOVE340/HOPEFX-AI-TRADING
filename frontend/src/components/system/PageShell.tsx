@@ -73,7 +73,30 @@ const WIDTH: Record<PageWidth, string> = {
 };
 
 export interface PageShellProps {
-  title: string;
+  /**
+   * Optional ONLY because `hero` is the alternative. Exactly one of the two is
+   * the contract: give `title` and the shell renders the standard header, or
+   * give `hero` and the page renders its own.
+   *
+   * It was required until 2026-09-15. Keeping it required while adding `hero`
+   * would have shipped a prop the shell ignores on three pages, which is the
+   * dead-control shape this repository keeps finding.
+   */
+  title?: string;
+  /**
+   * A header the page draws itself, rendered in place of the standard one.
+   *
+   * Three pages have a designed header `PageHeader` cannot express without
+   * losing what they display: DocsPage's full-bleed brand band with the
+   * documentation search inside it, SuperAdminDashboard's red-topped danger
+   * card with the live engine-health pill, and Trading's terminal TopBar.
+   * Flattening those into a title and a subtitle is not a migration, it is a
+   * removal.
+   *
+   * The shell still gives a hero page everything else it gives: the width, the
+   * section rhythm, and the derived "Where to next" footer.
+   */
+  hero?: React.ReactNode;
   subtitle?: string;
   children: React.ReactNode;
   width?: PageWidth;
@@ -110,6 +133,7 @@ export interface PageShellProps {
 
 export const PageShell: React.FC<PageShellProps> = ({
   title,
+  hero,
   subtitle,
   children,
   width = 'standard',
@@ -125,6 +149,24 @@ export const PageShell: React.FC<PageShellProps> = ({
   className = '',
 }) => {
   const { pathname } = useLocation();
+
+  // Development-only, and deliberately a warning rather than a thrown error or
+  // a discriminated union: a page that gets this wrong should still render.
+  // `both` resolves to the hero, because a page that wrote a header meant it.
+  if (import.meta.env?.DEV) {
+    if (hero && title !== undefined) {
+      console.warn(
+        `PageShell: "${title}" passed both title and hero at ${pathname}. ` +
+          'Exactly one is the contract; the hero is being rendered and the title ignored.',
+      );
+    } else if (!hero && title === undefined) {
+      console.warn(
+        `PageShell: neither title nor hero at ${pathname}. ` +
+          'The page is rendering with no heading at all.',
+      );
+    }
+  }
+
   const links =
     related === false
       ? []
@@ -142,17 +184,19 @@ export const PageShell: React.FC<PageShellProps> = ({
       className={`mx-auto flex w-full flex-[1_0_auto] flex-col ${WIDTH[width]} px-s4 pb-s8 pt-s4
                   sm:px-s5 md:px-s6 md:pt-s5 ${className}`}
     >
-      <PageHeader
-        title={title}
-        subtitle={subtitle}
-        breadcrumbs={breadcrumbs}
-        badge={badge}
-        actions={actions}
-        tabs={tabs}
-        activeTab={activeTab}
-        onTabChange={onTabChange}
-        icon={icon}
-      />
+      {hero ?? (
+        <PageHeader
+          title={title ?? ''}
+          subtitle={subtitle}
+          breadcrumbs={breadcrumbs}
+          badge={badge}
+          actions={actions}
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={onTabChange}
+          icon={icon}
+        />
+      )}
 
       {/* One rhythm for every page. Sections are siblings in a flex column with
           a single gap token, so vertical spacing is a property of the shell

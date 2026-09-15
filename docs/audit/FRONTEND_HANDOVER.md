@@ -30,12 +30,12 @@ Measured 2026-09-15, immediately before this document was written:
 | Measure | Value |
 |---|---|
 | Correction register | 97 findings · OPEN 1 · PARTIAL 9 · OWNER 8 · FIXED 79 |
-| Pages on the standard shell | 59 of 62 — **3 off** |
+| Pages on the standard shell | 61 of 62 — **1 off**, `/terminal`, deliberately |
 | Colour literals | 3,552 across 190 files |
 | Emoji used as icons | 750 across 125 files |
 | Inline `fontSize` the cascade cannot reach | 2,108 (was 2,871) |
 | Numeric spacing utilities | 1,089 |
-| Frontend tests | 172 files · 2,972 tests · all pass |
+| Frontend tests | 178 files · 3,036 tests · all pass |
 | eslint | 0 errors · 18 warnings (one a11y rule, known limitations) |
 
 ---
@@ -241,9 +241,12 @@ A **size ratchet** (mirroring `frontend_colour_ratchet.py`) would stop the count
 growing while this is decided. It does not exist yet; the register's probe
 measures the number but does not block on it.
 
-### 2. The 5 pages still off the standard shell
+### 2. The pages off the standard shell — one left, deliberately
 
-`python scripts/frontend_page_shell_ratchet.py --check` names them:
+This section was written when there were five. `python
+scripts/frontend_page_shell_ratchet.py --check` is the current figure and
+names what is left; as of 2026-09-15 that is `Trading` alone, by the owner's
+decision. The five it named were:
 
 ```
 AICore · DocsPage · SuperAdminDashboard · Trading · TradingDashboard
@@ -287,41 +290,56 @@ the page. `MLDashboard` did; its links moved to the shell's `related` prop,
 which puts hand-picked links ahead of the derived ones. All nine migrated pages
 were audited for this.
 
-**What is left, and all three are BLOCKED ON THE SAME DECISION.**
+**Settled 2026-09-15. Two of the three are migrated; the third is off on the
+owner's instruction.**
 
-Measured 2026-09-15 by inspecting each: every remaining page has a **designed
-header** that `PageHeader` cannot express. It is a bordered title bar with
-`title`, `subtitle`, `breadcrumbs`, `badge`, `actions`, `tabs` and `icon` — no
-tone, no hero, no slot for a page to supply its own.
+Every remaining page had a **designed header** that `PageHeader` could not
+express. It is a bordered title bar with `title`, `subtitle`, `breadcrumbs`,
+`badge`, `actions`, `tabs` and `icon` — no tone, no hero, no slot for a page to
+supply its own.
 
-| Page | Its header | What flattening it would cost |
+| Page | Its header | What flattening it would have cost |
 |---|---|---|
-| `DocsPage` | A hero band: brand-styled h1 with "FX" accent-coloured, subtitle, live status badge, 48px above the fold | The brand treatment on the public documentation landing page |
-| `SuperAdminDashboard` | A danger card: red top border, gradient icon tile, `MASTER CONTROL` badge, the operator's name | The red is **functional** on the page that holds the kill switch, not decoration |
+| `DocsPage` | A hero band: brand-styled h1 with "FX" accent-coloured, subtitle, live status badge, the documentation search box, 48px above the fold | The brand treatment, and the page's primary control |
+| `SuperAdminDashboard` | A danger card: red top border, gradient icon tile, `MASTER CONTROL` badge, the operator's name, the live engine-health pill | The red is **functional** on the page that holds the kill switch, not decoration |
 | `Trading` (`/terminal`) | A terminal `TopBar`: symbol picker, timeframe, live tick, WS status, emergency stop | Vertical space on the order-entry screen, and the header band pushes the live tick down |
 
-So none of the three is "not done yet". Each is a page where the migration as it
-stands would **remove what the page displays**, which is the one thing this
-thread is not allowed to do. Do not force them.
+So none of the three was "not done yet". Each was a page where the migration as
+it stood would have **removed what the page displays**.
 
-**The decision, and it is the owner's.** Three options, and the middle one is the
-recommendation:
+**The owner chose option 2 — give the shared header the capability.** What
+shipped:
 
-1. *Flatten them.* Cheapest, closes the ratchet, loses three designed headers
-   including a functional danger signal. Not recommended.
-2. *Give the shared header the capability.* A `tone?: 'default' | 'danger'` on
-   `PageHeader`, and a `hero?: React.ReactNode` slot on `PageShell` that
-   replaces the standard header while the page still gets the width, the
-   rhythm and the derived footer. Additive, nothing existing changes, and it
-   closes all three honestly. **Recommended.**
-3. *Leave them off on purpose.* Record the three as permanent, deliberate
-   exemptions here and stop counting them as debt.
+* **`hero?: React.ReactNode` on `PageShell`.** It renders in place of the
+  standard header; the page still gets the width, the section rhythm and the
+  derived "Where to next" footer. `title` became **optional** in the same
+  change, because a prop the shell ignores on the hero path is exactly the
+  dead-control shape this repository keeps finding. Exactly one of the two is
+  the contract, and the shell `console.warn`s in development when a caller
+  gives both (the hero wins) or neither.
+* **`tone` on `PageHeader` was deliberately NOT built.** With `hero` carrying
+  both designed headers verbatim, nothing would have passed `tone`. Shipping it
+  would have been a second dead control in the commit that closed the first.
+* `DocsPage` → `width="full"`, hero = its brand band, body = the 900px sections
+  column unchanged.
+* `SuperAdminDashboard` → `width="wide"`, hero = breadcrumbs + the red danger
+  card, body wrapped in one `<div>` so the shell's section gap does not stack
+  with the margins that layout already carries. It stops 96px earlier than the
+  1536px `.page-content` on screens wider than 1440 — the only visual change,
+  and it is the standardisation this shell exists for.
 
-`Trading` carries a second constraint whatever is chosen: `flow-by-flow`'s risk
-floor puts `/terminal` at **R3** — an order-entry surface with an emergency stop
-— and §5 requires a `flow-prototype` approval surface and explicit owner
-approval before a major UI/UX change there. No post-hoc approval. Do not migrate
-it without that, however the header question is settled.
+Proven by `frontend/src/test/the_shell_takes_a_designed_header.test.tsx` (9
+tests), red before the change and injection-proven three ways afterwards: the
+hero never rendered (2 fail), the hero rendered alongside the standard header
+(1 fail), and the both-were-given warning suppressed (1 fail).
+
+**`Trading` (`/terminal`) stays off, and that is a decision, not debt.** The
+owner was asked directly and answered "Not now — leave /terminal alone". It also
+carries a second constraint whatever is chosen: `flow-by-flow`'s risk floor puts
+`/terminal` at **R3** — an order-entry surface with an emergency stop — and §5
+requires a `flow-prototype` approval surface and explicit owner approval before
+a major UI/UX change there. No post-hoc approval. It remains the single entry in
+`docs/FRONTEND_PAGE_SHELL_DEBT.json`; do not migrate it without that approval.
 
 **`TradingDashboard` is no longer counted, and that is a fix not an exemption.**
 `/observability` rendered `<><Observability /><TradingDashboard /></>` as

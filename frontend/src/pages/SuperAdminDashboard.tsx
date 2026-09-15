@@ -16,6 +16,7 @@ import { superadminApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { CrossLinkBar } from '../components/CrossLinkBar';
+import { PageShell } from '../components/system/PageShell';
 
 const OverviewSection        = lazy(() => import('./superadmin/OverviewSection'));
 const UsersSection           = lazy(() => import('./superadmin/UsersSection'));
@@ -381,194 +382,210 @@ const SuperAdminDashboard: React.FC = () => {
         />
       )}
 
-      <div className="page-content">
-
-          {/* Breadcrumbs */}
-          <div className="mb-3">
-            <Breadcrumb items={[
-              { label: 'Home',        href: '/home' },
-              { label: 'Admin Panel', href: '/admin' },
-              { label: 'Super Admin' },
-            ]} />
-          </div>
-
-          {/* Page header card */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-[#0a1628] border border-[#1e293b] border-t-2 border-t-red-600 rounded-xl p-4 sm:p-5 mb-5">
-            {/* Left: icon + title */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg,#450a0a,#7f1d1d)', border: '2px solid #dc2626' }}>
-                ⚡
+      <PageShell
+        // `wide` (1440px) rather than the 1536px `.page-content` gave this
+        // page: three widths replace twelve, and the sidebar-plus-content
+        // layout below is unchanged — it simply stops 96px earlier on a
+        // screen wider than 1440.
+        width="wide"
+        // The red top border, the gradient icon tile, the MASTER CONTROL
+        // badge and the live engine-health pill are the danger signal on the
+        // one page that can halt trading. PageHeader cannot express any of
+        // them, so the page keeps its own header rather than losing it.
+        hero={
+          <>
+              {/* Breadcrumbs */}
+              <div className="mb-3">
+                <Breadcrumb items={[
+                  { label: 'Home',        href: '/home' },
+                  { label: 'Admin Panel', href: '/admin' },
+                  { label: 'Super Admin' },
+                ]} />
               </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-slate-100 text-lg sm:text-xl font-black m-0 tracking-tight">Super Admin</h1>
-                  <span className="text-2xs font-black px-2 py-0.5 rounded bg-red-950 border border-red-700 text-red-300 tracking-widest">
-                    MASTER CONTROL
-                  </span>
-                </div>
-                <p className="text-slate-500 text-xs mt-0.5 m-0">
-                  Full platform control · <strong className="text-red-300">{user.username}</strong>
-                  <span className="text-slate-700 mx-2">·</span>
-                  <span>{TABS.length} sections</span>
-                </p>
-              </div>
-            </div>
 
-            {/* Right: engine health + live indicator */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {engineHealth && !engineHealthErr ? (
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs ${
-                  killSwitchActive
-                    ? 'bg-red-950/60 border-red-700'
-                    : engineHealth.running
-                    ? 'bg-green-950/60 border-green-700'
-                    : 'bg-terminal-raised border-terminal-border'
-                }`}>
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    killSwitchActive ? 'bg-red-500 animate-pulse' : engineHealth.running ? 'bg-green-400' : 'bg-slate-500'
-                  }`} />
-                  <span className={`font-bold ${
-                    killSwitchActive ? 'text-red-400' : engineHealth.running ? 'text-green-400' : 'text-slate-400'
-                  }`}>
-                    {killSwitchActive ? 'KILL SWITCH ON' : engineHealth.running ? 'ENGINE LIVE' : 'ENGINE STOPPED'}
-                  </span>
-                  {!killSwitchActive && (
-                    <span className="text-slate-500 hidden sm:inline">
-                      · {engineHealth.mode} · {engineHealth.positions_open} pos
-                    </span>
-                  )}
-                </div>
-              ) : engineHealthErr ? (
-                /* Never show a confirmed-looking state we could not confirm. */
-                <div
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-700 bg-amber-950/60 text-xs"
-                  role="alert"
-                  title={engineHealthErr}
-                >
-                  <span className="w-2 h-2 rounded-full flex-shrink-0 bg-amber-400 animate-pulse" />
-                  <span className="font-bold text-amber-300">ENGINE STATUS UNKNOWN</span>
-                  <span className="text-amber-500/80 hidden sm:inline">
-                    · {engineHealthOkAt
-                      ? `last confirmed ${new Date(engineHealthOkAt).toLocaleTimeString()}`
-                      : 'never reached'}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-terminal-border bg-terminal-raised text-xs text-slate-500">
-                  <Spinner size={10} /> engine…
-                </div>
-              )}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-950/60 border border-green-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-green-400 text-2xs font-bold">LIVE</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Mobile nav trigger */}
-          <div className="lg:hidden mb-4">
-            <button
-              onClick={() => setMobileNavOpen(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-[#0a1628] border border-[#1e293b] rounded-xl text-sm font-medium text-slate-200 cursor-pointer"
-            >
-              <span className="flex items-center gap-2">
-                <span>{activeTabDef.icon}</span>
-                <span>{activeTabDef.label}</span>
-              </span>
-              <span className="text-slate-500 text-xs">{mobileNavOpen ? '▲' : '▼'} {TABS.length} sections</span>
-            </button>
-            {mobileNavOpen && (
-              <div className="mt-1 bg-[#0a1628] border border-[#1e293b] rounded-xl overflow-hidden max-h-[60vh] overflow-y-auto">
-                {navContent}
-              </div>
-            )}
-          </div>
-
-          {/* Desktop layout: sidebar + content */}
-          <div className="flex gap-5 items-start">
-            {/* Sidebar — hidden on mobile, visible lg+ */}
-            <nav className="hidden lg:block w-52 flex-shrink-0 bg-[#0a1628] border border-[#1e293b] rounded-xl sticky top-6 max-h-[calc(100vh-80px)] overflow-y-auto">
-              {navContent}
-            </nav>
-
-            {/* Content area */}
-            <main className="flex-1 min-w-0">
-              {/* Section header */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-[#0a1628] border border-[#1e293b] rounded-xl px-4 py-3 mb-4">
+              {/* Page header card */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-[#0a1628] border border-[#1e293b] border-t-2 border-t-red-600 rounded-xl p-4 sm:p-5 mb-5">
+                {/* Left: icon + title */}
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0"
-                    style={{ background: `${activeTabDef.accent}22`, border: `1px solid ${activeTabDef.accent}44` }}>
-                    {activeTabDef.icon}
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg,#450a0a,#7f1d1d)', border: '2px solid #dc2626' }}>
+                    ⚡
                   </div>
                   <div>
-                    <div className="text-slate-100 text-sm sm:text-base font-bold">{activeTabDef.label}</div>
-                    <div className="text-slate-500 text-xs">{activeTabDef.description}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="text-slate-100 text-lg sm:text-xl font-black m-0 tracking-tight">Super Admin</h1>
+                      <span className="text-2xs font-black px-2 py-0.5 rounded bg-red-950 border border-red-700 text-red-300 tracking-widest">
+                        MASTER CONTROL
+                      </span>
+                    </div>
+                    <p className="text-slate-500 text-xs mt-0.5 m-0">
+                      Full platform control · <strong className="text-red-300">{user.username}</strong>
+                      <span className="text-slate-700 mx-2">·</span>
+                      <span>{TABS.length} sections</span>
+                    </p>
                   </div>
                 </div>
 
-                {/* Controls: kill switch + auto-refresh */}
+                {/* Right: engine health + live indicator */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => setShowKillConfirm(true)}
-                    disabled={togglingKill}
-                    // The emergency stop was a ~24px target with an emoji
-                    // label. It is the single control that must never be
-                    // mis-tapped or ambiguous.
-                    aria-label={killSwitchActive
-                      ? 'Resume trading — the kill switch is currently active'
-                      : 'Activate the kill switch and halt all trading'}
-                    className={`inline-flex min-h-[44px] items-center gap-1.5 px-3.5 rounded-lg border-0 text-2xs font-bold cursor-pointer transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
+                  {engineHealth && !engineHealthErr ? (
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs ${
                       killSwitchActive
-                        ? 'bg-green-950 text-green-400 hover:bg-green-900 focus-visible:ring-green-500'
-                        : 'bg-red-950 text-red-400 hover:bg-red-900 focus-visible:ring-red-500'
-                    }`}
-                  >
-                    {killSwitchActive
-                      ? <><Play size={13} strokeWidth={2.5} aria-hidden /> Resume</>
-                      : <><OctagonX size={13} strokeWidth={2.5} aria-hidden /> Kill switch</>}
-                  </button>
-                  {killErr && <span className="text-red-400 text-2xs">{killErr}</span>}
-
-                  <div className="flex items-center gap-1.5 bg-terminal-bg border border-terminal-border rounded-lg px-2.5 py-1.5">
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
-                        className="w-3 h-3 accent-blue-500" />
-                      <span className="text-slate-500 text-2xs">Auto</span>
-                    </label>
-                    {autoRefresh && (
-                      <span className="text-slate-600 text-2xs font-mono min-w-[20px]">{countdown}s</span>
-                    )}
-                    <button
-                      onClick={() => { setRefreshKey(k => k + 1); setSectionLoadedAt(new Date()); setCountdown(REFRESH_INTERVAL); }}
-                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-slate-500 hover:text-slate-300 bg-transparent border-0 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                      title="Refresh now"
-                      aria-label="Refresh this section now"
-                    ><RefreshCw size={14} strokeWidth={2} aria-hidden /></button>
+                        ? 'bg-red-950/60 border-red-700'
+                        : engineHealth.running
+                        ? 'bg-green-950/60 border-green-700'
+                        : 'bg-terminal-raised border-terminal-border'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        killSwitchActive ? 'bg-red-500 animate-pulse' : engineHealth.running ? 'bg-green-400' : 'bg-slate-500'
+                      }`} />
+                      <span className={`font-bold ${
+                        killSwitchActive ? 'text-red-400' : engineHealth.running ? 'text-green-400' : 'text-slate-400'
+                      }`}>
+                        {killSwitchActive ? 'KILL SWITCH ON' : engineHealth.running ? 'ENGINE LIVE' : 'ENGINE STOPPED'}
+                      </span>
+                      {!killSwitchActive && (
+                        <span className="text-slate-500 hidden sm:inline">
+                          · {engineHealth.mode} · {engineHealth.positions_open} pos
+                        </span>
+                      )}
+                    </div>
+                  ) : engineHealthErr ? (
+                    /* Never show a confirmed-looking state we could not confirm. */
+                    <div
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-700 bg-amber-950/60 text-xs"
+                      role="alert"
+                      title={engineHealthErr}
+                    >
+                      <span className="w-2 h-2 rounded-full flex-shrink-0 bg-amber-400 animate-pulse" />
+                      <span className="font-bold text-amber-300">ENGINE STATUS UNKNOWN</span>
+                      <span className="text-amber-500/80 hidden sm:inline">
+                        · {engineHealthOkAt
+                          ? `last confirmed ${new Date(engineHealthOkAt).toLocaleTimeString()}`
+                          : 'never reached'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-terminal-border bg-terminal-raised text-xs text-slate-500">
+                      <Spinner size={10} /> engine…
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-950/60 border border-green-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                    <span className="text-green-400 text-2xs font-bold">LIVE</span>
                   </div>
-
-                  <span className="text-slate-700 text-2xs font-mono hidden sm:block">
-                    {sectionLoadedAt.toLocaleTimeString()}
-                  </span>
                 </div>
               </div>
+          </>
+        }
+      >
+        {/* One child, so the shell's section gap does not stack with the
+            margins this layout already carries. */}
+        <div>
+            {/* Mobile nav trigger */}
+            <div className="lg:hidden mb-4">
+              <button
+                onClick={() => setMobileNavOpen(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-[#0a1628] border border-[#1e293b] rounded-xl text-sm font-medium text-slate-200 cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <span>{activeTabDef.icon}</span>
+                  <span>{activeTabDef.label}</span>
+                </span>
+                <span className="text-slate-500 text-xs">{mobileNavOpen ? '▲' : '▼'} {TABS.length} sections</span>
+              </button>
+              {mobileNavOpen && (
+                <div className="mt-1 bg-[#0a1628] border border-[#1e293b] rounded-xl overflow-hidden max-h-[60vh] overflow-y-auto">
+                  {navContent}
+                </div>
+              )}
+            </div>
 
-              {/* Section content */}
-              <SectionErrorBoundary key={`${activeTab}-${refreshKey}`} tab={activeTabDef.label}>
-                <Suspense fallback={<SectionFallback />}>
-                  <SuperAdminNavContext.Provider value={navCtx}>
-                    <div className="animate-fade-in">
-                      {renderSection()}
+            {/* Desktop layout: sidebar + content */}
+            <div className="flex gap-5 items-start">
+              {/* Sidebar — hidden on mobile, visible lg+ */}
+              <nav className="hidden lg:block w-52 flex-shrink-0 bg-[#0a1628] border border-[#1e293b] rounded-xl sticky top-6 max-h-[calc(100vh-80px)] overflow-y-auto">
+                {navContent}
+              </nav>
+
+              {/* Content area */}
+              <main className="flex-1 min-w-0">
+                {/* Section header */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-[#0a1628] border border-[#1e293b] rounded-xl px-4 py-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0"
+                      style={{ background: `${activeTabDef.accent}22`, border: `1px solid ${activeTabDef.accent}44` }}>
+                      {activeTabDef.icon}
                     </div>
-                  </SuperAdminNavContext.Provider>
-                </Suspense>
-              </SectionErrorBoundary>
-            </main>
-          </div>
+                    <div>
+                      <div className="text-slate-100 text-sm sm:text-base font-bold">{activeTabDef.label}</div>
+                      <div className="text-slate-500 text-xs">{activeTabDef.description}</div>
+                    </div>
+                  </div>
 
-          {/* Cross-links */}
-          <CrossLinkBar links={SA_CROSS_LINKS} title="Platform Sections" className="mt-6" />
-      </div>
+                  {/* Controls: kill switch + auto-refresh */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setShowKillConfirm(true)}
+                      disabled={togglingKill}
+                      // The emergency stop was a ~24px target with an emoji
+                      // label. It is the single control that must never be
+                      // mis-tapped or ambiguous.
+                      aria-label={killSwitchActive
+                        ? 'Resume trading — the kill switch is currently active'
+                        : 'Activate the kill switch and halt all trading'}
+                      className={`inline-flex min-h-[44px] items-center gap-1.5 px-3.5 rounded-lg border-0 text-2xs font-bold cursor-pointer transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${
+                        killSwitchActive
+                          ? 'bg-green-950 text-green-400 hover:bg-green-900 focus-visible:ring-green-500'
+                          : 'bg-red-950 text-red-400 hover:bg-red-900 focus-visible:ring-red-500'
+                      }`}
+                    >
+                      {killSwitchActive
+                        ? <><Play size={13} strokeWidth={2.5} aria-hidden /> Resume</>
+                        : <><OctagonX size={13} strokeWidth={2.5} aria-hidden /> Kill switch</>}
+                    </button>
+                    {killErr && <span className="text-red-400 text-2xs">{killErr}</span>}
+
+                    <div className="flex items-center gap-1.5 bg-terminal-bg border border-terminal-border rounded-lg px-2.5 py-1.5">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
+                          className="w-3 h-3 accent-blue-500" />
+                        <span className="text-slate-500 text-2xs">Auto</span>
+                      </label>
+                      {autoRefresh && (
+                        <span className="text-slate-600 text-2xs font-mono min-w-[20px]">{countdown}s</span>
+                      )}
+                      <button
+                        onClick={() => { setRefreshKey(k => k + 1); setSectionLoadedAt(new Date()); setCountdown(REFRESH_INTERVAL); }}
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-slate-500 hover:text-slate-300 bg-transparent border-0 cursor-pointer transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                        title="Refresh now"
+                        aria-label="Refresh this section now"
+                      ><RefreshCw size={14} strokeWidth={2} aria-hidden /></button>
+                    </div>
+
+                    <span className="text-slate-700 text-2xs font-mono hidden sm:block">
+                      {sectionLoadedAt.toLocaleTimeString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Section content */}
+                <SectionErrorBoundary key={`${activeTab}-${refreshKey}`} tab={activeTabDef.label}>
+                  <Suspense fallback={<SectionFallback />}>
+                    <SuperAdminNavContext.Provider value={navCtx}>
+                      <div className="animate-fade-in">
+                        {renderSection()}
+                      </div>
+                    </SuperAdminNavContext.Provider>
+                  </Suspense>
+                </SectionErrorBoundary>
+              </main>
+            </div>
+
+            {/* Cross-links */}
+            <CrossLinkBar links={SA_CROSS_LINKS} title="Platform Sections" className="mt-6" />
+        </div>
+      </PageShell>
     </>
   );
 };
