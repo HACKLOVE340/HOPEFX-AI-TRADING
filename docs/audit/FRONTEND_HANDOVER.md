@@ -35,7 +35,7 @@ Measured 2026-09-15, immediately before this document was written:
 | Emoji used as icons | 750 across 125 files |
 | Inline `fontSize` the cascade cannot reach | 2,108 (was 2,871) |
 | Numeric spacing utilities | 1,089 |
-| Frontend tests | 179 files · 3,044 tests · all pass |
+| Frontend tests | 180 files · 3,053 tests · all pass |
 | eslint | 0 errors · **17** warnings — all one a11y rule, all triaged 2026-09-15 as that rule's blind spot (it never looks UP at a wrapping `<label>`). The eighteenth was real: `superadmin/ui.tsx`'s `Toggle` gave 64 switches no accessible name. Do not clear the 17 with an `aria-label` |
 
 ---
@@ -438,11 +438,56 @@ From the owner's 2026-09-14 brief, still entirely unbuilt:
 
 ### 5. Motion, elevation, and the round-edge transparency the owner asked for
 
-Plan Tasks 3 and 4, untouched. The owner asked specifically for "some of the
-round edge to be transparent". There is no motion layer: transitions are
-per-component inline strings, so there is no way to honour
-`prefers-reduced-motion` in one place. `hub/a11yMotion.ts` exists and is the
-right home.
+Plan Tasks 3 and 4. **The motion half of this entry was wrong and is corrected;
+the elevation and transparency half is real and is blocked on approval.**
+
+It used to read: "There is no motion layer: transitions are per-component
+inline strings, so there is no way to honour `prefers-reduced-motion` in one
+place." Measured 2026-09-15, `prefers-reduced-motion` **is** honoured in one
+place, and has been. `index.css` carries an unlayered, `!important` universal
+rule:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .hover-lift:hover { transform: none; }
+}
+```
+
+Being unlayered and `!important` is what makes it work: it outranks Tailwind's
+`@layer` rules *and* a component's own inline `style` attribute, so it reaches
+all 152 inline `transition:` strings and all 192 Tailwind `transition-*` /
+`animate-*` classes. A second block zeroes `--dur-fast` / `--dur-base` /
+`--dur-slow` for the call sites written as `var(--dur-*)`.
+
+The canvas half — which no stylesheet can reach, because a canvas is not the
+cascade — is `hub/usePrefersReducedMotion.ts`, already asserted by
+`hub_viz.test.tsx` and `hub_spatial.test.ts`. Outside `src/hub/`, 17 files call
+`requestAnimationFrame`; every one was opened, and every one is a resize or
+visible-range handler being rAF-throttled, not an animation loop.
+
+**What was genuinely missing was the test.** A WCAG 2.3.3 guarantee for most of
+the app rested on one CSS block that nothing pinned: it could have been deleted,
+stripped of an `!important`, or moved inside `@layer` with the whole suite
+staying green. `src/test/motion_can_be_switched_off.test.ts` now pins it — 9
+tests, injection-proven five ways (block removed · `!important` dropped · moved
+into `@layer` · the hover-lift transform reset removed · the pseudo-element
+selectors dropped).
+
+`hub/a11yMotion.ts` remains the right home for a *token* motion layer — named
+durations and easings a component asks for by name — but that is a refactor of
+152 call sites, not a missing a11y control, and it should be priced as one.
+
+**Still open, and NOT to be started without approval:** elevation and the
+owner's "some of the round edge to be transparent". That is a visual redesign
+across the shared surfaces, which `flow-by-flow` §5 puts behind a
+`flow-prototype` approval surface and explicit owner sign-off. No post-hoc
+approval. Build the prototype, show it, then implement.
 
 ---
 
