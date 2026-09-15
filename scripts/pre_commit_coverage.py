@@ -33,6 +33,8 @@ Environment variables
 COVERAGE_THRESHOLD   : minimum line coverage % (default: 80)
 SKIP_COVERAGE_GATE   : set to "1" to skip this hook (emergency bypass)
 CI_FAST              : set to "1" to use reduced estimators (faster CI)
+COVERAGE_MODULE_TIMEOUT_SECONDS : maximum seconds for one module run (default: 60)
+COVERAGE_TOTAL_TIMEOUT_SECONDS  : maximum seconds for one hook run (default: 300)
 
 Usage (called by pre-commit framework)
 ---------------------------------------
@@ -46,12 +48,15 @@ import re
 import subprocess  # nosec B404 — pytest subprocess, fixed args
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
 
 _THRESHOLD = int(os.getenv("COVERAGE_THRESHOLD", "80"))
 _SKIP = os.getenv("SKIP_COVERAGE_GATE", "0").strip() == "1"
+_MODULE_TIMEOUT_SECONDS = int(os.getenv("COVERAGE_MODULE_TIMEOUT_SECONDS", "60"))
+_TOTAL_TIMEOUT_SECONDS = int(os.getenv("COVERAGE_TOTAL_TIMEOUT_SECONDS", "300"))
 
 #: Where the recorded debt lives. Generated, never hand-written.
 #:
@@ -350,7 +355,7 @@ def _run_coverage(module_path: Path, test_paths: list[Path]) -> tuple[float | No
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=600,
+                timeout=_MODULE_TIMEOUT_SECONDS,
                 env=env,
             )
             output = result.stdout + result.stderr
@@ -540,6 +545,7 @@ def main(argv: list[str]) -> int:
 
     unmeasured: list[str] = []
     checked = 0
+    started = time.monotonic()
 
     for arg in argv:
         path = Path(arg)
@@ -557,6 +563,18 @@ def main(argv: list[str]) -> int:
         if not test_files:
             # No test file found — skip silently (new module, not yet tested)
             continue
+
+        elapsed = time.monotonic() - started
+        if elapsed >= _TOTAL_TIMEOUT_SECONDS:
+            message = (
+                f"coverage gate time budget exhausted after {elapsed:.1f}s while checking {path}; "
+                "increase COVERAGE_TOTAL_TIMEOUT_SECONDS or run a narrower staged change"
+            )
+            failures.append(message)
+            unmeasured.append(message)
+            print(f"pre_commit_coverage: FAIL {message}", file=sys.stderr)
+            break
+
         test_file = test_files[0]
 
         checked += 1

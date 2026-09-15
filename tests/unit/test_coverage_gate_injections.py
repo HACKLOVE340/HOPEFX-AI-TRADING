@@ -328,3 +328,28 @@ class TestTheHookItselfCanRunTheGateItNames:
             "measured'. Match the sibling hooks (docs-freshness, gate-evidence, ...) and use "
             "language: system so it runs with the project's own interpreter."
         )
+
+
+class TestTheCoverageBudgetIsBounded:
+    """The hook must stop instead of allowing an all-files run to run for hours."""
+
+    def test_total_budget_exhaustion_fails_closed(self, project: Path, monkeypatch) -> None:
+        import scripts.pre_commit_coverage as gate
+
+        second = project / "mymod" / "second.py"
+        second.write_text("def f():\n    return 2\n", encoding="utf-8")
+        test = project / "tests" / "unit" / "test_thing.py"
+        test.write_text("def test_nothing():\n    assert True\n", encoding="utf-8")
+
+        monkeypatch.setattr(gate, "_find_test_files", lambda _path: [test])
+        monkeypatch.setattr(gate, "_load_baseline", lambda: frozenset())
+        monkeypatch.setattr(gate, "_coveragerc_omits", lambda _path: False)
+        monkeypatch.setattr(gate, "_run_coverage", lambda _path, _tests: (80.0, ""))
+        monkeypatch.setattr(gate, "_TOTAL_TIMEOUT_SECONDS", 10)
+        clock = iter((0.0, 0.0, 11.0))
+        monkeypatch.setattr(gate.time, "monotonic", lambda: next(clock))
+        monkeypatch.chdir(project)
+
+        result = gate.main(["mymod/thing.py", "mymod/second.py"])
+
+        assert result == 1
