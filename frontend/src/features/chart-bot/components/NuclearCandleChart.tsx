@@ -20,7 +20,6 @@ import {
   LineSeries,
   AreaSeries,
   CrosshairMode,
-  UTCTimestamp,
   CandlestickData,
   LineData,
   AreaData,
@@ -33,12 +32,10 @@ import { useNuclearStore, selectActiveBars } from '../store/nuclear-store';
 import { fmtPrice, fmtPctRaw, fmtSpread } from '../../../lib/utils';
 import { severityColor } from '../types/nuclear';
 import type { OHLCVBar } from '../types/nuclear';
+import { toUTCSeconds as toUTC } from '../../../lib/chartTime';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toUTC(ts: number): UTCTimestamp {
-  return (ts > 1e10 ? Math.floor(ts / 1000) : ts) as UTCTimestamp;
-}
 
 function barToCandle(b: OHLCVBar): CandlestickData {
   return { time: toUTC(b.time), open: b.open, high: b.high, low: b.low, close: b.close };

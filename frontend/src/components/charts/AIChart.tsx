@@ -28,6 +28,7 @@ import { tradingApi } from '../../hooks/useApi';
 import { ohlcvLimitFor } from '../../features/chart-bot/services/chart-api';
 import { cn, fmtPrice, extractApiError } from '../../lib/utils';
 import type { PriceTick } from '../../types';
+import { toUTCSeconds as toUTC } from '../../lib/chartTime';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,10 +65,6 @@ interface AIChartProps {
 
 function apiSym(s: string) { return s.replace('/', '_'); }
 
-function toUTC(ts: number | string): UTCTimestamp {
-  if (typeof ts === 'string') return Math.floor(new Date(ts).getTime() / 1000) as UTCTimestamp;
-  return Math.floor(ts > 1_000_000_000_000 ? ts / 1000 : ts) as UTCTimestamp;
-}
 
 function regimeColor(r?: string): string {
   if (!r) return '#64748b';

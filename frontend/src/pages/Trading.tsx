@@ -36,6 +36,7 @@ import { PanelSkeleton } from '../components/ui/Skeleton';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative, extractApiError, sameSymbol, positionSide } from '../lib/utils';
 import type { PriceTick } from '../store';
 import { assessBars } from '../lib/barQuality';
+import { toUTCSeconds as toUTC } from '../lib/chartTime';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -76,11 +77,6 @@ interface AIAnalysisResult {
 
 function apiSym(s: string) { return s.replace('/', '_'); }
 
-function toUTC(ts: number | string): UTCTimestamp {
-  if (typeof ts === 'string') return Math.floor(new Date(ts).getTime() / 1000) as UTCTimestamp;
-  // Auto-detect ms vs seconds: values > 1e10 are milliseconds
-  return Math.floor(ts > 1_000_000_000_000 ? ts / 1000 : ts) as UTCTimestamp;
-}
 
 /**
  * Price formatting per instrument class.

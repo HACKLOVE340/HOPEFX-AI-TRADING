@@ -18,16 +18,13 @@ import {
   ISeriesMarkersPluginApi,
   SeriesMarker,
   Time,
-  UTCTimestamp,
 } from 'lightweight-charts';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor } from '../types/nuclear';
+import { toUTCSeconds as toUTC } from '../../../lib/chartTime';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toUTC(ts: number): UTCTimestamp {
-  return (ts > 1e10 ? Math.floor(ts / 1000) : ts) as UTCTimestamp;
-}
 
 // ─── Stats bar ────────────────────────────────────────────────────────────────
 

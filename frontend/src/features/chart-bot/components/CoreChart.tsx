@@ -19,7 +19,6 @@ import {
   LineSeries,
   CrosshairMode,
   PriceScaleMode,
-  UTCTimestamp,
   CandlestickData,
   HistogramData,
   LineData,
@@ -35,6 +34,7 @@ import { COLORS, CHART_DIMS } from '../utils/design-tokens';
 import { fmtSpread } from '../../../lib/utils';
 import { formatPrice, formatTime } from '../utils/formatters';
 import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartPattern, ChartClickContext } from '../types';
+import { toUTCSeconds as toUTC } from '../../../lib/chartTime';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,9 +54,6 @@ const INDICATORS: { key: IndicatorKey; label: string }[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toUTC(ts: number): UTCTimestamp {
-  return (ts > 1e10 ? Math.floor(ts / 1000) : ts) as UTCTimestamp;
-}
 
 function barToCandle(b: OHLCVBar): CandlestickData {
   return { time: toUTC(b.time), open: b.open, high: b.high, low: b.low, close: b.close };
