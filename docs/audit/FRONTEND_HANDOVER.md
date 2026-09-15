@@ -30,7 +30,7 @@ Measured 2026-09-15, immediately before this document was written:
 | Measure | Value |
 |---|---|
 | Correction register | 97 findings · OPEN 1 · PARTIAL 9 · OWNER 8 · FIXED 79 |
-| Pages on the standard shell | 51 of 63 — **12 off** |
+| Pages on the standard shell | 53 of 63 — **10 off** |
 | Colour literals | 3,553 across 190 files |
 | Emoji used as icons | 750 across 125 files |
 | Inline `fontSize` the cascade cannot reach | 2,108 (was 2,871) |
@@ -241,23 +241,45 @@ A **size ratchet** (mirroring `frontend_colour_ratchet.py`) would stop the count
 growing while this is decided. It does not exist yet; the register's probe
 measures the number but does not block on it.
 
-### 2. The 12 pages still off the standard shell
+### 2. The 10 pages still off the standard shell
 
 `python scripts/frontend_page_shell_ratchet.py --check` names them:
 
 ```
 AICore · Affiliate · CryptoCheckout · DocsPage · MLDashboard
-NuclearDashboardPage · Profile · StatusPage · SuperAdminDashboard
-Trading · TradingDashboard · WalkForward
+NuclearDashboardPage · StatusPage · SuperAdminDashboard
+Trading · TradingDashboard
 ```
 
-`NotificationsPage` and `Settings` were migrated on 2026-09-15; they were the
-only two with a single `page-content` root. The rest have **several**, because
-they return early for loading, error and signed-out states and each return
-carries its own root — Affiliate has five, CryptoCheckout five, Profile five,
-StatusPage three, WalkForward two. Migrating one of those means every branch,
-and a branch left behind is a page that renders unframed exactly when something
-has gone wrong.
+Four were migrated on 2026-09-15: `NotificationsPage` and `Settings` (a single
+`page-content` root each), then `WalkForward` and `Profile` (multi-root).
+
+**The pattern for a multi-root page — let the shell OUTLIVE the branch.** These
+pages return early for loading, error and signed-out states, and each return
+carried its own bare root, so those states rendered a sentence with no heading
+and no way onward — at the moment an operator most needs both. Do NOT wrap each
+branch in its own shell: declare the page's identity once as a `shell` object,
+spread it into every branch, and let the branch decide only the body. The header
+is then a property of the page rather than of its request having succeeded.
+`frontend/src/test/the_shell_outlives_the_branch.test.tsx` holds it and was red
+on five of six assertions before the work.
+
+Remaining counts: Affiliate five roots, CryptoCheckout five, StatusPage three.
+`AICore`, `Trading` and `TradingDashboard` own full-bleed layouts and should
+probably get a **fourth width** on `PageShell` rather than being forced into the
+three that exist. `SuperAdminDashboard` is a tab shell whose children are the
+real pages.
+
+**Two things `WalkForward` and `Profile` turned up, worth expecting again:**
+
+* WalkForward carried an unreachable branch — `if (!data)` sat after a branch
+  returning for `apiError || !data`. Dead since it was written.
+* Profile's migration broke `renders profile username after load`, and the test
+  was RIGHT. It had been deliberately strengthened under audit F11 from "an h1
+  exists" — which passes on an error page — to "the h1 is the username". The
+  first attempt titled every state "Profile" and demoted the person's name to an
+  h2; the fix was to put the person in the shell's title, not to weaken the
+  assertion. **Expect the page's existing tests to encode a real decision.**
 
 These are the hard ones — the earlier 49 were the tractable ones. `AICore`,
 `Trading` and `TradingDashboard` own their own full-bleed layouts and should

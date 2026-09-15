@@ -11,6 +11,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
+import { LineChart } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -203,12 +205,40 @@ const WalkForward: React.FC = () => {
     });
   };
 
-  if (loading) return <div style={s.loading}>Loading walk-forward results…</div>;
+  /* The page's identity, independent of whether its request succeeded. */
+  const shell = {
+    title: 'Walk-Forward Validation',
+    icon: LineChart,
+    width: 'wide' as const,
+    subtitle: 'Out-of-sample validation across rolling folds',
+  };
+
+  /*
+   * One shell, outliving the branches.
+   *
+   * These three states used to return their own roots: the loading one a bare
+   * styled div, the empty one a `page-content` with its own h1 reading
+   * "Walk-Forward Analysis", and the happy one a `page-content` with an h1
+   * reading "Walk-Forward Validation". So a page that was loading or that had
+   * failed showed no heading and no way onward — at the moment an operator most
+   * needs both — and the page had two different names depending on whether its
+   * request had succeeded.
+   *
+   * Nothing below is dropped. The loading sentence, the empty-state copy, the
+   * Retry and the link to Backtesting all still render; they are now the BODY
+   * of a page that has already said what it is.
+   */
+  if (loading) {
+    return (
+      <PageShell {...shell}>
+        <div style={s.loading}>Loading walk-forward results…</div>
+      </PageShell>
+    );
+  }
 
   if (apiError || !data) {
     return (
-      <div className="page-content">
-        <h1 style={s.title}>Walk-Forward Analysis</h1>
+      <PageShell {...shell}>
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: 'var(--text-dim)', textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
           <div style={{ fontSize: 16, color: 'var(--text)', marginBottom: 8 }}>
@@ -226,20 +256,22 @@ const WalkForward: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
-  if (!data)   return <div style={s.loading}>No walk-forward data available.</div>;
+
+  /*
+   * `if (!data)` stood here and could never run: the branch above already
+   * returns for `apiError || !data`. Dead since it was written, and removed
+   * rather than carried — its sentence ("No walk-forward data available.") is
+   * the one the reachable branch already shows.
+   */
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Walk-Forward Validation</h1>
-          <p style={s.subtitle}>
-            {data.strategy ?? '—'} · {data.symbol ?? '—'} · {(data.folds ?? []).length} folds
-          </p>
-        </div>
+    <PageShell
+      {...shell}
+      subtitle={`${data.strategy ?? '—'} · ${data.symbol ?? '—'} · ${(data.folds ?? []).length} folds`}
+      actions={(
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => navigate('/ai-strategy')}
@@ -261,8 +293,8 @@ const WalkForward: React.FC = () => {
             <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
           </div>
         </div>
-      </div>
-
+      )}
+    >
       {/* Summary metrics */}
       <div style={s.metricsRow}>
         <MetricCard label="Avg Sharpe"    value={(data.avg_sharpe   ?? 0).toFixed(2)}   color="#60a5fa" />
@@ -355,7 +387,7 @@ const WalkForward: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

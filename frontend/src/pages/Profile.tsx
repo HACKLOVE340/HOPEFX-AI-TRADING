@@ -4,6 +4,8 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { UserRound } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError, fmtPct, fmtPctRaw } from '../lib/utils';
@@ -136,10 +138,48 @@ const Profile: React.FC = () => {
   // guarded route (F4-01).
   if (selfAlias) return <Navigate to="/profile" replace />;
 
-  if (loading) return <div className="page-content"><p style={{color:'var(--text-dim)'}}>Loading profile…</p></div>;
-  if (error)   return <div className="page-content"><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
+  /*
+   * One shell, outliving the branches.
+   *
+   * The comment above records that all four states were moved onto the app
+   * shell's `page-content` so the layout stopped jumping. They still each
+   * returned their OWN root, so loading, error and not-found rendered a
+   * sentence with no heading and no way onward — the state where an operator
+   * most needs both. The shell is now a property of the page rather than of
+   * its request having succeeded.
+   *
+   * The title is the PERSON once they have loaded, and "Profile" before that.
+   *
+   * An earlier attempt used "Profile" in every state and demoted the person's
+   * name to an h2. `renders profile username after load` failed, and it was
+   * right to: that assertion was deliberately strengthened under audit F11
+   * from "an h1 exists" — which passes on an error page — to "the h1 is the
+   * username". A profile page's heading is the person, and the test was
+   * describing behaviour someone wanted rather than an accident.
+   *
+   * So the name moves UP into the shell's heading rather than being duplicated
+   * there. The identity card keeps the avatar, the @handle, the bio and the
+   * follow counts; it loses only a second, smaller copy of a name that is now
+   * the page's title two lines above it. Nothing an operator can read is gone.
+   */
+  const shell = {
+    title: profile?.display_name || profile?.username || 'Profile',
+    icon: UserRound,
+    width: 'standard' as const,
+  };
+
+  if (loading) {
+    return <PageShell {...shell}><p style={{color:'var(--text-dim)'}}>Loading profile…</p></PageShell>;
+  }
+  if (error) {
+    return (
+      <PageShell {...shell}>
+        <div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div>
+      </PageShell>
+    );
+  }
   if (!profile) return (
-    <div className="page-content">
+    <PageShell {...shell}>
       <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-muted)' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>👤</div>
         <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>
@@ -150,7 +190,7 @@ const Profile: React.FC = () => {
         </div>
         <button onClick={() => navigate(-1)} style={s.retryBtn}>← Go back</button>
       </div>
-    </div>
+    </PageShell>
   );
 
   // stats may be absent for a brand-new profile — fall back to zeros so the
@@ -160,7 +200,10 @@ const Profile: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
+    <PageShell
+      {...shell}
+      subtitle={`@${profile.username}${profile.country ? ` · ${profile.country}` : ''}`}
+    >
       {/* Header */}
       <div style={s.header}>
         <div style={s.avatarWrap}>
@@ -178,7 +221,6 @@ const Profile: React.FC = () => {
           )}
         </div>
         <div style={s.headerInfo}>
-          <h1 style={s.name}>{profile.display_name || profile.username}</h1>
           <p style={s.username}>@{profile.username}{profile.country ? ` · ${profile.country}` : ''}</p>
           {profile.bio && <p style={s.bio}>{profile.bio}</p>}
           <div style={s.followRow}>
@@ -289,7 +331,7 @@ const Profile: React.FC = () => {
           </table>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
