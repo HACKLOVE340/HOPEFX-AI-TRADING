@@ -1,6 +1,6 @@
 # Landing the audit branch
 
-`claude/add-new-skills-lys862` is **621 commits and 1,512 files ahead of `main`**
+`claude/add-new-skills-lys862` is **623 commits and 1,525 files ahead of `main`**
 (measured 2026-09-14; this read 551 and 1,227 when the plan was written, and 565 and
 1,246 on 2026-09-13). Both figures are now measured by
 `scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —

@@ -3046,6 +3046,45 @@ def _p_chart_gate_vacuous() -> tuple[str, str]:
     )
 
 
+def _p_density_cannot_reach() -> tuple[str, str]:
+    """Is the density control able to reach the interface it is stamped on?
+
+    `data-density` is set on every route and redefines eleven tokens per tier.
+    It can only change a pixel where a component reads one of those tokens. This
+    counts both sides from the tree: the token-reading utilities against the
+    literal sizes that no token can reach.
+    """
+    root = ROOT / "frontend" / "src"
+    if not root.is_dir():
+        return ("UNKNOWN", "frontend/src is not present")
+
+    token_uses = 0
+    literal_sizes = 0
+    literal_space = 0
+    token_pattern = re.compile(r"\b(p-card|p-row|gap-grid|text-body|text-value|text-title|text-label|text-micro)\b")
+    size_pattern = re.compile(r"fontSize:\s*[0-9]")
+    space_pattern = re.compile(r"\b(?:p|px|py|gap)-[0-9]+\b")
+
+    for path in root.rglob("*.tsx"):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        token_uses += len(token_pattern.findall(text))
+        literal_sizes += len(size_pattern.findall(text))
+        literal_space += len(space_pattern.findall(text))
+
+    unreachable = literal_sizes + literal_space
+    if unreachable == 0:
+        return ("FIXED", f"every size reaches the token layer ({token_uses} token uses)")
+    return (
+        "OPEN",
+        f"{token_uses} token-reading utilities against {literal_sizes} inline fontSize "
+        f"and {literal_space} numeric spacing utilities — {unreachable} sizes the density "
+        f"control cannot reach",
+    )
+
+
 def _p_field_has_no_label() -> tuple[str, str]:
     """Settings fields showed a label and had no accessible name.
 
@@ -3244,6 +3283,36 @@ FINDINGS: list[Finding] = [
         "pytest tests/unit/test_agent_deadline_is_enforced.py tests/unit/test_agentic_loop.py -q",
         _p_agent_deadline,
         [S_TDD, S_VBC, S_DEAD],
+    ),
+    Finding(
+        "DENSITY-CANNOT-REACH",
+        "The density control is stamped on every route and can reach almost nothing",
+        "P2",
+        "Frontend",
+        "Measured 2026-09-15 while making density a user choice",
+        "`PageSurface` stamps `data-density` on every route, `index.css` fully specifies three "
+        'tiers across eleven tokens each, and CLAUDE.md documents it as "one table, stamped on '
+        'every route". Every part of that is true and none of it reaches a pixel on most pages: '
+        "the tokens the tiers redefine are consumed by 29 class usages in the whole application, "
+        "against 2,871 inline `fontSize: <number>` and 1,089 numeric Tailwind spacing utilities. "
+        "A literal pixel is not in the cascade, so no tier can change it. That is why the "
+        "interface does not feel dense at any setting, and it is the dead-control shape: a "
+        "control that exists, is documented accurately, and never runs. It is the same defect as "
+        "the 3,555 colour literals, in the size dimension — and the colour side already has a "
+        "codemod and a ratchet, which is the precedent for closing this one. NOT fixed by making "
+        "density a user preference: that made the control settable, which is a different thing "
+        "from making it effective, and shipping the control without recording this would have "
+        "been shipping a second dead control on top of the first.",
+        "frontend/src/test/density_is_not_a_dead_control.test.ts proves the three tiers are "
+        "specified, monotonic and separated by a real margin rather than a rounding one — parsed "
+        "from index.css, because the tiers live inside `@layer base`, which jsdom's CSSOM drops "
+        "entirely, so a `getComputedStyle` assertion here would have been a test of jsdom's "
+        "coverage rather than of the cascade. The live cascade is proved in a browser. This "
+        "entry stays OPEN until the literal sizes reach the token layer; the probe counts both "
+        "sides from the tree, so it closes itself and cannot be closed by assertion.",
+        "python scripts/correction_register.py --id DENSITY-CANNOT-REACH",
+        _p_density_cannot_reach,
+        [S_DEAD, S_VBC],
     ),
     Finding(
         "SHELL-NO-GROW",

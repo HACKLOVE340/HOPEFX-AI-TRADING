@@ -27,6 +27,7 @@ import { useLocation } from 'react-router-dom';
 import { RelatedPages } from '../RelatedPages';
 import { RelatedSlotProvider } from './RelatedContext';
 import { relatedFor } from '../../lib/related';
+import { useDensityPref } from '../../lib/densityPref';
 
 export type Density = 'comfortable' | 'promax' | 'ultra';
 export type Surface = 'default' | 'ai';
@@ -105,7 +106,26 @@ function match(pathname: string, prefixes: readonly string[]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-export function densityFor(pathname: string): Density {
+/**
+ * The density a route gets, and what the person's choice may do to it.
+ *
+ * `pref` is the person's setting from `lib/densityPref`, or null when they have
+ * not chosen. It overrides the table in both directions — someone who wants the
+ * sign-in page dense gets it — except that it can never loosen a data surface
+ * below `ultra`. Density on /portfolio decides how many rows of open risk are
+ * on screen at once, and three fewer positions visible is not a taste question.
+ */
+export function densityFor(pathname: string, pref?: Density | null): Density {
+  // ULTRA first, and before the preference: a data surface stays dense no
+  // matter what anyone adds below, and no matter what anyone prefers. Density
+  // on /portfolio decides how many rows of open risk are on screen at once, and
+  // three fewer positions visible is not a taste question.
+  if (match(pathname, ULTRA)) return 'ultra';
+
+  // The person's choice overrides the table in BOTH directions — someone who
+  // wants the sign-in page dense gets it. See `lib/densityPref.ts`.
+  if (pref) return pref;
+
   // `ultra` is the default as of 2026-09-15, by the owner's decision in the
   // design review: this is a trading terminal, and the dense tier is what a
   // terminal should feel like. It was previously opt-in per route, so the tier
@@ -115,12 +135,11 @@ export function densityFor(pathname: string): Density {
   // rather than scanned — docs, the academy, the legal pages — get worse when
   // you tighten them. `promax` remains defined and is now reached only by a
   // route that asks for it by name.
-  // ULTRA first: a data surface stays dense no matter what anyone adds below.
-  if (match(pathname, ULTRA)) return 'ultra';
   if (match(pathname, COMFORTABLE)) return 'comfortable';
   if (match(pathname, PROMAX)) return 'promax';
   return 'ultra';
 }
+
 
 export function surfaceFor(pathname: string): Surface {
   return match(pathname, AI) ? 'ai' : 'default';
@@ -129,6 +148,9 @@ export function surfaceFor(pathname: string): Surface {
 export const PageSurface: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { pathname } = useLocation();
   const surface = surfaceFor(pathname);
+  // The person's choice, live: changing it in Settings restyles the page they
+  // are on, and the other tab too, without a reload.
+  const [densityPref] = useDensityPref();
 
   /**
    * The page's own footer wins; this is the fallback for the 40 pages that
@@ -150,7 +172,7 @@ export const PageSurface: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <div
-      data-density={densityFor(pathname)}
+      data-density={densityFor(pathname, densityPref)}
       // Absent rather than "default": an empty attribute would still match
       // [data-surface] selectors written later, and a page would silently
       // acquire a palette nobody chose for it.

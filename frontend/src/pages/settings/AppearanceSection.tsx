@@ -6,6 +6,8 @@ import { ACCENT_COLORS } from './types';
 import { Card, SectionHeader, Field, Select, Toggle, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { Palette } from 'lucide-react';
+import { useDensityPref } from '../../lib/densityPref';
+import type { Density } from '../../components/system/PageSurface';
 
 const DEFAULT: AppearanceSettings = {
   theme: 'dark',
@@ -29,7 +31,21 @@ function applyTheme(theme: AppearanceSettings['theme'], accent: string) {
   root.setAttribute('data-theme', isDark ? 'dark' : 'light');
 }
 
+/**
+ * The density tiers, and what each one is FOR.
+ *
+ * Named by what they do to the page rather than by their token values: nobody
+ * chooses a setting called "promax" on the strength of the word.
+ */
+const DENSITIES: readonly { value: Density | null; label: string; hint: string }[] = [
+  { value: null, label: 'Per page', hint: 'Each page picks what suits it. The default.' },
+  { value: 'comfortable', label: 'Comfortable', hint: 'More room. Easier to read, less on screen.' },
+  { value: 'promax', label: 'Pro', hint: 'Tighter. A working balance.' },
+  { value: 'ultra', label: 'Ultra', hint: 'Tightest. The most on screen at once.' },
+];
+
 const AppearanceSection: React.FC = () => {
+  const [density, setDensity] = useDensityPref();
   const [form, setForm] = useState<AppearanceSettings>(() => {
     try {
       const cached = localStorage.getItem(STORAGE_KEY);
@@ -105,6 +121,52 @@ const AppearanceSection: React.FC = () => {
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
+        </div>
+
+        {/*
+          A button group, not a `Field`.
+
+          `Field` renders a `<label>` that WRAPS its control, which is right for
+          one input and wrong for four buttons: a label may name a single
+          control, and wrapping a group makes every button carry the same
+          accessible name. The Theme picker above already uses a heading plus a
+          group for exactly this reason.
+        */}
+        <div style={{ marginBottom: 20 }}>
+          <h3 id="density-label" style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>
+            Density
+          </h3>
+          <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: '0 0 12px' }}>
+            How tightly the interface packs. Trading surfaces — positions, P&amp;L, the
+            order ticket — stay at Ultra whatever you choose here, because how many
+            rows of open risk you can see at once is not a preference.
+          </p>
+          <div role="group" aria-labelledby="density-label" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {DENSITIES.map((option) => {
+              const selected = density === option.value;
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => setDensity(option.value)}
+                  aria-pressed={selected}
+                  style={{
+                    flex: '1 1 140px', padding: '12px 10px', borderRadius: 10, cursor: 'pointer',
+                    border: `2px solid ${selected ? 'var(--link)' : 'var(--border)'}`,
+                    background: selected ? 'var(--surface-raised)' : 'var(--surface)',
+                    color: selected ? 'var(--link)' : 'var(--text-muted)',
+                    fontSize: 13, fontWeight: 600, transition: 'border-color .15s, color .15s',
+                    display: 'grid', gap: 4, textAlign: 'left',
+                  }}
+                >
+                  {option.label}
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-dim)' }}>
+                    {option.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <Field label="Accent color">
