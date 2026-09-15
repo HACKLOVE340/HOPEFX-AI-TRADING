@@ -4,6 +4,8 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Share2 } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
@@ -122,20 +124,36 @@ const Affiliate:React.FC=()=>{
     navigator.clipboard.writeText(referralLink).then(()=>{setCopied(true);if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);copiedTimerRef.current=setTimeout(()=>setCopied(false),2500);});
   };
 
-  if(!userId)return(<div className="page-content"><p style={{color:'var(--text-dim)'}}>Please log in to view your affiliate dashboard.</p></div>);
-  if(loading)return(<div className="page-content"><p style={{color:'var(--text-dim)'}}>Loading affiliate data…</p></div>);
-  if(apiError)return(<div className="page-content"><h1 style={st.heading}>Affiliate Program</h1><div style={st.errorBox}><strong>Error:</strong> {apiError}<button onClick={loadData} style={st.retryBtn}>Retry</button></div></div>);
+  /*
+   * One shell, outliving the five branches.
+   *
+   * Signed-out, loading, errored, not-yet-enrolled and enrolled each returned
+   * their own root. Three of the five carried no heading at all, so a visitor
+   * who was simply not signed in saw one sentence on a blank page. The two that
+   * DID carry one repeated `<h1 style={st.heading}>Affiliate Program</h1>`
+   * verbatim, which is the duplication this pattern exists to remove: the page
+   * says what it is once, and the branch decides only the body.
+   */
+  const shell = {
+    title: 'Affiliate Program',
+    icon: Share2,
+    width: 'standard' as const,
+    subtitle: 'Refer traders and earn recurring commission',
+  };
+
+  if(!userId)return(<PageShell {...shell}><p style={{color:'var(--text-dim)'}}>Please log in to view your affiliate dashboard.</p></PageShell>);
+  if(loading)return(<PageShell {...shell}><p style={{color:'var(--text-dim)'}}>Loading affiliate data…</p></PageShell>);
+  if(apiError)return(<PageShell {...shell}><div style={st.errorBox}><strong>Error:</strong> {apiError}<button onClick={loadData} style={st.retryBtn}>Retry</button></div></PageShell>);
 
   if(!account)return(
-    <div className="page-content">
-      <h1 style={st.heading}>Affiliate Program</h1>
+    <PageShell {...shell}>
       <div style={st.enrollCard}>
         <h2 style={{fontSize:22,marginBottom:12,color:'var(--text-strong)'}}>Earn by referring traders</h2>
         <p style={{color:'var(--text-dim)',marginBottom:24,lineHeight:1.6}}>Share your referral link and earn recurring commissions. Commissions range from <strong style={{color:'var(--text-strong)'}}>10% (Bronze)</strong> to <strong style={{color:'var(--ai-model)'}}>25% (Platinum)</strong>.</p>
         <div style={st.tierGrid}>{Object.entries(LEVEL_RATES).map(([level,rate])=>(<div key={level} style={{...st.tierCard,border:`1px solid ${LEVEL_COLORS[level]}`}}><div style={{color:LEVEL_COLORS[level],fontWeight:700,textTransform:'capitalize',marginBottom:4}}>{level}</div><div style={{fontSize:24,fontWeight:800,color:'var(--text-strong)'}}>{rate}</div><div style={{fontSize:12,color:'var(--text-muted)'}}>commission</div></div>))}</div>
         <button onClick={handleSignup} disabled={signupLoading} style={{...st.primaryBtn,marginTop:24,opacity:signupLoading?0.6:1}}>{signupLoading?'Joining…':'Join the affiliate program'}</button>
       </div>
-    </div>
+    </PageShell>
   );
 
   // /register?ref= is the only URL that attributes without relying on the landing
@@ -143,10 +161,9 @@ const Affiliate:React.FC=()=>{
   // same shape.
   const referralLink=`${window.location.origin}/register?ref=${account.code}`;
   return(
-    <div className="page-content">
+    <PageShell {...shell}>
       <div style={st.pageHeader}>
         <div>
-          <h1 style={st.heading}>Affiliate Program</h1>
           <div style={{display:'flex',alignItems:'center',gap:10}}>
             <span style={{...st.levelBadge,background:LEVEL_COLORS[account.level]+'22',color:LEVEL_COLORS[account.level],border:`1px solid ${LEVEL_COLORS[account.level]}`}}>{account.level.toUpperCase()}</span>
             <span style={{color:'var(--text-muted)',fontSize:14}}>{Number.isFinite(account.commission_rate) ? (account.commission_rate*100).toFixed(0) : '—'}% commission · {statusBadge(account.status)}</span>
@@ -235,7 +252,7 @@ const Affiliate:React.FC=()=>{
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

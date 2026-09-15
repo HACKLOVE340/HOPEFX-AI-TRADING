@@ -30,7 +30,7 @@ Measured 2026-09-15, immediately before this document was written:
 | Measure | Value |
 |---|---|
 | Correction register | 97 findings · OPEN 1 · PARTIAL 9 · OWNER 8 · FIXED 79 |
-| Pages on the standard shell | 53 of 63 — **10 off** |
+| Pages on the standard shell | 56 of 63 — **7 off** |
 | Colour literals | 3,553 across 190 files |
 | Emoji used as icons | 750 across 125 files |
 | Inline `fontSize` the cascade cannot reach | 2,108 (was 2,871) |
@@ -241,18 +241,19 @@ A **size ratchet** (mirroring `frontend_colour_ratchet.py`) would stop the count
 growing while this is decided. It does not exist yet; the register's probe
 measures the number but does not block on it.
 
-### 2. The 10 pages still off the standard shell
+### 2. The 7 pages still off the standard shell
 
 `python scripts/frontend_page_shell_ratchet.py --check` names them:
 
 ```
-AICore · Affiliate · CryptoCheckout · DocsPage · MLDashboard
-NuclearDashboardPage · StatusPage · SuperAdminDashboard
-Trading · TradingDashboard
+AICore · DocsPage · MLDashboard · NuclearDashboardPage
+SuperAdminDashboard · Trading · TradingDashboard
 ```
 
-Four were migrated on 2026-09-15: `NotificationsPage` and `Settings` (a single
-`page-content` root each), then `WalkForward` and `Profile` (multi-root).
+Seven were migrated on 2026-09-15: `NotificationsPage` and `Settings` (a single
+`page-content` root each), then `WalkForward`, `Profile`, `StatusPage` and
+`Affiliate` (multi-root, one shared shell), then `CryptoCheckout` (multi-root,
+**five different shells** — see below).
 
 **The pattern for a multi-root page — let the shell OUTLIVE the branch.** These
 pages return early for loading, error and signed-out states, and each return
@@ -264,11 +265,23 @@ is then a property of the page rather than of its request having succeeded.
 `frontend/src/test/the_shell_outlives_the_branch.test.tsx` holds it and was red
 on five of six assertions before the work.
 
-Remaining counts: Affiliate five roots, CryptoCheckout five, StatusPage three.
-`AICore`, `Trading` and `TradingDashboard` own full-bleed layouts and should
-probably get a **fourth width** on `PageShell` rather than being forced into the
-three that exist. `SuperAdminDashboard` is a tab shell whose children are the
-real pages.
+**Not every multi-root page wants ONE shell.** `CryptoCheckout`'s five roots are
+five steps of a wizard — Crypto Checkout, Send Payment, Confirming Payment,
+Payment Confirmed — and each legitimately has its own title. Each branch already
+used `PageHeader`, so the migration was header-to-shell per branch, not one
+shared identity. Read the branches before assuming: a page whose branches are
+STATES of one screen wants one shell; a page whose branches are SCREENS wants
+one each.
+
+That conversion was done by an AST-style matcher rather than by hand, and its
+first version threw on a self-closing `<div … />` — which is the right failure,
+because it wrote nothing. Fix the matcher, never the file.
+
+Remaining: `AICore`, `Trading` and `TradingDashboard` own full-bleed layouts and
+should probably get a **fourth width** on `PageShell` rather than being forced
+into the three that exist — that is a design decision and wants the owner's
+word. `SuperAdminDashboard` is a tab shell whose children are the real pages.
+`DocsPage`, `MLDashboard` and `NuclearDashboardPage` are ordinary and tractable.
 
 **Two things `WalkForward` and `Profile` turned up, worth expecting again:**
 

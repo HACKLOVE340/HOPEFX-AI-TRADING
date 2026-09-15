@@ -25,7 +25,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import QRCode from '../components/QRCode';
 import { useRefreshPlan } from '../hooks/usePlan';
 import { CrossLinkBar } from '../components/CrossLinkBar';
@@ -409,11 +409,11 @@ const CryptoCheckout: React.FC = () => {
   // ── Step: Select ───────────────────────────────────────────────────────────
   if (step === 'select') {
     return (
-      <div className="page-content">
-        <PageHeader title="Crypto Checkout" subtitle="Pay with Bitcoin, Ethereum, or USDT — no card required."
+      <PageShell title="Crypto Checkout" subtitle="Pay with Bitcoin, Ethereum, or USDT — no card required."
           breadcrumbs={breadcrumbs}
           actions={<Link to="/upgrade" style={st.headerLink}>← All Plans</Link>}
-        />
+      >
+
         {catalogueErr && <div style={st.warnBox} role="alert">{catalogueErr}</div>}
         {ratesErr && <div style={st.warnBox}>{ratesErr}</div>}
         {addressError && <div style={st.errorBox}>{addressError}</div>}
@@ -495,17 +495,17 @@ const CryptoCheckout: React.FC = () => {
           { label: '⚙️ Settings',    href: '/settings', color: '#34d399' },
           { label: '📊 Dashboard',   href: '/dashboard',color: '#fbbf24' },
         ]}/>
-      </div>
+      </PageShell>
     );
   }
 
   // ── Step: Address ───────────────────────────────────────────────────────────
   if (step === 'address' && depositInfo) {
     return (
-      <div className="page-content">
-        <PageHeader title="Send Payment" breadcrumbs={breadcrumbs}
+      <PageShell title="Send Payment" breadcrumbs={breadcrumbs}
           actions={<button onClick={() => setStep('select')} style={st.backBtn}>← Back</button>}
-        />
+      >
+
         <div style={st.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
             <span style={{ color: meta.color, fontSize: 32 }}>{meta.icon}</span>
@@ -571,7 +571,7 @@ const CryptoCheckout: React.FC = () => {
             I've sent the payment →
           </button>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -581,8 +581,9 @@ const CryptoCheckout: React.FC = () => {
     const confirmed = paymentStatus?.confirmations ?? 0;
     const pct = Math.min(100, required > 0 ? (confirmed / required) * 100 : 0);
     return (
-      <div className="page-content">
-        <PageHeader title="Confirming Payment" breadcrumbs={breadcrumbs} />
+      <PageShell title="Confirming Payment" breadcrumbs={breadcrumbs}
+      >
+
         <StaleDataNotice
           failed={statusFreshness.failed}
           what="payment status"
@@ -616,15 +617,16 @@ const CryptoCheckout: React.FC = () => {
               : ' This page polls automatically every ' + POLL_INTERVAL_MS / 1000 + ' seconds.'}
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // ── Step: Complete ──────────────────────────────────────────────────────────
   if (step === 'complete') {
     return (
-      <div className="page-content">
-        <PageHeader title="Payment Confirmed" breadcrumbs={breadcrumbs} />
+      <PageShell title="Payment Confirmed" breadcrumbs={breadcrumbs}
+      >
+
         <div style={{ ...st.card, textAlign: 'center', padding: '48px 32px' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
@@ -643,15 +645,14 @@ const CryptoCheckout: React.FC = () => {
             </Link>
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Fallback: step='address' or 'confirming' but depositInfo not yet set
   // (can occur during the React batch-render between setDepositInfo + setStep)
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell
         title={step === 'confirming' ? 'Confirming Payment' : 'Send Payment'}
         breadcrumbs={breadcrumbs}
         actions={
@@ -659,7 +660,8 @@ const CryptoCheckout: React.FC = () => {
             ← Back
           </button>
         }
-      />
+    >
+
       <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
         {addressError ? (
           <>
@@ -690,7 +692,7 @@ const CryptoCheckout: React.FC = () => {
           </>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 };
 

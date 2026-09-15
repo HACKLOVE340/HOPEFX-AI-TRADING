@@ -28,15 +28,25 @@ import { MemoryRouter } from 'react-router-dom';
 const never = () => new Promise(() => {});
 const fails = () => Promise.reject(new Error('upstream is down'));
 
-const walkForwardGet = vi.fn();
+// One spy behind `api.get`, shared by every page that uses the bare client.
+// Each describe block resets it, so the pages cannot see each other's answers.
+const apiGet = vi.fn();
 const profileGet = vi.fn();
+const affiliateGet = vi.fn();
 
 vi.mock('../hooks/useApi', async (orig) => {
   const real = await (orig() as Promise<Record<string, unknown>>);
   return {
     ...real,
-    api: { ...(real.api as object), get: (...a: unknown[]) => walkForwardGet(...a) },
+    api: { ...(real.api as object), get: (...a: unknown[]) => apiGet(...a), post: (...a: unknown[]) => apiGet(...a) },
     profileApi: { get: (...a: unknown[]) => profileGet(...a), update: vi.fn() },
+    affiliateApi: {
+      account: (...a: unknown[]) => affiliateGet(...a),
+      referrals: (...a: unknown[]) => affiliateGet(...a),
+      commissions: (...a: unknown[]) => affiliateGet(...a),
+      leaderboard: (...a: unknown[]) => affiliateGet(...a),
+      signup: vi.fn(),
+    },
   };
 });
 
@@ -52,15 +62,23 @@ vi.mock('lightweight-charts', () => ({
 
 import WalkForward from '../pages/WalkForward';
 import Profile from '../pages/Profile';
+import StatusPage from '../pages/StatusPage';
+import Affiliate from '../pages/Affiliate';
 
 const PAGES = [
-  { name: 'Walk-Forward', Component: WalkForward, mock: walkForwardGet, heading: /walk-forward/i },
+  { name: 'Walk-Forward', Component: WalkForward, mock: apiGet, heading: /walk-forward/i },
   { name: 'Profile', Component: Profile, mock: profileGet, heading: /profile/i },
+  // StatusPage had no h1 in ANY branch before this — not while loading, not on
+  // error, not on success. It is the clearest case in the set: the page a user
+  // opens when they suspect the platform is broken did not say what it was.
+  { name: 'Status', Component: StatusPage, mock: apiGet, heading: /status/i },
+  { name: 'Affiliate', Component: Affiliate, mock: affiliateGet, heading: /affiliate/i },
 ];
 
 beforeEach(() => {
-  walkForwardGet.mockReset();
+  apiGet.mockReset();
   profileGet.mockReset();
+  affiliateGet.mockReset();
 });
 afterEach(() => cleanup());
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Circle, ShieldAlert, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { Activity } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
 import { extractApiError } from '../lib/utils';
@@ -202,13 +204,34 @@ const StatusPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [load]);
 
+  /*
+   * One shell, outliving the branches.
+   *
+   * This page had no h1 in ANY of its three states — not while loading, not on
+   * error, not on success. It is the page a user opens when they suspect the
+   * platform is broken, and it did not say what it was or offer a way onward.
+   * The identity is declared once here and spread into every branch, so the
+   * heading is a property of the page rather than of its request having
+   * succeeded.
+   */
+  const shell = {
+    title: 'System Status',
+    icon: Activity,
+    width: 'standard' as const,
+    subtitle: 'Live component health, incidents and 30-day uptime',
+  };
+
   if (loading) {
-    return <div className="page-content"><p style={{ color: 'var(--text-muted)' }}>Checking system status…</p></div>;
+    return (
+      <PageShell {...shell}>
+        <p style={{ color: 'var(--text-muted)' }}>Checking system status…</p>
+      </PageShell>
+    );
   }
 
   if (error || !data) {
     return (
-      <div className="page-content">
+      <PageShell {...shell}>
         <div style={{ ...styles.banner, background: '#450a0a', border: '1px solid #dc2626' }}>
           <span style={{ fontSize: 32 }}>❌</span>
           <div>
@@ -217,7 +240,7 @@ const StatusPage: React.FC = () => {
           </div>
           <button onClick={load} style={styles.refreshBtn} title="Retry">↻</button>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -231,7 +254,7 @@ const StatusPage: React.FC = () => {
     : 100;
 
   return (
-    <div className="page-content">
+    <PageShell {...shell}>
       {/* Banner */}
       <div style={{
         ...styles.banner,
@@ -461,7 +484,7 @@ const StatusPage: React.FC = () => {
         Auto-refreshes every 60s &nbsp;·&nbsp;
         <a href="/api/status/json" style={{ color: '#3b82f6' }}>JSON API</a>
       </div>
-    </div>
+    </PageShell>
   );
 };
 
