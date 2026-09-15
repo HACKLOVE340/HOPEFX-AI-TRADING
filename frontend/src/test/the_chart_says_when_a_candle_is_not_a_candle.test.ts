@@ -148,3 +148,64 @@ describe('assessBars — what lightweight-charts requires', () => {
     expect(q.usable).toBe(false);
   });
 });
+
+// ── the other half: what the chart shows when NOTHING arrived ────────────────
+//
+// `assessBars` deliberately says nothing for an empty series, because that is
+// the 503 path and the endpoint's own message is the one the operator needs.
+// This asserts that message actually survives the trip: the API returns a
+// structured `detail` object, and `extractApiError` has to unwrap it rather
+// than stringify it.
+//
+// It matters on `/ai-chart-dashboard`, which renders six panels at 1h.
+// Measured 2026-09-15, five of those six symbols have a working yfinance
+// ticker and one does not — XAUUSD, the instrument this platform trades. So the
+// gold panel is the one that fails, and it is first in the grid. The refusal
+// now names the timeframes bundled history CAN serve, and that sentence is
+// useless if the chart drops it.
+
+import { extractApiError } from '../lib/utils';
+
+describe('the 503 reaches the operator intact', () => {
+  const refusal = (available: string[]) => ({
+    response: {
+      status: 503,
+      data: {
+        detail: {
+          error: 'ohlcv_unavailable',
+          message:
+            'No real OHLCV data available for XAUUSD 1h. The price engine and all fallback '
+            + 'feeds are currently unavailable. Configure a live data feed (GOLDAPI_IO_KEY, '
+            + 'OANDA_API_KEY, etc.).'
+            + (available.length ? ` Bundled history can still serve ${available.join(', ')} for this symbol without any feed.` : ''),
+          symbol: 'XAUUSD',
+          timeframe: '1h',
+          available_timeframes: available,
+        },
+      },
+    },
+  });
+
+  it('keeps the sentence naming the timeframes that would work', () => {
+    const shown = extractApiError(refusal(['1d', '1w']), 'Failed to load chart');
+    expect(shown).toContain('1d');
+    expect(shown).toContain('1w');
+  });
+
+  it('still names the feed to configure', () => {
+    expect(extractApiError(refusal(['1d', '1w']), 'x')).toContain('OANDA_API_KEY');
+  });
+
+  it('does not fall back to the generic message, and does not dump JSON at the operator', () => {
+    const shown = extractApiError(refusal(['1d']), 'Failed to load chart');
+    expect(shown).not.toBe('Failed to load chart');
+    expect(shown).not.toContain('{');
+    expect(shown).not.toContain('ohlcv_unavailable');
+  });
+
+  it('promises nothing for a symbol with no bundled history', () => {
+    const shown = extractApiError(refusal([]), 'x');
+    expect(shown).not.toContain('Bundled history');
+    expect(shown).toContain('OANDA_API_KEY');
+  });
+});

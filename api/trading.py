@@ -2696,6 +2696,57 @@ async def get_prices(
     return {}
 
 
+# Timeframes `_load_gold_history_csv` can actually serve. Kept beside it so the
+# two cannot drift: a list that promised a timeframe the loader refuses would
+# send the operator to a second failure.
+_CSV_FALLBACK_TIMEFRAMES: tuple[str, ...] = ("1d", "1w")
+
+
+def _servable_fallback_timeframes(symbol: str) -> tuple[str, ...]:
+    """Timeframes this deployment can serve for *symbol* with no live feed.
+
+    Only the bundled gold history qualifies — it is the one source that needs
+    neither the price engine nor the network. Everything else depends on a feed
+    that is either up or is not, and claiming otherwise would be a promise the
+    next request breaks.
+    """
+    return _CSV_FALLBACK_TIMEFRAMES if symbol.upper() == "XAUUSD" else ()
+
+
+def _ohlcv_unavailable_detail(symbol: str, timeframe: str) -> dict:
+    """The 503 body, naming what WOULD work.
+
+    The refusal itself was already honest: it declines to fabricate bars and
+    names the feed to configure. What it did not say is that another timeframe
+    is sitting right there.
+
+    That matters most on `/ai-chart-dashboard`, which renders six panels at 1h.
+    Measured 2026-09-15, five of those six symbols have a working yfinance
+    ticker and one does not — XAUUSD, the instrument this platform trades,
+    whose ticker is deliberately empty because Yahoo delisted the contract. So
+    the gold panel is the one that fails, it is first in the grid, and an
+    operator reading "no data" concludes the instrument is broken rather than
+    the timeframe.
+    """
+    available = _servable_fallback_timeframes(symbol)
+    message = (
+        f"No real OHLCV data available for {symbol} {timeframe}. "
+        "The price engine and all fallback feeds are currently unavailable. "
+        "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
+    )
+    if available:
+        message += " Bundled history can still serve " + ", ".join(available) + " for this symbol without any feed."
+    return {
+        "error": "ohlcv_unavailable",
+        "message": message,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        # Machine-readable so a chart can offer the switch rather than making
+        # the operator parse a sentence.
+        "available_timeframes": list(available),
+    }
+
+
 def _load_gold_history_csv(timeframe: str, limit: int) -> list[dict]:
     """Deep historical XAUUSD OHLCV from a bundled CSV (daily back to ~2000).
 
@@ -2969,16 +3020,7 @@ async def get_ohlcv(
     )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "ohlcv_unavailable",
-            "message": (
-                f"No real OHLCV data available for {symbol} {timeframe}. "
-                "The price engine and all fallback feeds are currently unavailable. "
-                "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
-            ),
-            "symbol": symbol,
-            "timeframe": timeframe,
-        },
+        detail=_ohlcv_unavailable_detail(symbol, timeframe),
     )
 
 
