@@ -10,7 +10,7 @@
  */
 
 import React, {
-  useEffect, useRef, memo,
+  useEffect, useRef, useMemo, memo,
 } from 'react';
 import {
   createChart,
@@ -33,6 +33,7 @@ import { fmtPrice, fmtPctRaw, fmtSpread } from '../../../lib/utils';
 import { severityColor } from '../types/nuclear';
 import type { OHLCVBar } from '../types/nuclear';
 import { toUTCSeconds as toUTC } from '../../../lib/chartTime';
+import { assessBars } from '../../../lib/barQuality';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -229,6 +230,12 @@ const NuclearCandleChart = memo(() => {
 
   // ── Update candles ──────────────────────────────────────────────────────────
 
+  /*
+   * What the bars are worth — see `lib/barQuality.ts`. Derived from `bars`
+   * rather than set inside the effect below, so it cannot outlive them.
+   */
+  const barNotice = useMemo(() => assessBars(bars ?? []).notice, [bars]);
+
   useEffect(() => {
     if (!candleRef.current || !bars.length) return;
     const sorted = [...bars].sort((a, b) => a.time - b.time);
@@ -309,6 +316,14 @@ const NuclearCandleChart = memo(() => {
 
       {/* Chart canvas */}
       <div ref={containerRef} style={s.canvas} />
+
+      {/* Beside the chart, not over it. The legend and the alert overlay both
+          sit on the canvas already; a third thing over it would bury two. */}
+      {barNotice && (
+        <div role="status" style={{ padding: '2px 12px 4px', fontSize: 10, lineHeight: 1.4, color: 'var(--warn)' }}>
+          {barNotice}
+        </div>
+      )}
 
       {/* Nuclear zone overlay (red tint on alert) */}
       {isAlert && (

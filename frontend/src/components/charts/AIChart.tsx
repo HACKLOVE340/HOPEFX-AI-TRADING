@@ -29,6 +29,7 @@ import { ohlcvLimitFor } from '../../features/chart-bot/services/chart-api';
 import { cn, fmtPrice, extractApiError } from '../../lib/utils';
 import type { PriceTick } from '../../types';
 import { toUTCSeconds as toUTC } from '../../lib/chartTime';
+import { assessBars } from '../../lib/barQuality';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -158,6 +159,19 @@ export function AIChart({
   const [loading,        setLoading]        = useState(true);
   const [analyzing,      setAnalyzing]      = useState(false);
   const [chartError,     setChartError]     = useState<string | null>(null);
+  /*
+   * What the bars that DID arrive are worth. `chartError` covers "nothing
+   * came" — the endpoint's 503, which already names the symbol, the timeframe
+   * and the feed to configure. This covers "these are not candles": measured
+   * on the daily series this chart can serve with no live feed, 62 of 500 bars
+   * have no body or no wicks, and it drew them as though the market had been
+   * still. See `lib/barQuality.ts`.
+   *
+   * State rather than a memo here, unlike the chart-bot charts: this component
+   * fetches into a ref inside an effect rather than holding the bars in React,
+   * so there is nothing to derive from.
+   */
+  const [barNotice, setBarNotice] = useState<string | null>(null);
   const [aiError,        setAiError]        = useState<string | null>(null);
   const [candles,        setCandles]        = useState<OHLCVCandle[]>([]);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
@@ -226,7 +240,7 @@ export function AIChart({
 
   const loadOhlcv = useCallback((initial = false) => {
     if (!candleRef.current || !hydrated || !isAuth) return;
-    if (initial) { setLoading(true); setChartError(null); setAiResult(null); }
+    if (initial) { setLoading(true); setChartError(null); setAiResult(null); setBarNotice(null); }
 
     // Load a meaningful history window per timeframe (e.g. ~1500 bars on 1h,
     // 8000 on daily) instead of a fixed 300 bars, which only covered ~12 days
@@ -235,7 +249,7 @@ export function AIChart({
       .then((r) => {
         const raw  = r.data as OHLCVCandle[] | { data?: OHLCVCandle[] };
         const data = Array.isArray(raw) ? raw : (raw.data ?? []);
-        if (!data.length) { if (initial) setChartError('No OHLCV data'); return; }
+        if (!data.length) { if (initial) setChartError('No OHLCV data'); setBarNotice(null); return; }
 
         // Drop bars whose timestamp will not convert. toUTC returns NaN for an
         // unparseable value, and NaN times are what surface as
@@ -253,6 +267,11 @@ export function AIChart({
         // still closes over the previous `candles`.
         const newest = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
         lastBarTimeRef.current = newest ? toUTC(newest.timestamp) : null;
+
+        setBarNotice(assessBars(sorted.map((c) => ({
+          time: toUTC(c.timestamp),
+          open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume,
+        }))).notice);
 
         candleRef.current!.setData(sorted.map((c) => ({
           time: toUTC(c.timestamp),
@@ -275,6 +294,7 @@ export function AIChart({
       .catch((err) => {
         if (!initial) return; // silent on background refresh
         setChartError(extractApiError(err, 'Failed to load chart'));
+        setBarNotice(null);
       })
       .finally(() => { if (initial) setLoading(false); });
   }, [symbol, timeframe, hydrated, isAuth]);
@@ -478,6 +498,13 @@ export function AIChart({
         {/* Container always rendered so the chart canvas has a real size on init */}
         <div ref={containerRef} style={{ width: '100%', height }} />
       </div>
+      {/* Beside the chart, not over it: these bars are still worth looking at,
+          and an overlay would hide the thing it describes. */}
+      {barNotice && !chartError && (
+        <div role="status" className="px-2 pb-1 text-[10px] leading-snug text-[var(--warn)]">
+          {barNotice}
+        </div>
+      )}
 
       {/* ── AI analysis text summary ────────────────────────────────── */}
       {aiResult?.reasoning && (
