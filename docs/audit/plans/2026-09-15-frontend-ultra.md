@@ -233,7 +233,7 @@ beside it. The AI's tag is an opinion with a model name on it, not a fact.
 
 ## Part 5 — Tasks
 
-### Task 1: Land the foundation already built
+### Task 1: Land the foundation already built — **DONE, commit `e9f00a0a`**
 
 **Files:**
 - Modify: `frontend/src/index.css` (palette + ground tokens, both themes)
@@ -258,7 +258,14 @@ beside it. The AI's tag is an opinion with a model name on it, not a fact.
 
 ---
 
-### Task 2: Density becomes a user choice
+### Task 2: Density becomes a user choice — **DONE, commits `c2811c06` and `b86d8478`**
+
+> Landed with one finding the plan did not anticipate: the control was DEAD.
+> `data-density` reached 29 class usages against 2,871 inline sizes, so making
+> it settable changed almost nothing. `scripts/frontend_size_codemod.py`
+> converted 763 of them; 2,108 remain and need per-bucket decisions. Tracked as
+> DENSITY-CANNOT-REACH in the correction register. See
+> `docs/audit/FRONTEND_HANDOVER.md` before starting Task 3.
 
 **Files:**
 - Create: frontend/src/lib/densityPref.ts — to be created
@@ -387,7 +394,7 @@ export function densityFor(pathname: string, pref: Density | null = null): Densi
 
 ---
 
-### Task 3: The motion layer
+### Task 3: The motion layer — **NOT STARTED**
 
 **Files:**
 - Create: frontend/src/styles/motion.css — to be created (imported by `index.css`)
@@ -440,7 +447,7 @@ describe('the motion budget', () => {
 
 ---
 
-### Task 4: The elevation rule, enforced
+### Task 4: The elevation rule, enforced — **NOT STARTED**
 
 **Files:**
 - Create: frontend/src/test/elevation_is_spent_by_role.test.ts — to be created
@@ -457,7 +464,7 @@ describe('the motion budget', () => {
 
 ---
 
-### Task 5: Finish the PageShell migration (14 pages)
+### Task 5: Finish the PageShell migration (14 pages) — **NOT STARTED**
 
 **Files:** the 14 named by `python scripts/frontend_page_shell_ratchet.py --check`.
 
@@ -469,7 +476,11 @@ describe('the motion budget', () => {
 
 ---
 
-### Task 6: Wire the 19 data pages that call no API
+### Task 6: Wire the 19 data pages that call no API — **NOT STARTED**
+
+> Re-measured 2026-09-15: **11** routed pages call no API, not 19, and four of
+> them (DocsPage, PrivacyPolicy, TermsAndRiskDisclosure, NotFound) are correctly
+> static and must stay that way. Five are worth wiring. See the handover.
 
 **Files:** the 19 identified in Part 0, one commit per page.
 
@@ -484,7 +495,7 @@ prettier empty page.
 
 ---
 
-### Task 7: Apply the enrichment rules by archetype
+### Task 7: Apply the enrichment rules by archetype — **NOT STARTED**
 
 **Files:** per the table in Part 3, one commit per archetype.
 
@@ -504,7 +515,7 @@ expect(lost, `these disappeared from the page: ${lost.join(' | ')}`).toEqual([])
 
 ---
 
-### Task 8: The AI Room
+### Task 8: The AI Room — **NOT STARTED**
 
 **Files:**
 - Create: frontend/src/components/ai/AIRoom.tsx — to be created
@@ -556,7 +567,7 @@ it('never labels a model as a person', async () => {
 
 ---
 
-### Task 9: The Community Room
+### Task 9: The Community Room — **NOT STARTED**
 
 **Files:**
 - Create: frontend/src/hooks/useCommunityRooms.ts — to be created (the missing client for `api/community_chat.py`)
@@ -577,7 +588,7 @@ it('never labels a model as a person', async () => {
 
 ---
 
-### Task 10: Live News inside Community
+### Task 10: Live News inside Community — **NOT STARTED**
 
 **Files:**
 - Create: frontend/src/components/community/NewsWall.tsx — to be created
@@ -592,7 +603,7 @@ it('never labels a model as a person', async () => {
 
 ---
 
-### Task 11: Prove the whole thing, then document it
+### Task 11: Prove the whole thing, then document it — **NOT STARTED**
 
 - [ ] **Step 1: Drive all 93 routes** at 1440 and 390, capturing console errors, failed requests, unnamed controls and duplicate ids. Expected: no regressions against the control run.
 - [ ] **Step 2: Re-measure contrast** in both themes across the driven routes. Expected: 0 failures.
