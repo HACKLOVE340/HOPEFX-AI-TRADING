@@ -30,8 +30,8 @@ Measured 2026-09-15, immediately before this document was written:
 | Measure | Value |
 |---|---|
 | Correction register | 97 findings · OPEN 1 · PARTIAL 9 · OWNER 8 · FIXED 79 |
-| Pages on the standard shell | 49 of 63 — **14 off** |
-| Colour literals | 3,555 across 190 files |
+| Pages on the standard shell | 51 of 63 — **12 off** |
+| Colour literals | 3,553 across 190 files |
 | Emoji used as icons | 750 across 125 files |
 | Inline `fontSize` the cascade cannot reach | 2,108 (was 2,871) |
 | Numeric spacing utilities | 1,089 |
@@ -241,15 +241,23 @@ A **size ratchet** (mirroring `frontend_colour_ratchet.py`) would stop the count
 growing while this is decided. It does not exist yet; the register's probe
 measures the number but does not block on it.
 
-### 2. The 14 pages still off the standard shell
+### 2. The 12 pages still off the standard shell
 
 `python scripts/frontend_page_shell_ratchet.py --check` names them:
 
 ```
-AICore · Affiliate · CryptoCheckout · DocsPage · MLDashboard · NotificationsPage
-NuclearDashboardPage · Profile · Settings · StatusPage · SuperAdminDashboard
+AICore · Affiliate · CryptoCheckout · DocsPage · MLDashboard
+NuclearDashboardPage · Profile · StatusPage · SuperAdminDashboard
 Trading · TradingDashboard · WalkForward
 ```
+
+`NotificationsPage` and `Settings` were migrated on 2026-09-15; they were the
+only two with a single `page-content` root. The rest have **several**, because
+they return early for loading, error and signed-out states and each return
+carries its own root — Affiliate has five, CryptoCheckout five, Profile five,
+StatusPage three, WalkForward two. Migrating one of those means every branch,
+and a branch left behind is a page that renders unframed exactly when something
+has gone wrong.
 
 These are the hard ones — the earlier 49 were the tractable ones. `AICore`,
 `Trading` and `TradingDashboard` own their own full-bleed layouts and should
@@ -261,6 +269,19 @@ children are the real pages.
 slicing. A non-greedy regex cannot match nested JSX — `<PageHeader[\s\S]*?/>`
 stops at the `/>` inside `actions={<button …/>}`, which produced 7 false
 refusals before it was caught.
+
+**Method that worked for these two:** exact-string replacement of the header
+block, asserted before writing. Line-offset surgery was tried first and its own
+assertion caught an off-by-index before anything was written — the fix was to
+stop counting lines, not to fix the count.
+
+**The gate that measures this was broken and is now fixed.** `_on_shell` was
+`"PageShell" in text`, and adding `// TODO: migrate this page to PageShell one
+day` to a page moved it out of the debt list. It now requires a real import AND
+a real element, reading code with comments and string literals stripped. Seven
+tests in `tests/unit/test_frontend_page_shell_ratchet.py` hold it, one of which
+asserts the 49 already-migrated pages do not reclassify under the stricter
+rule.
 
 ### 3. Pages that render but fetch nothing
 

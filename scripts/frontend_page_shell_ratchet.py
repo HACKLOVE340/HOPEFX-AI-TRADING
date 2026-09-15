@@ -142,8 +142,59 @@ def _is_page(path: Path, routed: set[str], public: set[str]) -> bool:
     return path.stem not in public  # reachable signed-out; see _public_pages
 
 
+# Comments and string literals, in that order. A `//` inside a string is not a
+# comment and a quote inside a comment does not open a string, so the two cannot
+# be stripped independently — they are alternatives in one pattern, and only the
+# comment and string branches are replaced.
+_PROSE = re.compile(
+    r"""
+      (?P<block>  /\*[\s\S]*?\*/ )
+    | (?P<line>   //[^\n]* )
+    | (?P<single> '(?:\\.|[^'\\\n])*' )
+    | (?P<double> "(?:\\.|[^"\\\n])*" )
+    | (?P<tmpl>   `(?:\\.|[^`\\])*` )
+    """,
+    re.VERBOSE,
+)
+
+_IMPORTS_SHELL = re.compile(r"\bimport\b[\s\S]{0,200}?\bPageShell\b[\s\S]{0,200}?\bfrom\b")
+_RENDERS_SHELL = re.compile(r"<PageShell[\s/>]")
+
+
+def _strip_prose(text: str) -> str:
+    """Blank out comments and string literals, keeping line structure."""
+
+    def blank(m: re.Match[str]) -> str:
+        return re.sub(r"[^\n]", " ", m.group(0))
+
+    return _PROSE.sub(blank, text)
+
+
 def _on_shell(text: str) -> bool:
-    return "PageShell" in text
+    """Does this page actually BUILD on PageShell?
+
+    This was `"PageShell" in text`, and it was injection-proven wrong on
+    2026-09-15: adding the single line
+
+        // TODO: migrate this page to PageShell one day
+
+    to `pages/WalkForward.tsx` — no import, no element, no behaviour change of
+    any kind — moved the page out of the debt list and made the ratchet offer to
+    bank the progress. A checker reading prose as code is F255, and this is the
+    fourth time in this repository.
+
+    It matters more here than in the other three, because this gate's whole job
+    is to refuse a NEW page that is not on the shell. A contributor who writes a
+    TODO about migrating passed it, which inverts the control: the pages most
+    likely to carry that comment are exactly the ones not yet migrated.
+
+    Both halves are required and neither is sufficient. An import with no
+    element is a leftover from a botched migration and renders nothing; an
+    element with no import does not compile, and counting it would record a
+    broken page as a migrated one.
+    """
+    code = _strip_prose(text)
+    return bool(_IMPORTS_SHELL.search(code)) and bool(_RENDERS_SHELL.search(code))
 
 
 def measure() -> dict[str, int]:

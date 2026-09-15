@@ -1,16 +1,14 @@
 {
  "_comment": "Page components not yet built on components/system/PageShell.tsx, as of 2026-09-14. This list may only SHRINK. A page that reaches the shell must have its line DELETED \u2014 an entry that no longer describes anything is how a ratchet quietly stops being one. A page NOT on this list and not on the shell blocks: a new page is where new inconsistency arrives, and PageShell is one import. See scripts/frontend_page_shell_ratchet.py.",
- "_total": 14,
+ "_total": 12,
  "files": {
   "frontend/src/pages/AICore.tsx": 1,
   "frontend/src/pages/Affiliate.tsx": 1,
   "frontend/src/pages/CryptoCheckout.tsx": 1,
   "frontend/src/pages/DocsPage.tsx": 1,
   "frontend/src/pages/MLDashboard.tsx": 1,
-  "frontend/src/pages/NotificationsPage.tsx": 1,
   "frontend/src/pages/NuclearDashboardPage.tsx": 1,
   "frontend/src/pages/Profile.tsx": 1,
-  "frontend/src/pages/Settings.tsx": 1,
   "frontend/src/pages/StatusPage.tsx": 1,
   "frontend/src/pages/SuperAdminDashboard.tsx": 1,
   "frontend/src/pages/Trading.tsx": 1,

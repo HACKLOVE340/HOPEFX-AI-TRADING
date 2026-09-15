@@ -46,7 +46,13 @@ def _load(pages: Path, record: Path):
     return mod
 
 
-ON_SHELL = "import { PageShell } from '../components/system/PageShell';\nexport default function P() { return null; }\n"
+# A page that IMPORTS the shell and RENDERS it. Both halves matter: an import
+# with no element is a leftover from a botched migration, and the gate used to
+# accept it — see the F255 tests at the foot of this file.
+ON_SHELL = (
+    "import { PageShell } from '../components/system/PageShell';\n"
+    'export default function P() { return <PageShell title="P">body</PageShell>; }\n'
+)
 OFF_SHELL = "export default function P() { return null; }\n"
 
 
@@ -258,3 +264,91 @@ def test_the_real_record_describes_a_real_tree():
         assert "PageShell" not in (REPO / rel).read_text(encoding="utf-8"), (
             f"{rel} is on the shell and must leave the record"
         )
+
+
+# ── the gate must read code, not prose ───────────────────────────────────────
+#
+# `_on_shell` was `"PageShell" in text`. Injection-proven 2026-09-15: adding the
+# single line
+#
+#     // TODO: migrate this page to PageShell one day
+#
+# to `pages/WalkForward.tsx` — no import, no element, no behaviour change of any
+# kind — moved the page out of the debt list and made the ratchet offer to bank
+# the progress.
+#
+# That is F255, a checker reading prose as code, for the fourth time in this
+# repository. It matters more here than in the other three because this gate's
+# whole job is to refuse a NEW page that is not on the shell: a contributor who
+# writes a TODO about migrating passes it, which inverts the control.
+
+
+def _on_shell(text: str) -> bool:
+    """Load the checker the same way the rest of this file loads the module."""
+    spec = importlib.util.spec_from_file_location("page_shell_ratchet_prose", SCRIPT)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return bool(mod._on_shell(text))
+
+
+def test_a_comment_mentioning_the_shell_is_not_being_on_the_shell():
+
+    assert not _on_shell("// TODO: migrate this page to PageShell one day\nexport default X;")
+    assert not _on_shell("/* PageShell would be better here */\nexport default X;")
+    assert not _on_shell("/**\n * Not yet on PageShell.\n */\nexport default X;")
+
+
+def test_a_string_mentioning_the_shell_is_not_being_on_the_shell():
+
+    assert not _on_shell("const todo = 'move to PageShell';")
+    assert not _on_shell('const todo = "PageShell";')
+    assert not _on_shell("const todo = `PageShell`;")
+
+
+def test_an_import_without_a_usage_is_not_being_on_the_shell():
+    """A leftover import after a botched migration renders nothing."""
+
+    text = "import { PageShell } from '../components/system/PageShell';\nexport default () => <div/>;"
+    assert not _on_shell(text)
+
+
+def test_a_usage_without_an_import_is_not_being_on_the_shell():
+    """It would not compile; counting it hides a broken page as a migrated one."""
+
+    assert not _on_shell("export default () => <PageShell title='x'>y</PageShell>;")
+
+
+def test_an_imported_and_rendered_shell_is_being_on_the_shell():
+
+    text = (
+        "import { PageShell } from '../components/system/PageShell';\n"
+        "export default () => <PageShell title='Walk forward' width='standard'>body</PageShell>;\n"
+    )
+    assert _on_shell(text)
+
+
+def test_a_self_closing_shell_counts():
+
+    text = (
+        "import { PageShell } from '../components/system/PageShell';\n"
+        "export default () => <PageShell title='x' body={<X/>} />;\n"
+    )
+    assert _on_shell(text)
+
+
+def test_the_real_pages_still_measure_the_same_way():
+    """The stricter rule must not reclassify the 49 pages already migrated.
+
+    If it does, either the rule is wrong or one of those pages was never on the
+    shell and the old check was hiding it — and both need looking at rather than
+    a baseline bump.
+    """
+    spec = importlib.util.spec_from_file_location("page_shell_ratchet_real", SCRIPT)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    baseline = json.loads((Path(__file__).resolve().parents[2] / "docs" / "FRONTEND_PAGE_SHELL_DEBT.json").read_text())
+    recorded = set(baseline.get("files", baseline))
+    assert set(mod.measure()) == recorded

@@ -13,6 +13,8 @@
  *   professional+: api-keys, trading
  */
 
+import { SlidersHorizontal } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
@@ -359,11 +361,19 @@ const Settings: React.FC = () => {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
-      <div className="page-content">
-        <div style={S.header}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-            <h1 style={S.heading}>Settings</h1>
-            <div style={{ display: 'flex', gap: 8 }}>
+      <PageShell
+        title="Settings"
+        icon={SlidersHorizontal}
+        width="wide"
+        /* Everything the hand-rolled header carried keeps its place: the title,
+           the three shortcuts, the sentence under it, and the super-admin
+           badge. The only change is that they now sit in the same frame as the
+           other fifty pages, and the page gains the derived "Where to next"
+           footer it had no way to grow on its own. */
+        subtitle="Manage your account, trading preferences, integrations, and platform configuration."
+        badge={superAdmin ? <span style={S.saBadge}>SUPER ADMIN — Full Platform Control</span> : undefined}
+        actions={(
+          <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
                 style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 ⚡ Trade
@@ -376,16 +386,9 @@ const Settings: React.FC = () => {
                 style={{ padding: '6px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 💰 Wallet
               </button>
-            </div>
           </div>
-          <p style={S.subheading}>
-            Manage your account, trading preferences, integrations, and platform configuration.
-            {superAdmin && (
-              <span style={S.saBadge}>SUPER ADMIN — Full Platform Control</span>
-            )}
-          </p>
-        </div>
-
+        )}
+      >
         <div style={S.layout}>
           <nav style={S.sidebar}>
             {/* Search box */}
@@ -512,7 +515,7 @@ const Settings: React.FC = () => {
             </Suspense>
           </main>
         </div>
-      </div>
+      </PageShell>
     </>
   );
 };

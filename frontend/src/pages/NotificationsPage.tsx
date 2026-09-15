@@ -9,6 +9,8 @@
  *   WS   /ws/notifications           — real-time push
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Bell } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -133,19 +135,25 @@ const NotificationsPage: React.FC = () => {
   const unreadCount = items.filter(n => !n.read).length;
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', margin: 0 }}>
-            Notifications {unreadCount > 0 && (
-              <span style={{ fontSize: 14, background: '#3b82f6', color: '#fff', borderRadius: 12, padding: '2px 8px', marginLeft: 8 }}>
-                {unreadCount}
-              </span>
-            )}
-          </h1>
-          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '4px 0 0' }}>Real-time alerts and updates</p>
-        </div>
+    <PageShell
+      title="Notifications"
+      icon={Bell}
+      subtitle="Real-time alerts and updates"
+      width="standard"
+      /* The unread count keeps its place beside the title. It was a span inside
+         the h1 and PageShell has a slot for exactly this; a count that moved
+         into the body would stop answering the question the page is opened to
+         answer. The literal blue and white are gone with it — they were the
+         last two colour literals in this file. */
+      badge={unreadCount > 0 ? (
+        <span style={{
+          fontSize: 'var(--fs-label)', background: 'var(--link)', color: 'var(--bg)',
+          borderRadius: 12, padding: '2px 8px', fontWeight: 700,
+        }}>
+          {unreadCount}
+        </span>
+      ) : undefined}
+      actions={(
         <div style={{ display: 'flex', gap: 8 }}>
           {voice.ttsSupported && (
             <button
@@ -187,8 +195,8 @@ const NotificationsPage: React.FC = () => {
             {markingAll ? '…' : '✓ Mark all read'}
           </button>
         </div>
-      </div>
-
+      )}
+    >
       <ActionBanner message={err} ok={false} onDismiss={() => setErr('')} />
 
       {/* List */}
@@ -262,7 +270,7 @@ const NotificationsPage: React.FC = () => {
           </button>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
