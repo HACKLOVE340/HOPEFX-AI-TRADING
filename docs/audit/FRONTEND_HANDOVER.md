@@ -30,8 +30,8 @@ Measured 2026-09-15, immediately before this document was written:
 | Measure | Value |
 |---|---|
 | Correction register | 97 findings · OPEN 1 · PARTIAL 9 · OWNER 8 · FIXED 79 |
-| Pages on the standard shell | 56 of 63 — **7 off** |
-| Colour literals | 3,553 across 190 files |
+| Pages on the standard shell | 58 of 63 — **5 off** |
+| Colour literals | 3,552 across 190 files |
 | Emoji used as icons | 750 across 125 files |
 | Inline `fontSize` the cascade cannot reach | 2,108 (was 2,871) |
 | Numeric spacing utilities | 1,089 |
@@ -241,82 +241,65 @@ A **size ratchet** (mirroring `frontend_colour_ratchet.py`) would stop the count
 growing while this is decided. It does not exist yet; the register's probe
 measures the number but does not block on it.
 
-### 2. The 7 pages still off the standard shell
+### 2. The 5 pages still off the standard shell
 
 `python scripts/frontend_page_shell_ratchet.py --check` names them:
 
 ```
-AICore · DocsPage · MLDashboard · NuclearDashboardPage
-SuperAdminDashboard · Trading · TradingDashboard
+AICore · DocsPage · SuperAdminDashboard · Trading · TradingDashboard
 ```
 
-Seven were migrated on 2026-09-15: `NotificationsPage` and `Settings` (a single
-`page-content` root each), then `WalkForward`, `Profile`, `StatusPage` and
-`Affiliate` (multi-root, one shared shell), then `CryptoCheckout` (multi-root,
-**five different shells** — see below).
+Nine were migrated on 2026-09-15. `NotificationsPage` and `Settings` had a
+single `page-content` root each. `WalkForward`, `Profile`, `StatusPage` and
+`Affiliate` were multi-root and took one shared shell. `CryptoCheckout` was
+multi-root and took **five** — see below. `NuclearDashboardPage` needed the
+fourth width, and `MLDashboard` was ordinary.
 
 **The pattern for a multi-root page — let the shell OUTLIVE the branch.** These
 pages return early for loading, error and signed-out states, and each return
 carried its own bare root, so those states rendered a sentence with no heading
 and no way onward — at the moment an operator most needs both. Do NOT wrap each
 branch in its own shell: declare the page's identity once as a `shell` object,
-spread it into every branch, and let the branch decide only the body. The header
-is then a property of the page rather than of its request having succeeded.
-`frontend/src/test/the_shell_outlives_the_branch.test.tsx` holds it and was red
-on five of six assertions before the work.
+spread it into every branch, and let the branch decide only the body.
+`frontend/src/test/the_shell_outlives_the_branch.test.tsx` holds it across four
+pages and was red on eleven of twelve assertions before the work.
 
 **Not every multi-root page wants ONE shell.** `CryptoCheckout`'s five roots are
 five steps of a wizard — Crypto Checkout, Send Payment, Confirming Payment,
-Payment Confirmed — and each legitimately has its own title. Each branch already
-used `PageHeader`, so the migration was header-to-shell per branch, not one
-shared identity. Read the branches before assuming: a page whose branches are
-STATES of one screen wants one shell; a page whose branches are SCREENS wants
-one each.
+Payment Confirmed — and each legitimately has its own title. A page whose
+branches are STATES of one screen wants one shell; a page whose branches are
+SCREENS wants one each. Read the branches before assuming.
 
-That conversion was done by an AST-style matcher rather than by hand, and its
-first version threw on a self-closing `<div … />` — which is the right failure,
-because it wrote nothing. Fix the matcher, never the file.
+**`PageShell` now has a fourth width, `full`, and a `fills` prop.** Four pages
+could not migrate because every width was a `max-w-[…]` constraint and they are
+workspaces — a chart surface, an order book, a plane. Forcing one into a
+max-width letterboxes it and takes away screen the operator was using, which is
+a migration that REMOVES what a page displays. `fills` gives the body
+`flex-1 min-h-0` so an inner scroller can scroll; it is a separate prop from
+`width="full"` on purpose, because a full-bleed page that scrolls as one long
+document is also a real shape. Held by
+`frontend/src/test/the_shell_has_a_full_bleed_width.test.tsx`, including an
+assertion that the three existing widths are untouched.
 
-Remaining: `AICore`, `Trading` and `TradingDashboard` own full-bleed layouts and
-should probably get a **fourth width** on `PageShell` rather than being forced
-into the three that exist — that is a design decision and wants the owner's
-word. `SuperAdminDashboard` is a tab shell whose children are the real pages.
-`DocsPage`, `MLDashboard` and `NuclearDashboardPage` are ordinary and tractable.
+**Watch for a page that renders its own `<RelatedPages>`.** `PageShell`'s footer
+is on by default, so leaving one in the body puts TWO "Where to next" blocks on
+the page. `MLDashboard` did; its links moved to the shell's `related` prop,
+which puts hand-picked links ahead of the derived ones. All nine migrated pages
+were audited for this.
 
-**Two things `WalkForward` and `Profile` turned up, worth expecting again:**
+**What is left, and why each is last:**
 
-* WalkForward carried an unreachable branch — `if (!data)` sat after a branch
-  returning for `apiError || !data`. Dead since it was written.
-* Profile's migration broke `renders profile username after load`, and the test
-  was RIGHT. It had been deliberately strengthened under audit F11 from "an h1
-  exists" — which passes on an error page — to "the h1 is the username". The
-  first attempt titled every state "Profile" and demoted the person's name to an
-  h2; the fix was to put the person in the shell's title, not to weaken the
-  assertion. **Expect the page's existing tests to encode a real decision.**
-
-These are the hard ones — the earlier 49 were the tractable ones. `AICore`,
-`Trading` and `TradingDashboard` own their own full-bleed layouts and should
-probably get a **fourth width** on `PageShell` rather than being forced into the
-three that exist. `Settings` and `SuperAdminDashboard` are tab shells whose
-children are the real pages.
-
-**Method that worked for the first 49:** AST-range replacement, never text
-slicing. A non-greedy regex cannot match nested JSX — `<PageHeader[\s\S]*?/>`
-stops at the `/>` inside `actions={<button …/>}`, which produced 7 false
-refusals before it was caught.
-
-**Method that worked for these two:** exact-string replacement of the header
-block, asserted before writing. Line-offset surgery was tried first and its own
-assertion caught an off-by-index before anything was written — the fix was to
-stop counting lines, not to fix the count.
-
-**The gate that measures this was broken and is now fixed.** `_on_shell` was
-`"PageShell" in text`, and adding `// TODO: migrate this page to PageShell one
-day` to a page moved it out of the debt list. It now requires a real import AND
-a real element, reading code with comments and string literals stripped. Seven
-tests in `tests/unit/test_frontend_page_shell_ratchet.py` hold it, one of which
-asserts the 49 already-migrated pages do not reclassify under the stricter
-rule.
+* `AICore`, `Trading`, `TradingDashboard` — workspaces. The fourth width now
+  exists, so these are unblocked; they are large (685, 1096, 272 lines) and each
+  owns a bespoke grid, so they want a session each rather than a batch.
+* `SuperAdminDashboard` — a tab shell whose children are the real pages.
+* `DocsPage` — **deliberately last, and possibly never.** It is a documentation
+  landing page with a designed hero: its own breadcrumb, a brand-styled h1 where
+  "FX" is accent-coloured, a subtitle and a live status badge, in a 48px band
+  above the fold. `PageShell`'s standard header cannot carry that, so migrating
+  it as-is would flatten the hero — which is removing what the page displays,
+  not improving it. Either give `PageShell` a hero affordance first, or leave
+  this one off the shell on purpose and say so here.
 
 ### 3. Pages that render but fetch nothing
 

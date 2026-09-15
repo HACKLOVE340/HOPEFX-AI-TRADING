@@ -10,13 +10,13 @@
  * Admin/ops surface — gated at the route level.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RelatedPages } from '../components';
 import {
   Sparkles, Radar, FlaskConical, Cpu, RefreshCw,
    Activity,
 } from 'lucide-react';
 import { mlOpsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { PageShell } from '../components/system/PageShell';
 
 interface Health {
   running?: boolean; retraining_state?: string; can_retrain?: boolean;
@@ -138,12 +138,31 @@ const MLDashboard: React.FC = () => {
     { label: 'Drift', value: driftValue() },
   ];
 
+  /*
+   * On the standard shell.
+   *
+   * The page carried its own `maxWidth: 1100` and its own padding, which is the
+   * twelfth width `PageShell` was built to replace; `wide` is the tier it now
+   * shares with the other analytics pages. The icon moved from inside the h1 to
+   * the shell's `icon` slot — the same icon, in the place every other page puts
+   * it — and both buttons became `actions`. Nothing it displayed is gone.
+   */
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', color: 'var(--text)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Cpu size={18} strokeWidth={1.75} aria-hidden /> ML-Ops
-        </h1>
+    <PageShell
+      title="ML-Ops"
+      icon={Cpu}
+      width="wide"
+      subtitle="Pipeline health, drift checks and retraining"
+      /* Hand-picked, ahead of the derived links. These were rendered inside the
+         body before the migration, which with PageShell's own footer on by
+         default would have put two "Where to next" blocks on the page. */
+      related={[
+        { to: '/intelligence', label: 'AI intelligence', hint: 'Model health and attribution', icon: Sparkles },
+        { to: '/observability', label: 'Engine monitor', hint: 'Live orchestrator panels', icon: Activity },
+        { to: '/ab-testing', label: 'A/B testing', hint: 'Compare model versions', icon: FlaskConical },
+        { to: '/signals', label: 'Signal feed', hint: 'What the model publishes', icon: Radar },
+      ]}
+      actions={(
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={load}
@@ -161,8 +180,8 @@ const MLDashboard: React.FC = () => {
             {busy === 'retrain' ? 'Retraining…' : 'Trigger Retrain'}
           </button>
         </div>
-      </div>
-
+      )}
+    >
       {msg && <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: 'var(--link)', marginBottom: 16 }}>{msg}</div>}
       {loading && <div style={{ color: 'var(--text-muted)', padding: 20 }}>Loading pipeline…</div>}
       {!loading && err && (
@@ -224,16 +243,7 @@ const MLDashboard: React.FC = () => {
           </div>
         </>
       )}
-      <RelatedPages
-        links={[
-          { to: '/intelligence', label: 'AI intelligence', hint: 'Model health and attribution', icon: Sparkles },
-          { to: '/observability', label: 'Engine monitor', hint: 'Live orchestrator panels', icon: Activity },
-          { to: '/ab-testing', label: 'A/B testing', hint: 'Compare model versions', icon: FlaskConical },
-          { to: '/signals', label: 'Signal feed', hint: 'What the model publishes', icon: Radar },
-        ]}
-      />
-
-    </div>
+    </PageShell>
   );
 };
 

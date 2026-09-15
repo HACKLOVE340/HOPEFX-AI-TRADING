@@ -50,12 +50,26 @@ import { RelatedPages, type RelatedLink } from '../RelatedPages';
 import type { BreadcrumbItem } from '../Breadcrumb';
 import { relatedFor } from '../../lib/related';
 
-export type PageWidth = 'wide' | 'standard' | 'narrow';
+/**
+ * `full` is the fourth, added 2026-09-15 for the workspaces.
+ *
+ * Four pages could not reach this shell because it had no width for them —
+ * `NuclearDashboardPage`, `AICore`, `Trading`, `TradingDashboard`. Each is a
+ * workspace rather than a document: a chart surface, an order book, a plane.
+ * Forcing one into a max-width does not restyle it, it LETTERBOXES it and takes
+ * away screen the operator was using, which is a migration that removes what a
+ * page displays.
+ *
+ * So the shell gained a width rather than the pages losing their layout. It is
+ * purely additive: the other three are untouched and `full` is opt-in.
+ */
+export type PageWidth = 'wide' | 'standard' | 'narrow' | 'full';
 
 const WIDTH: Record<PageWidth, string> = {
   wide: 'max-w-[var(--page-wide)]',
   standard: 'max-w-[var(--page-standard)]',
   narrow: 'max-w-[var(--page-narrow)]',
+  full: 'max-w-none',
 };
 
 export interface PageShellProps {
@@ -70,6 +84,21 @@ export interface PageShellProps {
   activeTab?: string;
   onTabChange?: (key: string) => void;
   icon?: React.ComponentProps<typeof PageHeader>['icon'];
+  /**
+   * The body fills the shell and scrolls inside itself, rather than growing the
+   * page.
+   *
+   * The default body wrapper is a `flex flex-col gap-grid` with no `min-h-0`,
+   * so a child asking for `flex: 1; min-height: 0` gets nothing and its inner
+   * scroller never scrolls. `min-h-0` is the half that is easy to forget: a
+   * flex child refuses to shrink below its content without it.
+   *
+   * Deliberately a separate prop rather than something `width="full"` implies.
+   * A full-bleed page that scrolls as one long document is a real shape, and so
+   * is a standard-width page with an inner scroller; coupling the two would
+   * take one of them away.
+   */
+  fills?: boolean;
   /**
    * Onward navigation. `true` derives it; an array adds hand-picked links
    * ahead of the derived ones; `false` suppresses it, which should be rare
@@ -91,6 +120,7 @@ export const PageShell: React.FC<PageShellProps> = ({
   activeTab,
   onTabChange,
   icon,
+  fills = false,
   related = true,
   className = '',
 }) => {
@@ -127,7 +157,7 @@ export const PageShell: React.FC<PageShellProps> = ({
       {/* One rhythm for every page. Sections are siblings in a flex column with
           a single gap token, so vertical spacing is a property of the shell
           rather than a margin each section remembers differently. */}
-      <div className="flex flex-col gap-grid">{children}</div>
+      <div className={`flex flex-col gap-grid${fills ? ' flex-1 min-h-0' : ''}`}>{children}</div>
 
       {links.length > 0 && <RelatedPages links={links} />}
     </div>
