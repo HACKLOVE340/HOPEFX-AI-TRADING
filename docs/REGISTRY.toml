@@ -1275,6 +1275,12 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/audit/FRONTEND_HANDOVER.md"
+tier = "T3"
+owner = "hacklove340"
+state = "draft"
+
+[[document]]
 path = "docs/audit/LANDING_PLAN.md"
 tier = "T2"
 subject = "landing_plan"
@@ -1335,12 +1341,6 @@ state = "draft"
 [[document]]
 path = "docs/audit/plans/2026-09-11-coverage-floor-programme.md"
 tier = "T4"
-owner = "hacklove340"
-state = "draft"
-
-[[document]]
-path = "docs/audit/FRONTEND_HANDOVER.md"
-tier = "T3"
 owner = "hacklove340"
 state = "draft"
 
@@ -1680,3 +1680,9 @@ subject = "database-restore"
 owner = "hacklove340"
 state = "active"
 note = "SEV1 recovery procedure. Every command executed and verified 2026-09-08, not transcribed."
+
+[[document]]
+path = "docs/superpowers/plans/2026-09-15-repository-remediation.md"
+tier = "T4"
+owner = "engineering"
+state = "draft"
