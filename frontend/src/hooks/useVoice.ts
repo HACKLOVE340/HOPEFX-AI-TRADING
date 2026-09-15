@@ -97,6 +97,69 @@ export interface UseVoice {
   speechProgress: number | null;
 }
 
+
+/**
+ * What the OS should actually be asked to SAY.
+ *
+ * Assistant replies are Markdown and were handed to the speech engine raw, so
+ * the platform asked the OS to pronounce "star star Dashboard arrow Account
+ * star star" and "underscore open-paren" — measured in Chromium by spying on
+ * `window.speechSynthesis.speak` while driving /ai-assistant.
+ *
+ * This is a READ-ALOUD transform only. The on-screen text and the transcript
+ * keep their formatting; only the string going to the voice is flattened. It is
+ * deliberately not a Markdown parser — a parser would pull in a dependency and
+ * an AST to produce a flat string, and the failure mode here is a mispronounced
+ * character, not a wrong document.
+ *
+ * Exported so it can be tested directly: the hook needs a browser, the rule
+ * does not.
+ */
+export function speechText(markdown: string): string {
+  let t = markdown ?? '';
+
+  // Fenced code: keep the code, drop the fence and its language tag.
+  t = t.replace(/```[a-zA-Z0-9_-]*\n?([\s\S]*?)```/g, '$1');
+  // Inline code, emphasis, strikethrough — keep the words, drop the marks.
+  t = t.replace(/`([^`]+)`/g, '$1');
+  t = t.replace(/~~([^~]+)~~/g, '$1');
+  t = t.replace(/(\*\*\*|___)(\S[\s\S]*?\S|\S)\1/g, '$2');
+  t = t.replace(/(\*\*|__)(\S[\s\S]*?\S|\S)\1/g, '$2');
+  t = t.replace(/(\*|_)(\S[\s\S]*?\S|\S)\1/g, '$2');
+  // A link is read by its text; the URL is noise out loud. Images likewise.
+  t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+  // Headings, block quotes, list bullets: the marker is layout, not language.
+  t = t.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+  t = t.replace(/^\s{0,3}>\s?/gm, '');
+  t = t.replace(/^\s*[-*+]\s+/gm, '');
+  t = t.replace(/^\s*\d+[.)]\s+/gm, '');
+  // A horizontal rule has nothing to say.
+  t = t.replace(/^\s*([-*_])\1{2,}\s*$/gm, '');
+  // Any leftover emphasis characters that did not pair up.
+  t = t.replace(/[*_`]+/g, '');
+
+  // Line breaks become sentence breaks: without this the engine runs lines
+  // together, and a run of blank lines becomes a long dead pause.
+  // Line breaks become sentence breaks BETWEEN lines only. Appending to the
+  // last line as well made every single-line reply end in a spoken full stop
+  // it never had.
+  const lines = t
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines
+    .reduce((acc, line, i) => {
+      if (i === 0) return line;
+      const sep = /[.!?:,;—]$/.test(acc) ? ' ' : '. ';
+      return acc + sep + line;
+    }, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+
 export function useVoice(lang = 'en-US'): UseVoice {
   const sttSupported = getRecognitionCtor() !== null;
   const ttsSupported = ttsAvailable();
@@ -189,7 +252,9 @@ export function useVoice(lang = 'en-US'): UseVoice {
   }, [lang]);
 
   const speak = useCallback((text: string) => {
-    const t = (text ?? '').trim();
+    // Flattened before it reaches any engine — cloud or Web Speech — because
+    // both pronounce Markdown. See `speechText`.
+    const t = speechText(text ?? '').trim();
     if (!t) return;
     // Prefer cloud TTS when configured; fall back to Web Speech on any failure.
     void cloudTtsAvailable().then((cloud) => {
