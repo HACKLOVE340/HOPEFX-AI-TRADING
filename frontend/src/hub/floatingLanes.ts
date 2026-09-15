@@ -33,6 +33,21 @@ function notify(): void {
   for (const listener of listeners) listener();
 }
 
+/**
+ * The desktop sidebar's lane.
+ *
+ * The dock knew about other FLOATING controls and nothing about the app chrome,
+ * so having been moved off the support launcher it chose bottom-left — which is
+ * the sidebar. Measured in Chromium at 1440x900 on /ai: presence at (24,600)
+ * 268x276 against a sidebar occupying x 0-310, covering the navigation and the
+ * left edge of the "Where to next" footer.
+ *
+ * The id is exported rather than typed at both ends because a mismatch would
+ * silently reserve a lane nobody avoids — the same class of bug as the empty
+ * `avoid` list this module was written to fix.
+ */
+export const SIDEBAR_LANE = 'app-sidebar';
+
 /** Claim a rectangle. Calling again with the same id replaces the claim. */
 export function reserveLane(id: string, rect: Rect): void {
   const held = lanes.get(id);

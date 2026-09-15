@@ -1,10 +1,10 @@
 {
  "_comment": "Hardcoded colour literals per file in frontend/src. This number may only fall. See scripts/frontend_colour_ratchet.py for why these literals keep three finished features dead, and for the rule that a file reaching zero must be DELETED from this list rather than left at 0 \u2014 an entry describing nothing is how a ratchet stops being one.",
- "_total": 3557,
+ "_total": 3555,
  "files": {
   "frontend/src/App.tsx": 12,
   "frontend/src/components/AdminGuard.tsx": 6,
-  "frontend/src/components/AppBackground.tsx": 12,
+  "frontend/src/components/AppBackground.tsx": 3,
   "frontend/src/components/AuthGuard.tsx": 1,
   "frontend/src/components/Breadcrumb.tsx": 5,
   "frontend/src/components/CandleChart.tsx": 26,
@@ -190,6 +190,7 @@
   "frontend/src/pages/superadmin/ui.tsx": 47,
   "frontend/src/test/hub_a11y.test.ts": 24,
   "frontend/src/test/hub_viz.test.tsx": 4,
+  "frontend/src/test/the_ground_follows_the_theme.test.ts": 7,
   "frontend/src/test/trade_symbol_and_confidence.test.tsx": 2
  }
 }

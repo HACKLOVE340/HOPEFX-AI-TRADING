@@ -29,6 +29,7 @@
  * See `scripts/frontend_colour_ratchet.py` for the measurement behind that.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Headphones, MessageSquare, X } from 'lucide-react';
 import AIChat from './AIChat';
 import { releaseLane, reserveLane } from '../../hub/floatingLanes';
 import type { Rect } from '../../hub/spatial';
@@ -260,21 +261,25 @@ const AISupportWidget: React.FC = () => {
         onPointerUp={(event) => endDrag(event, false)}
         onPointerCancel={(event) => endDrag(event, false)}
       >
-        <span aria-hidden="true">{open ? '✕' : '💬'}</span>
+        {/* Lucide, not emoji: an emoji renders in the reader's emoji font, so
+            it cannot inherit currentColor and ignores the launcher's hover,
+            focus and parked states — and a screen reader announces it by its
+            Unicode name. The button's accessible name is on aria-label above. */}
+        {open
+          ? <X size={20} strokeWidth={2} aria-hidden="true" />
+          : <MessageSquare size={20} strokeWidth={2} aria-hidden="true" />}
       </button>
 
       {open && (
         <div className="support-panel" style={{ bottom: panelBottom }} role="dialog" aria-label="AI Support">
           <div className="support-panel-head">
-            <span aria-hidden="true" style={{ fontSize: 18 }}>
-              🎧
-            </span>
+            <Headphones size={18} strokeWidth={1.75} aria-hidden="true" />
             <div style={{ flex: 1 }}>
               <div className="support-panel-title">AI Support</div>
               <div className="support-panel-sub">Typically replies instantly</div>
             </div>
             <button type="button" className="support-panel-close" onClick={() => setOpen(false)} aria-label="Close">
-              ✕
+              <X size={16} strokeWidth={2} aria-hidden="true" />
             </button>
           </div>
           <div className="support-panel-body">

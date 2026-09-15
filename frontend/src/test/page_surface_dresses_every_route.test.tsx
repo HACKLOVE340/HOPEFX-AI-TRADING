@@ -64,9 +64,14 @@ describe('PageSurface', () => {
     }
   });
 
-  it('leaves everything else at the pro-max default', () => {
+  it('leaves everything else at the dense default', () => {
+    // This asserted 'promax' until 2026-09-15, when the owner's design review
+    // made `ultra` the default: this is a trading terminal and it should feel
+    // like one. `promax` is now an opt-out nothing claims, and `comfortable`
+    // still wins for the pages that are read rather than scanned — the test
+    // above holds that, so the tiers are not collapsing into one.
     for (const p of ['/dashboard', '/settings', '/notifications', '/marketplace']) {
-      expect(densityFor(p), p).toBe('promax');
+      expect(densityFor(p), p).toBe('ultra');
     }
   });
 
@@ -90,7 +95,13 @@ describe('PageSurface', () => {
       'utf8',
     );
     const paths = [...tables.matchAll(/'(\/[a-z0-9-]+)'/g)].map((m) => m[1]!);
-    expect(paths.length).toBeGreaterThan(40);
+    // Was `> 40`, which counted the 35-entry ULTRA list. That list named the
+    // data surfaces so they could opt IN to dense; dense is now the default, so
+    // a list selecting the default could not change anything and was replaced
+    // by an empty PROMAX opt-out. The floor now guards what is left — the
+    // reading pages and the AI surfaces — and still fails if a table is
+    // emptied or the regex stops matching.
+    expect(paths.length, 'the density/surface tables have collapsed').toBeGreaterThan(20);
     const orphans = [...new Set(paths)].filter((p) => !ROUTES.has(p));
     expect(
       orphans,
@@ -100,11 +111,11 @@ describe('PageSurface', () => {
 
   it('stamps density on every page and the AI palette on only AI pages', () => {
     const ai = stamp('/ai-core');
-    expect(ai.getAttribute('data-density')).toBe('promax');
+    expect(ai.getAttribute('data-density')).toBe('ultra');  // was 'promax'; see the default above
     expect(ai.getAttribute('data-surface')).toBe('ai');
 
     const plain = stamp('/dashboard');
-    expect(plain.getAttribute('data-density')).toBe('promax');
+    expect(plain.getAttribute('data-density')).toBe('ultra');  // was 'promax'; see the default above
     // Absent, not empty: an empty attribute still matches [data-surface].
     expect(plain.hasAttribute('data-surface')).toBe(false);
 

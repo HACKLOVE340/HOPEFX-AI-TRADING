@@ -46,6 +46,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, X } from 'lucide-react';
 
 import { PresenceCore } from './PresenceCore';
+import { useSpeech } from './speechBus';
 import type { Presence } from './presence';
 import { describePage, type Landmark, type NavLike } from './pageContext';
 import { pageCapabilities, type SurfaceEntry } from './pageCapabilities';
@@ -121,6 +122,8 @@ const CLOSED_HEIGHT_GUESS = 200;
 
 export function PresenceAnywhere(props: PresenceAnywhereProps): React.ReactElement | null {
   const { pathname, nav, surface, presence, viewport } = props;
+
+  const speech = useSpeech();
 
   const [dismissed, setDismissed] = useState<boolean>(readDismissed);
   const [open, setOpen] = useState(false);
@@ -253,7 +256,30 @@ export function PresenceAnywhere(props: PresenceAnywhereProps): React.ReactEleme
       className="rounded-2xl border border-white/10 bg-slate-950/90 p-3 text-slate-200 shadow-xl backdrop-blur"
     >
       <div className="flex items-start gap-2">
-        <PresenceCore presence={presence} size={open ? 72 : 56} />
+        <PresenceCore
+          presence={presence}
+          size={open ? 72 : 56}
+          // The head, talking, on whatever page you are on.
+          //
+          // Before this it was handed nothing but a `Presence`, so `mouthFor`
+          // ran with `speaking=false` every frame and the mouth was painted
+          // shut while the platform talked. `hub/speechBus` carries the real
+          // utterance and the engine's own character index; null progress stays
+          // null, because that is what makes the mouth hold a steady shape
+          // rather than animate from a clock.
+          utterance={speech.utterance}
+          speechProgress={speech.progress}
+          speaking={speech.speaking}
+          // A head alone. §7's contextual transformation — the head becoming a
+          // chart or a network — belongs on the AI Core plane, where a panel
+          // beside it holds the real numbers. In a 56-pixel dock it would be an
+          // unlabelled squiggle where a face should be.
+          representation="core"
+          // And a head big enough to read. The rings stay: they carry activity
+          // and risk headroom, and dropping them would be a decoration removing
+          // data. The head is scaled up inside them instead.
+          headScale={2.2}
+        />
         <div className="min-w-0 flex-1">
           {/* Assertive only for an alert. Everything else is polite, because a
               screen reader interrupted by "standing by" is a screen reader

@@ -45,7 +45,7 @@ export const NAV_DESCRIPTIONS: Record<string, string> = {
   '/teams': 'Shared books and desks you belong to.',
   '/chat': 'Talk to other traders in real time.',
   '/copy-trading': 'Mirror another trader, with your own sizing and limits.',
-  '/social': 'The public feed.',
+  '/social': 'What other traders are posting, and what the desk is reacting to.',
 
   '/profile': 'Your public trader profile and what others can see.',
   '/wallet': 'Balance, deposits, withdrawals and payout history.',
@@ -70,4 +70,12 @@ export const NAV_DESCRIPTIONS: Record<string, string> = {
   '/master-control': 'Superadmin control plane.',
   '/reliability': 'SLOs, error budgets and incident history.',
   '/status': 'Live component status, as customers see it.',
+  '/dashboard': 'Where the session starts: balance, open risk, and what moved while you were away.',
+  '/trade': 'Place, size and close a position, with the risk it costs shown before you commit.',
+  '/portfolio': 'Everything you are holding, what it is worth now, and what it has cost you.',
+  '/watchlist': 'The instruments you are tracking, with the levels you said mattered.',
+  '/alerts': 'Price and condition alerts you have set, and the ones that have fired.',
+  '/terminal': 'The full trading terminal: chart, book, ticket and positions on one surface.',
+  '/journal': 'Why you took each trade, written down while it is still true.',
+  '/settings': 'Your account, security, notifications and how the platform behaves for you.',
 };

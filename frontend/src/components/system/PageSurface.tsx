@@ -32,10 +32,19 @@ export type Density = 'comfortable' | 'promax' | 'ultra';
 export type Surface = 'default' | 'ai';
 
 /**
- * Data surfaces. The reader is scanning rows, not reading sentences: books,
- * ledgers, terminals, audit trails, admin tables. Ultra buys roughly three
- * extra rows per screen at a laptop height, which is the difference between
- * seeing your open risk and scrolling for it.
+ * Data surfaces — always dense, and they outrank every opt-out below.
+ *
+ * The reader is scanning rows, not reading sentences: books, ledgers,
+ * terminals, audit trails, admin tables. Ultra buys roughly three extra rows
+ * per screen at a laptop height, which is the difference between seeing your
+ * open risk and scrolling for it.
+ *
+ * Dense became the DEFAULT on 2026-09-15, which briefly made this list look
+ * redundant — and it was deleted for a few minutes on that reasoning. That was
+ * wrong: the list is not "these get dense", it is "these are dense whatever
+ * else anyone adds later". It is the precedence rule that stops a future
+ * PROMAX entry quietly loosening the order book. Nothing is lost by keeping a
+ * statement of intent; something is lost by throwing one away.
  */
 const ULTRA = [
   '/trade', '/trading', '/terminal', '/portfolio', '/watchlist', '/positions',
@@ -46,6 +55,16 @@ const ULTRA = [
   '/prop-firm', '/correlation', '/indicators', '/backtest', '/ml-ops',
   '/signals', '/performance', '/alerts', '/auto-heal', '/wallet',
 ];
+
+/**
+ * Pages that opt OUT of the dense default, back to the middle tier.
+ *
+ * Deliberately empty: nothing asks for the middle tier today. It is the seam
+ * for a page that turns out to need air without being prose, and
+ * `[data-density="promax"]` is still defined in index.css, so adding a path
+ * here is the whole change. A path listed in ULTRA above beats anything here.
+ */
+const PROMAX: readonly string[] = [];
 
 /**
  * Reading surfaces. Prose, not figures — and prose at 13px in a 1.5 line box
@@ -87,9 +106,20 @@ function match(pathname: string, prefixes: readonly string[]): boolean {
 }
 
 export function densityFor(pathname: string): Density {
+  // `ultra` is the default as of 2026-09-15, by the owner's decision in the
+  // design review: this is a trading terminal, and the dense tier is what a
+  // terminal should feel like. It was previously opt-in per route, so the tier
+  // existed and almost nothing used it.
+  //
+  // COMFORTABLE stays opt-in and still wins, because the pages that are READ
+  // rather than scanned — docs, the academy, the legal pages — get worse when
+  // you tighten them. `promax` remains defined and is now reached only by a
+  // route that asks for it by name.
+  // ULTRA first: a data surface stays dense no matter what anyone adds below.
   if (match(pathname, ULTRA)) return 'ultra';
   if (match(pathname, COMFORTABLE)) return 'comfortable';
-  return 'promax';
+  if (match(pathname, PROMAX)) return 'promax';
+  return 'ultra';
 }
 
 export function surfaceFor(pathname: string): Surface {

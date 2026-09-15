@@ -10,7 +10,7 @@
  *  - Search box filters all visible nav items in real-time
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan,
@@ -23,6 +23,7 @@ import { NAV_ITEMS, NAV_GROUPS, HUBS, topLevelItems } from './navConfig';
 import type { NavItem } from './navConfig';
 import { authApi, notificationsApi } from '../../hooks/useApi';
 import type { Plan } from '../../lib/subscription';
+import { SIDEBAR_LANE, releaseLane, reserveLane } from '../../hub/floatingLanes';
 
 // ── WS status dot ─────────────────────────────────────────────────────────────
 const WsDot: React.FC = () => {
@@ -369,6 +370,38 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
   const pushRecentPath  = useStore((s) => s.pushRecentPath);
   const [search, setSearch] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
+  const asideRef = useRef<HTMLElement | null>(null);
+
+  // Claim the space the sidebar occupies, so the presence dock treats it like
+  // any other persistent occupant. Without this the dock, having been moved off
+  // the support launcher, chose bottom-left — which is here — and covered the
+  // navigation and the left edge of the page footer.
+  //
+  // Measured rather than assumed: `collapsed` changes the width by 164px and
+  // the mobile drawer is position:fixed, so a hardcoded rectangle would be
+  // wrong in two states out of three.
+  useEffect(() => {
+    const publish = () => {
+      const el = asideRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) {
+        // Off-canvas drawer: it occupies nothing, so it must claim nothing —
+        // a stale rectangle would push the presence away from empty space.
+        releaseLane(SIDEBAR_LANE);
+        return;
+      }
+      reserveLane(SIDEBAR_LANE, { x: r.x, y: r.y, width: r.width, height: r.height });
+    };
+    publish();
+    window.addEventListener('resize', publish);
+    const id = window.setTimeout(publish, 250); // after the width transition
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener('resize', publish);
+      releaseLane(SIDEBAR_LANE);
+    };
+  }, [collapsed]);
 
   // Track recently-visited nav items (only real nav destinations, not aliases).
   useEffect(() => {
@@ -482,7 +515,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
   }, [recentPaths, location.pathname, favoriteSet, admin, superAdmin]);
 
   return (
-    <aside style={{
+    <aside ref={asideRef} style={{
       width: collapsed ? 60 : 224,
       background: 'var(--surface, var(--raised))',
       borderRight: '1px solid var(--border, var(--border-strong))',

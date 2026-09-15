@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { voiceApi } from './useApi';
+import { publishSpeech } from '../hub/speechBus';
 
 // ── Cloud TTS availability (cached once per page load) ────────────────────────
 // The backend /api/voice/* routes provide higher-quality cloud TTS/STT when a
@@ -294,6 +295,33 @@ export function useVoice(lang = 'en-US'): UseVoice {
         .catch(() => speakWebSpeech(t));
     });
   }, [speakWebSpeech, stopCloudAudio]);
+
+  /**
+   * Tell the rest of the app what is being said (§7 lip sync, everywhere).
+   *
+   * Before this, speech was component state: `AICore` could animate its head
+   * because it owned the hook, and `PresenceAnywhere` — the presence on every
+   * other page in the platform — could not, so its mouth was painted shut for
+   * the life of the component while the assistant talked. See `hub/speechBus`.
+   *
+   * It publishes `spokenText`, which is the string the ENGINE was given —
+   * `speak` flattens Markdown through `speechText` first. The mouth is driven
+   * by a character index into that string, so publishing the raw Markdown
+   * would index a different string from the one being spoken and land the
+   * mouth on the wrong character for the whole reply.
+   *
+   * It publishes `speechProgress` verbatim, null included. Null means nobody
+   * measured it and `mouthFor` holds a steady shape; substituting zero here
+   * would pin every head in the app to the first character of the utterance.
+   */
+  useEffect(() => {
+    publishSpeech({ utterance: spokenText, progress: speechProgress, speaking });
+  }, [speaking, spokenText, speechProgress]);
+
+  // A component that unmounts mid-utterance cancels synthesis below. Without
+  // this the bus would hold that frame forever and every head in the app would
+  // keep an open mouth over an utterance nobody can hear.
+  useEffect(() => () => { publishSpeech({ utterance: '', progress: null, speaking: false }); }, []);
 
   // Cancel any in-flight speech/recognition on unmount.
   useEffect(() => () => {

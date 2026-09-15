@@ -189,3 +189,391 @@ export function headOffset(gaze: Gaze | null, size: number, reducedMotion: boole
   const limit = size * 0.06;
   return { x: gaze.x * limit, y: gaze.y * limit };
 }
+
+// ── the skull: a head with volume, that turns and articulates (§7) ────────────
+
+/**
+ * What was here before was an ellipse, two dots and a second ellipse for a
+ * mouth. It faced forward always, because an outline has no orientation:
+ * `gazeToward` measured where to look and `headOffset` slid the whole drawing a
+ * few pixels toward it, which is the most a flat shape can do.
+ *
+ * `headMesh` builds the head as geometry — a wireframe skull sampled on
+ * latitude rings and meridians, rotated by yaw and pitch, projected with a mild
+ * perspective divide so the near side is larger, and split at the mandible so
+ * the jaw hinges open with the measured mouth openness.
+ *
+ * ## Still not a mascot
+ *
+ * §7 asks for "professional". A rendered human face on a platform that places
+ * orders reads as a character; a wireframe skull reads as an instrument, which
+ * is what this is. The silhouette comes from a profile table rather than a
+ * circle, so it has cheekbones and a chin and could not be mistaken for a ball,
+ * but nothing here draws skin, hair or an expression the data did not supply.
+ *
+ * ## Nothing here animates from a clock except the scan ring
+ *
+ * The jaw is driven by `mouthOpenness`, which comes from `mouthFor`, which
+ * comes from the character the engine reports it is speaking. The head's
+ * orientation comes from `gazeToward`, which comes from a measured rect. The
+ * one thing a clock may move is the scan ring, and it carries no information,
+ * which is why it is the one thing reduced motion removes.
+ */
+
+/** Half-height of the head, in units of `radius`. */
+const HEAD_HEIGHT = 1.3;
+/** Front-to-back depth, in units of `radius`. A head is deeper than it is wide. */
+const HEAD_DEPTH = 1.18;
+/** How far the skull's mass sits behind the origin, so it rotates about itself. */
+const BACKSET = 0.12;
+/** Perspective focal length, in units of `radius`. Large enough to be a cue, not a fisheye. */
+const FOCAL = 5;
+
+/** Latitude of the jaw hinge. Everything below this is the mandible. */
+const JAW_V = -0.16;
+/** How far the jaw swings at full openness, in radians (~19 degrees). */
+const MAX_JAW = 0.34;
+/** Where the hinge sits, front-to-back, in units of `radius`. */
+const JAW_HINGE_Z = -0.55;
+
+/** Latitude and longitude of an eye on the face. */
+const EYE_V = 0.14;
+const EYE_U = 0.44;
+
+/** How far the brow arc reaches either side of the eye, in radians of longitude. */
+const BROW_SPAN = 0.26;
+/** How far above the eye the brow sits at rest, in latitude. */
+const BROW_LIFT = 0.12;
+/** How far a full raise or a full frown moves it. */
+const BROW_TRAVEL = 0.07;
+
+/** How far the mouth reaches either side of the face's centre line, in radians. */
+const MOUTH_SPAN = 0.42;
+
+const RINGS = [0.92, 0.78, 0.62, 0.44, 0.24, 0.04, -0.16, -0.38, -0.6, -0.8] as const;
+const MERIDIANS = 10;
+const ARC_STEPS = 16;
+const MERIDIAN_STEPS = 18;
+
+/** How long the scan ring takes to travel the head and back, in milliseconds. */
+const SCAN_PERIOD = 2600;
+
+/**
+ * The silhouette, as a table rather than a formula.
+ *
+ * A circle is widest exactly halfway between its poles. A head is widest above
+ * that, at the cheekbones, and tapers to a chin — which no single closed-form
+ * curve gives you without fitting constants that then mean nothing. Reading it
+ * off a table keeps the shape legible and lets it be adjusted by looking at it.
+ */
+const PROFILE: readonly (readonly [number, number])[] = [
+  [1.0, 0.0],
+  [0.92, 0.42],
+  [0.8, 0.68],
+  [0.62, 0.86],
+  [0.4, 0.96],
+  [0.18, 1.0],
+  [0.0, 0.98],
+  [-0.2, 0.92],
+  [-0.42, 0.8],
+  [-0.62, 0.64],
+  [-0.82, 0.42],
+  [-1.0, 0.0],
+];
+
+/** Half-width of the head at latitude `v`, in units of `radius`. */
+export function headWidthAt(v: number): number {
+  const t = Math.max(-1, Math.min(1, v));
+  for (let i = 0; i < PROFILE.length - 1; i += 1) {
+    const [v0, w0] = PROFILE[i]!;
+    const [v1, w1] = PROFILE[i + 1]!;
+    if (t <= v0 && t >= v1) {
+      const span = v0 - v1;
+      const k = span === 0 ? 0 : (v0 - t) / span;
+      return w0 + (w1 - w0) * k;
+    }
+  }
+  return 0;
+}
+
+export interface Projected {
+  x: number;
+  y: number;
+}
+
+export interface Strand {
+  points: Projected[];
+  /** Mean depth, -1 (behind) to 1 (toward the viewer). The drawing dims by it. */
+  depth: number;
+}
+
+export interface MeshEye {
+  x: number;
+  y: number;
+  /** -1 (behind) to 1 (toward the viewer). */
+  z: number;
+  radius: number;
+  /** The pupil, inside the eye. Dilated or contracted by the mode. */
+  pupilRadius: number;
+  /**
+   * 0 shut, 1 open. The drawing squashes the eye's height by this rather than
+   * scaling it: a shut eye is a line across the socket, whereas an eye that
+   * shrank to a dot would read as a pupil contracting, which means something
+   * else entirely.
+   */
+  openness: number;
+}
+
+export interface HeadMesh {
+  /** The cranium and the face. Never moved by the jaw. */
+  shell: Strand[];
+  /** The mandible. Hinges with `mouthOpenness`. */
+  jaw: Strand[];
+  eyes: MeshEye[];
+  /** Two arcs above the eyes. Angle and height come from `brow`. */
+  brows: Strand[];
+  /**
+   * The lip line, in halves.
+   *
+   * The jaw hinging is not visible on its own — a wireframe skull with an
+   * articulating mandible and no lip line is a talking head you cannot see
+   * talk, which is what the ellipse-and-dots head at least got right. The
+   * upper lip rides the shell and the lower rides the mandible, so the two
+   * meet when shut and part by exactly as much as the jaw has swung.
+   */
+  mouth: { upper: Strand; lower: Strand };
+  /** The travelling scan ring, or null under reduced motion. */
+  scan: Strand | null;
+  /** 0 (profile) to 1 (facing the viewer). */
+  facing: number;
+}
+
+export interface HeadMeshOptions {
+  /** Half the head's width, in pixels. */
+  radius: number;
+  /** Radians. Positive turns the face toward the viewer's right. */
+  yaw: number;
+  /** Radians. Positive tips the chin down. */
+  pitch: number;
+  /** 0 shut, 1 wide. From `mouthFor`. */
+  mouthOpenness: number;
+  /** Milliseconds. Moves the scan ring and nothing else. */
+  time: number;
+  reducedMotion: boolean;
+  /**
+   * The face the brain chose — see `hub/headModes.ts`. All optional, and all
+   * defaulting to a level, open-eyed, neutral head, because every caller that
+   * existed before modes did passes none of them.
+   */
+  /** Roll in radians. A tilt reads as "I am not certain". */
+  roll?: number;
+  /** 0 shut, 1 open. */
+  lidOpen?: number;
+  /** -1 drawn in and down, 0 neutral, +1 raised. */
+  brow?: number;
+  /** Pupil scale. Around 1 is resting; wide when alarmed, narrow when concentrating. */
+  pupil?: number;
+}
+
+/** A point in the head's own space, before rotation. */
+function modelPoint(u: number, v: number, radius: number): [number, number, number] {
+  const w = headWidthAt(v);
+  return [
+    w * Math.sin(u) * radius,
+    -v * HEAD_HEIGHT * radius,
+    (w * Math.cos(u) * HEAD_DEPTH - BACKSET) * radius,
+  ];
+}
+
+/**
+ * Swing a point with the mandible.
+ *
+ * A rotation about the hinge axis, not a translation: a jaw that slid downward
+ * would separate from the skull and leave a gap at the ear. The chin therefore
+ * moves down AND back, which is what a jaw does.
+ */
+function hinge(
+  p: [number, number, number],
+  angle: number,
+  radius: number,
+): [number, number, number] {
+  if (angle === 0) return p;
+  const yHinge = -JAW_V * HEAD_HEIGHT * radius;
+  const zHinge = JAW_HINGE_Z * radius;
+  const dy = p[1] - yHinge;
+  const dz = p[2] - zHinge;
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return [p[0], yHinge + dy * c + dz * s, zHinge - dy * s + dz * c];
+}
+
+/**
+ * Yaw about the vertical axis, then pitch about the horizontal one, then roll
+ * about the line of sight.
+ *
+ * Roll is last so a tilt is a tilt of the head as it is currently turned,
+ * rather than a tilt of the model that the turn then swings somewhere else.
+ */
+function orient(
+  p: [number, number, number],
+  yaw: number,
+  pitch: number,
+  roll: number,
+): [number, number, number] {
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const x1 = p[0] * cy + p[2] * sy;
+  const z1 = -p[0] * sy + p[2] * cy;
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  const y2 = p[1] * cp - z1 * sp;
+  const z2 = p[1] * sp + z1 * cp;
+  if (roll === 0) return [x1, y2, z2];
+  const cr = Math.cos(roll);
+  const sr = Math.sin(roll);
+  return [x1 * cr - y2 * sr, x1 * sr + y2 * cr, z2];
+}
+
+/** Orthographic with a mild divide — enough that the near side reads as nearer. */
+function project(p: [number, number, number], radius: number): { x: number; y: number; depth: number } {
+  const focal = FOCAL * radius;
+  const k = focal / Math.max(focal * 0.35, focal - p[2]);
+  return {
+    x: p[0] * k,
+    y: p[1] * k,
+    depth: Math.max(-1, Math.min(1, p[2] / (HEAD_DEPTH * radius))),
+  };
+}
+
+function strandFrom(
+  samples: readonly [number, number][],
+  o: HeadMeshOptions,
+  jawAngle: number,
+): Strand {
+  const points: Projected[] = [];
+  let depthSum = 0;
+  for (const [u, v] of samples) {
+    let p = modelPoint(u, v, o.radius);
+    if (v < JAW_V) p = hinge(p, jawAngle, o.radius);
+    const q = project(orient(p, o.yaw, o.pitch, o.roll ?? 0), o.radius);
+    points.push({ x: q.x, y: q.y });
+    depthSum += q.depth;
+  }
+  return { points, depth: samples.length === 0 ? 0 : depthSum / samples.length };
+}
+
+export function headMesh(options: HeadMeshOptions): HeadMesh {
+  const o = options;
+  const openness = Math.max(0, Math.min(1, o.mouthOpenness));
+  const jawAngle = openness * MAX_JAW;
+
+  const shell: Strand[] = [];
+  const jaw: Strand[] = [];
+
+  // Latitude rings, each cut into a front arc and a back arc.
+  //
+  // A whole ring would average to one depth for every latitude, so the back of
+  // the skull would be drawn exactly as brightly as the face and the mesh would
+  // read as a tangle. Cut in two, the front arc is in front and the back arc is
+  // behind, and the drawing has something to dim.
+  for (const v of RINGS) {
+    for (const half of [0, 1] as const) {
+      const samples: [number, number][] = [];
+      for (let i = 0; i <= ARC_STEPS; i += 1) {
+        const u = -Math.PI / 2 + (i / ARC_STEPS) * Math.PI + half * Math.PI;
+        samples.push([u, v]);
+      }
+      (v < JAW_V ? jaw : shell).push(strandFrom(samples, o, jawAngle));
+    }
+  }
+
+  // Meridians, crown to chin, split at the jaw line so the mandible can move
+  // without dragging the cheek down with it.
+  for (let m = 0; m < MERIDIANS; m += 1) {
+    const u = (m / MERIDIANS) * Math.PI * 2;
+    const upper: [number, number][] = [];
+    const lower: [number, number][] = [];
+    for (let i = 0; i <= MERIDIAN_STEPS; i += 1) {
+      const v = 1 - (i / MERIDIAN_STEPS) * 2;
+      (v < JAW_V ? lower : upper).push([u, v]);
+    }
+    // The hinge latitude itself belongs to both, so the two halves meet.
+    if (upper.length > 0 && lower.length > 0) lower.unshift([u, JAW_V]);
+    if (upper.length > 1) shell.push(strandFrom(upper, o, jawAngle));
+    if (lower.length > 1) jaw.push(strandFrom(lower, o, jawAngle));
+  }
+
+  const roll = o.roll ?? 0;
+  const lidOpen = Math.max(0, Math.min(1, o.lidOpen ?? 1));
+  const brow = Math.max(-1, Math.min(1, o.brow ?? 0));
+  const pupil = Math.max(0.1, o.pupil ?? 1);
+
+  const eyes: MeshEye[] = [-1, 1].map((side) => {
+    const q = project(orient(modelPoint(side * EYE_U, EYE_V, o.radius), o.yaw, o.pitch, roll), o.radius);
+    const radius = o.radius * 0.1;
+    return {
+      x: q.x,
+      y: q.y,
+      z: q.depth,
+      radius,
+      // Clamped inside the eye whatever the caller asks for: a pupil the size
+      // of its socket is a black dot, not a dilation.
+      pupilRadius: radius * Math.max(0.2, Math.min(0.72, 0.42 * pupil)),
+      openness: lidOpen,
+    };
+  });
+
+  // The brows. An arc across the socket, lifted or drawn in by `brow` — the
+  // one part of the face that carries the reading rather than the speech, which
+  // is why reduced motion keeps it and removes the scan.
+  const brows: Strand[] = [-1, 1].map((side) => {
+    const samples: [number, number][] = [];
+    for (let i = 0; i <= 6; i += 1) {
+      const across = (i / 6) * 2 - 1;
+      const u = side * EYE_U + across * BROW_SPAN * side;
+      // Raised lifts the whole arc; drawn in lowers the inner end further than
+      // the outer one, which is what makes a worried brow read as worried
+      // rather than merely low.
+      const inner = side * across < 0 ? 1 : 0;
+      const v = EYE_V + BROW_LIFT + brow * BROW_TRAVEL - inner * Math.max(0, -brow) * BROW_TRAVEL * 0.6;
+      samples.push([u, v]);
+    }
+    return strandFrom(samples, o, 0);
+  });
+
+  // The lip line. Both halves are sampled at the SAME latitude and longitudes;
+  // the only difference is that the lower one is swung with the mandible. So
+  // "shut" is not a tuned constant, it is the two halves being the same points.
+  const lipSamples: [number, number][] = [];
+  for (let i = 0; i <= 10; i += 1) {
+    lipSamples.push([-MOUTH_SPAN + (i / 10) * MOUTH_SPAN * 2, JAW_V]);
+  }
+  const mouth = {
+    upper: strandFrom(lipSamples, o, 0),
+    lower: strandFrom(lipSamples.map(([u, v]) => [u, v - 1e-9] as [number, number]), o, jawAngle),
+  };
+
+  // The scan ring: a real latitude ring at the height the sweep has reached, so
+  // it follows the skull's width instead of ruling a straight line across it.
+  let scan: Strand | null = null;
+  if (!o.reducedMotion) {
+    const phase = ((o.time % SCAN_PERIOD) + SCAN_PERIOD) % SCAN_PERIOD / SCAN_PERIOD;
+    const sweep = 1 - 2 * Math.abs(phase - 0.5);
+    const v = -0.9 + sweep * 1.8;
+    const samples: [number, number][] = [];
+    for (let i = 0; i <= ARC_STEPS * 2; i += 1) {
+      samples.push([(i / (ARC_STEPS * 2)) * Math.PI * 2, v]);
+    }
+    scan = strandFrom(samples, o, jawAngle);
+  }
+
+  return {
+    shell,
+    jaw,
+    eyes,
+    brows,
+    mouth,
+    scan,
+    facing: Math.max(0, Math.min(1, Math.cos(o.yaw) * Math.cos(o.pitch))),
+  };
+}

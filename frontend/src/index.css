@@ -9,13 +9,13 @@
 ───────────────────────────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    --bg:            #080c14;
-    --surface:       #0d1421;
-    --raised:        #111827;
-    --border:        #1e2d3d;
-    --text:          #e2e8f0;
-    --text-muted:    #64748b;
-    --accent:        #00d4ff;
+    --bg:            #05070d;
+    --surface:       #0a0e18;
+    --raised:        #0f1523;
+    --border:        #1b2433;
+    --text:          #dbe3ee;
+    --text-muted:    #7286a0;
+    --accent:        #f0b429;
     --bull:          #00e676;
     --bear:          #ff1744;
 
@@ -29,18 +29,18 @@
        nothing to say which was which, so every screen picked a different one.
        Two greys with named jobs replace four without. */
 
-    --text-strong:   #f8fafc;   /* figures and headings, above --text        */
-    --text-dim:      #94a3b8;   /* secondary text                           */
-    --hairline:      #16222f;   /* dividers and quiet edges, below --border  */
-    --surface-hover: #141c2b;   /* hover fill                               */
-    --link:          #60a5fa;   /* interactive text                         */
+    --text-strong:   #f7f9fc;   /* figures and headings, above --text        */
+    --text-dim:      #93a1b5;   /* secondary text                           */
+    --hairline:      #121926;   /* dividers and quiet edges, below --border  */
+    --surface-hover: #131a28;   /* hover fill                               */
+    --link:          #7cc0ff;   /* interactive text                         */
 
     /* Money moving, at the saturation a dark ground can carry. --bull and
        --bear stay as they are: those are the tick-flash colours, where a
        brief full-strength flash is the point. */
-    --gain:          #4ade80;
-    --loss:          #f87171;
-    --warn:          #fbbf24;   /* needs attention, not yet a loss          */
+    --gain:          #3ddc97;
+    --loss:          #ff5c6c;
+    --warn:          #f5b84b;   /* needs attention, not yet a loss          */
     /* Navigation row height. Pro-max on a mouse, thumb-sized on touch — the
        media query below raises it rather than the sidebar guessing which it
        has. A touch target is never traded away for density. */
@@ -88,22 +88,49 @@
        less of it. */
 
     /* Surfaces the original set had no word for. */
-    --sunken:        #05070c;   /* below --bg: wells, inputs, code          */
-    --border-strong: #2b3f56;   /* emphasis edge, above --border            */
-    --accent-soft:   rgba(0, 212, 255, .12);
-    --accent-ink:    #04212b;   /* text ON --accent                         */
+    --sunken:        #020408;   /* below --bg: wells, inputs, code          */
+    --border-strong: #2a3648;   /* emphasis edge, above --border            */
+    --accent-soft:   rgba(240, 180, 41, .13);
+    --accent-ink:    #1a1203;
+
+    /* ── The page ground ──────────────────────────────────────────────────
+       `AppBackground` is a fixed, inset-0 layer on every authenticated route,
+       and it painted `linear-gradient(180deg,#0a1424,#0a0f1c,#06090f)` as a
+       literal — so choosing Light moved `body` and the chrome while the ground
+       stayed navy. A white sidebar on a dark page is what that looked like.
+       These are the same three stops plus the four aurora tints and the grid,
+       as tokens, so both themes own them. */
+    --ground-base:   #0a1424;
+    --ground-mid:    #0a0f1c;
+    --ground-deep:   #06090f;
+    --ground-glow-a: rgba(37, 99, 235, .22);
+    --ground-glow-b: rgba(99, 102, 241, .16);
+    --ground-glow-c: rgba(34, 211, 238, .12);
+    --ground-glow-d: rgba(240, 180, 41, .10);
+    --ground-grid:   rgba(120, 150, 210, .05);
+    --orb-blue:      rgba(59, 130, 246, .42);
+    --orb-indigo:    rgba(99, 102, 241, .30);
+    --orb-cyan:      rgba(34, 211, 238, .26);
+    --orb-gold:      rgba(240, 180, 41, .16);
+    --spark-up:      #3ddc97;
+    --spark-down:    #ff5c6c;
+    --spark-a:       #7cc0ff;
+    --spark-b:       #f0b429;
+    /* Vignette — darkens the edges on dark, lifts them on light. */
+    --ground-vignette:        rgba(3, 6, 12, .55);
+    --ground-vignette-strong: rgba(3, 6, 12, .72);   /* text ON --accent                         */
     /* Text on a saturated danger fill. Near-white in EVERY theme, because the
        fill is red in every theme — reaching for --text-strong here puts
        near-black on red the moment the light palette loads. */
     --on-danger:     #fff6f6;
-    --focus:         #38bdf8;   /* focus ring, never reused as decoration   */
+    --focus:         #58b6ff;   /* focus ring, never reused as decoration   */
     --overlay:       rgba(2, 6, 14, .62);
     --info:          #7dd3fc;   /* neutral notice, not a gain and not a loss */
     /* Referenced by .stat-tile-label since that component was written and
        declared nowhere, so the label inherited its colour instead of
        receding. Fainter than --text-muted, for a label whose value is the
        thing being read. */
-    --text-faint:    #56627a;
+    --text-faint:    #5b6d86;
 
     /* ── Service health ────────────────────────────────────────────────────
        Separate names from --gain/--loss even where the hue is close, for the
@@ -189,36 +216,58 @@
      meaning and gains contrast: #00e676 on white fails WCAG AA outright.
      ═══════════════════════════════════════════════════════════════════════ */
   :root[data-theme="light"] {
-    --bg:            #f4f5f8;
+    --bg:            #f6f7fa;
     --surface:       #ffffff;
     --raised:        #ffffff;
-    --sunken:        #eceff4;
-    --border:        #d7dce5;
-    --border-strong: #b6bfcd;
-    --hairline:      #e6eaf0;
+    --sunken:        #eef1f6;
+    --border:        #d8dee8;
+    --border-strong: #b8c2d0;
+    --hairline:      #e6eaf1;
     --surface-hover: #f1f4f9;
-    --text:          #1b2230;
-    --text-strong:   #0b1120;
-    --text-dim:      #5a6577;
-    --text-muted:    #78849a;
-    --text-faint:    #949fb2;
-    --accent:        #1063d0;
-    --accent-soft:   rgba(16, 99, 208, .10);
+    --text:          #1f2937;
+    --text-strong:   #0b1220;
+    --text-dim:      #4a5768;
+    --text-muted:    #5b6b7a;
+    --text-faint:    #6b7a8c;
+    --accent:        #8a5a00;
+    --accent-soft:   rgba(138, 90, 0, .10);
     --accent-ink:    #ffffff;
     --on-danger:     #fff6f6;
-    --link:          #1058bd;
-    --focus:         #1063d0;
+    --link:          #1d4ed8;
+    --focus:         #1d4ed8;
     --overlay:       rgba(15, 23, 42, .38);
     --info:          #0369a1;
+
+    /* The same ground, lit. Not an inversion: the aurora tints keep their hue
+       and lose most of their weight, because a wash that reads as depth on a
+       near-black ground reads as dirt on paper. */
+    --ground-base:   #ffffff;
+    --ground-mid:    #f8f9fc;
+    --ground-deep:   #eef1f6;
+    --ground-glow-a: rgba(37, 99, 235, .07);
+    --ground-glow-b: rgba(99, 102, 241, .05);
+    --ground-glow-c: rgba(14, 165, 233, .05);
+    --ground-glow-d: rgba(138, 90, 0, .05);
+    --ground-grid:   rgba(30, 58, 110, .05);
+    --orb-blue:      rgba(59, 130, 246, .12);
+    --orb-indigo:    rgba(99, 102, 241, .10);
+    --orb-cyan:      rgba(14, 165, 233, .09);
+    --orb-gold:      rgba(138, 90, 0, .07);
+    --spark-up:      #047857;
+    --spark-down:    #b91c1c;
+    --spark-a:       #1d4ed8;
+    --spark-b:       #8a5a00;
+    --ground-vignette:        rgba(120, 132, 155, .12);
+    --ground-vignette-strong: rgba(120, 132, 155, .18);
 
     /* Direction and money. Saturation drops and darkness rises so both clear
        AA on white; the pair stays distinguishable for red-green deficiency
        by lightness as well as hue. */
     --bull:  #0b8f5a;
     --bear:  #c22f2f;
-    --gain:  #0b8f5a;
-    --loss:  #c22f2f;
-    --warn:  #9a6206;
+    --gain:  #047857;
+    --loss:  #b91c1c;
+    --warn:  #92620a;
 
     /* Support desk keeps its meanings: waiting amber, mine accent, theirs
        slate, done receded, urgent its own severity. */
