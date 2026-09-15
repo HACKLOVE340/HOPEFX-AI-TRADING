@@ -37,11 +37,14 @@ column, so no reader mistakes a written intention for a measurement.
 from __future__ import annotations
 
 import re
+import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 
 
 @dataclass
@@ -75,7 +78,11 @@ def _callers() -> Section:
     s = Section("2. Live capabilities with no production caller  [MEASURED — a SCREEN, not a verdict]")
     try:
         from scripts.capability_callers import SweepBroken, sweep
+    except Exception as exc:  # pragma: no cover
+        s.note = f"unmeasured — the caller sweep could not be imported: {exc}"
+        return s
 
+    try:
         rows = sweep()
     except SweepBroken as exc:
         s.note = f"unmeasured — {exc}"
