@@ -21,6 +21,26 @@ import jsxA11y from 'eslint-plugin-jsx-a11y';
 
 import a11yDebt from './a11y-debt.json' with { type: 'json' };
 
+// One options object for `jsx-a11y/control-has-associated-label`, shared by the
+// error-level rule and the warn-level debt override below.
+//
+// They were two separate configurations and the second was a bare `'warn'`,
+// which in flat config RESETS the options to the rule's defaults. So the 18
+// files on the debt list were not merely being warned instead of errored —
+// they were being checked by a DIFFERENT RULE: no `controlComponents`, and the
+// default `depth: 2`.
+//
+// Sharing the object changes no current finding — 18 warnings before and 18
+// after, verified — and that is the point: the two configurations agreeing is
+// what makes the debt list a severity switch rather than a second rule.
+//
+// `depth` was tried here and deliberately NOT kept. The hypothesis was that
+// the remaining warnings are controls whose label text sits deeper than the
+// default reach; raising it to 6 changed nothing, because this rule looks DOWN
+// into a control's children and never UP at a wrapping <label>. Implicit label
+// association is valid HTML the rule cannot see. See a11y-debt.json.
+const A11Y_LABEL_OPTIONS = { controlComponents: ['button'] };
+
 export default tseslint.config(
   {
     ignores: [
@@ -115,7 +135,7 @@ export default tseslint.config(
       // Only this rule is on. `jsx-a11y`'s recommended set produces a wall on
       // an established codebase, and the config above already refuses that
       // trade twice (no-use-before-define at 1,990, no-explicit-any).
-      'jsx-a11y/control-has-associated-label': ['error', { controlComponents: ['button'] }],
+      'jsx-a11y/control-has-associated-label': ['error', A11Y_LABEL_OPTIONS],
 
       // ── Genuine footguns ────────────────────────────────────────────────
       eqeqeq: ['error', 'always', { null: 'ignore' }],
@@ -171,7 +191,7 @@ export default tseslint.config(
   {
     files: Object.keys(a11yDebt.files),
     rules: {
-      'jsx-a11y/control-has-associated-label': 'warn',
+      'jsx-a11y/control-has-associated-label': ['warn', A11Y_LABEL_OPTIONS],
     },
   },
 );

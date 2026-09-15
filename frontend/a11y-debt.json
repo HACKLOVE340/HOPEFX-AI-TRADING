@@ -1,6 +1,6 @@
 {
   "_comment": "Files with jsx-a11y/control-has-associated-label violations. eslint.config.js reads this list and downgrades the rule to a warning FOR THESE FILES ONLY, so a violation in any other file is an error and fails `npm run lint`. The list may only SHRINK: src/test/a11y_debt_is_accurate.test.ts fails if a listed file has no violations left (delete its entry) or if a listed file no longer exists. An entry that describes nothing is how a ratchet stops being one. F172.",
-  "_total": 18,
+  "_total": 17,
   "_shape": "The 138 measured on 2026-09-13 were described as 'icon-only buttons without an accessible name'. Classified with the same parser eslint uses, exactly ONE was a button: input 108, textarea 17, div 5, td 4, th 2, button 1, option 1. Sixteen more were false positives of a kind worth knowing about - a control carrying id=\"x\" with a sibling <label htmlFor=\"x\">, which is correctly labelled at runtime and unresolvable by a static rule. Clear those by giving the label an id and the control aria-labelledby, never by copying the text into an aria-label that can drift from what is on screen (WCAG 2.5.3). The remaining 121 are controls with no accessible name at all, and are real.",
   "files": {
     "src/components/DataTable.tsx": 1,
@@ -14,7 +14,7 @@
     "src/pages/Trading.tsx": 2,
     "src/pages/settings/PlatformConfiguration.tsx": 2,
     "src/pages/superadmin/FinancialSection.tsx": 1,
-    "src/pages/superadmin/LogsSection.tsx": 1,
-    "src/pages/superadmin/ui.tsx": 1
-  }
+    "src/pages/superadmin/LogsSection.tsx": 1
+  },
+  "_triage": "Triaged one by one on 2026-09-15, because 'known limitation of one rule' is a label that hides a real defect. jsx-a11y/control-has-associated-label looks DOWN into a control's own children for text; it never looks UP at a wrapping <label>, and it does not follow htmlFor/id across this shape. Seventeen of the eighteen findings are therefore its blind spot and the code is CORRECT \u2014 e.g. <label>Start Date <input type=\"date\"/></label> (ReplayPage), <label htmlFor={`journal-notes-${id}`}>Notes</label> with the matching <textarea id=...> (TradeJournal), a radio inside a <label> carrying the option text (FinancialSection), and a <td> inside an aria-hidden skeleton row (DataTable). Do NOT clear those with an aria-label: it would duplicate text already on screen and drift at the first rename (WCAG 2.5.3). The eighteenth was real and is FIXED: superadmin/ui.tsx's Toggle rendered div[role=\"switch\"] inside a <label>, and a <label> implicitly labels only LABELABLE elements (input, select, textarea, button, meter, output, progress) \u2014 so all 64 uses announced as \"switch, off\" with no name, several of them controlling how the platform trades. It now carries aria-labelledby pointing at the element that renders the visible text, plus aria-describedby and aria-disabled. See src/test/the_superadmin_toggle_has_a_name.test.tsx."
 }

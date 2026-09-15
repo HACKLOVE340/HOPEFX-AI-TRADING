@@ -35,8 +35,8 @@ Measured 2026-09-15, immediately before this document was written:
 | Emoji used as icons | 750 across 125 files |
 | Inline `fontSize` the cascade cannot reach | 2,108 (was 2,871) |
 | Numeric spacing utilities | 1,089 |
-| Frontend tests | 178 files · 3,036 tests · all pass |
-| eslint | 0 errors · 18 warnings (one a11y rule, known limitations) |
+| Frontend tests | 179 files · 3,044 tests · all pass |
+| eslint | 0 errors · **17** warnings — all one a11y rule, all triaged 2026-09-15 as that rule's blind spot (it never looks UP at a wrapping `<label>`). The eighteenth was real: `superadmin/ui.tsx`'s `Toggle` gave 64 switches no accessible name. Do not clear the 17 with an `aria-label` |
 
 ---
 

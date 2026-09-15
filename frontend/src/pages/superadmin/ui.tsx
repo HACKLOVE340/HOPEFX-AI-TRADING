@@ -340,19 +340,49 @@ interface ToggleProps {
   accent?: string;
 }
 
-export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onChange, disabled, accent = '#22c55e' }) => (
+/**
+ * The switch takes its name from the text beside it.
+ *
+ * This used to be a `<label>` wrapping a `div[role="switch"]`, which looks
+ * labelled and is not: a `<label>` implicitly labels only *labelable* elements
+ * — input, select, textarea, button, meter, output, progress — and a div with a
+ * role is none of them. All 64 uses of this component therefore rendered a
+ * switch a screen reader announces as "switch, off", with nothing to say what
+ * it switches. Several of them change how the platform trades.
+ *
+ * `aria-labelledby` points at the element that already renders the visible
+ * text, so the accessible name IS what is on screen and cannot drift from it.
+ * An `aria-label` carrying a second copy of the string would pass the same
+ * check and start lying at the first rename.
+ */
+export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onChange, disabled, accent = '#22c55e' }) => {
+  // One id per instance. 64 toggles share this component and several pages
+  // render a dozen; a constant id would point every switch at the first one.
+  const uid = React.useId();
+  const labelId = `${uid}-label`;
+  const descId = `${uid}-desc`;
+  return (
   <label style={{
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '10px 0', cursor: disabled ? 'not-allowed' : 'pointer',
     userSelect: 'none', opacity: disabled ? 0.5 : 1,
   }}>
     <div>
-      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 500 }}>{label}</div>
-      {description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>}
+      <div id={labelId} style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 500 }}>{label}</div>
+      {description && <div id={descId} style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>}
     </div>
     <div
       role="switch"
       aria-checked={checked}
+      // Only claim a relationship that exists: `label` and `description` are
+      // both optional, and pointing at an id nothing renders is worse than
+      // pointing at nothing — it resolves to the empty string and the switch
+      // goes back to being nameless, silently.
+      aria-labelledby={label ? labelId : undefined}
+      aria-describedby={description ? descId : undefined}
+      // The tab order already skipped a disabled switch; nothing told assistive
+      // technology WHY it was skipped.
+      aria-disabled={disabled ? true : undefined}
       tabIndex={disabled ? -1 : 0}
       onClick={() => !disabled && onChange(!checked)}
       onKeyDown={e => !disabled && (e.key === 'Enter' || e.key === ' ') && onChange(!checked)}
@@ -371,7 +401,8 @@ export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onC
       }} />
     </div>
   </label>
-);
+  );
+};
 
 // ── Divider ───────────────────────────────────────────────────────────────────
 
