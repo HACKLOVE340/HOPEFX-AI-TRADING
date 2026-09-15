@@ -237,9 +237,32 @@ it, and the mechanism is already built and proven.
 whole safety argument is that nothing moves at the default density, and rounding
 638 sites by 1px abandons it.
 
-A **size ratchet** (mirroring `frontend_colour_ratchet.py`) would stop the count
-growing while this is decided. It does not exist yet; the register's probe
-measures the number but does not block on it.
+A **size ratchet** now exists and blocks — `scripts/frontend_size_ratchet.py`,
+wired into `pre-commit` on 2026-09-15, baselined at **3,198 unreachable sizes
+across 194 files**. Same rule as the colour and page-shell ratchets: a rise
+blocks, a new file carrying any literal size blocks, and a file that reaches
+zero must have its line DELETED from `docs/FRONTEND_SIZE_DEBT.json` rather than
+left at 0.
+
+It does not decide anything — the bucket decisions above are still the owner's.
+It stops 3,198 becoming 3,500 while they are made, which is what the colour
+ratchet did for the codemod on that side and the reason that codemod's 1,777
+retired literals stayed retired.
+
+`scripts/correction_register.py`'s `DENSITY-CANNOT-REACH` probe now imports
+`count_split()` from the ratchet instead of keeping its own three regexes, so
+the figure the register prints and the figure the gate holds cannot disagree.
+Two counters of one population drift at the first edit — that is how
+`frontend_page_shell_ratchet` came to print "37 of 72" against a real
+population of 63.
+
+One injection against it **survived** the first eleven tests and is worth
+knowing about: removing the `if not baseline` guard left everything green,
+because with a populated tree every file then failed as "no baseline entry" and
+the check still returned 1. The guard's real job is the case those tests never
+reached — nothing scanned AND nothing recorded, where a moved or renamed
+`frontend/src` falls straight through to `return 0` and reads exactly like a
+clean tree. The twelfth test covers it.
 
 ### 2. The pages off the standard shell — one left, deliberately
 

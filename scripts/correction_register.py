@@ -3058,21 +3058,15 @@ def _p_density_cannot_reach() -> tuple[str, str]:
     if not root.is_dir():
         return ("UNKNOWN", "frontend/src is not present")
 
-    token_uses = 0
-    literal_sizes = 0
-    literal_space = 0
-    token_pattern = re.compile(r"\b(p-card|p-row|gap-grid|text-body|text-value|text-title|text-label|text-micro)\b")
-    size_pattern = re.compile(r"fontSize:\s*[0-9]")
-    space_pattern = re.compile(r"\b(?:p|px|py|gap)-[0-9]+\b")
+    # One counter, not two. This probe used to keep its own three regexes, and
+    # `scripts/frontend_size_ratchet.py` now holds the same population at a
+    # baseline — two definitions of one number drift at the first edit, which
+    # is how the page-shell ratchet came to print "37 of 72" against a real
+    # population of 63.
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from frontend_size_ratchet import count_split
 
-    for path in root.rglob("*.tsx"):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        token_uses += len(token_pattern.findall(text))
-        literal_sizes += len(size_pattern.findall(text))
-        literal_space += len(space_pattern.findall(text))
+    token_uses, literal_sizes, literal_space = count_split(ROOT)
 
     unreachable = literal_sizes + literal_space
     if unreachable == 0:

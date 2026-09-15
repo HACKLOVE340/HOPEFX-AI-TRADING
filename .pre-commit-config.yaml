@@ -310,6 +310,21 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      # The same defect in the size dimension, and the same remedy. `data-density`
+      # is stamped on every route and redefines eleven tokens per tier; a literal
+      # `fontSize: 12` or `p-4` is not in the cascade, so no tier can move it.
+      # 763 sizes reached the token layer via frontend_size_codemod.py and the
+      # rest need a per-bucket DECISION (12px x638 and 11px x532 sit BETWEEN
+      # tokens) that is the owner's, not a substitution. Keeping the number from
+      # growing while that is decided is not the owner's call, and is this.
+      - id: frontend-size-ratchet
+        name: Sizes the density control cannot reach may only decrease
+        language: system
+        entry: python scripts/frontend_size_ratchet.py --check
+        files: '^(frontend/src/.*\.tsx$|docs/FRONTEND_SIZE_DEBT\.json$|scripts/frontend_size_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
       # The frame around the colours. 74 pages had chosen twelve different
       # widths one at a time, 43 rendered no PageHeader at all, and 40 ended
       # with no outbound link. PageShell is the standard page; this keeps the

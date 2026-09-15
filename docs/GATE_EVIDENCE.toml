@@ -196,6 +196,13 @@ evidence = "tests/unit/test_frontend_colour_ratchet.py"
 injected = "Three distinct regressions, each refused: an extra hex literal in a baselined file (20 -> 21 blocks with both counts named), a brand-new file carrying one literal (no baseline entry blocks), and a file driven to zero while its baseline line remains (blocks with 'delete the line'). Also proven against the real tree rather than only a fixture: appending '#abcdef' to frontend/src/pages/NotFound.tsx took the total 8021 -> 8022 and the gate blocked naming that file; restoring it returned the gate to green. A sanity floor test asserts the recorded total exceeds 5000, so a glob or regex that stops matching reads as a broken counter rather than as 8021 clean files"
 
 [[gate]]
+id = "frontend-size-ratchet"
+kind = "pre_commit"
+runs = "scripts/frontend_size_ratchet.py --check"
+evidence = "tests/unit/test_frontend_size_ratchet.py"
+injected = "Five refusals driven against a throwaway tree rather than asserted from reading: a count that ROSE in a baselined file (1 -> 2 blocks naming both), a brand-new file carrying any unreachable size (no baseline entry blocks), a file driven to zero while its baseline line remains (blocks with 'delete the line', because an entry describing nothing is how a ratchet stops being one), a missing baseline (blocks rather than reading as clean), and the spacing half of the population silently dropped from the counter (6 of 12 tests fail). A deleted file is proven NOT to block, which is why the zero-count check tests for the file's existence rather than only for its absence from the counts. One injection SURVIVED the first eleven tests and is the reason for the twelfth: removing the `if not baseline` guard left everything green, because with a populated tree every file then failed as 'no baseline entry' and the check still returned 1 — the guard's real job is the case those tests never reached, nothing scanned AND nothing recorded, where a moved or renamed frontend/src falls through to `return 0` and reads exactly like a clean tree. A sanity floor asserts the scan still finds more than 50 files in the real repository and that the committed baseline's stated total equals the sum of its entries. One further test holds the counter single: scripts/correction_register.py's DENSITY-CANNOT-REACH probe imports count_split() from this module rather than keeping its own regexes, and the test fails if the two ever disagree — the page-shell ratchet printed '37 of 72' against a real population of 63 for exactly that reason."
+
+[[gate]]
 id = "frontend-page-shell-ratchet"
 kind = "pre_commit"
 runs = "scripts/frontend_page_shell_ratchet.py --check"
