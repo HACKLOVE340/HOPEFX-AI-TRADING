@@ -142,7 +142,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
       {/* R:R + description */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>R:R</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
           {riskReward(pattern.entry_price, pattern.target_price, pattern.stop_loss)}
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 'auto' }}>
@@ -161,7 +161,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
           onClick={() => onTrade(pattern)}
           style={{
             width: '100%', padding: '8px 0', borderRadius: 7, cursor: 'pointer', fontWeight: 700,
-            fontSize: 13, fontFamily: 'inherit',
+            fontSize: 'var(--fs-body)', fontFamily: 'inherit',
             background: bullish ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
             border: `1px solid ${bullish ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
             color: bullish ? 'var(--gain)' : 'var(--loss)',
@@ -327,7 +327,7 @@ const PatternDetector: React.FC = () => {
                 <strong style={{ color: '#fde68a' }}>{data.symbol}</strong> / {timeframe}
                 {typeof data.bars === 'number' ? ` — only ${data.bars} bar${data.bars === 1 ? '' : 's'}` : ''}.
               </p>
-              <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', maxWidth: 460, lineHeight: 1.7 }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', textAlign: 'center', maxWidth: 460, lineHeight: 1.7 }}>
                 {data.note}
               </p>
               <button onClick={scan} style={s.retryBtn}>Retry</button>
@@ -344,7 +344,7 @@ const PatternDetector: React.FC = () => {
           )
         ) : (
           <div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
               Found <strong style={{ color: 'var(--text-dim)' }}>{data.count}</strong> pattern{data.count !== 1 ? 's' : ''} on{' '}
               <strong style={{ color: 'var(--text-dim)' }}>{data.symbol}</strong> / {timeframe}
             </div>
@@ -374,7 +374,7 @@ const PatternDetector: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:    { minHeight: '100vh', background: 'var(--surface)', color: 'var(--text-strong)', fontFamily: "'Inter',system-ui,sans-serif", padding: 24 },
   header:  { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 20 },
-  title:   { fontSize: 28, fontWeight: 700, margin: 0 },
+  title:   { fontSize: 'var(--fs-hero)', fontWeight: 700, margin: 0 },
   subtitle:{ fontSize: 14, color: 'var(--text-dim)', marginTop: 4 },
 
   controls: { display: 'flex', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap' },
@@ -383,7 +383,7 @@ const s: Record<string, React.CSSProperties> = {
 
   select: {
     background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6,
-    color: 'var(--text-strong)', fontSize: 13, padding: '6px 10px', cursor: 'pointer',
+    color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '6px 10px', cursor: 'pointer',
     outline: 'none',
   },
 
@@ -403,7 +403,7 @@ const s: Record<string, React.CSSProperties> = {
 
   retryBtn: {
     background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6,
-    color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 18px',
+    color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 18px',
   },
 
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 20 },

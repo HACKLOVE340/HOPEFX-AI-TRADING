@@ -150,8 +150,8 @@ const ProgressBar: React.FC<{
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace', color: labelColor }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{label}</span>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: 'monospace', color: labelColor }}>
           {amount ?? `${(value * 100).toFixed(2)}% / ${(limit * 100).toFixed(0)}%`}
         </span>
       </div>
@@ -312,7 +312,7 @@ const PropFirmTracker: React.FC = () => {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{new Date(ch.started_at).toLocaleDateString()} {ch.ended_at ? `→ ${new Date(ch.ended_at).toLocaleDateString()}` : '(active)'}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: ch.result === 'passed' ? 'var(--gain)' : ch.result === 'failed' ? 'var(--loss)' : '#f59e0b' }}>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: ch.result === 'passed' ? 'var(--gain)' : ch.result === 'failed' ? 'var(--loss)' : '#f59e0b' }}>
                   {ch.result.toUpperCase()}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>P&L: {fmtPctRaw(ch.profit_pct)} · DD: {fmtPctRaw(ch.max_drawdown_pct)}</div>
@@ -333,10 +333,10 @@ const PropFirmTracker: React.FC = () => {
           {(alertsQ.data ?? []).map(alert => (
             <div key={alert.alert_id} style={{ background: alert.severity === 'critical' ? '#450a0a' : '#431407', border: `1px solid ${alert.severity === 'critical' ? '#7f1d1d' : '#92400e'}`, borderRadius: 8, padding: '12px 16px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: alert.severity === 'critical' ? 'var(--loss)' : 'var(--warn)', marginBottom: 4 }}>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: alert.severity === 'critical' ? 'var(--loss)' : 'var(--warn)', marginBottom: 4 }}>
                   {alert.severity === 'critical' ? '🚨' : '⚠️'} {alert.alert_type}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{alert.message}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{alert.message}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{new Date(alert.created_at).toLocaleString()}</div>
               </div>
               {!alert.acknowledged && (
@@ -371,7 +371,7 @@ const PropFirmTracker: React.FC = () => {
             <DailyPnlChart data={dailyQ.data ?? []} />
           )}
           {(dailyQ.data ?? []).map(d => (
-            <div key={d.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #1e293b', fontSize: 13 }}>
+            <div key={d.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #1e293b', fontSize: 'var(--fs-body)'}}>
               <span style={{ color: 'var(--text-dim)' }}>{d.date}</span>
               <span style={{ color: d.pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>{fmtPnl(d.pnl)}</span>
               <span style={{ color: 'var(--text-muted)' }}>{d.trades} trades</span>
@@ -438,8 +438,8 @@ const PropFirmTracker: React.FC = () => {
             {/* Trading days */}
             <div style={{ marginBottom: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>📅 Trading Days</span>
-                <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace', color: '#cbd5e1' }}>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>📅 Trading Days</span>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: 'monospace', color: '#cbd5e1' }}>
                   {status.trading_days_completed} / {status.trading_days_required}
                 </span>
               </div>

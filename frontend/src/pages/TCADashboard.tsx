@@ -597,13 +597,13 @@ const TCADashboard: React.FC = () => {
                 <div key={session} style={pg.sessionRow}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={sessionDot(session)} />
-                    <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>
+                    <span style={{ color: '#f1f5f9', fontSize: 'var(--fs-body)', fontWeight: 600, textTransform: 'capitalize' }}>
                       {session.replace('_', ' ')}
                     </span>
                     <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{s.n_trades} trades</span>
                   </div>
                   <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                    <span style={{ color: slippageColor(s.mean_slippage_bps), fontSize: 13, fontWeight: 600 }}>
+                    <span style={{ color: slippageColor(s.mean_slippage_bps), fontSize: 'var(--fs-body)', fontWeight: 600 }}>
                       {Number.isFinite(s.mean_slippage_bps) ? s.mean_slippage_bps.toFixed(2) : '—'} bps
                     </span>
                     <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>
@@ -633,7 +633,7 @@ const TCADashboard: React.FC = () => {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: 'var(--loss)', fontSize: 13, fontWeight: 700 }}>
+                    <div style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700 }}>
                       {a.mean_slippage_bps.toFixed(2)} bps
                     </div>
                     <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
@@ -680,17 +680,17 @@ const TCADashboard: React.FC = () => {
         {filteredRecords.length === 0 ? (
           <div style={{ ...pg.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 36 }}>📊</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-dim)' }}>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>
               {records.length === 0 ? 'No fill records yet' : 'No records match the current filters'}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 360 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', maxWidth: 360 }}>
               {records.length === 0
                 ? 'Trades will appear here once the execution engine records fills.'
                 : 'Try clearing your filters to see all records.'}
             </div>
             {records.length === 0 && (
               <button onClick={() => navigate('/trade')}
-                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
                 ⚡ Start Trading
               </button>
             )}

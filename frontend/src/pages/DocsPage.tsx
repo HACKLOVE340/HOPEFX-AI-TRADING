@@ -212,12 +212,12 @@ const DocsPage: React.FC = () => {
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           {/* Breadcrumb */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}>
-            <Link to="/home" style={{ color: 'var(--text-faint)', fontSize: 13, textDecoration: 'none' }}
+            <Link to="/home" style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none' }}
               onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
             >Home</Link>
             <ChevronRight size={12} style={{ color: 'var(--text-faint)' }} />
-            <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>Documentation</span>
+            <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>Documentation</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -228,12 +228,12 @@ const DocsPage: React.FC = () => {
             }}>
               <BookOpen size={20} style={{ color: 'var(--accent)' }} />
             </div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', margin: 0 }}>
+            <h1 style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, letterSpacing: '-0.5px', margin: 0 }}>
               HOPE<span style={{ color: 'var(--accent)' }}>FX</span> Documentation
             </h1>
           </div>
 
-          <p style={{ color: 'var(--text-muted)', fontSize: 15, margin: '0 0 28px', lineHeight: 1.6 }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-value)', margin: '0 0 28px', lineHeight: 1.6 }}>
             AI-powered gold and forex trading platform. Automated strategies, real-time signals,
             and institutional-grade risk management.
           </p>
@@ -305,7 +305,7 @@ const DocsPage: React.FC = () => {
                 }}>
                   {section.icon}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)' }}>
                   {section.title}
                 </span>
               </div>
@@ -320,7 +320,7 @@ const DocsPage: React.FC = () => {
                       rel={entry.external ? 'noopener noreferrer' : undefined}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6,
-                        color: 'var(--text-dim)', fontSize: 13, textDecoration: 'none',
+                        color: 'var(--text-dim)', fontSize: 'var(--fs-body)', textDecoration: 'none',
                         padding: '5px 0',
                         transition: 'color 0.15s',
                       }}
@@ -353,7 +353,7 @@ const DocsPage: React.FC = () => {
               <FAQItem key={item.q} q={item.q} a={item.a} />
             ))}
           </div>
-          <p style={{ marginTop: 16, fontSize: 13, color: 'var(--text-faint)' }}>
+          <p style={{ marginTop: 16, fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
             More questions?{' '}
             <a
               href={`${GITHUB_BASE}/FAQ.md`}
@@ -398,7 +398,7 @@ const DocsPage: React.FC = () => {
               <Link
                 key={l.label}
                 to={l.to}
-                style={{ color: 'var(--text-faint)', fontSize: 13, textDecoration: 'none' }}
+                style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
               >
@@ -412,7 +412,7 @@ const DocsPage: React.FC = () => {
             rel="noopener noreferrer"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              color: 'var(--text-faint)', fontSize: 13, textDecoration: 'none',
+              color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none',
             }}
             onMouseOver={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
             onMouseOut={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}

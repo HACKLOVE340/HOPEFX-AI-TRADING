@@ -91,7 +91,7 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
         >
           {link.icon && (
             typeof link.icon === 'string'
-              ? <span style={{ fontSize: 13 }}>{link.icon}</span>   /* legacy emoji */
+              ? <span style={{ fontSize: 'var(--fs-body)'}}>{link.icon}</span>   /* legacy emoji */
               : React.createElement(link.icon, { size: 14, strokeWidth: 1.75, 'aria-hidden': true })
           )}
           {link.label}

@@ -341,7 +341,7 @@ const s: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 24px' },
+  tagline: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 24px' },
   form:    { display: 'flex', flexDirection: 'column', gap: 16 },
   field:   { display: 'flex', flexDirection: 'column' },
   label: {
@@ -371,19 +371,19 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     touchAction: 'manipulation',
   },
-  forgotLink: { fontSize: 13, color: 'var(--link)', textDecoration: 'none', fontWeight: 500, minHeight: 44, display: 'inline-flex', alignItems: 'center' },
+  forgotLink: { fontSize: 'var(--fs-body)', color: 'var(--link)', textDecoration: 'none', fontWeight: 500, minHeight: 44, display: 'inline-flex', alignItems: 'center' },
   totpHint:   { fontSize: 11, color: 'var(--text-muted)', marginTop: 6 },
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)',
     border: '1px solid rgba(248,113,113,0.25)',
     borderRadius: 8, padding: '10px 14px',
-    fontSize: 13, color: 'var(--loss)', lineHeight: 1.5,
+    fontSize: 'var(--fs-body)', color: 'var(--loss)', lineHeight: 1.5,
   },
   btn: {
     background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
     color: '#fff', border: 'none', borderRadius: 8,
-    padding: '14px', fontSize: 15, fontWeight: 700,
+    padding: '14px', fontSize: 'var(--fs-value)', fontWeight: 700,
     cursor: 'pointer', marginTop: 4,
     /* 48px min height for comfortable touch */
     minHeight: 48,
@@ -394,7 +394,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   footer: {
     display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
-    gap: '8px 12px', marginTop: 24, fontSize: 13,
+    gap: '8px 12px', marginTop: 24, fontSize: 'var(--fs-body)',
   },
   link: { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };

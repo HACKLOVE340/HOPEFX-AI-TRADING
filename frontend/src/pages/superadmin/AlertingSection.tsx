@@ -188,7 +188,7 @@ const AlertingSection: React.FC = () => {
         <div style={{
           background: 'var(--surface)', border: `1px solid ${promStatus.available ? '#16a34a' : '#7f1d1d'}`,
           borderRadius: 10, padding: '12px 16px', marginBottom: 16,
-          display: 'flex', alignItems: 'center', gap: 12, fontSize: 13,
+          display: 'flex', alignItems: 'center', gap: 12, fontSize: 'var(--fs-body)',
         }}>
           <span style={{ fontSize: 16 }}>{promStatus.available ? '✅' : '❌'}</span>
           <span style={{ color: promStatus.available ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
@@ -208,7 +208,7 @@ const AlertingSection: React.FC = () => {
             background: tab === t ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
-            padding: '7px 16px', fontSize: 13, cursor: 'pointer',
+            padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer',
           }}>
             {t === 'rules' ? `Rules (${rules.length})` : `Fired Alerts (${fired.length})`}
           </button>
@@ -242,7 +242,7 @@ const AlertingSection: React.FC = () => {
           )}
 
           <SectionCard title="Alert Rules" icon={<Bell size={18} aria-hidden />} accent="#60a5fa" noPad>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Name', 'Condition', 'Severity', 'Channels', 'Last Fired', 'Fires', 'Enabled', 'Actions'].map(h => (
@@ -279,9 +279,9 @@ const AlertingSection: React.FC = () => {
       {tab === 'fired' && (
         <SectionCard title="Fired Alerts" icon={<Siren size={18} aria-hidden />} accent="#fbbf24" noPad>
           {fired.length === 0 ? (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No alerts fired recently</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No alerts fired recently</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Rule', 'Severity', 'Message', 'Fired At'].map(h => (

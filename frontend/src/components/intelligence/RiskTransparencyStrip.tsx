@@ -30,7 +30,7 @@ const Cell: React.FC<{
       background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9,
     }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: fg, marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 'var(--fs-title)', fontWeight: 800, color: fg, marginTop: 2 }}>{value}</div>
     </div>
   );
 };
@@ -74,7 +74,7 @@ export const RiskTransparencyStrip: React.FC = () => {
       </div>
 
       {!hasAny ? (
-        <div style={{ fontSize: 13, color: 'var(--text-faint)' }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
           Risk telemetry will appear once the live feed is connected.
         </div>
       ) : (

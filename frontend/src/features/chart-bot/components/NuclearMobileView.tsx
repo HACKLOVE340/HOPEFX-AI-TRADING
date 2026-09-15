@@ -253,7 +253,7 @@ const ms: Record<string, React.CSSProperties> = {
   riskGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 },
   riskCell: { display: 'flex', flexDirection: 'column', gap: 2 },
   riskLabel: { fontSize: 9, color: 'var(--text-faint)', letterSpacing: 1 },
-  riskValue: { fontSize: 13, fontWeight: 700, color: 'var(--text-dim)', fontFamily: 'monospace' },
+  riskValue: { fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)', fontFamily: 'monospace' },
   signalList: { padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 },
   sectionTitle: { fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700, marginBottom: 4 },
   signalRow: {

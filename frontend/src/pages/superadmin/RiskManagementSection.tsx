@@ -192,7 +192,7 @@ const RiskManagementSection: React.FC = () => {
             background: tab === t.id ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t.id ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t.id ? 'var(--text-strong)' : 'var(--text-muted)',
-            padding: '7px 14px', fontSize: 13, cursor: 'pointer',
+            padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6,
           }}>
             <span>{t.icon}</span>{t.label}
@@ -232,7 +232,7 @@ const RiskManagementSection: React.FC = () => {
           {openBreakers > 0 && (
             <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 16 }}>🛑</span>
-              <span style={{ fontSize: 13, color: 'var(--loss)', fontWeight: 600 }}>{openBreakers} circuit breaker{openBreakers > 1 ? 's' : ''} OPEN — affected services are failing fast</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 600 }}>{openBreakers} circuit breaker{openBreakers > 1 ? 's' : ''} OPEN — affected services are failing fast</span>
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
@@ -241,7 +241,7 @@ const RiskManagementSection: React.FC = () => {
               return (
                 <div key={b.name} style={{ background: 'var(--raised)', borderRadius: 10, padding: '14px 16px', border: `1px solid ${sc.color}33` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>{b.name}</span>
+                    <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{b.name}</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: sc.color, background: sc.bg, border: `1px solid ${sc.color}44`, borderRadius: 4, padding: '2px 8px' }}>
                       {b.state.replace('_', ' ').toUpperCase()}
                     </span>
@@ -268,7 +268,7 @@ const RiskManagementSection: React.FC = () => {
                 </div>
               );
             })}
-            {breakers.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: '16px 0' }}>No circuit breakers registered.</div>}
+            {breakers.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>No circuit breakers registered.</div>}
           </div>
         </SectionCard>
       )}
@@ -291,7 +291,7 @@ const RiskManagementSection: React.FC = () => {
           </div>
           {stressTests.length > 0 && (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['Scenario', 'P&L Impact', 'P&L %', 'Max Loss', 'Probability', 'Run At'].map(h => (
@@ -356,7 +356,7 @@ const RiskManagementSection: React.FC = () => {
             <EmptyState compact icon={CheckCircle2} title="No prop firm breaches found" description="Breach events will appear here when traders exceed their risk thresholds." />
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['User', 'Account', 'Breach Type', 'Threshold', 'Actual', 'Severity', 'Status', 'Detected'].map(h => (
@@ -442,7 +442,7 @@ const RiskManagementSection: React.FC = () => {
               )}
             </>
           ) : (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>
               No drawdown data available.
             </div>
           )}

@@ -289,7 +289,7 @@ const EconomicCalendar: React.FC = () => {
       subtitle="Upcoming market-moving events. Red = high impact on gold/USD."
       actions={<>{/* Auto-pause toggle */}
         <div style={s.autoPauseCard}>
-          <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 4 }}>Auto-pause trading</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 4 }}>Auto-pause trading</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
               onClick={handleToggleAutoPause}
@@ -323,7 +323,7 @@ const EconomicCalendar: React.FC = () => {
           background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8,
           padding: '10px 16px', marginBottom: 16,
           display: 'flex', alignItems: 'center', gap: 10,
-          color: 'var(--loss)', fontSize: 13, fontWeight: 600,
+          color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600,
         }}>
           🔴 Trading Blackout Active — high-impact event imminent. Order submission is paused.
           {macro.impact_score != null && (
@@ -370,10 +370,10 @@ const EconomicCalendar: React.FC = () => {
           ) : events.length === 0 ? (
             <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
               <div style={{ fontSize: 36 }}>📅</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-dim)' }}>No events found</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Try adjusting your filters or check back later.</div>
+              <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>No events found</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Try adjusting your filters or check back later.</div>
               <button onClick={() => navigate('/trade')}
-                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
                 ⚡ Go to Trade
               </button>
             </div>
@@ -408,12 +408,12 @@ const s: Record<string, React.CSSProperties> = {
   title:         { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px' },
   subtitle:      { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
   autoPauseCard: { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '12px 16px', minWidth: 260 },
-  toggleBtn:     { border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 14px', fontWeight: 700, fontSize: 13 },
+  toggleBtn:     { border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 14px', fontWeight: 700, fontSize: 'var(--fs-body)'},
   tabs:          { display: 'flex', gap: 8, marginBottom: 20 },
-  tab:           { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
+  tab:           { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 'var(--fs-body)'},
   tabActive:     { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   dayGroup:      { marginBottom: 24 },
-  dayHeader:     { fontSize: 13, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border)' },
+  dayHeader:     { fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border)' },
   eventRow:      { display: 'flex', alignItems: 'center', gap: 16, background: 'var(--raised)', borderRadius: 8, padding: '12px 16px', marginBottom: 6 },
   eventTime:     { minWidth: 60, textAlign: 'center' },
   eventMain:     { flex: 1 },

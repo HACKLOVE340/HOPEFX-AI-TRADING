@@ -89,7 +89,7 @@ const ComponentCard: React.FC<{
     gap: 6,
   }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-strong)' }}>
+      <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: 'var(--text-strong)' }}>
         {statusIcon(comp.status)} {comp.label}
       </span>
       <span style={{
@@ -246,7 +246,7 @@ const HealthEnginePanel: React.FC = () => {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {report && (
-            <div style={{ padding: '6px 14px', borderRadius: 20, background: overallColor + '22', border: `1px solid ${overallColor}44`, fontSize: 13, fontWeight: 700, color: overallColor }}>
+            <div style={{ padding: '6px 14px', borderRadius: 20, background: overallColor + '22', border: `1px solid ${overallColor}44`, fontSize: 'var(--fs-body)', fontWeight: 700, color: overallColor }}>
               {report.overall.toUpperCase()}
             </div>
           )}
@@ -295,7 +295,7 @@ const HealthEnginePanel: React.FC = () => {
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(c.status), flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{c.label}</span>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{c.label}</span>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                     <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{c.latency_ms}ms</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(c.status), textTransform: 'uppercase' }}>{c.status}</span>
@@ -325,11 +325,11 @@ const HealthEnginePanel: React.FC = () => {
       {/* History */}
       {tab === 'history' && (
         <>
-          {history.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>No history yet. Run the health engine first.</div>}
+          {history.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No history yet. Run the health engine first.</div>}
           {history.map((h, i) => (
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: statusColor(h.overall) }}>{h.overall.toUpperCase()}</span>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: statusColor(h.overall) }}>{h.overall.toUpperCase()}</span>
                 <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{h.checked_at}</span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
@@ -343,7 +343,7 @@ const HealthEnginePanel: React.FC = () => {
       {/* Probes management */}
       {tab === 'probes' && (
         <>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
             {probes.length} probes registered. Add a custom HTTP probe below.
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
@@ -528,7 +528,7 @@ const DiagnosticsPanel: React.FC = () => {
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Top Issues</div>
               {(summary.top_issues as Array<Record<string,string>>).map((issue, i) => (
                 <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#450a0a', border: '1px solid #dc262633', marginBottom: 6 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: '#fca5a5' }}>{issue.check_name}</div>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: '#fca5a5' }}>{issue.check_name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{issue.message}</div>
                   {issue.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Fix: {issue.remediation}</div>}
                 </div>
@@ -540,7 +540,7 @@ const DiagnosticsPanel: React.FC = () => {
 
       {tab === 'report' && (
         <>
-          {!report && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '16px 0' }}>No report loaded. Run diagnostics first.</div>}
+          {!report && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>No report loaded. Run diagnostics first.</div>}
           {report && (
             <>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Completed: {String(report.completed_at ?? 'N/A')}</div>
@@ -552,7 +552,7 @@ const DiagnosticsPanel: React.FC = () => {
                   border: `1px solid ${r.status === 'ok' ? '#16a34a33' : r.status === 'warning' ? '#d9770633' : '#dc262633'}`,
                 }}>
                   <div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{r.check_name}</span>
+                    <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{r.check_name}</span>
                     <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.message}</div>
                     {r.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Fix: {r.remediation}</div>}
                   </div>
@@ -569,11 +569,11 @@ const DiagnosticsPanel: React.FC = () => {
 
       {tab === 'results' && (
         <>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
             Latest diagnostic run results from the backend store ({latestResults.length} entries).
           </div>
           {latestResults.length === 0 && (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>No results available. Run diagnostics first.</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No results available. Run diagnostics first.</div>
           )}
           {latestResults.map((r, i) => {
             const status = String(r.status ?? r.result ?? 'unknown');
@@ -586,7 +586,7 @@ const DiagnosticsPanel: React.FC = () => {
                 background: 'var(--raised)', border: `1px solid ${statusColor}22`,
               }}>
                 <div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>
                     {String(r.check_name ?? r.name ?? `Check ${i + 1}`)}
                   </span>
                   {Boolean(r.message) && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{String(r.message as string)}</div>}
@@ -603,7 +603,7 @@ const DiagnosticsPanel: React.FC = () => {
 
       {tab === 'checks' && (
         <>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>Run a single diagnostic check and see results immediately.</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>Run a single diagnostic check and see results immediately.</div>
           {checkResult && (
             <div style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', marginBottom: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', marginBottom: 8 }}>Result: {String(checkResult.check_name)}</div>
@@ -619,7 +619,7 @@ const DiagnosticsPanel: React.FC = () => {
             {checks.map(c => (
               <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'monospace' }}>{c.name}</div>
+                  <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'monospace' }}>{c.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.description}</div>
                 </div>
                 <Button onClick={() => runCheck(c.name)} disabled={runningCheck === c.name} size="sm" variant="secondary">
@@ -633,12 +633,12 @@ const DiagnosticsPanel: React.FC = () => {
 
       {tab === 'remediation' && (
         <>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>Auto-remediation actions taken by the diagnostics engine.</div>
-          {remLog.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>No remediation actions recorded yet.</div>}
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>Auto-remediation actions taken by the diagnostics engine.</div>
+          {remLog.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No remediation actions recorded yet.</div>}
           {remLog.map((entry, i) => (
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{String(entry.action ?? entry.type ?? 'action')}</span>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{String(entry.action ?? entry.type ?? 'action')}</span>
                 <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{String(entry.timestamp ?? entry.taken_at ?? '')}</span>
               </div>
               {entry.detail != null && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{String(entry.detail)}</div>}
@@ -704,7 +704,7 @@ const RoutesPanel: React.FC = () => {
         <input aria-label="Filter by path or method"
           type="text" value={filter} onChange={e => setFilter(e.target.value)}
           placeholder="Filter by path or method…"
-          style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 13, boxSizing: 'border-box' }}
+          style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }}
         />
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{filtered.length} routes{filter ? ` matching "${filter}"` : ''}</div>
@@ -784,7 +784,7 @@ const ValidatePanel: React.FC = () => {
     <>
       <Card>
         <SectionHeader icon={<CheckCircle2 size={18} aria-hidden />} title="Setting Persistence Validator" />
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
           Verify that a config key is correctly persisted across Redis, config store, and app state.
         </p>
         <ActionBanner message={validateErr} ok={false} onDismiss={() => setValidateErr('')} />
@@ -792,7 +792,7 @@ const ValidatePanel: React.FC = () => {
           <div style={{ flex: 1, minWidth: 200 }}>
             <label id="superadmin-systemreliabilitysect-config-key-label" htmlFor="superadmin-systemreliabilitysect-config-key" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
             <input id="superadmin-systemreliabilitysect-config-key" aria-labelledby="superadmin-systemreliabilitysect-config-key-label" type="text" value={key} onChange={e => setKey(e.target.value)} placeholder="e.g. maintenance_mode"
-              style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 13, boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </div>
           <div style={{ alignSelf: 'flex-end' }}>
             <Button onClick={validate} disabled={loading || !key.trim()} size="sm">{loading ? '…' : '🔍 Validate'}</Button>
@@ -801,7 +801,7 @@ const ValidatePanel: React.FC = () => {
         {result && (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '14px 16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-strong)' }}>Key: <code style={{ color: 'var(--link)' }}>{String(result.key)}</code></span>
+              <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: 'var(--text-strong)' }}>Key: <code style={{ color: 'var(--link)' }}>{String(result.key)}</code></span>
               <span style={{ fontSize: 12, fontWeight: 700, color: result.consistent ? '#22c55e' : '#ef4444' }}>
                 {result.consistent ? '✅ Consistent' : '❌ Inconsistent'}
               </span>
@@ -827,19 +827,19 @@ const ValidatePanel: React.FC = () => {
 
       <Card>
         <SectionHeader icon={<RefreshCw size={18} aria-hidden />} title="Toggle End-to-End Validator" />
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
           After changing a toggle or setting, verify the new value is correctly persisted end-to-end.
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 160 }}>
             <label id="superadmin-systemreliabilitysect-config-key-2-label" htmlFor="superadmin-systemreliabilitysect-config-key-2" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
             <input id="superadmin-systemreliabilitysect-config-key-2" aria-labelledby="superadmin-systemreliabilitysect-config-key-2-label" type="text" value={toggleKey} onChange={e => setToggleKey(e.target.value)} placeholder="e.g. maintenance_mode"
-              style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 13, boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </div>
           <div style={{ flex: 1, minWidth: 120 }}>
             <label id="superadmin-systemreliabilitysect-expected-value-label" htmlFor="superadmin-systemreliabilitysect-expected-value" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Expected Value</label>
             <input id="superadmin-systemreliabilitysect-expected-value" aria-labelledby="superadmin-systemreliabilitysect-expected-value-label" type="text" value={toggleExpected} onChange={e => setToggleExpected(e.target.value)} placeholder="true / false / 42"
-              style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 13, boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </div>
           <div style={{ alignSelf: 'flex-end' }}>
             <Button onClick={validateToggle} disabled={toggleLoading || !toggleKey.trim()} size="sm">{toggleLoading ? '…' : '✅ Verify'}</Button>
@@ -847,7 +847,7 @@ const ValidatePanel: React.FC = () => {
         </div>
         {toggleResult && (
           <div style={{ background: 'var(--surface)', border: `1px solid ${toggleResult.consistent ? '#16a34a' : '#dc2626'}44`, borderRadius: 8, padding: '14px 16px' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: toggleResult.consistent ? '#22c55e' : '#ef4444', marginBottom: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: toggleResult.consistent ? '#22c55e' : '#ef4444', marginBottom: 8 }}>
               {toggleResult.consistent ? '✅ Value persisted correctly across all layers' : '❌ Inconsistency detected — value may not have saved'}
             </div>
             {Object.entries(toggleResult.layers as Record<string, Record<string, unknown>> ?? {}).map(([layer, info]) => (
@@ -1056,14 +1056,14 @@ const SystemReliabilitySection: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <SectionHeader icon={<Microscope size={18} aria-hidden />} title="System Reliability Dashboard" />
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '4px 0 0' }}>
               Real-time connectivity status for every platform component. Auto-refreshes every 30s.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {lastRefresh && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Last: {lastRefresh}</span>}
             <div style={{
-              padding: '6px 16px', borderRadius: 8, fontWeight: 700, fontSize: 13,
+              padding: '6px 16px', borderRadius: 8, fontWeight: 700, fontSize: 'var(--fs-body)',
               background: statusBg(overall), color: statusColor(overall),
               border: `1px solid ${statusColor(overall)}44`,
             }}>
@@ -1098,7 +1098,7 @@ const SystemReliabilitySection: React.FC = () => {
       </Card>
 
       {error && (
-        <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 13, color: '#fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 'var(--fs-body)', color: '#fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <span>❌ {error}</span>
           <button
             onClick={fetchStatus}
@@ -1139,7 +1139,7 @@ const SystemReliabilitySection: React.FC = () => {
             />
           ))}
           {!(components ?? status?.components)?.length && !loading && (
-            <div style={{ gridColumn: '1/-1', color: 'var(--text-faint)', fontSize: 13, padding: '16px 0' }}>
+            <div style={{ gridColumn: '1/-1', color: 'var(--text-faint)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
               No components registered. Ensure the reliability engine is running.
             </div>
           )}
@@ -1178,7 +1178,7 @@ const SystemReliabilitySection: React.FC = () => {
               <span>Span Name</span><span>Status</span><span>Duration</span><span>Time</span>
             </div>
             {traces.length === 0 && !tracesErr && (
-              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
                 No spans recorded yet. Emit a test trace or make API calls.
               </div>
             )}
@@ -1223,7 +1223,7 @@ const SystemReliabilitySection: React.FC = () => {
                     border: `1px solid ${r.passed ? '#16a34a' : '#dc2626'}33`,
                   }}>
                     <div>
-                      <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-strong)' }}>
+                      <span style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: 'var(--text-strong)' }}>
                         {r.passed ? '✅' : '❌'} {r.test}
                       </span>
                       <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{r.detail}</div>
@@ -1238,7 +1238,7 @@ const SystemReliabilitySection: React.FC = () => {
             </>
           )}
           {!selfTest && !selfTestRunning && (
-            <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: '32px 0', fontSize: 13 }}>
+            <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: '32px 0', fontSize: 'var(--fs-body)'}}>
               Click "Run All Tests" to execute the full end-to-end connectivity suite.
             </div>
           )}
@@ -1271,12 +1271,12 @@ const SystemReliabilitySection: React.FC = () => {
           </div>
           {historyErr && <ActionBanner message={historyErr} ok={false} onDismiss={() => setHistoryErr('')} />}
           {statusHistory.length === 0 && !historyLoading && !historyErr && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '16px 0' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
               No history yet. Trigger a status poll or click "Snapshot Now".
             </div>
           )}
           {historyLoading && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading history…</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading history…</div>
           )}
           {statusHistory.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1338,7 +1338,7 @@ const SystemReliabilitySection: React.FC = () => {
       {activeTab === 'env' && (
         <Card>
           <SectionHeader icon={<Globe2 size={18} aria-hidden />} title="Environment Variable Audit" />
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
             Shows presence/absence of environment variables. Values are never exposed.
           </p>
           {envErr && <ActionBanner message={envErr} ok={false} onDismiss={() => setEnvErr('')} />}

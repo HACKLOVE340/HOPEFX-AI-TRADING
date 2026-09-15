@@ -170,7 +170,7 @@ const PageFallback: React.FC = () => (
         borderTopColor: '#3b82f6', borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',
       }} />
-      <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>Loading…</span>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Loading…</span>
     </div>
   </div>
 );
@@ -247,7 +247,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
         fontFamily: "'Inter', system-ui, sans-serif",
       }}>
         {/* Logo */}
-        <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 8 }}>
+        <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 8 }}>
           HOPE<span style={{ color: '#3b82f6' }}>FX</span>
         </div>
 
@@ -448,7 +448,7 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({ onMenuOpen }) => (
         <rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor" />
       </svg>
     </button>
-    <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 }}>
+    <span style={{ fontSize: 'var(--fs-title)', fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 }}>
       HOPE<span style={{ color: '#3b82f6' }}>FX</span>
     </span>
     {/* Right side spacer to keep title centred */}

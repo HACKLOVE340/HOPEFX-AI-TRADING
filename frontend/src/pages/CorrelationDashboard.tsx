@@ -91,7 +91,7 @@ const CorrelationDashboard: React.FC = () => {
       width="wide" title="Correlation & Sentiment"
       subtitle="Rolling correlations between gold, FX, equities, and macro indicators."
       actions={<><div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-          <span style={{ fontSize:13, color:'var(--text-dim)' }}>Window:</span>
+          <span style={{ fontSize: 'var(--fs-body)', color:'var(--text-dim)' }}>Window:</span>
           {[14,30,60,90].map(w => (
             <button key={w} style={{ ...s.wBtn, ...(window===w ? s.wBtnActive : {}) }} onClick={() => setWindow(w)}>{w}d</button>
           ))}
@@ -109,19 +109,19 @@ const CorrelationDashboard: React.FC = () => {
       {loading ? <div style={s.dim}>Loading…</div> : loadErr ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span style={{ color: 'var(--loss)' }}>⚠ {loadErr}</span>
-          <button onClick={load} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 16px' }}>Retry</button>
+          <button onClick={load} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 16px' }}>Retry</button>
         </div>
       ) : (!corr && !cot) ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 36 }}>🔗</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-dim)' }}>Correlation data unavailable</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ensure the data layer is running, then retry.</div>
+          <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>Correlation data unavailable</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Ensure the data layer is running, then retry.</div>
           <button onClick={load}
-            style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+            style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
             ↻ Retry
           </button>
           <button onClick={() => navigate('/ai-chart')}
-            style={{ padding: '7px 18px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', borderRadius: 8, color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 18px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', borderRadius: 8, color: 'var(--accent)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             📊 AI Chart
           </button>
         </div>
@@ -138,7 +138,7 @@ const CorrelationDashboard: React.FC = () => {
                   card while the remedy sat unread in the response. See F189. */}
               {(corr.symbols ?? []).length === 0 ? (
                 <div style={{ padding:'18px 4px', display:'flex', flexDirection:'column', gap:8 }}>
-                  <div style={{ fontSize:13, fontWeight:600, color:'var(--text-dim)' }}>
+                  <div style={{ fontSize: 'var(--fs-body)', fontWeight:600, color:'var(--text-dim)' }}>
                     Not enough price history to correlate
                   </div>
                   {corr.note && (
@@ -200,7 +200,7 @@ const CorrelationDashboard: React.FC = () => {
                   </button>
                 </div>
                 {(corr.insights ?? []).map((ins, i) => (
-                  <div key={i} style={{ fontSize:13, color:'var(--text-dim)', padding:'4px 0', borderBottom:'1px solid var(--hairline)' }}>
+                  <div key={i} style={{ fontSize: 'var(--fs-body)', color:'var(--text-dim)', padding:'4px 0', borderBottom:'1px solid var(--hairline)' }}>
                     • {ins}
                   </div>
                 ))}
@@ -274,7 +274,7 @@ const CorrelationDashboard: React.FC = () => {
                   state: { signal: { symbol: 'XAU/USD', direction: cot.sentiment === 'BULLISH' ? 'BUY' : 'SELL' } }
                 })}
                 style={{
-                  marginTop:16, width:'100%', padding:'9px 0', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer',
+                  marginTop:16, width:'100%', padding:'9px 0', borderRadius:8, fontWeight:700, fontSize: 'var(--fs-body)', cursor:'pointer',
                   background: cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
                   border: `1px solid ${cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
                   color: cot.sentiment === 'BULLISH' ? 'var(--gain)' : 'var(--loss)',
@@ -293,15 +293,15 @@ const CorrelationDashboard: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page: { minHeight:'100vh', background:'var(--surface)', color:'var(--text-strong)', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
   header: { display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24, flexWrap:'wrap', gap:12 },
-  title: { fontSize:28, fontWeight:700, margin:0 },
+  title: { fontSize: 'var(--fs-hero)', fontWeight:700, margin:0 },
   subtitle: { fontSize:14, color:'var(--text-dim)', marginTop:4 },
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20 },
   card: { background:'var(--raised)', borderRadius:12, padding:24, border:'1px solid var(--border-strong)' },
-  cardTitle: { fontSize:13, fontWeight:600, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },
+  cardTitle: { fontSize: 'var(--fs-body)', fontWeight:600, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },
   mth: { padding:'8px 12px', color:'var(--text-muted)', fontWeight:600, textAlign:'center', whiteSpace:'nowrap', borderBottom:'1px solid var(--border-strong)' },
   mtd: { padding:'8px 12px', textAlign:'center', borderBottom:'1px solid var(--hairline)' },
   cotRow: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid var(--hairline)', fontSize:14 },
-  cotLabel: { color:'var(--text-muted)', fontSize:13 },
+  cotLabel: { color:'var(--text-muted)', fontSize: 'var(--fs-body)'},
   wBtn: { background:'var(--raised)', border:'1px solid var(--border-strong)', borderRadius:6, color:'var(--text-muted)', padding:'5px 10px', fontSize:12, cursor:'pointer' },
   wBtnActive: { background:'#3b82f6', border:'1px solid #3b82f6', color:'#fff' },
   dim: { color:'var(--text-faint)', textAlign:'center', padding:48 },

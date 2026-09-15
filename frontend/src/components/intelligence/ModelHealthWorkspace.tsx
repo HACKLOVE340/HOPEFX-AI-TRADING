@@ -68,7 +68,7 @@ const Stat: React.FC<{ label: string; value: string; sub?: string; color?: strin
 
 const SectionTitle: React.FC<{ children: React.ReactNode; right?: React.ReactNode }> = ({ children, right }) => (
   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-    <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0 }}>{children}</h2>
+    <h2 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', margin: 0 }}>{children}</h2>
     {right && <div style={{ marginLeft: 'auto' }}>{right}</div>}
   </div>
 );
@@ -200,7 +200,7 @@ export const ModelHealthWorkspace: React.FC = () => {
                   />
                 ) : imp && imp.features?.length ? (
                   <>
-                    <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                    <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '0 0 8px' }}>
                       Derived by <strong style={{ color: 'var(--text-dim)' }}>{imp.method}</strong> for model{' '}
                       <strong style={{ color: 'var(--text-dim)' }}>{imp.model}</strong>.
                     </p>
@@ -209,7 +209,7 @@ export const ModelHealthWorkspace: React.FC = () => {
                         const max = imp.features[0]?.importance || 1;
                         return (
                           <li key={f.feature} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ width: 130, flexShrink: 0, fontSize: 11.5, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <span style={{ width: 130, flexShrink: 0, fontSize: 'var(--fs-label)', color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {f.feature}
                             </span>
                             <span style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
@@ -269,7 +269,7 @@ export const ModelHealthWorkspace: React.FC = () => {
           Signal Quality
         </SectionTitle>
         {analyticsQuery.isLoading ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-faint)', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
             <Spinner size="sm" /> Loading analytics…
           </div>
         ) : a ? (
@@ -290,7 +290,7 @@ export const ModelHealthWorkspace: React.FC = () => {
             <Stat label="Avg R:R" value={Number.isFinite(a.avg_rr_ratio) ? a.avg_rr_ratio.toFixed(2) : '—'} color={a.avg_rr_ratio >= 1.5 ? '#22c55e' : '#fbbf24'} />
           </div>
         ) : (
-          <div style={{ fontSize: 13, color: 'var(--text-faint)' }}>Analytics unavailable.</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Analytics unavailable.</div>
         )}
       </div>
 

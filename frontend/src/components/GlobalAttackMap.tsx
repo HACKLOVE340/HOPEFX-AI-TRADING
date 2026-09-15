@@ -202,7 +202,7 @@ export const GlobalAttackMap: React.FC<GlobalAttackMapProps> = ({
 
         {loading && (
           <div style={overlayStyle}>
-            <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>Loading attack data…</span>
+            <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>Loading attack data…</span>
           </div>
         )}
       </div>
@@ -262,7 +262,7 @@ const headerStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   color: 'var(--text, var(--text-strong))',
-  fontSize: 13,
+  fontSize: 'var(--fs-body)',
   fontWeight: 700,
   letterSpacing: 0.3,
 };

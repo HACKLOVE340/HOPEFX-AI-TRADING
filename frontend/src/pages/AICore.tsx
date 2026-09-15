@@ -137,7 +137,7 @@ const Section: React.FC<{ title: string; icon: React.ElementType; note?: string;
   <section style={{ ...panel, marginBottom: 14 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
       <Icon size={16} color={COLOR.info} aria-hidden />
-      <h2 style={{ margin: 0, fontSize: 15, color: COLOR.text }}>{title}</h2>
+      <h2 style={{ margin: 0, fontSize: 'var(--fs-value)', color: COLOR.text }}>{title}</h2>
     </div>
     {note && <p style={{ margin: '0 0 12px', color: COLOR.muted, fontSize: 11, lineHeight: 1.6, maxWidth: '72ch' }}>{note}</p>}
     {children}

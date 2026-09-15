@@ -156,7 +156,7 @@ const StrategyBuilder: React.FC = () => {
           </div>
 
           {deployMsg && (
-            <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: 'var(--link)', marginBottom: 12, fontSize: 13 }}>{deployMsg}</div>
+            <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: 'var(--link)', marginBottom: 12, fontSize: 'var(--fs-body)'}}>{deployMsg}</div>
           )}
 
           <button onClick={deploy} disabled={deploying} style={{ padding: '10px 20px', background: deploying ? '#1e3a5f' : '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: deploying ? 'default' : 'pointer' }}>

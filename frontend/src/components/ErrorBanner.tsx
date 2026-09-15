@@ -41,7 +41,7 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({
         borderRadius: 8,
         color: ls.color,
         display: 'flex',
-        fontSize: 13,
+        fontSize: 'var(--fs-body)',
         gap: 8,
         padding: '10px 14px',
         ...style,

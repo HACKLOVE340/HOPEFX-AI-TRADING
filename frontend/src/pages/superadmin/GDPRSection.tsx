@@ -189,7 +189,7 @@ const GDPRSection: React.FC = () => {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['requests', 'policies', 'consent'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
+          <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
             {{ requests: 'Data Subject Requests', policies: 'Retention Policies', consent: 'Consent Log' }[t]}
           </button>
         ))}
@@ -222,9 +222,9 @@ const GDPRSection: React.FC = () => {
 
           <SectionCard title="Data Subject Requests" icon={<ClipboardList size={18} aria-hidden />} accent="#60a5fa" noPad>
             {requests.length === 0 ? (
-              <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No requests match this filter</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No requests match this filter</div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                 <thead>
                   <tr>
                     {['User', 'Type', 'Status', 'Submitted', 'Completed', 'Actions'].map(h => (
@@ -236,7 +236,7 @@ const GDPRSection: React.FC = () => {
                   {requests.map(r => (
                     <tr key={r.request_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                       <td style={{ padding: '10px 16px' }}>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{r.username || r.user_id}</div>
+                        <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)'}}>{r.username || r.user_id}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.email}</div>
                       </td>
                       <td style={{ padding: '10px 16px' }}>
@@ -273,7 +273,7 @@ const GDPRSection: React.FC = () => {
       {tab === 'policies' && (
         <SectionCard title="Data Retention Policies" icon={<Calendar size={18} aria-hidden />} accent="#a78bfa"
           subtitle="GDPR Art. 5(1)(e) — data minimisation and storage limitation. Edit retention days and save per row.">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr>
                 {['Data Type', 'Retention (days)', 'Legal Basis', ''].map(h => (
@@ -291,7 +291,7 @@ const GDPRSection: React.FC = () => {
                       aria-label={`Retention days for ${p.data_type.replace(/_/g, ' ')}`}
                       value={policyEdits[p.data_type] ?? p.retention_days}
                       onChange={e => setPolicyEdits(prev => ({ ...prev, [p.data_type]: Number(e.target.value) }))}
-                      style={{ width: 80, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 13 }}
+                      style={{ width: 80, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 'var(--fs-body)'}}
                     />
                     <span style={{ marginLeft: 8, color: 'var(--text-faint)', fontSize: 11 }}>
                       {(policyEdits[p.data_type] ?? p.retention_days) >= 365
@@ -338,7 +338,7 @@ const GDPRSection: React.FC = () => {
           ) : consentLog.length === 0 ? (
             <EmptyState compact icon={Scroll} title="No consent events found" description="User consent records will appear here as users accept or withdraw consent." />
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['User', 'Event', 'Details', 'IP', 'Timestamp'].map(h => (

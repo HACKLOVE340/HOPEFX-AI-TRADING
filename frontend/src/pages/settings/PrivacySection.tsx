@@ -96,7 +96,7 @@ const PrivacySection: React.FC = () => {
 
       {/* Social sharing */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Social Sharing</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Social Sharing</h3>
         <Toggle id="share-perf" label="Share performance stats" description="Allow other traders to see your win rate and returns." checked={form.share_performance} onChange={(v) => update({ share_performance: v })} />
         <Toggle id="share-trades" label="Share trade history" description="Make your closed trades visible on your public profile." checked={form.share_trades} onChange={(v) => update({ share_trades: v })} />
         <Toggle id="share-signals" label="Share AI signals" description="Publish the signals you act on to the community feed." checked={form.share_signals} onChange={(v) => update({ share_signals: v })} />
@@ -106,14 +106,14 @@ const PrivacySection: React.FC = () => {
 
       {/* Platform data */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Platform Data</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Platform Data</h3>
         <Toggle id="analytics" label="Usage analytics" description="Help improve HOPEFX by sharing anonymous usage data." checked={form.analytics_opt_in} onChange={(v) => update({ analytics_opt_in: v })} />
         <Toggle id="marketing" label="Marketing emails" description="Receive product updates, tips, and promotional offers." checked={form.marketing_emails} onChange={(v) => update({ marketing_emails: v })} />
       </Card>
 
       {/* Data retention */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>Data Retention</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>Data Retention</h3>
         <Field label="Keep trade history for (days)" description="Trades older than this will be archived. Minimum 30 days.">
           <Input
             type="number" min={30} max={3650}
@@ -125,8 +125,8 @@ const PrivacySection: React.FC = () => {
 
       {/* Data export */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Your Data</h3>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Your Data</h3>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 14 }}>
           Download a full export of your account data including trades, signals, settings, and profile.
         </p>
         <Button variant="secondary" onClick={handleExport} loading={exportLoading}>

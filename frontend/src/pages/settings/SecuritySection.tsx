@@ -130,7 +130,7 @@ const SecuritySection: React.FC = () => {
 
       {/* Password */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Change Password
         </h3>
         <Field label="Current password">
@@ -161,7 +161,7 @@ const SecuritySection: React.FC = () => {
           />
         </Field>
         {pwMsg && (
-          <div style={{ fontSize: 13, color: pwMsg.type === 'ok' ? '#22c55e' : 'var(--loss)', marginBottom: 12 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: pwMsg.type === 'ok' ? '#22c55e' : 'var(--loss)', marginBottom: 12 }}>
             {pwMsg.type === 'ok' ? '✅' : '❌'} {pwMsg.text}
           </div>
         )}
@@ -178,10 +178,10 @@ const SecuritySection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+            <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
               Two-Factor Authentication
             </h3>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, marginBottom: 0 }}>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 4, marginBottom: 0 }}>
               Protect your account with a TOTP authenticator app.
             </p>
           </div>
@@ -197,7 +197,7 @@ const SecuritySection: React.FC = () => {
             role="alert"
             style={{
               marginTop: 12, padding: '10px 14px', borderRadius: 8,
-              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 13,
+              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 'var(--fs-body)',
             }}
           >
             {twoFAErr} — the status above is unknown, not necessarily off.{' '}
@@ -222,7 +222,7 @@ const SecuritySection: React.FC = () => {
       {/* Sessions */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
             Active Sessions
           </h3>
           {sessions.length > 1 && (
@@ -237,7 +237,7 @@ const SecuritySection: React.FC = () => {
             role="alert"
             style={{
               marginBottom: 12, padding: '10px 14px', borderRadius: 8,
-              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 13,
+              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 'var(--fs-body)',
             }}
           >
             {revokeErr}
@@ -245,13 +245,13 @@ const SecuritySection: React.FC = () => {
         )}
 
         {sessionsLoading ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading sessions…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading sessions…</div>
         ) : sessionsErr ? (
           <div
             role="alert"
             style={{
               padding: '10px 14px', borderRadius: 8,
-              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 13,
+              background: '#450a0a', border: '1px solid #dc2626', color: '#fecaca', fontSize: 'var(--fs-body)',
             }}
           >
             {sessionsErr}. This is not the same as having no other sessions.{' '}
@@ -263,7 +263,7 @@ const SecuritySection: React.FC = () => {
             </button>
           </div>
         ) : sessions.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No active sessions found.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>No active sessions found.</div>
         ) : (
           sessions.map((session) => (
             <div key={session.session_id} style={{

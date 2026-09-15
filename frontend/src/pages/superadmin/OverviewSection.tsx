@@ -365,7 +365,7 @@ const OverviewSection: React.FC = () => {
                     ].map(l => (
                       <div key={l.label} style={{ background: 'var(--raised)', borderRadius: 6, padding: '6px 10px', flex: 1 }}>
                         <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{l.label}</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-dim)' }}>{l.v}</div>
+                        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)' }}>{l.v}</div>
                       </div>
                     ))}
                   </div>
@@ -387,7 +387,7 @@ const OverviewSection: React.FC = () => {
                         ].map(m => (
                           <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '8px 10px' }}>
                             <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: m.color }}>{m.value}</div>
+                            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: m.color }}>{m.value}</div>
                           </div>
                         ))}
                       </div>
@@ -406,7 +406,7 @@ const OverviewSection: React.FC = () => {
                         ].map(m => (
                           <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '8px 10px' }}>
                             <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: m.color }}>{m.value}</div>
+                            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: m.color }}>{m.value}</div>
                           </div>
                         ))}
                       </div>
@@ -421,7 +421,7 @@ const OverviewSection: React.FC = () => {
               <>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Task Queues</div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         {['Queue', 'Pending', 'Processing', 'Failed', 'Workers'].map(h => (

@@ -39,7 +39,7 @@ export const ActionBanner: React.FC<{
         borderRadius: 8,
         padding: '10px 14px',
         marginBottom: 16,
-        fontSize: 13,
+        fontSize: 'var(--fs-body)',
         color: ok ? 'var(--gain)' : 'var(--loss)',
         display: 'flex',
         justifyContent: 'space-between',
@@ -57,7 +57,7 @@ export const ActionBanner: React.FC<{
             color: 'inherit',
             cursor: 'pointer',
             flexShrink: 0,
-            fontSize: 15,
+            fontSize: 'var(--fs-value)',
             lineHeight: 1,
           }}
         >

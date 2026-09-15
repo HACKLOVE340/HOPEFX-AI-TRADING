@@ -324,7 +324,7 @@ export const GenerationWorkbench: React.FC = () => {
             width: '100%', boxSizing: 'border-box',
             resize: 'vertical', background: 'var(--surface)',
             border: '1px solid #1e2d44', borderRadius: 8, padding: 10,
-            color: COLOR.text, fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit',
+            color: COLOR.text, fontSize: 'var(--fs-body)', lineHeight: 1.5, fontFamily: 'inherit',
           }}
         />
 

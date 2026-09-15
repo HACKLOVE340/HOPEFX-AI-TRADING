@@ -165,7 +165,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
       </div>
       <div style={{ overflowY: 'auto', padding: '16px 20px', flex: 1 }}>
         {patch.message && (
-          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--text-dim)', marginBottom: 12 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 12 }}>
             {patch.message}
           </div>
         )}
@@ -182,7 +182,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
             ))}
           </pre>
         ) : (
-          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No diff available for this patch.</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No diff available for this patch.</div>
         )}
       </div>
     </div>
@@ -527,7 +527,7 @@ const panelHeaderStyle: React.CSSProperties = {
 };
 
 const panelTitleStyle: React.CSSProperties = {
-  color: 'var(--text, var(--text-strong))', fontSize: 13, fontWeight: 700,
+  color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-body)', fontWeight: 700,
 };
 
 const panelCountStyle: React.CSSProperties = {

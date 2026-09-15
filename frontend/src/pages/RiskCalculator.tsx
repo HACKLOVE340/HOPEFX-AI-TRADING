@@ -623,7 +623,7 @@ const RiskCalculator: React.FC = () => {
               {history.map(h => (
                 <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
+                    <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
                       {h.label || h.symbol} · 1:{Number.isFinite(h.rr_ratio) ? h.rr_ratio.toFixed(2) : '—'} R:R
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
@@ -731,7 +731,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: '24px',
   },
   header: { marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: 700, margin: 0, color: 'var(--text-strong)' },
+  title: { fontSize: 'var(--fs-hero)', fontWeight: 700, margin: 0, color: 'var(--text-strong)' },
   subtitle: { fontSize: 14, color: 'var(--text-dim)', marginTop: 8 },
   grid: {
     display: 'grid',
@@ -752,7 +752,7 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: '0.05em',
     marginBottom: 16,
   },
-  label: { fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, marginTop: 12 },
+  label: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, marginTop: 12 },
   inputWrap: {
     display: 'flex',
     alignItems: 'center',
@@ -767,13 +767,13 @@ const s: Record<string, React.CSSProperties> = {
     border: 'none',
     outline: 'none',
     color: 'var(--text-strong)',
-    fontSize: 15,
+    fontSize: 'var(--fs-value)',
     padding: '10px 12px',
   },
   inputAddon: {
     padding: '0 10px',
     color: 'var(--text-muted)',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)',
     background: 'var(--raised)',
     borderRight: '1px solid var(--border-strong)',
     height: '100%',
@@ -786,15 +786,15 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid var(--border-strong)',
     borderRadius: 8,
     color: 'var(--text-strong)',
-    fontSize: 15,
+    fontSize: 'var(--fs-value)',
     padding: '10px 12px',
     outline: 'none',
   },
   divider: { height: 1, background: 'var(--surface-hover)', margin: '20px 0' },
   rrDisplay: { textAlign: 'center', padding: '16px 0' },
-  rrLabel: { fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 },
+  rrLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 8 },
   rrValue: { fontSize: 48, fontWeight: 800, lineHeight: 1 },
-  rrSub: { fontSize: 13, color: 'var(--text-muted)', marginTop: 8 },
+  rrSub: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 8 },
   resultRow: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -803,7 +803,7 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: '1px solid var(--border)',
   },
   resultRowHighlight: { background: 'var(--raised)', borderRadius: 6, padding: '8px 12px', marginBottom: 4 },
-  resultLabel: { fontSize: 13, color: 'var(--text-dim)' },
+  resultLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)' },
   resultValue: { fontSize: 14, color: 'var(--text-dim)', fontWeight: 500 },
   placeholder: { color: 'var(--text-faint)', fontSize: 14, textAlign: 'center', padding: '32px 0' },
   vizWrap: { padding: '16px 0' },
@@ -829,7 +829,7 @@ const s: Record<string, React.CSSProperties> = {
   vizLineLabel: { fontSize: 11, fontWeight: 600 },
   vizLinePrice: { fontSize: 11 },
   tipList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  tip: { fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.5 },
+  tip: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.5 },
 };
 
 export default RiskCalculator;

@@ -250,7 +250,7 @@ const MLAISection: React.FC = () => {
         subtitle={`${models.length} models registered`}
         actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Model', 'Version', 'Status', 'Accuracy', 'Drift', 'Predictions Today', 'Last Trained', 'Actions'].map(h => (
@@ -326,7 +326,7 @@ const MLAISection: React.FC = () => {
             </tbody>
           </table>
           {models.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No models registered.</div>
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No models registered.</div>
           )}
         </div>
       </SectionCard>
@@ -412,7 +412,7 @@ const MLSubsystemsPanel: React.FC = () => {
         </div>
       )}
       {tab === 'filter' && !filterStats && (
-        <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>Signal filter stats not available. Ensure the ML engine is running.</div>
+        <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>Signal filter stats not available. Ensure the ML engine is running.</div>
       )}
 
       {tab === 'online' && onlineStatus && (
@@ -426,7 +426,7 @@ const MLSubsystemsPanel: React.FC = () => {
         </div>
       )}
       {tab === 'online' && !onlineStatus && (
-        <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>Online learner status not available. Enable FEATURE_ONLINE_LEARNING to activate.</div>
+        <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>Online learner status not available. Enable FEATURE_ONLINE_LEARNING to activate.</div>
       )}
 
       {tab === 'drift' && (
@@ -434,7 +434,7 @@ const MLSubsystemsPanel: React.FC = () => {
           {driftStatus && Object.entries(driftStatus).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
             <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--warn)' }}>{String(val)}</div>
+              <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--warn)' }}>{String(val)}</div>
             </div>
           ))}
           {sharpeStatus && (
@@ -444,14 +444,14 @@ const MLSubsystemsPanel: React.FC = () => {
                 {Object.entries(sharpeStatus).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
                   <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: (val as boolean) === true ? 'var(--loss)' : 'var(--gain)' }}>{String(val)}</div>
+                    <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: (val as boolean) === true ? 'var(--loss)' : 'var(--gain)' }}>{String(val)}</div>
                   </div>
                 ))}
               </div>
             </div>
           )}
           {!driftStatus && !sharpeStatus && (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, gridColumn: '1 / -1' }}>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', gridColumn: '1 / -1' }}>
               Drift monitor and Sharpe circuit breaker data not available. Ensure the ML engine is running.
             </div>
           )}
@@ -459,7 +459,7 @@ const MLSubsystemsPanel: React.FC = () => {
       )}
 
       {tab === 'features' && (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
           <p>The HOPEFX ML pipeline uses <strong style={{ color: 'var(--text-strong)' }}>176 engineered features</strong> including:</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 12 }}>
             {[

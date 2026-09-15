@@ -238,7 +238,7 @@ export default function SupportConsole(): React.ReactElement {
           {queue.isLoading ? (
             <p data-testid="queue-loading" style={{ padding: 24, color: C.dim, margin: 0 }}>Loading the queue…</p>
           ) : queue.isError ? (
-            <p data-testid="queue-error" style={{ padding: 20, margin: 0, color: C.urgent, fontSize: 13 }}>
+            <p data-testid="queue-error" style={{ padding: 20, margin: 0, color: C.urgent, fontSize: 'var(--fs-body)'}}>
               <AlertTriangle size={14} aria-hidden="true" style={{ verticalAlign: -2, marginRight: 6 }} />
               The queue could not be loaded, so this is not an empty queue — it is an unknown one.
               {' '}{refusalText(queue.error)}
@@ -272,7 +272,7 @@ export default function SupportConsole(): React.ReactElement {
                         <span style={{ flex: 1, minWidth: 0, fontWeight: 500, overflowWrap: 'anywhere' }}>{t.subject}</span>
                         <span style={{ fontSize: 11, color: C.dim }}>{age(t.created_at)}</span>
                       </span>
-                      <span style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap', fontSize: 10.5, color: C.muted }}>
+                      <span style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap', fontSize: 'var(--fs-micro)', color: C.muted }}>
                         <span style={{ border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 6px' }}>{t.id}</span>
                         {t.department ? (
                           <span style={{ border: `1px solid ${C.accentEdge}`, color: C.accent, borderRadius: 3, padding: '0 6px' }}>
@@ -292,7 +292,7 @@ export default function SupportConsole(): React.ReactElement {
                       {/* The signature element: why the floor sent it, in its own words. */}
                       {t.escalation_reason ? (
                         <span style={{
-                          display: 'block', marginTop: 6, fontSize: 11.5, lineHeight: 1.4,
+                          display: 'block', marginTop: 6, fontSize: 'var(--fs-label)', lineHeight: 1.4,
                           color: C.urgentText, background: C.urgentBg, borderLeft: `2px solid ${C.urgent}`,
                           padding: '4px 8px', borderRadius: '0 3px 3px 0', overflowWrap: 'anywhere',
                         }}>
@@ -322,8 +322,8 @@ export default function SupportConsole(): React.ReactElement {
           ) : current ? (
             <>
               <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
-                <h2 data-testid="thread-subject" style={{ margin: '0 0 6px', fontSize: 15 }}>{current.subject}</h2>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 10.5, color: C.muted }}>
+                <h2 data-testid="thread-subject" style={{ margin: '0 0 6px', fontSize: 'var(--fs-value)'}}>{current.subject}</h2>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 'var(--fs-micro)', color: C.muted }}>
                   <span style={{ border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 6px' }}>{current.id}</span>
                   {current.category ? <span style={{ border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 6px' }}>{current.category}</span> : null}
                   <span style={{ border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 6px' }}>
@@ -413,7 +413,7 @@ export default function SupportConsole(): React.ReactElement {
                       borderLeft: `2px solid ${m.author_kind === 'ai' ? C.accent : m.author_kind === 'operator' ? C.ok : m.author_kind === 'system' ? C.waiting : C.muted}`,
                     }}
                   >
-                    <span style={{ display: 'block', fontSize: 10.5, letterSpacing: '.05em', textTransform: 'uppercase', color: C.dim, marginBottom: 4 }}>
+                    <span style={{ display: 'block', fontSize: 'var(--fs-micro)', letterSpacing: '.05em', textTransform: 'uppercase', color: C.dim, marginBottom: 4 }}>
                       {m.author_id ?? m.author_kind}
                       {m.author_kind === 'ai' ? ' · AI' : ''}
                     </span>
@@ -437,7 +437,7 @@ export default function SupportConsole(): React.ReactElement {
                   }}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                  <span style={{ flex: 1, fontSize: 11.5, color: C.dim }}>
+                  <span style={{ flex: 1, fontSize: 'var(--fs-label)', color: C.dim }}>
                     {mine ? 'Sends as you, on the record.' : 'Two operators cannot hold one ticket.'}
                   </span>
                   <button
@@ -462,7 +462,7 @@ export default function SupportConsole(): React.ReactElement {
         </section>
       </div>
 
-      <p style={{ marginTop: 14, fontSize: 11.5, color: C.dim, display: 'flex', gap: 6, alignItems: 'center' }}>
+      <p style={{ marginTop: 14, fontSize: 'var(--fs-label)', color: C.dim, display: 'flex', gap: 6, alignItems: 'center' }}>
         <CheckCircle2 size={12} aria-hidden="true" />
         Escalations reach this queue from the triage floor. The AI cannot resolve what the floor escalated.
       </p>

@@ -333,8 +333,8 @@ const TradeJournal: React.FC = () => {
            trades.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '48px 24px' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>📓</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>No journal entries yet</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
+              <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>No journal entries yet</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
                 Journal entries are created automatically when you close a trade.
                 Head to the <a href="/trade" style={{ color: 'var(--link)' }}>Trading</a> page to make your first trade.
               </div>
@@ -570,13 +570,13 @@ const StatCard: React.FC<{ label: string; value: string; positive?: boolean }> =
 
 const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) => (
   <div style={s.tagStatRow}>
-    <span style={{ width: 120, color: 'var(--text-strong)', fontSize: 13 }}>{emoji ? `${emoji} ` : ''}{stat.tag}</span>
+    <span style={{ width: 120, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{emoji ? `${emoji} ` : ''}{stat.tag}</span>
     <span style={{ width: 50, color: 'var(--text-muted)', fontSize: 12 }}>{stat.count}×</span>
     <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
       <div style={{ width: `${stat.win_rate}%`, height: '100%', background: stat.win_rate >= 50 ? 'var(--gain)' : 'var(--loss)', borderRadius: 4 }} />
     </div>
-    <span style={{ width: 50, textAlign: 'right', color: (stat.win_rate ?? 0) >= 50 ? 'var(--gain)' : 'var(--loss)', fontSize: 13, fontWeight: 600 }}>{Number.isFinite(stat.win_rate) ? stat.win_rate : '—'}%</span>
-    <span style={{ width: 70, textAlign: 'right', color: (stat.avg_pnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)', fontSize: 13 }}>${Number.isFinite(stat.avg_pnl) ? stat.avg_pnl.toFixed(0) : '—'}</span>
+    <span style={{ width: 50, textAlign: 'right', color: (stat.win_rate ?? 0) >= 50 ? 'var(--gain)' : 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>{Number.isFinite(stat.win_rate) ? stat.win_rate : '—'}%</span>
+    <span style={{ width: 70, textAlign: 'right', color: (stat.avg_pnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)', fontSize: 'var(--fs-body)'}}>${Number.isFinite(stat.avg_pnl) ? stat.avg_pnl.toFixed(0) : '—'}</span>
   </div>
 );
 
@@ -588,7 +588,7 @@ const s: Record<string, React.CSSProperties> = {
   title:           { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px' },
   subtitle:        { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
   tabs:            { display: 'flex', gap: 8, marginBottom: 20 },
-  tab:             { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
+  tab:             { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 'var(--fs-body)'},
   tabActive:       { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   filterRow:       { marginBottom: 16 },
   select:          { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
@@ -597,19 +597,19 @@ const s: Record<string, React.CSSProperties> = {
   sideBadge:       { borderRadius: 4, fontSize: 11, fontWeight: 700, padding: '2px 8px' },
   deviationBadge:  { background: '#450a0a', color: 'var(--loss)', fontSize: 11, padding: '2px 8px', borderRadius: 4 },
   priceRow:        { display: 'flex', gap: 16, marginBottom: 8 },
-  priceItem:       { fontSize: 13, color: 'var(--text-muted)' },
+  priceItem:       { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
   tagRow:          { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
   tag:             { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '2px 8px' },
-  notes:           { fontSize: 13, color: 'var(--text-dim)', margin: '4px 0 0', lineHeight: 1.5 },
+  notes:           { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: '4px 0 0', lineHeight: 1.5 },
   editBtn:         { background: 'var(--surface-hover)', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
   editForm:        { borderTop: '1px solid var(--border-strong)', marginTop: 12, paddingTop: 12 },
-  label:           { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
-  textarea:        { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
-  input:           { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 13, boxSizing: 'border-box' },
+  label:           { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
+  textarea:        { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 'var(--fs-body)', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
+  input:           { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 'var(--fs-body)', boxSizing: 'border-box' },
   tagPicker:       { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
   tagPickerBtn:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
   tagPickerBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
-  saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
+  saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
   saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: 'var(--loss)', marginTop: 8 },
   statsGrid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 },
   statCard:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px' },

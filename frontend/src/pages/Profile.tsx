@@ -203,7 +203,7 @@ const Profile: React.FC = () => {
                 href={`/profile/${profile.user_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: 'var(--link)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}
+                style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: 'var(--link)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)'}}
                 title="See how your profile looks to other traders"
               >
                 👁 View Public Profile
@@ -261,8 +261,8 @@ const Profile: React.FC = () => {
             {profile.strategies?.map(str=>(
               <div key={str.strategy_id} style={s.stratRow}>
                 <span style={{fontWeight:600,color:'var(--text-strong)'}}>{str.name}</span>
-                <span style={{fontSize:13,color:'var(--text-muted)'}}>{str.subscribers ?? 0} subscribers</span>
-                <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(str.rating != null && Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0)} {str.rating != null && Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}</span>
+                <span style={{fontSize: 'var(--fs-body)',color:'var(--text-muted)'}}>{str.subscribers ?? 0} subscribers</span>
+                <span style={{fontSize: 'var(--fs-body)',color:'#f59e0b'}}>{'★'.repeat(str.rating != null && Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0)} {str.rating != null && Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}</span>
               </div>
             ))}
           </div>
@@ -304,19 +304,19 @@ const s: Record<string,React.CSSProperties> = {
   username:{fontSize:14,color:'var(--text-muted)',margin:'0 0 8px'},
   bio:{fontSize:14,color:'var(--text-dim)',margin:'0 0 10px',lineHeight:1.5},
   followRow:{display:'flex',gap:16},
-  followStat:{fontSize:13,color:'var(--text-muted)'},
+  followStat:{fontSize: 'var(--fs-body)',color:'var(--text-muted)'},
   headerActions:{flexShrink:0},
-  editBtn:{background:'var(--surface-hover)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 16px'},
-  followBtn:{border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 20px'},
+  editBtn:{background:'var(--surface-hover)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',cursor:'pointer',fontSize: 'var(--fs-body)',fontWeight:600,padding:'8px 16px'},
+  followBtn:{border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize: 'var(--fs-body)',fontWeight:600,padding:'8px 20px'},
   editCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'20px 24px',marginBottom:20},
   cardTitle:{fontSize:16,fontWeight:600,color:'var(--text)',marginBottom:14,marginTop:0},
-  label:{display:'block',fontSize:13,color:'var(--text-dim)',marginBottom:6},
+  label:{display:'block',fontSize: 'var(--fs-body)',color:'var(--text-dim)',marginBottom:6},
   input:{width:'100%',background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box'},
   textarea:{width:'100%',background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'},
   inlineError:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:6,padding:'6px 10px',fontSize:12,color:'var(--loss)',marginTop:8},
   successMsg:{background:'rgba(74,222,128,0.1)',border:'1px solid var(--gain)',borderRadius:6,padding:'6px 10px',fontSize:12,color:'var(--gain)',marginTop:8},
-  saveBtn:{background:'#3b82f6',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,padding:'9px 20px'},
-  cancelBtn:{background:'transparent',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-dim)',cursor:'pointer',fontSize:13,padding:'9px 16px'},
+  saveBtn:{background:'#3b82f6',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize: 'var(--fs-body)',fontWeight:600,padding:'9px 20px'},
+  cancelBtn:{background:'transparent',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-dim)',cursor:'pointer',fontSize: 'var(--fs-body)',padding:'9px 16px'},
   statsGrid:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:12,marginBottom:20},
   statCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:8,padding:'12px 16px'},
   card:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'20px 24px',marginBottom:16},

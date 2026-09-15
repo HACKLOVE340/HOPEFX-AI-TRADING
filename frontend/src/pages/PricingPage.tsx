@@ -149,7 +149,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
         <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--text-strong)' }}>
           {fmtPrice(plan, annual)}
         </span>
-        {!isFree && <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 4 }}>/mo</span>}
+        {!isFree && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginLeft: 4 }}>/mo</span>}
       </div>
       {!isFree && annual && plan.price_usd_annual > 0 && (
         <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 4 }}>
@@ -227,7 +227,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
 
   return (
     <div style={{ overflowX: 'auto', marginBottom: 48 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
         <thead>
           <tr>
             <th style={{ width: '20%', textAlign: 'left', padding: '12px 16px',
@@ -345,7 +345,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
           transform: open ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s' }}>+</span>
       </button>
       {open && (
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>{a}</p>
+        <p style={{ margin: '0 0 16px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6 }}>{a}</p>
       )}
     </div>
   );
@@ -402,14 +402,14 @@ const PricingPage: React.FC = () => {
         actions={
           isAuth ? (
             <Link to="/settings" style={{
-              fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
+              fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none',
               padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
             }}>
               Account Settings
             </Link>
           ) : (
             <Link to="/login" style={{
-              fontSize: 13, color: 'var(--text-dim)', textDecoration: 'none',
+              fontSize: 'var(--fs-body)', color: 'var(--text-dim)', textDecoration: 'none',
               padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
             }}>
               Sign in
@@ -430,12 +430,12 @@ const PricingPage: React.FC = () => {
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12,
           background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 30, padding: '6px 8px' }}>
           <button onClick={() => setAnnual(false)} style={{
-            padding: '6px 18px', borderRadius: 24, border: 'none', cursor: 'pointer', fontSize: 13,
+            padding: '6px 18px', borderRadius: 24, border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)',
             fontWeight: 600, background: !annual ? 'var(--surface-hover)' : 'transparent',
             color: !annual ? 'var(--text)' : 'var(--text-muted)',
           }}>Monthly</button>
           <button onClick={() => setAnnual(true)} style={{
-            padding: '6px 18px', borderRadius: 24, border: 'none', cursor: 'pointer', fontSize: 13,
+            padding: '6px 18px', borderRadius: 24, border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)',
             fontWeight: 600, background: annual ? 'var(--surface-hover)' : 'transparent',
             color: annual ? 'var(--text)' : 'var(--text-muted)',
           }}>
@@ -451,7 +451,7 @@ const PricingPage: React.FC = () => {
       ) : plans.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-          <div style={{ color: 'var(--text-muted)', fontSize: 15 }}>Plans unavailable — please try again shortly.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-value)'}}>Plans unavailable — please try again shortly.</div>
         </div>
       ) : (
         <>
@@ -475,7 +475,7 @@ const PricingPage: React.FC = () => {
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <button onClick={() => setShowTable(t => !t)} style={{
               background: 'none', border: '1px solid var(--border-strong)', borderRadius: 8,
-              color: 'var(--text-dim)', fontSize: 13, padding: '8px 20px', cursor: 'pointer',
+              color: 'var(--text-dim)', fontSize: 'var(--fs-body)', padding: '8px 20px', cursor: 'pointer',
             }}>
               {showTable ? 'Hide' : 'Show'} full feature comparison ↕
             </button>
@@ -545,14 +545,14 @@ const PricingPage: React.FC = () => {
           {!isAuth && (
             <Link to="/register" style={{
               padding: '12px 32px', background: '#8b5cf6', color: '#fff', border: 'none',
-              borderRadius: 8, fontSize: 15, fontWeight: 700, textDecoration: 'none', display: 'inline-block',
+              borderRadius: 8, fontSize: 'var(--fs-value)', fontWeight: 700, textDecoration: 'none', display: 'inline-block',
             }}>
               Start for free
             </Link>
           )}
           <Link to={isAuth ? '/dashboard' : '/login'} style={{
             padding: '12px 32px', background: 'transparent', color: 'var(--text-dim)',
-            border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 15,
+            border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: 'var(--fs-value)',
             fontWeight: 600, textDecoration: 'none', display: 'inline-block',
           }}>
             {isAuth ? 'Go to Dashboard' : 'Sign in'}

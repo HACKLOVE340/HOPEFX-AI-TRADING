@@ -318,7 +318,7 @@ const PlatformSection: React.FC = () => {
             rows={3}
             style={{
               width: '100%', background: 'var(--raised)', border: '1px solid var(--border-strong)',
-              borderRadius: 7, color: 'var(--text-strong)', fontSize: 13, padding: '8px 12px',
+              borderRadius: 7, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '8px 12px',
               resize: 'vertical', outline: 'none', boxSizing: 'border-box',
             }}
           />

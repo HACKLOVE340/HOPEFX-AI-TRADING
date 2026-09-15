@@ -178,7 +178,7 @@ function scoreMatch(query: string, item: CommandItem): number {
 function CommandIcon({ icon, selected }: { icon?: LucideIcon | string; selected: boolean }) {
   const box = { flexShrink: 0, width: 24, opacity: selected ? 1 : 0.7 } as const;
   if (typeof icon === 'string') {
-    return <span style={{ ...box, fontSize: 17, textAlign: 'center' as const }}>{icon}</span>;
+    return <span style={{ ...box, fontSize: 'var(--fs-title)', textAlign: 'center' as const }}>{icon}</span>;
   }
   const Glyph = icon ?? ArrowRight;
   return (
@@ -307,7 +307,7 @@ export const CommandPalette: React.FC = () => {
           onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = '#334155'; (e.currentTarget as HTMLDivElement).style.color = '#94a3b8'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLDivElement).style.color = '#475569'; }}
         >
-          <span style={{ fontSize: 13 }}>⌘</span>
+          <span style={{ fontSize: 'var(--fs-body)'}}>⌘</span>
           <kbd style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontFamily: 'monospace' }}>K</kbd>
           <span>Search</span>
         </div>
@@ -353,7 +353,7 @@ export const CommandPalette: React.FC = () => {
             placeholder="Search pages, actions, settings…"
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
-              color: 'var(--text-strong)', fontSize: 15, fontFamily: 'Inter, system-ui, sans-serif',
+              color: 'var(--text-strong)', fontSize: 'var(--fs-value)', fontFamily: 'Inter, system-ui, sans-serif',
             }}
           />
           <kbd style={{
@@ -367,7 +367,7 @@ export const CommandPalette: React.FC = () => {
         {/* Results */}
         <div style={{ maxHeight: 380, overflowY: 'auto', padding: '8px 0' }}>
           {filtered.length === 0 ? (
-            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
               No results for <strong style={{ color: 'var(--text-muted)' }}>"{query}"</strong>
             </div>
           ) : (
@@ -399,7 +399,7 @@ export const CommandPalette: React.FC = () => {
                       >
                         <CommandIcon icon={item.icon} selected={isSelected} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>
+                          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 500 }}>
                             <HighlightMatch text={item.label} query={query} />
                           </div>
                           {item.desc && (

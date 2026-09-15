@@ -120,7 +120,7 @@ const BillingSection: React.FC = () => {
       {/* Current plan */}
       <Card>
         {loading ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading subscription…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading subscription…</div>
         ) : billingErr ? (
           <div>
             <ErrorBanner message={`${billingErr}. If you have an active plan it is unaffected — this is a display problem.`} />
@@ -145,7 +145,7 @@ const BillingSection: React.FC = () => {
                   />
                 </div>
                 {billing.renewal_date && (
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                     Renews {new Date(billing.renewal_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                   </div>
                 )}
@@ -163,7 +163,7 @@ const BillingSection: React.FC = () => {
                 <Divider />
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                   {billing.features.map((f) => (
-                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
                       <span style={{ color: '#22c55e', fontSize: 12 }}>✓</span> {f}
                     </div>
                   ))}
@@ -182,11 +182,11 @@ const BillingSection: React.FC = () => {
             </div>
           </>
         ) : (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
             No subscription found.{' '}
             <button
               onClick={() => navigate('/checkout')}
-              style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 13, padding: 0 }}
+              style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: 0 }}
             >
               Choose a plan →
             </button>
@@ -196,7 +196,7 @@ const BillingSection: React.FC = () => {
 
       {/* Plan comparison */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Available plans</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Available plans</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 }}>
           {plans.map(({ id, name, price, features, highlight }) => (
             <div key={id} style={{
@@ -238,11 +238,11 @@ const BillingSection: React.FC = () => {
 
       {/* Transaction history */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Transaction history
         </h3>
         {txLoading ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading transactions…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading transactions…</div>
         ) : txErr ? (
           <div>
             <ErrorBanner message={txErr} />
@@ -251,7 +251,7 @@ const BillingSection: React.FC = () => {
             </div>
           </div>
         ) : transactions.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No transactions yet.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>No transactions yet.</div>
         ) : (
           transactions.map((tx) => (
             <div key={tx.id} style={{

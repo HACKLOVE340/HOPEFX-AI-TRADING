@@ -116,7 +116,7 @@ const ProfileSection: React.FC = () => {
           }}>
             {avatarPreview
               ? <img src={avatarPreview} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setAvatarPreview('')} />
-              : <span style={{ fontSize: 28, color: 'var(--text-faint)' }}>
+              : <span style={{ fontSize: 'var(--fs-hero)', color: 'var(--text-faint)' }}>
                   {form.username?.[0]?.toUpperCase() ?? '?'}
                 </span>
             }
@@ -223,7 +223,7 @@ const ProfileSection: React.FC = () => {
               style={{
                 padding: '8px 16px', borderRadius: 8,
                 background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-                color: 'var(--link)', fontSize: 13, cursor: 'pointer',
+                color: 'var(--link)', fontSize: 'var(--fs-body)', cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 fontFamily: 'inherit',
               }}
@@ -238,7 +238,7 @@ const ProfileSection: React.FC = () => {
               style={{
                 padding: '8px 16px', borderRadius: 8,
                 background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
-                color: 'var(--ai-model)', fontSize: 13, cursor: 'pointer',
+                color: 'var(--ai-model)', fontSize: 'var(--fs-body)', cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >
@@ -249,7 +249,7 @@ const ProfileSection: React.FC = () => {
               style={{
                 padding: '8px 16px', borderRadius: 8,
                 background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
-                color: '#34d399', fontSize: 13, textDecoration: 'none',
+                color: '#34d399', fontSize: 'var(--fs-body)', textDecoration: 'none',
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >

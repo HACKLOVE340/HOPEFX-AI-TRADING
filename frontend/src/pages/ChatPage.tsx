@@ -166,7 +166,7 @@ const ChatPage: React.FC = () => {
           <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Chat</h2>
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {loadingRooms && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 16 }}>Loading rooms…</div>}
+          {loadingRooms && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: 16 }}>Loading rooms…</div>}
           {rooms.map(room => (
             <div
               key={room.id}
@@ -206,7 +206,7 @@ const ChatPage: React.FC = () => {
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>{ROOM_ICONS[activeRoom.type] ?? '💬'}</span>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-strong)' }}>{activeRoom.name}</div>
+              <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' }}>{activeRoom.name}</div>
               {activeRoom.description && (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{activeRoom.description}</div>
               )}
@@ -226,16 +226,16 @@ const ChatPage: React.FC = () => {
 
         {/* Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {loadingMsgs && <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center' }}>Loading messages…</div>}
+          {loadingMsgs && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', textAlign: 'center' }}>Loading messages…</div>}
           {!loadingMsgs && messages.length === 0 && (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', marginTop: 40 }}>
               No messages yet. Be the first to say something!
             </div>
           )}
           {messages.map(msg => (
             <div key={msg.id} style={{ display: 'flex', flexDirection: isOwn(msg) ? 'row-reverse' : 'row', gap: 10, alignItems: 'flex-end' }}>
               {/* Avatar */}
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: isOwn(msg) ? '#1e3a5f' : 'var(--raised)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: isOwn(msg) ? 'var(--link)' : 'var(--text-dim)', flexShrink: 0 }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: isOwn(msg) ? '#1e3a5f' : 'var(--raised)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-body)', fontWeight: 700, color: isOwn(msg) ? 'var(--link)' : 'var(--text-dim)', flexShrink: 0 }}>
                 {msg.username.charAt(0).toUpperCase()}
               </div>
               <div style={{ maxWidth: '70%' }}>

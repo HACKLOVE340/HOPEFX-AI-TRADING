@@ -112,11 +112,11 @@ const ApiKeysSection: React.FC = () => {
           padding: '16px 20px', background: '#052e16', border: '1px solid #166534',
           borderRadius: 12, marginBottom: 20,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', marginBottom: 8 }}>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: '#22c55e', marginBottom: 8 }}>
             ✅ API key created — copy it now. It will not be shown again.
           </div>
           <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: 'var(--text-strong)',
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-body)', color: 'var(--text-strong)',
             background: 'var(--surface)', padding: '10px 14px', borderRadius: 8,
             wordBreak: 'break-all', letterSpacing: '0.02em',
           }}>
@@ -144,7 +144,7 @@ const ApiKeysSection: React.FC = () => {
 
       {/* Create new key */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Create new key
         </h3>
         <Field label="Key name" description="A label to identify this key (e.g. 'My trading bot').">
@@ -162,7 +162,7 @@ const ApiKeysSection: React.FC = () => {
                 key={scope}
                 onClick={() => toggleScope(scope)}
                 style={{
-                  padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                  padding: '6px 14px', borderRadius: 20, fontSize: 'var(--fs-body)', fontWeight: 600,
                   cursor: 'pointer', transition: 'all 0.15s',
                   background: newKeyScopes.includes(scope) ? '#1e3a5f' : 'var(--surface)',
                   border: `1px solid ${newKeyScopes.includes(scope) ? '#3b82f6' : '#334155'}`,
@@ -174,7 +174,7 @@ const ApiKeysSection: React.FC = () => {
             ))}
           </div>
         </Field>
-        {createError && <div style={{ fontSize: 13, color: 'var(--loss)', marginBottom: 10 }}>❌ {createError}</div>}
+        {createError && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: 10 }}>❌ {createError}</div>}
         <Button
           onClick={handleCreate}
           loading={creating}
@@ -186,15 +186,15 @@ const ApiKeysSection: React.FC = () => {
 
       {/* Existing keys */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Active keys
         </h3>
         {loading ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading keys…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading keys…</div>
         ) : loadError ? (
           <ErrorBanner message={`${loadError} This is not the same as having none — do not assume no keys are live.`} />
         ) : keys.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No API keys yet.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>No API keys yet.</div>
         ) : (
           keys.map((key) => (
             <div key={key.key_id} style={{

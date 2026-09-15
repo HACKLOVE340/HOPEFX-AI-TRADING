@@ -103,7 +103,7 @@ const StepIndicator: React.FC<{ status: KYCStatus }> = ({ status }) => {
                 background: done ? '#166534' : active ? '#1d4ed8' : 'var(--raised)',
                 border: `2px solid ${done ? 'var(--gain)' : active ? '#3b82f6' : '#334155'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 700,
+                fontSize: 'var(--fs-body)', fontWeight: 700,
                 color: done ? 'var(--gain)' : active ? '#93c5fd' : 'var(--text-faint)',
               }}>
                 {done ? '✓' : step.id}
@@ -291,24 +291,24 @@ const KYCPage: React.FC = () => {
                   )}
                 </div>
                 {status === 'approved' && (
-                  <p style={{ fontSize: 13, color: 'var(--gain)', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gain)', margin: '8px 0 0' }}>
                     Your identity has been verified. All trading features are unlocked.
                   </p>
                 )}
                 {status === 'under_review' && (
-                  <p style={{ fontSize: 13, color: 'var(--link)', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 'var(--fs-body)', color: 'var(--link)', margin: '8px 0 0' }}>
                     Your documents are under review. This typically takes 1–2 business days.
                   </p>
                 )}
                 {status === 'unknown' && (
-                  <p style={{ fontSize: 13, color: '#ffb800', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 'var(--fs-body)', color: '#ffb800', margin: '8px 0 0' }}>
                     We couldn&apos;t reach the verification service, so we don&apos;t know
                     where your application stands. Nothing has changed — refresh to try
                     again, and don&apos;t re-submit documents until this loads.
                   </p>
                 )}
                 {status === 'pending' && (
-                  <p style={{ fontSize: 13, color: '#f59e0b', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 'var(--fs-body)', color: '#f59e0b', margin: '8px 0 0' }}>
                     Submission received. Our compliance team will begin review shortly.
                   </p>
                 )}
@@ -317,7 +317,7 @@ const KYCPage: React.FC = () => {
             {status === 'rejected' && kycState?.rejection_reason && (
               <div style={{ marginTop: 16, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
                 <div style={{ fontSize: 12, color: 'var(--loss)', fontWeight: 700, marginBottom: 4 }}>Rejection Reason</div>
-                <div style={{ fontSize: 13, color: '#fca5a5', lineHeight: 1.5 }}>{kycState.rejection_reason}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: '#fca5a5', lineHeight: 1.5 }}>{kycState.rejection_reason}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Please re-upload corrected documents and resubmit.</div>
               </div>
             )}
@@ -339,7 +339,7 @@ const KYCPage: React.FC = () => {
                     borderBottom: i < kycState!.documents.length - 1 ? '1px solid var(--border)' : 'none',
                   }}>
                     <div>
-                      <span style={{ fontSize: 13, color: 'var(--text-strong)', fontWeight: 500 }}>{docLabel}</span>
+                      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-strong)', fontWeight: 500 }}>{docLabel}</span>
                       {doc.uploaded_at && (
                         <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 10 }}>
                           {new Date(doc.uploaded_at).toLocaleDateString()}
@@ -361,7 +361,7 @@ const KYCPage: React.FC = () => {
               <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>📤</span> Upload Documents
               </h3>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px', lineHeight: 1.5 }}>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 20px', lineHeight: 1.5 }}>
                 Upload at least a government-issued ID and proof of address. Files must be JPG, PNG, or PDF under 10 MB.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -377,7 +377,7 @@ const KYCPage: React.FC = () => {
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div>
-                          <label id={`kyc-doc-${doc.id}-label`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{doc.label}</label>
+                          <label id={`kyc-doc-${doc.id}-label`} style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{doc.label}</label>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{doc.desc}</div>
                         </div>
                         {isUploaded && (
@@ -435,7 +435,7 @@ const KYCPage: React.FC = () => {
                   background: submitOk ? '#052e16' : '#450a0a',
                   border: `1px solid ${submitOk ? '#166534' : '#7f1d1d'}`,
                   borderRadius: 8, color: submitOk ? 'var(--gain)' : 'var(--loss)',
-                  fontSize: 13, padding: '12px 16px', margin: '18px 0 0', lineHeight: 1.5,
+                  fontSize: 'var(--fs-body)', padding: '12px 16px', margin: '18px 0 0', lineHeight: 1.5,
                 }}>
                   {submitMsg}
                 </div>
@@ -444,7 +444,7 @@ const KYCPage: React.FC = () => {
               {missing.length > 0 && uploadedDocs.length > 0 && (
                 <div style={{
                   background: '#1e1b0b', border: '1px solid #78350f', borderRadius: 8,
-                  color: 'var(--warn)', fontSize: 13, padding: '12px 16px', margin: '18px 0 0', lineHeight: 1.5,
+                  color: 'var(--warn)', fontSize: 'var(--fs-body)', padding: '12px 16px', margin: '18px 0 0', lineHeight: 1.5,
                 }}>
                   Still needed before you can submit: {missing.join(' and ')}.
                 </div>
@@ -478,7 +478,7 @@ const KYCPage: React.FC = () => {
             ].map(({ icon, title, body }) => (
               <div key={title} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
                 <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>{title}</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>{title}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{body}</div>
               </div>
             ))}

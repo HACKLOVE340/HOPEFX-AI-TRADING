@@ -108,7 +108,7 @@ interface FieldProps {
  */
 export const Field: React.FC<FieldProps> = ({ label, description, children }) => (
   <label style={{ display: 'block', marginBottom: 20 }}>
-    <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <span style={{ display: 'block', fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
       {label}
     </span>
     {description && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, marginTop: 0 }}>{description}</span>}
@@ -313,12 +313,12 @@ export const SaveBar: React.FC<SaveBarProps> = ({ onSave, saving, saved, error }
     gap: 12, marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border)',
   }}>
     {error && (
-      <span role="alert" style={{ fontSize: 13, color: 'var(--warn)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span role="alert" style={{ fontSize: 'var(--fs-body)', color: 'var(--warn)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
         <AlertTriangle size={14} strokeWidth={2} aria-hidden /> {error}
       </span>
     )}
     {saved && !saving && (
-      <span role="status" style={{ fontSize: 13, color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span role="status" style={{ fontSize: 'var(--fs-body)', color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
         <Check size={14} strokeWidth={2.5} aria-hidden /> Saved
       </span>
     )}

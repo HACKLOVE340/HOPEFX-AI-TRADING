@@ -206,7 +206,7 @@ const LiveStatusCard: React.FC<{
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
           }}>🛡️</div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-strong)' }}>Autonomous Healing Engine</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' }}>Autonomous Healing Engine</div>
             <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>Real-time integrity monitor · Self-patching system</div>
           </div>
         </div>
@@ -589,7 +589,7 @@ const SafetyGatesPanel: React.FC<{
                   boxShadow: active ? `0 0 8px ${opt.color}66` : 'none',
                   transition: 'all 0.15s',
                 }} />
-                <span style={{ fontSize: 13, color: active ? 'var(--text-strong)' : 'var(--text-muted)', fontWeight: active ? 600 : 400 }}>
+                <span style={{ fontSize: 'var(--fs-body)', color: active ? 'var(--text-strong)' : 'var(--text-muted)', fontWeight: active ? 600 : 400 }}>
                   {opt.label}
                 </span>
                 {opt.value === 'nuclear' && active && (
@@ -717,7 +717,7 @@ const DriftLogPanel: React.FC<{
     subtitle="File integrity violations detected by the scan loop"
     actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
     {events.length === 0 ? (
-      <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-faint)', fontSize: 13 }}>
+      <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
         No drift events — all tracked files match baseline
       </div>
     ) : (
@@ -859,7 +859,7 @@ const PendingApprovalPanel: React.FC<{
     subtitle="Patches waiting for manual approval before the healer applies them"
     actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
     {patches.length === 0 ? (
-      <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-faint)', fontSize: 13 }}>No patches awaiting approval</div>
+      <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No patches awaiting approval</div>
     ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {patches.map((p, i) => (
@@ -1444,7 +1444,7 @@ const AutoHealingSection: React.FC = () => {
           background: msgType === 'ok' ? '#052e16' : '#450a0a',
           color: msgType === 'ok' ? 'var(--gain)' : 'var(--loss)',
           border: `1px solid ${msgType === 'ok' ? '#16a34a' : '#dc2626'}`,
-          fontSize: 13, fontWeight: 600,
+          fontSize: 'var(--fs-body)', fontWeight: 600,
         }}>{msg}</div>
       )}
     </div>

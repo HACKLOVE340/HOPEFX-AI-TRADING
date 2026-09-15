@@ -53,7 +53,7 @@ export const MlSafetyStrip: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-faint)' }}>
+      <div style={{ padding: '14px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
         Loading model health…
       </div>
     );
@@ -62,7 +62,7 @@ export const MlSafetyStrip: React.FC = () => {
   if (isError || !data) {
     return (
       <div style={{
-        padding: '12px 16px', fontSize: 13, color: 'var(--text-dim)',
+        padding: '12px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)',
         background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
       }}>
         Model health unavailable.

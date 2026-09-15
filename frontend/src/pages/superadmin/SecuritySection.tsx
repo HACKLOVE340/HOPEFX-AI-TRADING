@@ -178,7 +178,7 @@ const SecuritySection: React.FC = () => {
           </div>
         }>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Severity', 'Type', 'Detail', 'IP', 'User', 'Time'].map(h => (
@@ -216,7 +216,7 @@ const SecuritySection: React.FC = () => {
           <ActionBtn label="Block IP" onClick={blockIP} variant="danger" icon={<Ban size={18} aria-hidden />} loading={busy === 'block-ip'} disabled={!newIP} />
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['IP Address', 'Reason', 'Blocked By', 'Blocked At', ''].map(h => (
@@ -246,7 +246,7 @@ const SecuritySection: React.FC = () => {
             </tbody>
           </table>
           {blocked.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-faint)', fontSize: 13 }}>No IPs currently blocked.</div>
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No IPs currently blocked.</div>
           )}
         </div>
       </SectionCard>
@@ -255,7 +255,7 @@ const SecuritySection: React.FC = () => {
       <SectionCard title="Active Sessions" icon={<Link2 size={18} aria-hidden />} accent="#06b6d4"
         subtitle={`${sessions.length} sessions active`}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'IP', 'Device', 'Started', 'Last Active', ''].map(h => (
@@ -294,7 +294,7 @@ const SecuritySection: React.FC = () => {
             </tbody>
           </table>
           {sessions.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-faint)', fontSize: 13 }}>No active sessions.</div>
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No active sessions.</div>
           )}
         </div>
       </SectionCard>

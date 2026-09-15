@@ -293,7 +293,7 @@ const StatusPage: React.FC = () => {
                 ? <CheckCircle2 size={18} strokeWidth={2} aria-hidden style={{ color: '#22c55e', flexShrink: 0, marginTop: 1 }} />
                 : <ShieldAlert size={18} strokeWidth={2} aria-hidden style={{ color: 'var(--warn)', flexShrink: 0, marginTop: 1 }} />}
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: liveGate.allowed ? '#22c55e' : 'var(--warn)' }}>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: liveGate.allowed ? '#22c55e' : 'var(--warn)' }}>
                   {liveGate.allowed
                     ? 'Live trading is permitted'
                     : 'Live trading is blocked'}
@@ -377,7 +377,7 @@ const StatusPage: React.FC = () => {
           background: wsStatus === 'connected' ? '#22c55e' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444',
           boxShadow: wsStatus === 'connected' ? '0 0 6px #22c55e' : 'none',
         }} />
-        <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
           WebSocket feed: <strong style={{ color: wsStatus === 'connected' ? '#22c55e' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444' }}>
             {wsStatus.charAt(0).toUpperCase() + wsStatus.slice(1)}
           </strong>
@@ -401,7 +401,7 @@ const StatusPage: React.FC = () => {
             <div style={styles.componentName}>{name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
             <div style={styles.componentStatus}>
               <Dot status={info.status} />
-              <span style={{ color: STATUS_COLOR[info.status], fontWeight: 600, textTransform: 'capitalize', fontSize: 13 }}>
+              <span style={{ color: STATUS_COLOR[info.status], fontWeight: 600, textTransform: 'capitalize', fontSize: 'var(--fs-body)'}}>
                 {info.status}
               </span>
             </div>
@@ -447,7 +447,7 @@ const StatusPage: React.FC = () => {
                 {inc.severity === 'major' ? '❌' : '⚠️'}
               </span>
               <span style={{ color: 'var(--text)', fontWeight: 500 }}>{inc.date}</span>
-              <span style={{ color: 'var(--text-dim)', fontSize: 13, flex: 1 }}>{inc.title}</span>
+              <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)', flex: 1 }}>{inc.title}</span>
               <span style={{ fontSize: 11, color: inc.resolved ? 'var(--gain)' : 'var(--warn)' }}>
                 {inc.resolved ? 'Resolved' : 'Ongoing'}
               </span>
@@ -487,7 +487,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
   },
   bannerTitle: { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' },
-  bannerSub: { fontSize: 13, color: 'var(--text-dim)', marginTop: 4 },
+  bannerSub: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4 },
   refreshBtn: {
     marginLeft: 'auto',
     background: 'transparent',

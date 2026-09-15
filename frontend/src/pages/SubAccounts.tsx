@@ -603,29 +603,29 @@ const s: Record<string, React.CSSProperties> = {
   page:    { padding: '24px 28px', maxWidth: 1200 },
   metrics: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 28 },
   section: { marginBottom: 32 },
-  sectionTitle: { color: 'var(--text, var(--text-strong))', fontSize: 15, fontWeight: 600, marginBottom: 12 },
+  sectionTitle: { color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-value)', fontWeight: 600, marginBottom: 12 },
   primaryBtn: {
     alignItems: 'center', background: '#3b82f6', border: 'none', borderRadius: 6,
-    color: '#fff', cursor: 'pointer', display: 'flex', fontSize: 13, fontWeight: 600,
+    color: '#fff', cursor: 'pointer', display: 'flex', fontSize: 'var(--fs-body)', fontWeight: 600,
     gap: 6, padding: '7px 16px',
   },
   secondaryBtn: {
     background: 'transparent', border: '1px solid var(--border, var(--border-strong))', borderRadius: 6,
-    color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
+    color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '7px 14px',
   },
   cancelBtn: {
     background: 'transparent', border: '1px solid var(--border, var(--border-strong))', borderRadius: 6,
-    color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
+    color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '7px 14px',
   },
   formGrid: { display: 'flex', flexDirection: 'column', gap: 10 },
   label:    { color: 'var(--text-muted, var(--text-dim))', fontSize: 12, fontWeight: 600 },
   input: {
     background: 'var(--surface-raised, #243044)', border: '1px solid var(--border, var(--border-strong))',
-    borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 13, outline: 'none', padding: '8px 12px',
+    borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-body)', outline: 'none', padding: '8px 12px',
   },
   select: {
     background: 'var(--surface, var(--raised))', border: '1px solid var(--border, var(--border-strong))',
-    borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 13, padding: '6px 10px',
+    borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-body)', padding: '6px 10px',
   },
 };
 

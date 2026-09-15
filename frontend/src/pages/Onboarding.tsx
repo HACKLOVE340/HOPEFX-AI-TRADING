@@ -112,7 +112,7 @@ const Step1Broker: React.FC<{ state: WizardState; setState: (s: WizardState) => 
               background: state.broker === b.id ? '#1c1a0a' : 'var(--raised)',
             }}>
             <div style={{ fontWeight: 600, color: 'var(--text-strong)', textAlign: 'left' }}>{b.name}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{b.desc}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{b.desc}</div>
           </button>
         ))}
       </div>
@@ -154,9 +154,9 @@ const Step2Risk: React.FC<{ state: WizardState; setState: (s: WizardState) => vo
             }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{l.name}</span>
-              <span style={{ fontSize: 13, color: 'var(--warn)', fontWeight: 700 }}>{l.risk} / trade</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--warn)', fontWeight: 700 }}>{l.risk} / trade</span>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{l.desc}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{l.desc}</div>
           </button>
         ))}
       </div>
@@ -192,7 +192,7 @@ const Step3PropFirm: React.FC<{ state: WizardState; setState: (s: WizardState) =
               background: state.propFirm === f.id ? '#1c1a0a' : 'var(--raised)',
             }}>
             <div style={{ fontWeight: 600, color: 'var(--text-strong)', textAlign: 'left' }}>{f.name}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{f.desc}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2, textAlign: 'left' }}>{f.desc}</div>
           </button>
         ))}
       </div>
@@ -310,7 +310,7 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
       ) : (
         <div style={{ ...s.resultBox, border: '1px solid #14532d', background: '#052e16' }}>
           <div style={{ color: 'var(--gain)', fontWeight: 600 }}>✓ Paper trading active!</div>
-          <div style={{ fontSize: 13, color: '#86efac', marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: '#86efac', marginTop: 4 }}>
             Head to the Dashboard to watch your first AI signals.
           </div>
         </div>
@@ -404,7 +404,7 @@ const Onboarding: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--warn)', margin: '0 0 4px' }}>HOPEFX Setup</h1>
-            <p style={{ fontSize: 13, color: 'var(--text-faint)', margin: 0 }}>Step {step + 1} of {STEPS.length}</p>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', margin: 0 }}>Step {step + 1} of {STEPS.length}</p>
           </div>
           <button onClick={skip} style={s.skipBtn}>✕ Skip</button>
         </div>
@@ -451,12 +451,12 @@ const s: Record<string, React.CSSProperties> = {
   stepTitle:  { fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' },
   stepSub:    { fontSize: 14, color: 'var(--text-muted)', margin: '0 0 20px' },
   optionBtn:  { width: '100%', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.15s' },
-  infoBox:    { background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#93c5fd', marginTop: 12 },
+  infoBox:    { background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 14px', fontSize: 'var(--fs-body)', color: '#93c5fd', marginTop: 12 },
   code:       { background: 'var(--raised)', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 12 },
-  primaryBtn: { width: '100%', background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 15, fontWeight: 700, cursor: 'pointer', padding: '14px 0' },
+  primaryBtn: { width: '100%', background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 'var(--fs-value)', fontWeight: 700, cursor: 'pointer', padding: '14px 0' },
   resultBox:  { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 16 },
-  errorBox:   { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--loss)', marginBottom: 12 },
-  skipBtn:    { background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 13, padding: '4px 8px' },
+  errorBox:   { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: 12 },
+  skipBtn:    { background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 8px' },
   navBtn:     { background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, padding: '8px 12px' },
   nextBtn:    { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '10px 24px' },
 };

@@ -65,7 +65,7 @@ interface Trade {
 
 function EquityCurveChart({ points }: { points: { t: number; v: number }[] }) {
   if (points.length < 2) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: 'var(--text-faint)', fontSize: 13 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
       Not enough data to render curve
     </div>
   );
@@ -458,10 +458,10 @@ const Performance: React.FC = () => {
               description="Make your first trade to start tracking equity curve, Sharpe ratio, win rate, and drawdown metrics."
               action={
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <Link to="/trade" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
+                  <Link to="/trade" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
                     ⚡ Start Trading
                   </Link>
-                  <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>
+                  <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-block' }}>
                     🧠 AI Strategy
                   </Link>
                 </div>
@@ -507,13 +507,13 @@ const Performance: React.FC = () => {
             </div>
             {equityQ.isLoading && <PanelSkeleton rows={3} />}
             {equityQ.isError && (
-              <div style={{ textAlign: 'center', color: 'var(--loss)', padding: 40, fontSize: 13 }}>
+              <div style={{ textAlign: 'center', color: 'var(--loss)', padding: 40, fontSize: 'var(--fs-body)'}}>
                 Failed to load equity curve — {extractApiError(equityQ.error, 'check your connection')}
               </div>
             )}
             {!equityQ.isLoading && !equityQ.isError && (equity.length > 1
               ? <EquityCurveChart points={equity} />
-              : <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 40, fontSize: 13 }}>No equity data yet</div>
+              : <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 40, fontSize: 'var(--fs-body)'}}>No equity data yet</div>
             )}
           </div>
 
@@ -581,7 +581,7 @@ const Performance: React.FC = () => {
           </div>
           {tradesQ.isLoading && <PanelSkeleton rows={6} />}
           {tradesQ.isError && (
-            <div style={{ color: 'var(--loss)', fontSize: 13 }}>
+            <div style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)'}}>
               Failed to load trades — {extractApiError(tradesQ.error, 'authentication required')}
             </div>
           )}
@@ -602,7 +602,7 @@ const Performance: React.FC = () => {
             </div>
           )}
           {!tradesQ.isLoading && filteredTrades.length === 0 && (
-            <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 40, fontSize: 13 }}>No trades found</div>
+            <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 40, fontSize: 'var(--fs-body)'}}>No trades found</div>
           )}
         </div>
       )}
@@ -619,7 +619,7 @@ const Performance: React.FC = () => {
           </div>
           {weeklyQ.isLoading && <PanelSkeleton rows={4} />}
           {weeklyQ.isError && (
-            <div style={{ color: 'var(--loss)', fontSize: 13, padding: '12px 0' }}>
+            <div style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)', padding: '12px 0' }}>
               No weekly report available yet. Reports are generated automatically each Sunday.
             </div>
           )}
@@ -648,7 +648,7 @@ const Performance: React.FC = () => {
                 {wr.ai_commentary && (
                   <div style={{ background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' }}>
                     <div style={{ fontSize: 12, color: 'var(--link)', marginBottom: 6, fontWeight: 600 }}>🤖 AI Commentary</div>
-                    <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0, lineHeight: 1.6 }}>{String(wr.ai_commentary)}</p>
+                    <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: 0, lineHeight: 1.6 }}>{String(wr.ai_commentary)}</p>
                   </div>
                 )}
               </>
@@ -683,21 +683,21 @@ const s: Record<string, React.CSSProperties> = {
   subtitle:    { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
   tabBtn:      { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '6px 12px' },
   tabBtnActive:{ background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
-  refreshBtn:  { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 12px' },
-  errorBox:    { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', fontSize: 13, padding: '12px 16px', marginBottom: 16 },
+  refreshBtn:  { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 12px' },
+  errorBox:    { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', fontSize: 'var(--fs-body)', padding: '12px 16px', marginBottom: 16 },
   statsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 },
   statCard:    { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' },
   statLabel:   { fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' },
   statValue:   { fontSize: 22, fontWeight: 700 },
   statSub:     { fontSize: 11, color: 'var(--text-faint)', marginTop: 4 },
-  noteBox:     { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-dim)', marginBottom: 20 },
+  noteBox:     { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 20 },
   card:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 16, marginBottom: 16 },
-  cardTitle:   { fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 12px' },
+  cardTitle:   { fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 12px' },
   table:       { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th:          { textAlign: 'left', color: 'var(--text-faint)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', padding: '6px 10px', borderBottom: '1px solid var(--border-strong)' },
   td:          { padding: '8px 10px', color: 'var(--text-dim)', fontSize: 12 },
   filterInput: { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '8px 10px', fontSize: 16, outline: 'none', width: '100%', maxWidth: 160, WebkitAppearance: 'none' },
-  apiNote:     { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--text-muted)', marginTop: 16 },
+  apiNote:     { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 16 },
 };
 
 export default Performance;

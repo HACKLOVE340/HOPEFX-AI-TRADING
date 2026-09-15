@@ -119,10 +119,10 @@ const LeaderCard: React.FC<{
     </div>
 
     <div style={s.leaderFooter}>
-      <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
         AUM: <strong>${(leader.aum / 1_000_000).toFixed(2)}M</strong>
       </span>
-      <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
         Fee: <strong>{leader.fee != null ? `${leader.fee}%` : 'not published'}</strong>
       </span>
     </div>
@@ -309,8 +309,8 @@ const CopyTrading: React.FC = () => {
           {!sessionsLoading && sessions.length === 0 && (
             <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 48 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-              <div style={{ fontSize: 15, color: 'var(--text-dim)', marginBottom: 8 }}>No active copy sessions</div>
-              <div style={{ fontSize: 13, marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
+              <div style={{ fontSize: 'var(--fs-value)', color: 'var(--text-dim)', marginBottom: 8 }}>No active copy sessions</div>
+              <div style={{ fontSize: 'var(--fs-body)', marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
               <button
                 onClick={() => setActiveTab('browse')}
                 style={{ background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: '10px 24px' }}
@@ -370,7 +370,7 @@ const CopyTrading: React.FC = () => {
                   <button
                     onClick={() => handleUpdateAllocation(sess.trader_id)}
                     disabled={updatingId === sess.trader_id}
-                    style={{ ...s.copyBtn, padding: '8px 14px', fontSize: 13, background: '#3b82f6' }}
+                    style={{ ...s.copyBtn, padding: '8px 14px', fontSize: 'var(--fs-body)', background: '#3b82f6' }}
                   >
                     {updatingId === sess.trader_id ? 'Updating…' : 'Update Allocation'}
                   </button>
@@ -379,7 +379,7 @@ const CopyTrading: React.FC = () => {
                 <button
                   onClick={() => handleStopCopy(sess.trader_id)}
                   disabled={stoppingId === sess.trader_id}
-                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
+                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px' }}
                 >
                   {stoppingId === sess.trader_id ? 'Stopping…' : '⏹ Stop Copying'}
                 </button>
@@ -509,7 +509,7 @@ const s: Record<string, React.CSSProperties> = {
   page:          { padding: 24, maxWidth: 1100, margin: '0 auto' },
   header:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title:         { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: 0 },
-  select:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 13 },
+  select:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 'var(--fs-body)'},
   grid:          { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginBottom: 24 },
   leaderCard:    { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 16, transition: 'border-color 0.15s' },
   leaderTop:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
@@ -522,15 +522,15 @@ const s: Record<string, React.CSSProperties> = {
   allocationCard:{ background: 'var(--raised)', border: '1px solid #f59e0b55', borderRadius: 12, padding: 24 },
   cardTitle:     { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 20px' },
   allocationGrid:{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 },
-  label:         { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 },
+  label:         { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 8 },
   input:         { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
   summaryBox:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 16 },
   summaryRow:    { display: 'flex', justifyContent: 'space-between', marginBottom: 10 },
-  summaryLabel:  { fontSize: 13, color: 'var(--text-muted)' },
-  summaryVal:    { fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' },
+  summaryLabel:  { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
+  summaryVal:    { fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' },
   copyBtn:       { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '12px 24px' },
   cancelBtn:     { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 14, cursor: 'pointer', padding: '12px 20px' },
-  tabBtn:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
+  tabBtn:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px' },
   tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   sessMetric:    { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' },
 };

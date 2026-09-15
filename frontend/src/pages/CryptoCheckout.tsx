@@ -195,7 +195,7 @@ const CryptoButton: React.FC<{ currency: CryptoOption; selected: boolean; onSele
     }}>
       <span style={{ fontSize: 22, color: meta.color }}>{meta.icon}</span>
       <div style={{ textAlign: 'left' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{meta.name}</div>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{meta.name}</div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currency}</div>
       </div>
     </button>
@@ -442,7 +442,7 @@ const CryptoCheckout: React.FC = () => {
           </div>
           {selectedCrypto === 'USDT' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Network:</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Network:</span>
               {(['TRC20', 'ERC20', 'BEP20'] as USDTNetwork[]).map(n => (
                 <button key={n} onClick={() => setUsdtNetwork(n)} style={{
                   padding: '5px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
@@ -459,7 +459,7 @@ const CryptoCheckout: React.FC = () => {
           <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
             padding: '20px 24px', marginBottom: 20 }}>
             <div style={{ fontWeight: 600, color: 'var(--text-strong)', marginBottom: 6 }}>Pay with Flutterwave</div>
-            <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: '0 0 12px' }}>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: '0 0 12px' }}>
               Recommended for West &amp; Central Africa — card, bank transfer, mobile money.
             </p>
             <button onClick={handleFlutterwavePay} disabled={flwLoading} style={{
@@ -477,7 +477,7 @@ const CryptoCheckout: React.FC = () => {
             <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{selectedPlan.name}</span>
             <span style={{ color: 'var(--text-muted)' }}> — ${selectedPlan.price_usd.toLocaleString()}/mo</span>
             {cryptoAmount !== null && (
-              <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>
+              <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>
                 {' '}≈ {fmtCrypto(cryptoAmount, selectedCrypto)}
               </span>
             )}
@@ -510,11 +510,11 @@ const CryptoCheckout: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
             <span style={{ color: meta.color, fontSize: 32 }}>{meta.icon}</span>
             <div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Send exactly</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-strong)' }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Send exactly</div>
+              <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)' }}>
                 {fmtCrypto(depositInfo.amount_crypto, selectedCrypto)}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 ≈ ${fmt(selectedPlan.price_usd)} · {depositInfo.network.toUpperCase()} network
               </div>
             </div>
@@ -555,13 +555,13 @@ const CryptoCheckout: React.FC = () => {
           </div>
 
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-            padding: '10px 14px', fontSize: 13, color: 'var(--warn)', marginBottom: 14 }}>
+            padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--warn)', marginBottom: 14 }}>
             ⚠️ Send only <strong>{selectedCrypto}</strong> on the{' '}
             <strong>{depositInfo.network.toUpperCase()}</strong> network.
             Sending a different asset will result in permanent loss.
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13,
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-body)',
             color: 'var(--text-muted)', marginBottom: 20 }}>
             <span>Confirmations required: <strong style={{ color: 'var(--text-strong)' }}>{depositInfo.confirmations_required}</strong></span>
             <span>Expires in: <ExpiryCountdown expiresAt={depositInfo.expires_at} /></span>
@@ -606,7 +606,7 @@ const CryptoCheckout: React.FC = () => {
             <div style={{ height: '100%', borderRadius: 4, background: meta.color,
               width: pct + '%', transition: 'width 0.5s ease' }} />
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             This typically takes {selectedCrypto === 'BTC' ? '30–60 minutes' : '2–5 minutes'}.
             {/* Only claim the poll is working while it is. Saying "polls
                 automatically" under a dead connection is the sentence that made
@@ -664,10 +664,10 @@ const CryptoCheckout: React.FC = () => {
         {addressError ? (
           <>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>
               Failed to generate deposit address
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20 }}>{addressError}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 20 }}>{addressError}</div>
             <button
               onClick={() => { setAddressError(null); setStep('select'); }}
               style={st.backBtn}
@@ -699,20 +699,20 @@ const CryptoCheckout: React.FC = () => {
 const st: Record<string, React.CSSProperties> = {
   page:       { maxWidth: 800, margin: '0 auto', padding: '24px 16px', color: 'var(--text-strong)' },
   section:    { marginBottom: 28 },
-  sectionTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: '0 0 12px' },
+  sectionTitle: { fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', margin: '0 0 12px' },
   card:       { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24, marginBottom: 16 },
   proceedBtn: { padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none',
     borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   backBtn:    { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
-    color: 'var(--text-dim)', fontSize: 13, padding: '6px 14px', cursor: 'pointer' },
+    color: 'var(--text-dim)', fontSize: 'var(--fs-body)', padding: '6px 14px', cursor: 'pointer' },
   copyBtn:    { background: 'var(--surface-hover)', border: 'none', borderRadius: 6,
     color: 'var(--text)', fontSize: 12, padding: '5px 12px', cursor: 'pointer' },
-  headerLink: { fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
+  headerLink: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none',
     padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6 },
   warnBox:    { background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-    padding: '10px 14px', color: 'var(--warn)', fontSize: 13, marginBottom: 16 },
+    padding: '10px 14px', color: 'var(--warn)', fontSize: 'var(--fs-body)', marginBottom: 16 },
   errorBox:   { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
-    padding: '10px 14px', color: 'var(--loss)', fontSize: 13, marginBottom: 16 },
+    padding: '10px 14px', color: 'var(--loss)', fontSize: 'var(--fs-body)', marginBottom: 16 },
 };
 
 export default CryptoCheckout;

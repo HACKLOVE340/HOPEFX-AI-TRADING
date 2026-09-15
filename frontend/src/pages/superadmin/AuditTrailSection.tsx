@@ -197,7 +197,7 @@ const AuditTrailSection: React.FC = () => {
       {/* Main tab switcher */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['compliance', 'system'] as const).map(t => (
-          <button key={t} onClick={() => setMainTab(t)} style={{ background: mainTab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${mainTab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: mainTab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
+          <button key={t} onClick={() => setMainTab(t)} style={{ background: mainTab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${mainTab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: mainTab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
             {{ compliance: '🔗 Compliance Audit Trail', system: '📋 System Audit Log' }[t]}
           </button>
         ))}
@@ -249,7 +249,7 @@ const AuditTrailSection: React.FC = () => {
 
       <SectionCard title="Immutable Audit Trail" icon={<Link2 size={18} aria-hidden />} accent="#a78bfa" noPad>
         {filtered.length === 0 ? (
-          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No audit records match this filter</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No audit records match this filter</div>
         ) : (
           <div>
             {filtered.map((r, i) => (
@@ -333,7 +333,7 @@ const AuditTrailSection: React.FC = () => {
       {total > 100 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, alignItems: 'center' }}>
           <ActionBtn label="← Prev" onClick={() => load(page - 1)} accent="#475569" size="sm" disabled={page <= 1} />
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(total / 100)}</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(total / 100)}</span>
           <ActionBtn label="Next →" onClick={() => load(page + 1)} accent="#475569" size="sm" disabled={records.length < 100} />
         </div>
       )}
@@ -358,7 +358,7 @@ const AuditTrailSection: React.FC = () => {
             ) : sysEntries.length === 0 ? (
               <EmptyState compact icon={ClipboardList} title="No audit entries found" description="System audit events will appear here as platform actions are recorded." links={[{ label: 'Audit Log', href: '/audit', icon: <Search size={16} aria-hidden /> }]} />
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                 <thead>
                   {/* 'Resource ID' is gone: AuditLogEntry has no such column, so it
                       rendered '—' on every row forever. Every other header here read a
@@ -405,7 +405,7 @@ const AuditTrailSection: React.FC = () => {
           {sysTotal > 50 && (
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, alignItems: 'center' }}>
               <ActionBtn label="← Prev" onClick={() => loadSysAudit(sysPage - 1)} accent="#475569" size="sm" disabled={sysPage <= 1} />
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Page {sysPage} of {Math.ceil(sysTotal / 50)}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Page {sysPage} of {Math.ceil(sysTotal / 50)}</span>
               <ActionBtn label="Next →" onClick={() => loadSysAudit(sysPage + 1)} accent="#475569" size="sm" disabled={sysEntries.length < 50} />
             </div>
           )}

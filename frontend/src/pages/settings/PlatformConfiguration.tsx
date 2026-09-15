@@ -1308,7 +1308,7 @@ const KillSwitchTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCo
   <Card danger>
     <SectionHeader icon={<OctagonAlert size={18} aria-hidden />} title="Global Kill Switch" desc="kill_switch.py — immediately halts all trading across all pods" />
     <div style={{ marginBottom: 12, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
-      <div style={{ fontSize: 13, color: '#fca5a5', fontWeight: 600 }}>
+      <div style={{ fontSize: 'var(--fs-body)', color: '#fca5a5', fontWeight: 600 }}>
         ⚠️ Activating the kill switch immediately stops all live trading, cancels pending orders, and blocks new order submission across all running pods.
       </div>
     </div>
@@ -1442,7 +1442,7 @@ const HealingTab: React.FC<{
             style={{
               width: '100%', padding: '10px 12px', background: 'var(--surface)',
               border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)',
-              fontSize: 13, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace',
+              fontSize: 'var(--fs-body)', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'monospace',
             }}
           />
         </Field>
@@ -1480,7 +1480,7 @@ const HealingTab: React.FC<{
         {TEST_CATEGORY_META.map((cat) => (
           <div key={cat.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
             <div>
-              <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.accent, display: 'inline-block' }} />
                 {cat.label}
                 {testIndex?.by_category[cat.key] !== undefined && (
@@ -1518,7 +1518,7 @@ const HealingTab: React.FC<{
           <Button variant="secondary" onClick={onReindexTests}>Re-index Test Files</Button>
         </div>
         {actionMsg && (
-          <div style={{ fontSize: 13, color: 'var(--link)', padding: '8px 12px', background: '#0c1a2e', borderRadius: 6, border: '1px solid #1e3a5f' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--link)', padding: '8px 12px', background: '#0c1a2e', borderRadius: 6, border: '1px solid #1e3a5f' }}>
             {actionMsg}
           </div>
         )}
@@ -2253,7 +2253,7 @@ const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
             {testing ? 'Testing…' : '🔌 Test SMTP Connection'}
           </Button>
           {testResult && (
-            <span style={{ fontSize: 13, fontWeight: 600, color: testResult === 'ok' ? '#22c55e' : '#ef4444' }}>
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: testResult === 'ok' ? '#22c55e' : '#ef4444' }}>
               {testResult === 'ok' ? '✓' : '✗'} {testMsg}
             </span>
           )}
@@ -2427,7 +2427,7 @@ const InfrastructureTab: React.FC = () => {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
                     {key.replace(/_/g, ' ')}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: statusColor(s) }}>{s.toUpperCase()}</div>
+                  <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: statusColor(s) }}>{s.toUpperCase()}</div>
                   {val.latency_ms !== undefined && (
                     <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{val.latency_ms}ms</div>
                   )}
@@ -2483,7 +2483,7 @@ const InfrastructureTab: React.FC = () => {
               padding: '12px 14px', marginBottom: 12,
             }}
           >
-            <div style={{ fontSize: 13, color: '#fecaca', marginBottom: 10 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: '#fecaca', marginBottom: 10 }}>
               No pattern set — this will evict <strong>every key</strong> in Redis, including live
               sessions and cached market data. Continue?
             </div>
@@ -2605,7 +2605,7 @@ const DiagnosticsTab: React.FC = () => {
     <>
       <Card>
         <SectionHeader icon={<Microscope size={18} aria-hidden />} title="Platform Diagnostics" />
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
           Run the full diagnostic suite across all 12 check categories. Auto-remediates critical findings.
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -2622,7 +2622,7 @@ const DiagnosticsTab: React.FC = () => {
               padding: '12px 14px', marginBottom: 12,
             }}
           >
-            <div style={{ fontSize: 13, color: '#fed7aa', marginBottom: 10 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: '#fed7aa', marginBottom: 10 }}>
               Auto-remediation applies corrective actions to live platform state without a preview.
               Run it now?
             </div>
@@ -2661,7 +2661,7 @@ const DiagnosticsTab: React.FC = () => {
           <SectionHeader icon={<AlertTriangle size={18} aria-hidden />} title="Top Issues" />
           {(summary.top_issues as Array<Record<string,string>>).map((issue, i) => (
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#450a0a', border: '1px solid #dc262633', marginBottom: 8 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: '#fca5a5' }}>{issue.check_name}</div>
+              <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: '#fca5a5' }}>{issue.check_name}</div>
               <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{issue.message}</div>
               {issue.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Fix: {issue.remediation}</div>}
             </div>
@@ -2682,7 +2682,7 @@ const DiagnosticsTab: React.FC = () => {
               border: `1px solid ${r.status === 'ok' ? '#16a34a33' : r.status === 'warning' ? '#d9770633' : '#dc262633'}`,
             }}>
               <div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{r.check_name}</span>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{r.check_name}</span>
                 <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.message}</div>
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444', textTransform: 'uppercase', flexShrink: 0, marginLeft: 12 }}>
@@ -2895,7 +2895,7 @@ const PlatformConfiguration: React.FC = () => {
           border: `1px solid ${validationResult.valid ? '#16a34a' : '#dc2626'}`,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: validationResult.issues.length > 0 ? 10 : 0 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: validationResult.valid ? 'var(--gain)' : 'var(--loss)' }}>
+            <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: validationResult.valid ? 'var(--gain)' : 'var(--loss)' }}>
               {validationResult.valid ? '✓ Config valid' : `✗ ${validationResult.error_count} error(s), ${validationResult.warning_count} warning(s)`}
             </span>
             <button onClick={() => setValidationResult(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>×</button>

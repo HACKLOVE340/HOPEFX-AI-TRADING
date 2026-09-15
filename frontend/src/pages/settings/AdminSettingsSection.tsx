@@ -134,7 +134,7 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* Registration */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>User Registration</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>User Registration</h3>
         <Toggle id="allow-reg" label="Allow new registrations" description="When disabled, the register page returns a 403." checked={form.allow_new_registrations} onChange={(v) => update({ allow_new_registrations: v })} />
         <Toggle id="email-verify" label="Require email verification" description="New users must verify their email before logging in." checked={form.require_email_verification} onChange={(v) => update({ require_email_verification: v })} />
         <Toggle id="force-2fa" label="Force 2FA for admins" description="All admin accounts must have 2FA enabled." checked={form.force_2fa_for_admins} onChange={(v) => update({ force_2fa_for_admins: v })} />
@@ -159,7 +159,7 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* Announcement banner */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Announcement Banner</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Announcement Banner</h3>
         <Toggle id="announcement" label="Show announcement banner" description="Display a banner at the top of the app for all users." checked={form.announcement_enabled} onChange={(v) => update({ announcement_enabled: v })} />
         {form.announcement_enabled && (
           <>
@@ -175,7 +175,7 @@ const AdminSettingsSection: React.FC = () => {
               <div style={{
                 marginTop: 8, padding: '10px 14px', background: '#78350f',
                 border: '1px solid #92400e', borderRadius: 8,
-                fontSize: 13, color: 'var(--warn)',
+                fontSize: 'var(--fs-body)', color: 'var(--warn)',
               }}>
                 Preview: {form.announcement_banner}
               </div>
@@ -186,7 +186,7 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* IP whitelist */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>IP Whitelist</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>IP Whitelist</h3>
         <Toggle id="ip-whitelist" label="Enable IP whitelist" description="Only allow logins from the listed IP addresses." checked={form.ip_whitelist_enabled} onChange={(v) => update({ ip_whitelist_enabled: v })} />
         {form.ip_whitelist_enabled && (
           <>
@@ -202,14 +202,14 @@ const AdminSettingsSection: React.FC = () => {
               <Button variant="secondary" size="sm" onClick={addIp}>Add</Button>
             </div>
             {form.ip_whitelist.length === 0 ? (
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No IPs added. All IPs are blocked when whitelist is enabled.</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>No IPs added. All IPs are blocked when whitelist is enabled.</div>
             ) : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {form.ip_whitelist.map((ip) => (
                   <div key={ip} style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     background: 'var(--surface)', border: '1px solid var(--border-strong)',
-                    borderRadius: 6, padding: '4px 10px', fontSize: 13, color: 'var(--text-dim)',
+                    borderRadius: 6, padding: '4px 10px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)',
                   }}>
                     {ip}
                     <button onClick={() => removeIp(ip)} style={{ background: 'none', border: 'none', color: 'var(--loss)', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
@@ -223,7 +223,7 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* SMTP */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>SMTP / Email</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>SMTP / Email</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
           <Field label="SMTP Host"><Input value={form.smtp_host} onChange={(e) => update({ smtp_host: e.target.value })} placeholder="smtp.example.com" /></Field>
           <Field label="Port"><Input type="number" value={form.smtp_port} onChange={(e) => update({ smtp_port: Number(e.target.value) })} /></Field>
@@ -243,8 +243,8 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* Global kill switch */}
       <Card danger>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#fca5a5', marginTop: 0, marginBottom: 8 }}>Global Kill Switch</h3>
-        <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 14 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: '#fca5a5', marginTop: 0, marginBottom: 8 }}>Global Kill Switch</h3>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 14 }}>
           Immediately halt ALL automated trading across every user account on the platform.
           This cannot be undone without manual intervention.
         </p>
@@ -261,7 +261,7 @@ const AdminSettingsSection: React.FC = () => {
             {killSwitchConfirm && (
               <button
                 onClick={() => setKillSwitchConfirm(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13 }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)'}}
               >
                 Cancel
               </button>

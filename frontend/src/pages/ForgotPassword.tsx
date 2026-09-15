@@ -138,7 +138,7 @@ const s: Record<string, React.CSSProperties> = {
   logo:        { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
   successIcon: { display: 'flex', justifyContent: 'center', marginBottom: 16 },
   heading:     { fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', textAlign: 'center', margin: '0 0 8px' },
-  subtext:     { fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
+  subtext:     { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
   form:        { display: 'flex', flexDirection: 'column', gap: 16 },
   field:       { display: 'flex', flexDirection: 'column' },
   label:       { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
@@ -152,21 +152,21 @@ const s: Record<string, React.CSSProperties> = {
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
-    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--loss)', lineHeight: 1.5,
+    borderRadius: 8, padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--loss)', lineHeight: 1.5,
   },
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
     color: '#fff', border: 'none', borderRadius: 8, padding: '14px',
-    fontSize: 15, fontWeight: 700, cursor: 'pointer',
+    fontSize: 'var(--fs-value)', fontWeight: 700, cursor: 'pointer',
     minHeight: 48, width: '100%',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     transition: 'opacity 0.15s', touchAction: 'manipulation',
   },
   footer:   { display: 'flex', justifyContent: 'center', marginTop: 20 },
-  backLink: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44 },
+  backLink: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44 },
   backBtn: {
     display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44,
-    fontSize: 13, color: 'var(--link)', textDecoration: 'none', fontWeight: 500,
+    fontSize: 'var(--fs-body)', color: 'var(--link)', textDecoration: 'none', fontWeight: 500,
   },
 };
 

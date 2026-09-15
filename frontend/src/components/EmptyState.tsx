@@ -67,7 +67,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       background: 'rgba(30,41,59,0.8)',
       border: '1px solid var(--border)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 28, lineHeight: 1,
+      fontSize: 'var(--fs-hero)', lineHeight: 1,
       marginBottom: 4,
       color: 'var(--text-faint)',
     }}>
@@ -75,9 +75,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         ? icon                                  /* legacy emoji call sites */
         : React.createElement(icon, { size: 26, strokeWidth: 1.5, 'aria-hidden': true })}
     </div>
-    <p style={{ color: 'var(--text-dim)', fontSize: 15, fontWeight: 600, margin: 0 }}>{title}</p>
+    <p style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-value)', fontWeight: 600, margin: 0 }}>{title}</p>
     {description && (
-      <p style={{ fontSize: 13, margin: 0, maxWidth: 360, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+      <p style={{ fontSize: 'var(--fs-body)', margin: 0, maxWidth: 360, lineHeight: 1.6, color: 'var(--text-muted)' }}>
         {description}
       </p>
     )}

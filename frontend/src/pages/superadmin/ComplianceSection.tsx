@@ -235,7 +235,7 @@ const ComplianceSection: React.FC = () => {
           </div>
         }>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Status', 'Document', 'Country', 'Submitted', 'Reviewed', 'Actions'].map(h => (
@@ -274,7 +274,7 @@ const ComplianceSection: React.FC = () => {
               })}
             </tbody>
           </table>
-          {kyc.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No KYC records match the current filter.</div>}
+          {kyc.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No KYC records match the current filter.</div>}
         </div>
         {confirm?.action === 'reject' && (
           <div style={{ marginTop: 12 }}>
@@ -287,7 +287,7 @@ const ComplianceSection: React.FC = () => {
       <SectionCard title="AML Alerts" icon={<Siren size={18} aria-hidden />} accent="#ef4444"
         subtitle="Anti-money laundering transaction monitoring">
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Type', 'Severity', 'Amount', 'Description', 'Status', 'Date', 'Actions'].map(h => (
@@ -323,7 +323,7 @@ const ComplianceSection: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {aml.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No AML alerts.</div>}
+          {aml.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No AML alerts.</div>}
         </div>
       </SectionCard>
 
@@ -331,7 +331,7 @@ const ComplianceSection: React.FC = () => {
       <SectionCard title="Sanctions Screening" icon={<Globe size={18} aria-hidden />} accent="#dc2626"
         subtitle="OFAC / UN / EU sanctions list matches">
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'List', 'Match Score', 'Status', 'Date', 'Actions'].map(h => (
@@ -373,7 +373,7 @@ const ComplianceSection: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {sanctions.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No sanctions hits.</div>}
+          {sanctions.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No sanctions hits.</div>}
         </div>
       </SectionCard>
 
@@ -423,7 +423,7 @@ const ComplianceSection: React.FC = () => {
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Report', 'Type', 'Period', 'Status', 'Generated', 'File'].map(h => (
@@ -476,7 +476,7 @@ const ComplianceSection: React.FC = () => {
           </div>
         }>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Event', 'When', 'Details'].map(h => (

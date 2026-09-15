@@ -37,17 +37,17 @@ const s = {
   card:    { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24 } as React.CSSProperties,
   cardH:   { fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 } as React.CSSProperties,
   label:   { fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block' } as React.CSSProperties,
-  input:   { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
-  textarea:{ width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', resize: 'vertical', minHeight: 100, boxSizing: 'border-box' } as React.CSSProperties,
-  select:  { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none' } as React.CSSProperties,
-  btn:     { padding: '10px 20px', background: '#f59e0b', color: '#0a0e1a', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer' } as React.CSSProperties,
-  btnSec:  { padding: '10px 20px', background: 'transparent', color: 'var(--text-dim)', border: '1px solid var(--border-strong)', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' } as React.CSSProperties,
+  input:   { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
+  textarea:{ width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none', resize: 'vertical', minHeight: 100, boxSizing: 'border-box' } as React.CSSProperties,
+  select:  { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none' } as React.CSSProperties,
+  btn:     { padding: '10px 20px', background: '#f59e0b', color: '#0a0e1a', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 'var(--fs-body)', cursor: 'pointer' } as React.CSSProperties,
+  btnSec:  { padding: '10px 20px', background: 'transparent', color: 'var(--text-dim)', border: '1px solid var(--border-strong)', borderRadius: 6, fontWeight: 600, fontSize: 'var(--fs-body)', cursor: 'pointer' } as React.CSSProperties,
   field:   { marginBottom: 14 } as React.CSSProperties,
   row:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px solid var(--border)' } as React.CSSProperties,
-  amRow:   { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, fontSize: 13, color: 'var(--text-dim)' } as React.CSSProperties,
+  amRow:   { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' } as React.CSSProperties,
   amVal:   { color: 'var(--text)', fontWeight: 500 } as React.CSSProperties,
-  success: { background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--gain)', marginBottom: 16 } as React.CSSProperties,
-  error:   { background: '#450a0a', border: '1px solid #991b1b', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: 'var(--loss)', marginBottom: 16 } as React.CSSProperties,
+  success: { background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '12px 16px', fontSize: 'var(--fs-body)', color: 'var(--gain)', marginBottom: 16 } as React.CSSProperties,
+  error:   { background: '#450a0a', border: '1px solid #991b1b', borderRadius: 8, padding: '12px 16px', fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: 16 } as React.CSSProperties,
   gate:    { textAlign: 'center', padding: '80px 40px' } as React.CSSProperties,
 };
 
@@ -107,9 +107,9 @@ function AccountManagerCard() {
     <div style={s.card}>
       <div style={s.cardH}>🎯 Your Dedicated Account Manager</div>
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading…</div>
       ) : !am ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Account manager details unavailable.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Account manager details unavailable.</div>
       ) : (
         <>
           <div style={{ fontSize: 18, fontWeight: 700, color: '#f59e0b', marginBottom: 16 }}>{am.name}</div>
@@ -128,7 +128,7 @@ function AccountManagerCard() {
           {am.calendar_url && (
             <div style={s.amRow}>
               <span>📅</span>
-              <a href={am.calendar_url} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', fontSize: 13 }}>
+              <a href={am.calendar_url} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', fontSize: 'var(--fs-body)'}}>
                 Book a call
               </a>
             </div>
@@ -275,14 +275,14 @@ function TicketList({ refresh }: { refresh: number }) {
     <div style={s.card}>
       <div style={s.cardH}>📋 My Support Tickets</div>
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading…</div>
       ) : tickets.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No tickets yet.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>No tickets yet.</div>
       ) : (
         tickets.map(t => (
           <div key={t.ticket_id} style={s.row}>
             <div>
-              <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, marginBottom: 4 }}>{t.subject}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 500, marginBottom: 4 }}>{t.subject}</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={badgeStyle(PRIORITY_COLORS[t.priority] ?? 'var(--text-muted)')}>{t.priority}</span>
                 <span style={badgeStyle(STATUS_COLORS[t.status] ?? 'var(--text-muted)')}>{t.status}</span>
@@ -462,14 +462,14 @@ function CustomDevList({ refresh }: { refresh: number }) {
     <div style={s.card}>
       <div style={s.cardH}>📦 My Development Requests</div>
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading…</div>
       ) : reqs.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No requests yet.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>No requests yet.</div>
       ) : (
         reqs.map(r => (
           <div key={r.request_id} style={s.row}>
             <div>
-              <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, marginBottom: 4 }}>{r.title}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 500, marginBottom: 4 }}>{r.title}</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={badgeStyle('#8b5cf6')}>{r.request_type}</span>
                 <span style={badgeStyle(STATUS_COLORS[r.status] ?? 'var(--text-muted)')}>{r.status}</span>

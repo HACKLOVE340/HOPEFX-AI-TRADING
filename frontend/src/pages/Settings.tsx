@@ -403,7 +403,7 @@ const Settings: React.FC = () => {
                   onChange={(e) => setSearch(e.target.value)}
                   style={{
                     background: 'transparent', border: 'none', outline: 'none',
-                    color: 'var(--text)', fontSize: 13, width: '100%', fontFamily: 'inherit',
+                    color: 'var(--text)', fontSize: 'var(--fs-body)', width: '100%', fontFamily: 'inherit',
                   }}
                 />
                 {search && (
@@ -524,7 +524,7 @@ const S: Record<string, React.CSSProperties> = {
     padding: '32px 24px', boxSizing: 'border-box',
   },
   header:    { maxWidth: 1400, margin: '0 auto 28px' },
-  heading:   { fontSize: 28, fontWeight: 800, color: 'var(--text-strong)', margin: 0, letterSpacing: '-0.02em' },
+  heading:   { fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)', margin: 0, letterSpacing: '-0.02em' },
   subheading: { fontSize: 14, color: 'var(--text-muted)', marginTop: 6, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   saBadge:   { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
   layout:    { maxWidth: 1400, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start' },
@@ -545,7 +545,7 @@ const S: Record<string, React.CSSProperties> = {
     background: 'transparent', cursor: 'pointer', fontSize: 12,
     textAlign: 'left' as const, transition: 'background 0.15s, color 0.15s', borderRadius: 0,
   },
-  tabIcon:     { fontSize: 13, flexShrink: 0, width: 16, textAlign: 'center' as const },
+  tabIcon:     { fontSize: 'var(--fs-body)', flexShrink: 0, width: 16, textAlign: 'center' as const },
   adminBadge:  { fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#1e3a5f', color: 'var(--link)', border: '1px solid #1e3a5f' },
   saBadgeSmall: { fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
   content:     { flex: 1, minWidth: 0 },

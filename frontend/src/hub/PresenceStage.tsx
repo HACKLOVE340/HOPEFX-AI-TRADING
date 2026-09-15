@@ -454,7 +454,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
                       background: 'none',
                       padding: 0,
                       cursor: 'pointer',
-                      fontSize: 11.5,
+                      fontSize: 'var(--fs-label)',
                       color: i === trail.length - 1 ? C.text : C.quiet,
                       fontWeight: i === trail.length - 1 ? 700 : 500,
                       maxWidth: 160,
@@ -632,7 +632,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
                       border: `1px solid ${C.edge}`,
                       background: 'rgba(10,17,30,.85)',
                       color: C.dim,
-                      fontSize: 11.5,
+                      fontSize: 'var(--fs-label)',
                       cursor: 'pointer',
                     }}
                   >
@@ -689,7 +689,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
             border: `1px solid ${C.edge}`,
             background: 'rgba(10,17,30,.9)',
             color: C.text,
-            fontSize: 13,
+            fontSize: 'var(--fs-body)',
             boxSizing: 'border-box',
           }}
         />

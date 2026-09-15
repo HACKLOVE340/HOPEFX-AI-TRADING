@@ -486,11 +486,11 @@ const MlAccuracyCard: React.FC = () => {
   }, []);
 
   if (mlErr) {
-    return <p style={{ color: 'var(--loss)', fontSize: 13, padding: '16px 0' }}>{mlErr}</p>;
+    return <p style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>{mlErr}</p>;
   }
   if (!data) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13, padding: '16px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
         <Spinner size="sm" /> Loading model metrics…
       </div>
     );
@@ -507,7 +507,7 @@ const MlAccuracyCard: React.FC = () => {
 
   if (safeAccuracy === 0 && safeTotalSigs === 0) {
     return (
-      <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>
+      <p style={{ color: '#475569', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
         {data.note || 'No model metrics available yet.'}
       </p>
     );
@@ -531,7 +531,7 @@ const MlAccuracyCard: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{data.model_id ?? 'Model'}</div>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)' }}>{data.model_id ?? 'Model'}</div>
           <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
             {safeTotalSigs.toLocaleString()} signals · evaluated {evaluatedLabel}
           </div>
@@ -603,7 +603,7 @@ const MarketRegimePanel: React.FC = () => {
   // that does not name a regime as no regime data.
   if (err || !regime?.regime) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 'var(--fs-body)'}}>
         {err || loaded ? 'Regime data unavailable.' : <><Spinner size="sm" /> Loading…</>}
       </div>
     );
@@ -809,7 +809,7 @@ const Dashboard: React.FC = () => {
                        focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
             style={{
               background: '#1d4ed8', border: '1px solid #3b82f6', borderRadius: 8,
-              color: '#fff', fontSize: 13, fontWeight: 700,
+              color: '#fff', fontSize: 'var(--fs-body)', fontWeight: 700,
               minHeight: 44, padding: '0 18px', cursor: 'pointer',
               textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
             }}
@@ -858,7 +858,7 @@ const Dashboard: React.FC = () => {
           <h2 style={s.cardTitle}>Live Equity Curve</h2>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             {has(acc?.total_pnl) && (
-              <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
+              <span style={{ fontSize: 'var(--fs-body)', color: acc.total_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
                 {fmtUSD(acc.total_pnl)}
               </span>
             )}

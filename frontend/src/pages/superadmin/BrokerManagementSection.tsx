@@ -194,7 +194,7 @@ const BrokerManagementSection: React.FC = () => {
               </div>
             </div>
           ))}
-          {brokers.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: '16px 0' }}>No brokers configured.</div>}
+          {brokers.length === 0 && <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>No brokers configured.</div>}
         </div>
       </SectionCard>
 
@@ -202,7 +202,7 @@ const BrokerManagementSection: React.FC = () => {
       <SectionCard title="Transaction Cost Analysis" icon={<BarChart3 size={18} aria-hidden />} accent="#8b5cf6"
         subtitle="Execution quality comparison across brokers">
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Broker', 'Avg Slippage', 'Fill Rate', 'Rejection Rate', 'Avg Execution', 'Total Orders', 'Period'].map(h => (
@@ -228,7 +228,7 @@ const BrokerManagementSection: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {tca.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No TCA data available.</div>}
+          {tca.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No TCA data available.</div>}
         </div>
       </SectionCard>
 
@@ -259,7 +259,7 @@ const BrokerManagementSection: React.FC = () => {
         }
       >
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Broker', 'Symbol pattern', 'Weight', 'Active'].map(h => (
@@ -309,7 +309,7 @@ const BrokerManagementSection: React.FC = () => {
             </tbody>
           </table>
           {routing.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 13 }}>
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
               No routing rules configured. Orders follow the smart router&apos;s default broker selection.
             </div>
           )}

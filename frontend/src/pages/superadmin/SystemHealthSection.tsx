@@ -158,7 +158,7 @@ const SystemHealthSection: React.FC = () => {
             background: tab === t ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
-            padding: '7px 14px', fontSize: 13, cursor: 'pointer',
+            padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
           }}>
             {{ services: `Services (${services.length})`, backups: `Backups (${backups.length})`, jobs: `Jobs (${jobs.length})`, apikeys: `API Keys (${apiKeys.length})` }[t]}
           </button>
@@ -211,7 +211,7 @@ const SystemHealthSection: React.FC = () => {
                   background: backupType === t ? '#1e3a5f' : 'var(--surface)',
                   border: `1px solid ${backupType === t ? '#3b82f6' : '#334155'}`,
                   borderRadius: 8, color: backupType === t ? 'var(--link)' : 'var(--text-muted)',
-                  padding: '7px 16px', fontSize: 13, cursor: 'pointer', textTransform: 'capitalize',
+                  padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer', textTransform: 'capitalize',
                 }}>
                   {t}
                 </button>
@@ -224,7 +224,7 @@ const SystemHealthSection: React.FC = () => {
             {backups.length === 0 ? (
               <EmptyState compact icon={Save} title="No backups found" description="Database and config backups will appear here once scheduled jobs run." />
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                 <thead>
                   <tr>
                     {['Backup ID', 'Type', 'Status', 'Size', 'Created'].map(h => (
@@ -251,7 +251,7 @@ const SystemHealthSection: React.FC = () => {
 
       {tab === 'jobs' && (
         <SectionCard title="Scheduled Jobs" icon={<AlarmClock size={18} aria-hidden />} accent="#fbbf24" noPad>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr>
                 {['Job', 'Schedule', 'Status', 'Last Run', 'Duration', 'Actions'].map(h => (
@@ -263,7 +263,7 @@ const SystemHealthSection: React.FC = () => {
               {jobs.map(job => (
                 <tr key={job.job_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 16px' }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{job.name}</div>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)'}}>{job.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{job.job_id}</div>
                   </td>
                   <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--ai-model)' }}>{job.schedule}</td>
@@ -294,7 +294,7 @@ const SystemHealthSection: React.FC = () => {
           {apiKeys.length === 0 ? (
             <EmptyState compact icon={KeyRound} title="No API keys found" description="Platform API keys will appear here once created." />
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Key', 'User', 'Scopes', 'Created', 'Last Used', 'Active', 'Actions'].map(h => (

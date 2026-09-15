@@ -205,7 +205,7 @@ const SecurityInfraSection: React.FC = () => {
             background: tab === t ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
-            padding: '7px 14px', fontSize: 13, cursor: 'pointer',
+            padding: '7px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer',
           }}>
             {{ healer: 'Self-Healer', av: 'Antivirus', hsm: 'HSM Vault', log: 'Infra Log', threat: 'Threat Intel' }[t]}
           </button>
@@ -287,9 +287,9 @@ const SecurityInfraSection: React.FC = () => {
              optional chaining stays regardless. */
           subtitle={`${(hsm.hsm_type ?? hsm.type ?? 'unknown').toUpperCase()} HSM · ${hsm.initialized ? 'Initialized' : 'Not initialized'}`}>
           {(hsm.keys?.length ?? 0) === 0 ? (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No keys in vault</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>No keys in vault</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Key ID', 'Created', 'Size', 'Active', 'Actions'].map(h => (
@@ -328,7 +328,7 @@ const SecurityInfraSection: React.FC = () => {
       {tab === 'log' && (
         <SectionCard title="Security Infrastructure Log" icon={<ClipboardList size={18} aria-hidden />} accent="#64748b">
           {infraLog.length === 0 ? (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No log entries</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>No log entries</div>
           ) : (
             infraLog.slice(0, 100).map((entry, i) => (
               <div key={i} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--hairline)', alignItems: 'flex-start' }}>
@@ -362,10 +362,10 @@ const SecurityInfraSection: React.FC = () => {
           {threatLoading ? (
             <LoadingRows rows={4} />
           ) : threatIntel.length === 0 ? (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No threat indicators loaded.</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>No threat indicators loaded.</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['Type', 'Indicator', 'Severity', 'Source', 'First Seen', 'Last Seen', 'Blocked'].map(h => (

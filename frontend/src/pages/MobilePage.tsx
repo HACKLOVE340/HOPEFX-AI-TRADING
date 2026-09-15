@@ -66,7 +66,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
     }}>
       <div style={{ fontSize: 52, marginBottom: 12 }}>{isIos ? '🍎' : '🤖'}</div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>
+      <div style={{ fontSize: 'var(--fs-title)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>
         {isIos ? 'iOS App' : 'Android App'}
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>
@@ -95,7 +95,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           width: '100%', background: isIos ? '#1c1c1e' : '#0f3460',
           border: `1px solid ${isIos ? '#3a3a3c' : '#1a5276'}`,
-          borderRadius: 10, color: 'var(--text-strong)', fontSize: 13, fontWeight: 600,
+          borderRadius: 10, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', fontWeight: 600,
           padding: '11px 0', textDecoration: 'none',
           opacity: url ? 1 : 0.5, cursor: url ? 'pointer' : 'not-allowed',
         }}
@@ -127,7 +127,7 @@ const SessionRow: React.FC<{
       {session.device_os?.toLowerCase().includes('ios') ? '📱' : '🤖'}
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)', display: 'flex', alignItems: 'center', gap: 8 }}>
         {session.device_name || 'Unknown Device'}
         {session.is_current && (
           <span style={{ fontSize: 10, color: 'var(--gain)', background: '#14532d', border: '1px solid #166534', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>
@@ -278,12 +278,12 @@ const MobilePage: React.FC = () => {
 
       {/* Features */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>⚡</span> Mobile Features
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
           {features.map(f => (
-            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--text-dim)' }}>
+            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               <span style={{
                 width: 20, height: 20, borderRadius: '50%',
                 background: '#14532d', border: '1px solid #166534',
@@ -298,10 +298,10 @@ const MobilePage: React.FC = () => {
 
       {/* Push token registration */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>🔔</span> Push Notifications
         </h3>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
           Register a device push token to receive trade alerts, signal notifications, and account updates on your mobile device.
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -312,7 +312,7 @@ const MobilePage: React.FC = () => {
             placeholder="Paste device push token…"
             style={{
               flex: 1, background: 'var(--raised)', border: '1px solid var(--border-strong)',
-              borderRadius: 8, color: 'var(--text-strong)', fontSize: 13, padding: '9px 14px',
+              borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '9px 14px',
               outline: 'none', fontFamily: 'JetBrains Mono, monospace',
             }}
             onKeyDown={e => { if (e.key === 'Enter') handleRegisterPushToken(); }}
@@ -325,7 +325,7 @@ const MobilePage: React.FC = () => {
               border: `1px solid ${pushToken.trim() ? '#3b82f6' : '#334155'}`,
               borderRadius: 8, color: pushToken.trim() ? '#93c5fd' : 'var(--text-faint)',
               cursor: pushToken.trim() ? 'pointer' : 'not-allowed',
-              fontSize: 13, fontWeight: 600, padding: '9px 18px',
+              fontSize: 'var(--fs-body)', fontWeight: 600, padding: '9px 18px',
               display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
             }}
           >
@@ -347,7 +347,7 @@ const MobilePage: React.FC = () => {
       {/* Active sessions */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-strong)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>📲</span> Active Mobile Sessions
           </h3>
           {sessions.length > 0 && (

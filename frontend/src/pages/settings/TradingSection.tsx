@@ -144,7 +144,7 @@ const TradingSection: React.FC = () => {
 
       {/* Defaults */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Defaults</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Defaults</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <Field label="Default symbol">
             <Select
@@ -182,7 +182,7 @@ const TradingSection: React.FC = () => {
 
       {/* Risk limits */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Risk Limits</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Risk Limits</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <Field label="Max risk per trade (%)" description="% of account balance risked per trade.">
             <Input
@@ -237,7 +237,7 @@ const TradingSection: React.FC = () => {
 
       {/* Automation */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Automation</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Automation</h3>
         <Toggle
           id="auto-trade"
           label="Auto-trade enabled"
@@ -255,7 +255,7 @@ const TradingSection: React.FC = () => {
           {form.kill_switch_enabled ? (
             <div style={{
               padding: '10px 14px', background: '#450a0a',
-              border: '1px solid #7f1d1d', borderRadius: 8, fontSize: 13, color: 'var(--loss)',
+              border: '1px solid #7f1d1d', borderRadius: 8, fontSize: 'var(--fs-body)', color: 'var(--loss)',
             }}>
               ⚠️ Kill switch is active. All automated trading is halted.
             </div>

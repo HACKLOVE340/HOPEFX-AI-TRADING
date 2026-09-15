@@ -108,7 +108,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
                 borderRadius: 8, padding: '10px 12px',
               }}>
                 <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color, fontFamily: 'monospace' }}>{value}</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color, fontFamily: 'monospace' }}>{value}</div>
               </div>
             ))}
           </div>
@@ -163,7 +163,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
               style={{
                 padding: '12px 20px',
                 background: 'transparent', border: '1px solid var(--border-strong)',
-                borderRadius: 8, color: 'var(--text-muted)', fontSize: 13,
+                borderRadius: 8, color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -206,7 +206,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, color: accentColor }}>{isLong ? '▲' : '▼'}</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: accentColor }}>{isLong ? '▲' : '▼'}</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace', letterSpacing: 0.5 }}>
             {signal.symbol.replace('_', '/')}
           </span>

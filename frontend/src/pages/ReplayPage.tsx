@@ -83,7 +83,7 @@ interface ReplayTrade {
 function MiniChart({ bars, currentBar }: { bars: OHLCBar[]; currentBar: number }) {
   if (!bars.length) return (
     <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--text-faint)', fontSize: 13 }}>No bars loaded</div>
+      color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No bars loaded</div>
   );
 
   const visible = bars.slice(Math.max(0, currentBar - 60), currentBar + 1);
@@ -139,7 +139,7 @@ function SessionCard({ session, selected, onClick }: {
       borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>
           {session.symbol} · {session.timeframe}
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
@@ -303,7 +303,7 @@ const ReplayPage: React.FC = () => {
             </Link>
             <button onClick={() => setShowCreate((s: boolean) => !s)}
               style={{ padding: '7px 16px', background: '#3b82f6', color: '#fff', border: 'none',
-                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               + New Session
             </button>
           </div>
@@ -320,7 +320,7 @@ const ReplayPage: React.FC = () => {
               Symbol
               <select value={symbol} onChange={e => setSymbol(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
-                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
+                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}}>
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
@@ -328,7 +328,7 @@ const ReplayPage: React.FC = () => {
               Timeframe
               <select value={timeframe} onChange={e => setTimeframe(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
-                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
+                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}}>
                 {TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
               </select>
             </label>
@@ -336,25 +336,25 @@ const ReplayPage: React.FC = () => {
               Start Date
               <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
-                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
+                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
             </label>
             <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
               End Date
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
-                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
+                  border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
             </label>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => createMut.mutate()} disabled={createMut.isPending}
               style={{ padding: '8px 16px', background: '#3b82f6', color: '#fff', border: 'none',
-                borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                 opacity: createMut.isPending ? 0.5 : 1 }}>
               {createMut.isPending ? 'Creating…' : 'Create Session'}
             </button>
             <button onClick={() => setShowCreate(false)}
               style={{ padding: '8px 14px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
-                borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>Cancel</button>
             {createMut.isError && (
               <span style={{ fontSize: 12, color: 'var(--loss)' }}>
                 ⚠ {extractApiError(createMut.error, 'Failed to create session')}
@@ -367,7 +367,7 @@ const ReplayPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '280px 1fr' : '1fr', gap: 20 }}>
         {/* Session list */}
         <div>
-          {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading…</div>}
+          {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: 20, textAlign: 'center' }}>Loading…</div>}
           {!isLoading && sessions.length === 0 && (
             <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
@@ -375,7 +375,7 @@ const ReplayPage: React.FC = () => {
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No replay sessions</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Create a session to replay historical market data</div>
               <button onClick={() => navigate('/ai-chart')}
-                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
                 📊 Open AI Chart
               </button>
             </div>
@@ -441,7 +441,7 @@ const ReplayPage: React.FC = () => {
                 disabled={stepMut.isPending || selected.status === 'completed'}
                 title="Step one bar (→)"
                 style={{ padding: '8px 16px', background: '#3b82f6', color: '#fff', border: 'none',
-                  borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                   opacity: (stepMut.isPending || selected.status === 'completed') ? 0.5 : 1 }}>
                 ⏭ Step
               </button>
@@ -450,7 +450,7 @@ const ReplayPage: React.FC = () => {
                 title="Play/Pause (Space)"
                 style={{ padding: '8px 16px',
                   background: autoPlay ? '#ef4444' : '#22c55e',
-                  color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  color: '#fff', border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                   opacity: selected.status === 'completed' ? 0.5 : 1 }}>
                 {autoPlay ? '⏸ Pause' : '▶ Play'}
               </button>
@@ -472,11 +472,11 @@ const ReplayPage: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="number" value={runBars} onChange={e => setRunBars(Number(e.target.value))}
                   aria-label="Bars to advance" min={1} max={500} style={{ width: 60, background: 'var(--surface)', border: '1px solid var(--border-strong)',
-                    borderRadius: 6, padding: '7px 8px', color: 'var(--text)', fontSize: 13 }} />
+                    borderRadius: 6, padding: '7px 8px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
                 <button onClick={() => runMut.mutate({ id: selected.session_id, bars: runBars })}
                   disabled={runMut.isPending || selected.status === 'completed'}
                   style={{ padding: '8px 14px', background: '#f59e0b', color: '#000', border: 'none',
-                    borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                     opacity: (runMut.isPending || selected.status === 'completed') ? 0.5 : 1 }}>
                   Run {runBars}
                 </button>

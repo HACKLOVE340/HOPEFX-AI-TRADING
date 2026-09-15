@@ -69,7 +69,7 @@ const Flash: React.FC<{ msg: string; ok: boolean; onClear: () => void }> = ({ ms
       padding: '11px 16px', borderRadius: 8, marginBottom: 12,
       background: isErr ? '#450a0a' : '#052e16',
       color: isErr ? 'var(--loss)' : 'var(--gain)',
-      fontSize: 13, fontWeight: 600, border: `1px solid ${isErr ? '#dc262633' : '#16a34a33'}`,
+      fontSize: 'var(--fs-body)', fontWeight: 600, border: `1px solid ${isErr ? '#dc262633' : '#16a34a33'}`,
     }}>
       <span>{msg}</span>
       <button onClick={onClear} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, marginLeft: 12 }}>×</button>
@@ -193,7 +193,7 @@ const ChargebacksPanel: React.FC = () => {
       {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
       {loading ? <LoadingRows rows={4} /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User','Amount','Provider','Reason','Status','Opened','Actions'].map(h => (
@@ -315,7 +315,7 @@ const TaxReportsPanel: React.FC = () => {
       )}
       {loading ? <LoadingRows rows={4} /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Period','Jurisdiction','Revenue','Taxable','Rate','Tax Owed','Due Date','Status','Actions'].map(h => (
@@ -442,7 +442,7 @@ const ReconciliationPanel: React.FC = () => {
             onChange={e => setPeriod(e.target.value)}
             aria-label="Reconciliation period"
             title="Period to reconcile (YYYY-MM)"
-            style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 10px', fontSize: 13, width: 150 }}
+            style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 10px', fontSize: 'var(--fs-body)', width: 150 }}
           />
           <Select
             value={provider}
@@ -457,7 +457,7 @@ const ReconciliationPanel: React.FC = () => {
       {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
       {loading ? <LoadingRows rows={4} /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Period','Provider','Expected','Actual','Discrepancy','Status','Created','Actions'].map(h => (
@@ -499,7 +499,7 @@ const ReconciliationPanel: React.FC = () => {
             </tbody>
           </table>
           {records.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 28, color: 'var(--text-faint)', fontSize: 13 }}>No reconciliation records. Click "Run Reconciliation" to generate.</div>
+            <div style={{ textAlign: 'center', padding: 28, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No reconciliation records. Click "Run Reconciliation" to generate.</div>
           )}
         </div>
       )}
@@ -555,7 +555,7 @@ const AffiliatePanel: React.FC = () => {
             Top Affiliates
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   {['#','Username','Referrals','Conversions','Earned','Pending'].map((h, i) => (
@@ -873,7 +873,7 @@ const FinancialSection: React.FC = () => {
               background: activeTab === t.id ? '#0f1f35' : 'transparent',
               color: activeTab === t.id ? 'var(--text-strong)' : 'var(--text-muted)',
               fontWeight: activeTab === t.id ? 600 : 400,
-              fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
+              fontSize: 'var(--fs-body)', cursor: 'pointer', whiteSpace: 'nowrap',
               outline: activeTab === t.id ? '1px solid #1e3a5f' : 'none',
               transition: 'background 0.12s, color 0.12s',
             }}
@@ -948,7 +948,7 @@ const FinancialSection: React.FC = () => {
               {/* Payments table */}
               <SectionCard title="Payment History" icon={<ReceiptText size={18} aria-hidden />} accent="#3b82f6" subtitle={`${payments.length} transactions`}>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         {['User','Amount','Plan','Provider','Status','Date',''].map(h => (

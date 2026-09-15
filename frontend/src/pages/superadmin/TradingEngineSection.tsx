@@ -159,7 +159,7 @@ const TradingEngineSection: React.FC = () => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: dotColor, display: 'inline-block', boxShadow: isRunning ? '0 0 6px var(--gain)' : 'none' }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: textColor }}>
               Engine {label}
             </span>
             <span style={{ fontSize: 12, color: 'var(--text-faint)', marginLeft: 4 }}>{status.mode}</span>
@@ -373,7 +373,7 @@ const DecisionEnginePanel: React.FC = () => {
     <>
       <SectionCard title="Decision Engine Pipeline" icon={<Zap size={18} aria-hidden />} accent="#f59e0b">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
           <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
             {loading ? '…' : '↻'}
           </button>
@@ -386,7 +386,7 @@ const DecisionEnginePanel: React.FC = () => {
                 {p.id}
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>{p.name}</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{p.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{p.desc}</div>
               </div>
             </div>
@@ -397,7 +397,7 @@ const DecisionEnginePanel: React.FC = () => {
             {Object.entries(status as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
               <div key={key} style={{ background: 'var(--raised)', borderRadius: 6, padding: '8px 12px' }}>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
               </div>
             ))}
           </div>
@@ -405,7 +405,7 @@ const DecisionEnginePanel: React.FC = () => {
       </SectionCard>
 
       <SectionCard title="Gatekeeper Checks (11)" icon={<Shield size={18} aria-hidden />} accent="#22c55e">
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
           Reference list of the checks the gatekeeper applies — all 11 must pass before any trade is
           executed, and failures are logged to the audit trail. This panel does not report live check
           state; see the engine status above.

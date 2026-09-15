@@ -214,7 +214,7 @@ const WalkForward: React.FC = () => {
           <div style={{ fontSize: 16, color: 'var(--text)', marginBottom: 8 }}>
             {apiError ?? 'No walk-forward data available.'}
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             Go to the Backtesting page and run a walk-forward analysis to see results here.
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16 }}>

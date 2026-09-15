@@ -130,7 +130,7 @@ function CodeInput({ value, onChange, disabled, placeholder = '000000', labelId 
       disabled={disabled}
       style={{
         width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)',
-        borderRadius: 8, color: 'var(--text-strong)', padding: '12px', fontSize: 28,
+        borderRadius: 8, color: 'var(--text-strong)', padding: '12px', fontSize: 'var(--fs-hero)',
         textAlign: 'center', letterSpacing: 10, marginBottom: 16,
         boxSizing: 'border-box', fontFamily: 'monospace',
         opacity: disabled ? 0.5 : 1,
@@ -298,7 +298,7 @@ const TwoFactorSetup: React.FC = () => {
       related={false}
       actions={
         <Link to="/settings" style={{
-          fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none',
+          fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none',
           padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
         }}>
           ← Settings
@@ -317,7 +317,7 @@ const TwoFactorSetup: React.FC = () => {
           <div style={{ fontWeight: 600, color: status.enabled ? 'var(--gain)' : 'var(--text-dim)' }}>
             2FA is {status.enabled ? 'ENABLED' : 'DISABLED'}
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             {status.enabled
               ? 'Your account is protected with TOTP authentication.'
               : 'Enable 2FA to protect your account from unauthorized access.'}
@@ -434,10 +434,10 @@ const TwoFactorSetup: React.FC = () => {
       {step === 'active' && (
         <div style={s.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-            <span style={{ fontSize: 28 }}>✅</span>
+            <span style={{ fontSize: 'var(--fs-hero)'}}>✅</span>
             <div>
               <div style={{ fontWeight: 700, color: 'var(--gain)', fontSize: 16 }}>2FA Activated!</div>
-              <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>Your account is now protected.</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>Your account is now protected.</div>
             </div>
           </div>
           <p style={s.cardText}>
@@ -459,7 +459,7 @@ const TwoFactorSetup: React.FC = () => {
         <div style={s.card}>
           <h2 style={s.cardTitle}>Backup Codes</h2>
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-            padding: '10px 14px', marginBottom: 16, fontSize: 13, color: 'var(--warn)' }}>
+            padding: '10px 14px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
             ⚠️ Save these codes now. They will not be shown again.
             Each code can only be used once.
           </div>
@@ -537,30 +537,30 @@ const s: Record<string, React.CSSProperties> = {
   cardTitle:    { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 10px' },
   cardText:     { fontSize: 14, color: 'var(--text-dim)', margin: '0 0 20px', lineHeight: 1.6 },
   btn:          { display: 'block', width: '100%', background: '#3b82f6', border: 'none',
-    borderRadius: 8, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+    borderRadius: 8, color: '#fff', fontSize: 'var(--fs-value)', fontWeight: 600, cursor: 'pointer',
     padding: '12px 0', transition: 'opacity 0.15s' },
   btnSecondary: { display: 'block', width: '100%', background: 'var(--surface-hover)', border: 'none',
     borderRadius: 8, color: 'var(--text-dim)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
     padding: '10px 0' },
-  label:        { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
+  label:        { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
   qrContainer:  { display: 'flex', justifyContent: 'center', margin: '16px 0' },
   secretBox:    { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8,
     padding: '10px 14px', marginBottom: 16 },
   secretLabel:  { fontSize: 12, color: 'var(--text-faint)' },
-  secretCode:   { fontSize: 13, color: 'var(--link)', letterSpacing: 2, wordBreak: 'break-all',
+  secretCode:   { fontSize: 'var(--fs-body)', color: 'var(--link)', letterSpacing: 2, wordBreak: 'break-all',
     display: 'block', marginTop: 4 },
   copyBtn:      { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
     color: 'var(--text-dim)', fontSize: 12, padding: '3px 10px', cursor: 'pointer' },
   codesGrid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '16px 0' },
   backupCode:   { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 6,
-    padding: '10px 12px', fontSize: 15, color: 'var(--text-dim)', textAlign: 'center',
+    padding: '10px 12px', fontSize: 'var(--fs-value)', color: 'var(--text-dim)', textAlign: 'center',
     letterSpacing: 3, fontFamily: 'monospace' },
   errorBox:     { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
     padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
   appLink:      { fontSize: 12, color: 'var(--link)', textDecoration: 'none',
     padding: '4px 10px', border: '1px solid #1e3a5f', borderRadius: 6,
     background: 'var(--surface)' },
-  crossLink:    { fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none' },
+  crossLink:    { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none' },
 };
 
 export default TwoFactorSetup;

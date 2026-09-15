@@ -417,7 +417,7 @@ const Register: React.FC = () => {
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                   background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-                  padding: '10px 14px', color: 'var(--warn)', fontSize: 13, marginBottom: 16,
+                  padding: '10px 14px', color: 'var(--warn)', fontSize: 'var(--fs-body)', marginBottom: 16,
                 }}
               >
                 <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -481,7 +481,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 16px' },
+  tagline: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 16px' },
   planBadge: {
     fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
     borderRadius: 20, padding: '4px 14px',
@@ -510,7 +510,7 @@ const s: Record<string, React.CSSProperties> = {
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
-    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--loss)', lineHeight: 1.5,
+    borderRadius: 8, padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--loss)', lineHeight: 1.5,
   },
   successBox: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -525,14 +525,14 @@ const s: Record<string, React.CSSProperties> = {
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
     color: '#fff', border: 'none', borderRadius: 8, padding: '14px',
-    fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4,
+    fontSize: 'var(--fs-value)', fontWeight: 700, cursor: 'pointer', marginTop: 4,
     minHeight: 48, width: '100%',
     transition: 'opacity 0.15s',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     touchAction: 'manipulation',
   },
   terms:  { fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', lineHeight: 1.6, margin: 0 },
-  footer: { textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--text-muted)' },
+  footer: { textAlign: 'center', marginTop: 20, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
   link:   { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };
 

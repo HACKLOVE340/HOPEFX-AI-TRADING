@@ -241,7 +241,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
   },
   explanationText: {
-    fontSize: 13, color: 'var(--text)', lineHeight: 1.6,
+    fontSize: 'var(--fs-body)', color: 'var(--text)', lineHeight: 1.6,
   },
   analogBox: {
     background: 'rgba(251,191,36,0.06)',

@@ -249,7 +249,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700,
   },
   rlAction: {
-    fontSize: 13, fontWeight: 800, letterSpacing: 1,
+    fontSize: 'var(--fs-body)', fontWeight: 800, letterSpacing: 1,
     padding: '2px 8px', border: '1px solid', borderRadius: 4,
     fontFamily: 'monospace',
     transition: 'color 0.4s ease, border-color 0.4s ease',

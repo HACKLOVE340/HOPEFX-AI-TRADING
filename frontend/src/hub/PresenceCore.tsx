@@ -886,7 +886,7 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
         aria-live="polite"
         style={{ maxWidth: '62ch', textAlign: 'center', display: 'grid', gap: 6 }}
       >
-        <p style={{ margin: 0, fontSize: 17, lineHeight: 1.55, fontWeight: 300, color: '#e7edf7' }}>
+        <p style={{ margin: 0, fontSize: 'var(--fs-title)', lineHeight: 1.55, fontWeight: 300, color: '#e7edf7' }}>
           {presence.reason}
         </p>
         <span style={{ ...LABEL, color: TONE[presence.tone] }}>{WORD[presence.state]}</span>

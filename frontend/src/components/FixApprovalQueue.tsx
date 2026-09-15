@@ -244,7 +244,7 @@ const headerStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   color: 'var(--text, var(--text-strong))',
-  fontSize: 13,
+  fontSize: 'var(--fs-body)',
   fontWeight: 700,
 };
 
@@ -270,7 +270,7 @@ const errorStyle: React.CSSProperties = {
 
 const emptyStyle: React.CSSProperties = {
   color: 'var(--text-muted)',
-  fontSize: 13,
+  fontSize: 'var(--fs-body)',
   padding: '24px 16px',
   textAlign: 'center',
 };

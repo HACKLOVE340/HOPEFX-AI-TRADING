@@ -119,7 +119,7 @@ export function VirtualList<T>({
         // The colour comes from the §27 palette rather than a literal: every
         // token there is re-measured against every surface on each test run,
         // and a hex typed here is a colour nobody measured.
-        style={{ margin: 0, position: 'sticky', bottom: 0, fontSize: 10.5, color: MUTED }}
+        style={{ margin: 0, position: 'sticky', bottom: 0, fontSize: 'var(--fs-micro)', color: MUTED }}
       >
         {`${items.length} ${noun}`}
         {view.measured ? '' : ` · window not measured: ${view.reason}`}

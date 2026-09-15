@@ -151,7 +151,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
         {(['members', 'performance'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 13, fontWeight: tab === t ? 600 : 400,
+              fontSize: 'var(--fs-body)', fontWeight: tab === t ? 600 : 400,
               color: tab === t ? '#8b5cf6' : 'var(--text-muted)',
               borderBottom: tab === t ? '2px solid #8b5cf6' : '2px solid transparent',
               textTransform: 'capitalize' }}>
@@ -169,17 +169,17 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
                 <input aria-label="Email address" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                   placeholder="Email address"
                   style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
-                    padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
+                    padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
                 <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
                   style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
-                    padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
+                    padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}}>
                   <option value="trader">Trader</option>
                   <option value="manager">Manager</option>
                   <option value="viewer">Viewer</option>
                 </select>
                 <button onClick={() => inviteMut.mutate()} disabled={!inviteEmail.trim() || inviteMut.isPending}
                   style={{ padding: '8px 14px', background: '#8b5cf6', color: '#fff', border: 'none',
-                    borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                     opacity: (!inviteEmail.trim() || inviteMut.isPending) ? 0.5 : 1 }}>
                   Invite
                 </button>
@@ -198,7 +198,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
           {/* Member list */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {members.length === 0 && (
-              <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>No members yet</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 20 }}>No members yet</div>
             )}
             {members.map(m => (
               <div key={m.user_id} style={{
@@ -207,11 +207,11 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
               }}>
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--surface-hover)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 13, fontWeight: 700, color: 'var(--text-dim)', flexShrink: 0 }}>
+                  fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)', flexShrink: 0 }}>
                   {m.username?.[0]?.toUpperCase() ?? '?'}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.username}</div>
+                  <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{m.username}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.email}</div>
                 </div>
                 <RoleBadge role={m.role} />
@@ -247,7 +247,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
       )}
 
       {tab === 'performance' && !perf && (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 30 }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 30 }}>
           No performance data available yet
         </div>
       )}
@@ -304,16 +304,16 @@ const TeamsPage: React.FC = () => {
       subtitle="Collaborative trading with shared strategies and P&L — enterprise tier"
       actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/leaderboard')}
-            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 8, color: '#f59e0b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 8, color: '#f59e0b', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer' }}>
             🏆 Leaderboard
           </button>
           <button onClick={() => navigate('/copy-trading')}
-            style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, color: '#34d399', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, color: '#34d399', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer' }}>
             🔁 Copy Trading
           </button>
           <button onClick={() => setShowCreate(s => !s)}
             style={{ padding: '9px 18px', background: '#06b6d4', color: '#fff', border: 'none',
-              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer' }}>
             + New Team
           </button>
         </div></>}
@@ -329,21 +329,21 @@ const TeamsPage: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <input aria-label="Team name" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Team name"
               style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
-                padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
+                padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
             <input aria-label="Description (optional)" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)"
               style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
-                padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
+                padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => createMut.mutate()} disabled={!newName.trim() || createMut.isPending}
               style={{ padding: '8px 16px', background: '#06b6d4', color: '#fff', border: 'none',
-                borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                 opacity: (!newName.trim() || createMut.isPending) ? 0.5 : 1 }}>
               {createMut.isPending ? 'Creating…' : 'Create'}
             </button>
             <button onClick={() => setShowCreate(false)}
               style={{ padding: '8px 14px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
-                borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
+                borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
               Cancel
             </button>
             {createMut.isError && (
@@ -358,7 +358,7 @@ const TeamsPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '280px 1fr' : '1fr', gap: 20 }}>
         {/* Team list */}
         <div>
-          {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading…</div>}
+          {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: 20, textAlign: 'center' }}>Loading…</div>}
           {!isLoading && teams.length === 0 && (
             <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
@@ -376,7 +376,7 @@ const TeamsPage: React.FC = () => {
                   borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
                 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t.name}</span>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{t.name}</span>
                   <span style={{ fontSize: 11, color: t.status === 'active' ? '#22c55e' : '#ef4444',
                     background: t.status === 'active' ? '#22c55e22' : '#ef444422',
                     padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>
@@ -416,18 +416,18 @@ const TeamsPage: React.FC = () => {
               {confirmDelete === selected.team_id ? (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button type="button" onClick={() => setConfirmDelete(null)}
-                    style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13 }}>
+                    style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)'}}>
                     Cancel
                   </button>
                   <button type="button" disabled={deleteMut.isPending}
                     onClick={() => { deleteMut.mutate(selected.team_id); setConfirmDelete(null); }}
-                    style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--loss)', background: 'var(--loss)', color: 'var(--on-danger)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                    style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--loss)', background: 'var(--loss)', color: 'var(--on-danger)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
                     {deleteMut.isPending ? 'Deleting…' : `Delete ${selected.name}`}
                   </button>
                 </div>
               ) : (
                 <button type="button" onClick={() => setConfirmDelete(selected.team_id)}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--loss)', background: 'transparent', color: 'var(--loss)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--loss)', background: 'transparent', color: 'var(--loss)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
                   Delete team
                 </button>
               )}

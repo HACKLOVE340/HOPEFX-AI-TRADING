@@ -536,7 +536,7 @@ const Code: React.FC<{ body: string }> = ({ body }) =>
         margin: 0,
         maxHeight: LIST_HEIGHT,
         overflow: 'auto',
-        fontSize: 11.5,
+        fontSize: 'var(--fs-label)',
         lineHeight: 1.6,
         color: C.text,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -566,7 +566,7 @@ const CameraConsent: React.FC = () => (
       The camera is off. Nothing is captured, streamed or stored until you grant camera consent, and
       granting it is an action you take — opening this panel is not one.
     </p>
-    <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.6, color: C.quiet }}>
+    <p style={{ margin: 0, fontSize: 'var(--fs-label)', lineHeight: 1.6, color: C.quiet }}>
       Consent is per operator and can be withdrawn at any time; withdrawing it stops any use
       immediately rather than at the next request.
     </p>

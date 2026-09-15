@@ -211,7 +211,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   logo:       { fontSize: 18, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
-  backLink:   { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none' },
+  backLink:   { display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none' },
   container:  { maxWidth: 800, margin: '0 auto', padding: '48px 24px 80px' },
   titleBlock: { marginBottom: 48 },
   badge: {
@@ -222,8 +222,8 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: 'uppercase',
   },
   title:      { fontSize: 36, fontWeight: 800, color: 'var(--text-strong)', margin: '0 0 8px', letterSpacing: -0.5 },
-  subtitle:   { fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px' },
-  intro:      { fontSize: 15, color: 'var(--text-dim)', lineHeight: 1.7, margin: 0 },
+  subtitle:   { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 16px' },
+  intro:      { fontSize: 'var(--fs-value)', color: 'var(--text-dim)', lineHeight: 1.7, margin: 0 },
   sections:   { display: 'flex', flexDirection: 'column', gap: 32 },
   section:    {
     background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
@@ -241,7 +241,7 @@ const s: Record<string, React.CSSProperties> = {
   bullet:       { display: 'flex', gap: 8, marginBottom: 6 },
   bulletDot:    { color: '#3b82f6', flexShrink: 0, fontWeight: 700 },
   para:         { margin: '0 0 8px' },
-  footerLinks:  { display: 'flex', justifyContent: 'center', gap: 16, marginTop: 48, fontSize: 13 },
+  footerLinks:  { display: 'flex', justifyContent: 'center', gap: 16, marginTop: 48, fontSize: 'var(--fs-body)'},
   footerLink:   { color: 'var(--text-muted)', textDecoration: 'none' },
 };
 

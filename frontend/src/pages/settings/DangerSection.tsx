@@ -123,13 +123,13 @@ const DangerSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Export your data</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Export your data</div>
             {/* Describes what the endpoint actually returns. It previously promised
                 audit log, trades and account activity; /settings/privacy/export
                 carries privacy, integration and accessibility settings only.
                 Widening the export is follow-up work — the copy must not run
                 ahead of it. */}
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Download a JSON copy of your privacy, integration, and accessibility settings.</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Download a JSON copy of your privacy, integration, and accessibility settings.</div>
           </div>
           <Button variant="secondary" onClick={handleExportData} loading={exportLoading}>
             Export JSON
@@ -141,8 +141,8 @@ const DangerSection: React.FC = () => {
       <Card danger>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#fca5a5', marginBottom: 4 }}>Emergency stop</div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: '#fca5a5', marginBottom: 4 }}>Emergency stop</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               Immediately halt all automated trading and close all open positions.
             </div>
           </div>
@@ -151,7 +151,7 @@ const DangerSection: React.FC = () => {
               lapsed. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {tradingHalted === true && (
-              <span style={{ fontSize: 13, color: 'var(--loss)', fontWeight: 600 }}>🛑 Trading halted</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 600 }}>🛑 Trading halted</span>
             )}
             {tradingHalted === null && (
               <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Status unavailable</span>
@@ -167,8 +167,8 @@ const DangerSection: React.FC = () => {
       <Card danger>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#fca5a5', marginBottom: 4 }}>Sign out everywhere</div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: '#fca5a5', marginBottom: 4 }}>Sign out everywhere</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               Revoke all active sessions across all devices. You will be signed out here too.
             </div>
           </div>
@@ -211,8 +211,8 @@ const DangerSection: React.FC = () => {
       {/* Delete account */}
       <Card danger>
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fca5a5', marginBottom: 4 }}>Delete account</div>
-          <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+          <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: '#fca5a5', marginBottom: 4 }}>Delete account</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
             Permanently delete your account, all data, positions, and settings. This cannot be undone.
           </div>
         </div>
@@ -238,7 +238,7 @@ const DangerSection: React.FC = () => {
           </Button>
         </div>
         {deleteError && (
-          <div style={{ fontSize: 13, color: 'var(--loss)', marginTop: 8 }}>❌ {deleteError}</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 8 }}>❌ {deleteError}</div>
         )}
       </Card>
     </div>

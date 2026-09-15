@@ -109,7 +109,7 @@ function SignalCard({ signal }: { signal: Signal }) {
       }} />
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{signal.type}</span>
+          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{signal.type}</span>
           <span style={{ fontSize: 11, color: DIRECTION_COLORS[signal.direction] ?? 'var(--text-dim)', fontWeight: 600 }}>
             {signal.direction.toUpperCase()}
           </span>
@@ -180,13 +180,13 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
             Title
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. XAUUSD Weekly Analysis"
               style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
-                borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' }} />
+                borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </label>
           <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
             Template
             <select value={template} onChange={e => setTemplate(e.target.value)}
               style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
-                borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
+                borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}}>
               {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </label>
@@ -195,7 +195,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
               Symbol
               <select value={symbol} onChange={e => setSymbol(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
-                  borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
+                  borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}}>
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
@@ -203,7 +203,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
               Timeframe
               <select value={timeframe} onChange={e => setTimeframe(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
-                  borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}>
+                  borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}}>
                 {TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
               </select>
             </label>
@@ -212,20 +212,20 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
             Description (optional)
             <textarea value={description} onChange={e => setDesc(e.target.value)} rows={2}
               style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
-                borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+                borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)', resize: 'vertical', boxSizing: 'border-box' }} />
           </label>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           <button onClick={() => onCreate({ title, template, symbol, timeframe, description })}
             disabled={!title.trim() || !template || creating}
             style={{ flex: 1, padding: '9px 0', background: '#8b5cf6', color: '#fff', border: 'none',
-              borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: creating ? 'not-allowed' : 'pointer',
+              borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: creating ? 'not-allowed' : 'pointer',
               opacity: (!title.trim() || !template || creating) ? 0.5 : 1 }}>
             {creating ? 'Creating…' : 'Create Notebook'}
           </button>
           <button onClick={onClose}
             style={{ padding: '9px 16px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
-              borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
+              borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
             Cancel
           </button>
         </div>
@@ -285,7 +285,7 @@ const ResearchPage: React.FC = () => {
       subtitle="AI-powered market analysis notebooks — enterprise tier"
       actions={<><button onClick={() => setShowCreate(true)}
           style={{ padding: '9px 18px', background: '#8b5cf6', color: '#fff', border: 'none',
-            borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer' }}>
           + New Notebook
         </button></>}
     >
@@ -296,7 +296,7 @@ const ResearchPage: React.FC = () => {
         {/* Notebook list */}
         <div>
           {nbLoading && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading notebooks…</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: 20, textAlign: 'center' }}>Loading notebooks…</div>
           )}
           {!nbLoading && notebooks.length === 0 && (
             <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
@@ -305,7 +305,7 @@ const ResearchPage: React.FC = () => {
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No research notebooks yet</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Create one to start AI-powered market analysis</div>
               <button onClick={() => navigate('/ai-strategy')}
-                style={{ padding: '7px 18px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 8, color: 'var(--gain)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                style={{ padding: '7px 18px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 8, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
                 🤖 AI Strategy
               </button>
             </div>
@@ -321,7 +321,7 @@ const ResearchPage: React.FC = () => {
                   transition: 'border-color 0.15s',
                 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{nb.title}</span>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{nb.title}</span>
                   <StatusBadge status={nb.status} />
                 </div>
                 <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-muted)' }}>
@@ -373,7 +373,7 @@ const ResearchPage: React.FC = () => {
             </div>
 
             {selected.description && (
-              <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 20 }}>{selected.description}</p>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 20 }}>{selected.description}</p>
             )}
 
             {selected.results ? (
@@ -383,7 +383,7 @@ const ResearchPage: React.FC = () => {
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Summary
                   </div>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>{selected.results.summary}</p>
+                  <p style={{ margin: 0, fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6 }}>{selected.results.summary}</p>
                 </div>
 
                 {/* Metrics */}
@@ -426,7 +426,7 @@ const ResearchPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
                 {selected.status === 'running'
                   ? '⏳ Analysis in progress…'
                   : 'Click ▶ Run to execute this notebook'}

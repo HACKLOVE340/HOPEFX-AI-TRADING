@@ -133,7 +133,7 @@ const Observability: React.FC = () => {
                   <div key={a.id ?? i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: 'var(--surface)', borderRadius: 8 }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: SEV_COLOR[(a.severity ?? 'info').toLowerCase()] ?? 'var(--link)' }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13 }}>{a.message ?? '(no message)'}</div>
+                      <div style={{ fontSize: 'var(--fs-body)'}}>{a.message ?? '(no message)'}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.service ?? ''}{a.timestamp ? ` · ${a.timestamp}` : ''}</div>
                     </div>
                   </div>

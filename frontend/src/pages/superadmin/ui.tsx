@@ -65,7 +65,7 @@ export const KpiTile: React.FC<KpiTileProps> = ({
       </div>
       {icon && <span style={{ fontSize: 18, opacity: 0.7 }}>{icon}</span>}
     </div>
-    <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-strong)', marginTop: 8, letterSpacing: '-0.02em' }}>
+    <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)', marginTop: 8, letterSpacing: '-0.02em' }}>
       {value}
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -296,7 +296,7 @@ export const Input: React.FC<InputProps> = ({ label, style, ...rest }) => (
       {...rest}
       style={{
         background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
-        color: 'var(--text-strong)', fontSize: 13, padding: '8px 12px',
+        color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '8px 12px',
         outline: 'none', width: '100%', boxSizing: 'border-box',
         ...style,
       }}
@@ -318,7 +318,7 @@ export const Select: React.FC<SelectProps> = ({ label, options, style, ...rest }
       {...rest}
       style={{
         background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
-        color: 'var(--text-strong)', fontSize: 13, padding: '8px 12px',
+        color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '8px 12px',
         outline: 'none', width: '100%', boxSizing: 'border-box',
         cursor: 'pointer',
         ...style,
@@ -347,7 +347,7 @@ export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onC
     userSelect: 'none', opacity: disabled ? 0.5 : 1,
   }}>
     <div>
-      <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 500 }}>{label}</div>
       {description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>}
     </div>
     <div
@@ -389,7 +389,7 @@ export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> =
 }) => (
   <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-faint)' }}>
     <div style={{ fontSize: 32, marginBottom: 10 }}>{icon}</div>
-    <div style={{ fontSize: 13 }}>{message}</div>
+    <div style={{ fontSize: 'var(--fs-body)'}}>{message}</div>
   </div>
 );
 
@@ -397,8 +397,8 @@ export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> =
 
 export const ErrorState: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (
   <div style={{ textAlign: 'center', padding: '32px 20px' }}>
-    <div style={{ fontSize: 28, marginBottom: 8 }}>⚠️</div>
-    <div style={{ fontSize: 13, color: 'var(--loss)', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
+    <div style={{ fontSize: 'var(--fs-hero)', marginBottom: 8 }}>⚠️</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
     {onRetry && (
       <button onClick={onRetry} style={{
         background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
@@ -465,7 +465,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       borderRadius: 14, padding: '28px 32px', maxWidth: 420, width: '90%',
     }}>
       <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 10 }}>{title}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: children ? 16 : 24 }}>{message}</div>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: children ? 16 : 24 }}>{message}</div>
       {children && <div style={{ marginBottom: 24 }}>{children}</div>}
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <ActionBtn label="Cancel" onClick={onCancel} variant="ghost" />

@@ -116,7 +116,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     key: 'detail',
     header: 'Detail',
     render: (row) => (
-      <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>{row.detail || '—'}</span>
+      <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{row.detail || '—'}</span>
     ),
   },
   {
@@ -359,7 +359,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
     color: 'var(--text, var(--text-strong))',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)',
     padding: '7px 12px',
     width: 220,
     outline: 'none',
@@ -370,7 +370,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     color: '#fff',
     cursor: 'pointer',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)',
     fontWeight: 600,
     padding: '7px 16px',
   },
@@ -380,7 +380,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     color: 'var(--text-muted, var(--text-dim))',
     cursor: 'pointer',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)',
     padding: '7px 12px',
   },
   exportBtn: {
@@ -391,7 +391,7 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--text-muted, var(--text-dim))',
     cursor: 'pointer',
     display: 'flex',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)',
     gap: 6,
     padding: '7px 14px',
   },

@@ -134,7 +134,7 @@ const MetricRow: React.FC<{ label: string; value: string; sub?: string; color?: 
 }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
-    <span style={{ fontSize: 13, fontWeight: 600, color: color ?? 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>
+    <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: color ?? 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>
       {value}
       {sub && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{sub}</span>}
     </span>
@@ -251,10 +251,10 @@ const PerformanceSection: React.FC = () => {
       {/* CPU */}
       {cpu && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>CPU</h3>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>CPU</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Utilisation</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: pctColor(cpu.percent), fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: pctColor(cpu.percent), fontFamily: 'monospace' }}>
               {cpu.percent}%
             </span>
           </div>
@@ -275,10 +275,10 @@ const PerformanceSection: React.FC = () => {
       {/* Memory */}
       {mem && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Memory</h3>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Memory</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>System RAM</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: pctColor(mem.percent), fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: pctColor(mem.percent), fontFamily: 'monospace' }}>
               {mem.used_mb.toLocaleString()} / {mem.total_mb.toLocaleString()} MB ({mem.percent}%)
             </span>
           </div>
@@ -293,7 +293,7 @@ const PerformanceSection: React.FC = () => {
       {/* Process */}
       {proc && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>
             Process (PID {proc.pid})
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
@@ -310,10 +310,10 @@ const PerformanceSection: React.FC = () => {
       {/* Disk */}
       {disk && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Disk</h3>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Disk</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usage</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: pctColor(disk.percent, 75, 90), fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: pctColor(disk.percent, 75, 90), fontFamily: 'monospace' }}>
               {disk.used_gb} / {disk.total_gb} GB ({disk.percent}%)
             </span>
           </div>
@@ -329,7 +329,7 @@ const PerformanceSection: React.FC = () => {
       {/* Network */}
       {net && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Network I/O</h3>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Network I/O</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
             <MetricRow label="Sent" value={`${net.bytes_sent_mb.toLocaleString()} MB`} />
             <MetricRow label="Received" value={`${net.bytes_recv_mb.toLocaleString()} MB`} />
@@ -352,7 +352,7 @@ const PerformanceSection: React.FC = () => {
       {/* Redis */}
       {redis && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Redis</h3>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Redis</h3>
           {redis.connected ? (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
               <MetricRow
@@ -367,7 +367,7 @@ const PerformanceSection: React.FC = () => {
               <MetricRow label="Uptime" value={fmtUptime(redis.uptime_seconds ?? 0)} color="#60a5fa" />
             </div>
           ) : (
-            <div style={{ color: 'var(--loss)', fontSize: 13 }}>
+            <div style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)'}}>
               ❌ Not connected{redis.error ? ` — ${redis.error}` : ''}
             </div>
           )}
@@ -377,7 +377,7 @@ const PerformanceSection: React.FC = () => {
       {/* DB pool */}
       {db && Object.keys(db).length > 0 && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Database Pool</h3>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Database Pool</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
             {db.pool_size != null && <MetricRow label="Pool size" value={String(db.pool_size)} />}
             {db.checked_out != null && <MetricRow label="Checked out" value={String(db.checked_out)} />}
@@ -396,7 +396,7 @@ const PerformanceSection: React.FC = () => {
       {/* Component latencies */}
       {components.length > 0 && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>
             Component Latencies
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -416,7 +416,7 @@ const PerformanceSection: React.FC = () => {
                     status={c.status === 'healthy' ? 'ok' : c.status === 'degraded' ? 'warning' : 'error'}
                     label={c.status}
                   />
-                  <span style={{ fontSize: 13, color: 'var(--text)' }}>{c.name}</span>
+                  <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text)' }}>{c.name}</span>
                   {c.critical && (
                     <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#1e3a5f', color: 'var(--link)', border: '1px solid #1e3a5f' }}>
                       CRITICAL

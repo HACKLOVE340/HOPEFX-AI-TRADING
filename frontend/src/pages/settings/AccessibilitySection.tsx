@@ -75,7 +75,7 @@ const AccessibilitySection: React.FC = () => {
 
       {/* Motion & display */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Motion & Display</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Motion & Display</h3>
         <Toggle id="reduce-motion" label="Reduce motion" description="Disable animations and transitions throughout the app." checked={form.reduce_motion} onChange={(v) => update({ reduce_motion: v })} />
         <Toggle id="high-contrast" label="High contrast" description="Increase border and text contrast for better readability." checked={form.high_contrast} onChange={(v) => update({ high_contrast: v })} />
         <Toggle id="large-text" label="Large text" description="Increase base font size across the dashboard." checked={form.large_text} onChange={(v) => update({ large_text: v, font_size: v ? 'large' : 'medium' })} />
@@ -83,7 +83,7 @@ const AccessibilitySection: React.FC = () => {
 
       {/* Font size */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>Font Size</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>Font Size</h3>
         <Field label="Base font size">
           <Select
             value={form.font_size}
@@ -108,7 +108,7 @@ const AccessibilitySection: React.FC = () => {
 
       {/* Color blind */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>Color Vision</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>Color Vision</h3>
         <Field label="Color blind mode" description="Adjusts chart and P&L colors for different types of color vision deficiency.">
           <Select
             value={form.color_blind_mode}
@@ -138,7 +138,7 @@ const AccessibilitySection: React.FC = () => {
 
       {/* Keyboard & screen reader */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Input & Assistive Tech</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Input & Assistive Tech</h3>
         <Toggle id="keyboard" label="Keyboard shortcuts" description="Enable global keyboard shortcuts (press ? to see all)." checked={form.keyboard_shortcuts} onChange={(v) => update({ keyboard_shortcuts: v })} />
         <Toggle id="screen-reader" label="Screen reader hints" description="Add extra ARIA labels and descriptions for screen readers." checked={form.screen_reader_hints} onChange={(v) => update({ screen_reader_hints: v })} />
       </Card>

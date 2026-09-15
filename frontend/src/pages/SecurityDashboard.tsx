@@ -225,7 +225,7 @@ const SecurityDashboard: React.FC = () => {
             background: lockdown.lockdown_active ? '#14532d' : '#450a0a',
             border: `1px solid ${lockdown.lockdown_active ? '#166534' : '#7f1d1d'}`,
             borderRadius: 8, color: lockdown.lockdown_active ? 'var(--gain)' : 'var(--loss)',
-            cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '8px 18px',
+            cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 700, padding: '8px 18px',
             flexShrink: 0,
           }}
         >
@@ -471,7 +471,7 @@ const panelHeaderStyle: React.CSSProperties = {
 
 const panelTitleStyle: React.CSSProperties = {
   color: 'var(--text, var(--text-strong))',
-  fontSize: 13,
+  fontSize: 'var(--fs-body)',
   fontWeight: 700,
 };
 

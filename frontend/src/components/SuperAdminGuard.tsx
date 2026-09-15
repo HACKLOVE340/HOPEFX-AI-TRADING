@@ -59,7 +59,7 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
           background: 'linear-gradient(135deg, #450a0a, #7f1d1d)',
           border: '2px solid #dc2626',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 20px', fontSize: 28,
+          margin: '0 auto 20px', fontSize: 'var(--fs-hero)',
         }}>
           ⚡
         </div>

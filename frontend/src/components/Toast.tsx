@@ -125,7 +125,7 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
 
       {/* Message */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: 'var(--text-strong)', lineHeight: 1.45, wordBreak: 'break-word' }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-strong)', lineHeight: 1.45, wordBreak: 'break-word' }}>
           {item.message}
         </div>
         {item.action && (

@@ -179,7 +179,7 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
                 </div>
               ))}
             </div>
-            <div style={{ background: 'var(--raised)', borderRadius: 8, padding: 16, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 13 }}>
+            <div style={{ background: 'var(--raised)', borderRadius: 8, padding: 16, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
               Equity chart — accent colour: <span style={{ color, marginLeft: 6, fontWeight: 700 }}>{color}</span>
             </div>
           </div>
@@ -415,7 +415,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
     marginBottom: 24, flexWrap: 'wrap', gap: 12,
   },
-  title:    { fontSize: 28, fontWeight: 700, margin: 0 },
+  title:    { fontSize: 'var(--fs-hero)', fontWeight: 700, margin: 0 },
   subtitle: { fontSize: 14, color: 'var(--text-dim)', marginTop: 4 },
   createBtn: {
     background: '#3b82f6', border: 'none', borderRadius: 8,
@@ -442,23 +442,23 @@ const s: Record<string, React.CSSProperties> = {
     background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
     color: 'var(--text-dim)', padding: '5px 10px', fontSize: 12, cursor: 'pointer',
   },
-  dim:   { color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 },
+  dim:   { color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 },
   empty: { color: 'var(--text-faint)', fontSize: 14, textAlign: 'center', padding: 48 },
   apiKeyBanner: {
     background: 'rgba(74,222,128,0.1)', border: '1px solid var(--gain)', borderRadius: 8,
-    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: 'var(--gain)',
+    padding: '12px 16px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--gain)',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     wordBreak: 'break-all',
   },
   errorBanner: {
     background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 8,
-    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: 'var(--loss)',
+    padding: '12px 16px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--loss)',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     wordBreak: 'break-all',
   },
   infoBanner: {
     background: 'var(--raised)', borderRadius: 8, padding: '12px 16px',
-    fontSize: 13, color: 'var(--text-dim)', border: '1px solid var(--border-strong)',
+    fontSize: 'var(--fs-body)', color: 'var(--text-dim)', border: '1px solid var(--border-strong)',
   },
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',

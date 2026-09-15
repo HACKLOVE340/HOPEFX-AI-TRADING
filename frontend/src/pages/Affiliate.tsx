@@ -181,12 +181,12 @@ const Affiliate:React.FC=()=>{
           </div>
           <div style={st.card}>
             <h3 style={st.cardTitle}>Request Commission Withdrawal</h3>
-            <p style={{color:'var(--text-muted)',fontSize:13,marginBottom:12}}>Minimum withdrawal: <strong style={{color:'var(--text-dim)'}}>{fmtUSD(MIN_WITHDRAWAL)}</strong></p>
+            <p style={{color:'var(--text-muted)',fontSize: 'var(--fs-body)',marginBottom:12}}>Minimum withdrawal: <strong style={{color:'var(--text-dim)'}}>{fmtUSD(MIN_WITHDRAWAL)}</strong></p>
             <div style={{display:'flex',gap:10,alignItems:'center'}}>
               <input aria-label="Amount (USD)" type="number" min={MIN_WITHDRAWAL} step="0.01" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} placeholder="Amount (USD)" style={st.input}/>
               <button onClick={handleWithdraw} disabled={withdrawing||!withdrawAmt} style={{...st.primaryBtn,opacity:withdrawing||!withdrawAmt?0.6:1}}>{withdrawing?'Processing…':'Withdraw'}</button>
             </div>
-            {withdrawMsg&&<div style={{marginTop:10,fontSize:13,color:withdrawOk?'var(--gain)':'var(--loss)'}}>{withdrawMsg}</div>}
+            {withdrawMsg&&<div style={{marginTop:10,fontSize: 'var(--fs-body)',color:withdrawOk?'var(--gain)':'var(--loss)'}}>{withdrawMsg}</div>}
           </div>
           <div style={st.card}>
             <h3 style={st.cardTitle}>How commissions work</h3>
@@ -242,9 +242,9 @@ const Affiliate:React.FC=()=>{
 const st:Record<string,React.CSSProperties>={
   page:{maxWidth:900,margin:'0 auto',padding:'32px 16px',fontFamily:'system-ui,-apple-system,sans-serif',color:'var(--text-strong)',background:'var(--surface)',minHeight:'100vh'},
   pageHeader:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:28},
-  heading:{fontSize:28,fontWeight:700,marginBottom:6,color:'var(--text-strong)'},
+  heading:{fontSize: 'var(--fs-hero)',fontWeight:700,marginBottom:6,color:'var(--text-strong)'},
   levelBadge:{fontSize:11,fontWeight:700,padding:'2px 10px',borderRadius:20,letterSpacing:1},
-  refreshBtn:{background:'transparent',border:'1px solid var(--border-strong)',borderRadius:6,color:'var(--text-dim)',cursor:'pointer',fontSize:13,padding:'6px 12px'},
+  refreshBtn:{background:'transparent',border:'1px solid var(--border-strong)',borderRadius:6,color:'var(--text-dim)',cursor:'pointer',fontSize: 'var(--fs-body)',padding:'6px 12px'},
   enrollCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:12,padding:'32px 28px',maxWidth:600},
   tierGrid:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12},
   tierCard:{background:'var(--surface)',borderRadius:8,padding:'14px 10px',textAlign:'center'},
@@ -252,8 +252,8 @@ const st:Record<string,React.CSSProperties>={
   linkCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'16px 20px',marginBottom:24},
   linkLabel:{fontSize:12,color:'var(--text-muted)',marginBottom:8,textTransform:'uppercase',letterSpacing:0.5},
   linkRow:{display:'flex',alignItems:'center',gap:12},
-  linkCode:{flex:1,background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:6,padding:'8px 12px',fontSize:13,color:'#93c5fd',wordBreak:'break-all'},
-  copyBtn:{padding:'8px 16px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:6,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'},
+  linkCode:{flex:1,background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:6,padding:'8px 12px',fontSize: 'var(--fs-body)',color:'#93c5fd',wordBreak:'break-all'},
+  copyBtn:{padding:'8px 16px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:6,fontSize: 'var(--fs-body)',cursor:'pointer',whiteSpace:'nowrap'},
   tabs:{display:'flex',gap:4,marginBottom:20,borderBottom:'1px solid var(--border)'},
   tab:{padding:'10px 20px',background:'transparent',border:'none',color:'var(--text-muted)',fontSize:14,cursor:'pointer',borderBottom:'2px solid transparent',fontWeight:500},
   tabActive:{color:'#3b82f6',borderBottom:'2px solid #3b82f6'},
@@ -265,7 +265,7 @@ const st:Record<string,React.CSSProperties>={
   card:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'20px 24px',marginBottom:16},
   cardTitle:{fontSize:16,fontWeight:600,color:'var(--text)',marginBottom:16,marginTop:0},
   input:{background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,width:180,outline:'none'},
-  subError:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:6,padding:'8px 12px',fontSize:13,color:'var(--loss)',marginBottom:12},
+  subError:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:6,padding:'8px 12px',fontSize: 'var(--fs-body)',color:'var(--loss)',marginBottom:12},
   errorBox:{background:'#450a0a',border:'1px solid #dc2626',borderRadius:10,padding:'20px 24px',color:'#fca5a5'},
   retryBtn:{marginLeft:16,background:'transparent',border:'1px solid #dc2626',color:'#fca5a5',borderRadius:6,padding:'4px 12px',cursor:'pointer'},
   howList:{color:'var(--text-dim)',fontSize:14,lineHeight:2,paddingLeft:20,margin:0},

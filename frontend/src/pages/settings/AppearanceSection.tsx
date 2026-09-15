@@ -100,7 +100,7 @@ const AppearanceSection: React.FC = () => {
 
       {/* Theme */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Theme</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Theme</h3>
         <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
           {(['dark', 'light', 'system'] as const).map((t) => (
             <button
@@ -111,7 +111,7 @@ const AppearanceSection: React.FC = () => {
                 border: `2px solid ${form.theme === t ? '#3b82f6' : '#334155'}`,
                 background: form.theme === t ? '#0c1a2e' : 'var(--surface)',
                 color: form.theme === t ? 'var(--link)' : 'var(--text-muted)',
-                fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+                fontSize: 'var(--fs-body)', fontWeight: 600, transition: 'all 0.15s',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
               }}
             >
@@ -133,7 +133,7 @@ const AppearanceSection: React.FC = () => {
           group for exactly this reason.
         */}
         <div style={{ marginBottom: 20 }}>
-          <h3 id="density-label" style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>
+          <h3 id="density-label" style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>
             Density
           </h3>
           <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: '0 0 12px' }}>
@@ -155,7 +155,7 @@ const AppearanceSection: React.FC = () => {
                     border: `2px solid ${selected ? 'var(--link)' : 'var(--border)'}`,
                     background: selected ? 'var(--surface-raised)' : 'var(--surface)',
                     color: selected ? 'var(--link)' : 'var(--text-muted)',
-                    fontSize: 13, fontWeight: 600, transition: 'border-color .15s, color .15s',
+                    fontSize: 'var(--fs-body)', fontWeight: 600, transition: 'border-color .15s, color .15s',
                     display: 'grid', gap: 4, textAlign: 'left',
                   }}
                 >
@@ -206,7 +206,7 @@ const AppearanceSection: React.FC = () => {
 
       {/* Charts */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Charts</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Charts</h3>
         <Field label="Default chart style">
           <Select
             value={form.chart_style}
@@ -223,7 +223,7 @@ const AppearanceSection: React.FC = () => {
 
       {/* Display */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Display</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Display</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <Field label="Number format">
             <Select

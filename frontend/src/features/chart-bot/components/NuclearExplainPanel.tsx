@@ -322,7 +322,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 8, color: 'var(--text-faint)', letterSpacing: 1.5, fontWeight: 700,
   },
   cellValue: {
-    fontSize: 13, fontWeight: 700, color: 'var(--text-dim)', fontFamily: 'monospace',
+    fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)', fontFamily: 'monospace',
   },
   featureList: {
     display: 'flex', flexDirection: 'column', gap: 6,
@@ -412,6 +412,6 @@ const s: Record<string, React.CSSProperties> = {
     padding: '32px 16px', gap: 8,
   },
   emptyIcon: { fontSize: 32 },
-  emptyText: { fontSize: 13, color: 'var(--text-faint)', fontWeight: 600 },
+  emptyText: { fontSize: 'var(--fs-body)', color: 'var(--text-faint)', fontWeight: 600 },
   emptySubtext: { fontSize: 11, color: 'var(--text-faint)' },
 };

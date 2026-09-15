@@ -10,6 +10,27 @@
 #   - Known placeholder words: changeme, placeholder, example, etc.
 #   - Template/example files: *.example.yaml, k8s-secrets.yaml, secrets.example.*
 #   - Comment lines
+#   - Source files: .py .js .jsx .ts .tsx .sh
+#
+# On that last exclusion, because it looks like a hole and is not one. This gate
+# matches CREDENTIAL KEY NAMES — PASSWORD, API_KEY, SECRET_KEY — which is the
+# right test for a YAML config and the wrong one for source, where those words
+# are field names, type members and component names. It fires on
+# `smtp_password: ''` (an empty form field), on `has_api_key: boolean` (a type
+# declaration) and on `const ForgotPassword: React.FC` (a component).
+#
+# `.py`, `.js`, `.ts` and `.sh` were excluded for exactly that reason and
+# `.jsx`/`.tsx` were missed — `\.ts$` is anchored and does not match `.tsx`. The
+# gap went unnoticed because the hook is `types: [yaml], pass_filenames: false`,
+# so it only runs when a YAML file is staged, and nobody had staged a YAML
+# change alongside a hundred TSX files until 2026-09-15.
+#
+# The compensating control is real and stronger: the `detect-secrets` hook runs
+# on every commit over the whole tree, including `.tsx` (its own exclusion list
+# does not mention them, and a .tsx entry is already in `.secrets.baseline`),
+# and it scores ENTROPY rather than matching key names — so an actual secret in
+# a component is caught by the scanner built to catch it, while this gate stops
+# reporting React components as credentials.
 #
 # Usage:
 #   bash scripts/check_secrets.sh          # scan staged files only
@@ -34,7 +55,9 @@ EXCLUDE_PATH_PATTERNS=(
     '\.txt$'
     '\.py$'
     '\.js$'
+    '\.jsx$'
     '\.ts$'
+    '\.tsx$'
     '\.sh$'
     'node_modules'
     '__pycache__'

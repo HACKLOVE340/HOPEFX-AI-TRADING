@@ -427,7 +427,7 @@ const ab: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', gap: 8,
     padding: '5px 10px', borderRadius: 6, flex: 1,
   },
-  actionText: { fontFamily: '"JetBrains Mono", monospace', fontSize: 13, fontWeight: 900, letterSpacing: '0.08em' },
+  actionText: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-body)', fontWeight: 900, letterSpacing: '0.08em' },
   confBar: { flex: 1, height: 4, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },
   confFill: { height: '100%', borderRadius: 2, transition: 'width 600ms ease' },
   confLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, letterSpacing: '0.06em', flexShrink: 0 },

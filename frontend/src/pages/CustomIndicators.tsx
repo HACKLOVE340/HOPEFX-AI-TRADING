@@ -75,7 +75,7 @@ function highlightFormula(formula: string): React.ReactNode[] {
 const FormulaHighlight: React.FC<{ formula: string }> = ({ formula }) => (
   <div style={{
     background: '#0a0f1a', border: '1px solid #1e293b', borderRadius: 6,
-    padding: '8px 12px', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6,
+    padding: '8px 12px', fontFamily: 'monospace', fontSize: 'var(--fs-body)', lineHeight: 1.6,
     marginTop: 6, minHeight: 36, wordBreak: 'break-all',
   }}>
     {formula ? highlightFormula(formula) : <span style={{ color: '#334155' }}>Enter a formula above…</span>}
@@ -280,7 +280,7 @@ const CustomIndicators: React.FC = () => {
         <div style={s.card}>
           <div style={s.cardTitle}>Preview — {symbol}</div>
           {loading && (
-            <div style={{ textAlign:'center', padding:'20px 0', color:'var(--text-muted)', fontSize:13 }}>⏳ Computing…</div>
+            <div style={{ textAlign:'center', padding:'20px 0', color:'var(--text-muted)', fontSize: 'var(--fs-body)'}}>⏳ Computing…</div>
           )}
           {!loading && preview.length > 0
             ? <PreviewChart data={preview} color={color} />

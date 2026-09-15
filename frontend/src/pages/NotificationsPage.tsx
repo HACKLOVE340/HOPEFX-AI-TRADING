@@ -144,7 +144,7 @@ const NotificationsPage: React.FC = () => {
               </span>
             )}
           </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>Real-time alerts and updates</p>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '4px 0 0' }}>Real-time alerts and updates</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {voice.ttsSupported && (
@@ -175,14 +175,14 @@ const NotificationsPage: React.FC = () => {
               background: filter === f ? '#1e3a5f' : 'var(--raised)',
               border: `1px solid ${filter === f ? '#3b82f6' : '#334155'}`,
               borderRadius: 8, color: filter === f ? 'var(--link)' : 'var(--text-muted)',
-              cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '6px 14px',
+              cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '6px 14px',
             }}>
               {f === 'all' ? 'All' : `Unread (${unreadCount})`}
             </button>
           ))}
           <button onClick={markAllRead} disabled={markingAll || unreadCount === 0} style={{
             background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8,
-            color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '6px 14px',
+            color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 14px',
           }}>
             {markingAll ? '…' : '✓ Mark all read'}
           </button>
@@ -199,7 +199,7 @@ const NotificationsPage: React.FC = () => {
         <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 64 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🔔</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-muted)' }}>No notifications</div>
-          <div style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 4 }}>You're all caught up!</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginTop: 4 }}>You're all caught up!</div>
         </div>
       )}
       {items.map(n => (
@@ -231,7 +231,7 @@ const NotificationsPage: React.FC = () => {
                 >×</button>
               </div>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
               {n.link && (
                 <a href={n.link} style={{ fontSize: 12, color: '#3b82f6', display: 'inline-block' }}>
@@ -256,7 +256,7 @@ const NotificationsPage: React.FC = () => {
           <button
             onClick={() => load(page + 1, filter)}
             disabled={loading}
-            style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 13, padding: '8px 24px' }}
+            style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '8px 24px' }}
           >
             {loading ? 'Loading…' : 'Load more'}
           </button>

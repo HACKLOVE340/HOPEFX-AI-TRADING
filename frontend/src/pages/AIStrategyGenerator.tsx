@@ -208,12 +208,12 @@ const AIStrategyGenerator: React.FC = () => {
     >
       {/* LLM health banner — shown while checking and when unavailable */}
       {llmStatus === 'checking' && (
-        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: 'var(--text-dim)' }}>
+        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
           Checking AI backend availability…
         </div>
       )}
       {llmStatus === 'unavailable' && (
-        <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#fca5a5' }}>
+        <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 'var(--fs-body)', color: '#fca5a5' }}>
           <strong>AI backend not configured.</strong> Set <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> in your <code>.env</code> file to enable strategy generation.
           Strategy generation will return an error until an LLM backend is available.
         </div>
@@ -228,13 +228,13 @@ const AIStrategyGenerator: React.FC = () => {
         <div style={s.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Strategy History</h3>
-            <button onClick={loadHistory} disabled={histLoading} style={{ ...s.btn, width: 'auto', padding: '6px 14px', fontSize: 13 }}>
+            <button onClick={loadHistory} disabled={histLoading} style={{ ...s.btn, width: 'auto', padding: '6px 14px', fontSize: 'var(--fs-body)'}}>
               {histLoading ? '⟳' : '↻'} Refresh
             </button>
           </div>
-          {histLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>}
+          {histLoading && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading…</div>}
           {!histLoading && history.length === 0 && (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>
               No strategies generated yet. Use the Generate tab to create your first strategy.
             </div>
           )}
@@ -355,7 +355,7 @@ const AIStrategyGenerator: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <button
                     onClick={() => setCodeExpanded(v => !v)}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--link)', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontWeight: 600 }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--link)', fontSize: 'var(--fs-body)', cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontWeight: 600 }}
                   >
                     {codeExpanded ? '▼ Hide Python code' : '▶ Show generated Python code'}
                   </button>
@@ -395,7 +395,7 @@ const AIStrategyGenerator: React.FC = () => {
                   onClick={() => navigate('/walk-forward')}
                   style={{
                     background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
-                    borderRadius: 8, color: 'var(--ai-model)', fontSize: 13, fontWeight: 600,
+                    borderRadius: 8, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 600,
                     cursor: 'pointer', padding: '9px 16px', fontFamily: 'inherit',
                   }}
                   title="Validate this strategy with walk-forward testing"
@@ -442,13 +442,13 @@ const s: Record<string, React.CSSProperties> = {
   subtitle:      { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
   card:          { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24, marginBottom: 20 },
   row:           { display: 'flex', gap: 16, marginBottom: 16 },
-  label:         { display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
+  label:         { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
   select:        { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
   textarea:      { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '10px 12px', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' },
   examples:      { display: 'flex', flexDirection: 'column', gap: 6, margin: '12px 0 16px' },
   examplesLabel: { fontSize: 12, color: 'var(--text-faint)', marginBottom: 4 },
   exampleBtn:    { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', padding: '6px 10px', textAlign: 'left' },
-  btn:           { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer', padding: '12px 24px', width: '100%' },
+  btn:           { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 'var(--fs-value)', fontWeight: 600, cursor: 'pointer', padding: '12px 24px', width: '100%' },
   resultHeader:  { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
   strategyName:  { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' },
   badge:         { background: '#166534', color: 'var(--gain)', fontSize: 12, padding: '3px 10px', borderRadius: 20 },
@@ -460,7 +460,7 @@ const s: Record<string, React.CSSProperties> = {
   deployRow:     { display: 'flex', alignItems: 'center', gap: 16 },
   deployBtn:     { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 20px' },
   errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: 16, color: 'var(--loss)' },
-  tabBtn:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
+  tabBtn:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px' },
   tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   histRow:       { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--border)' },
   delBtn:        { background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },

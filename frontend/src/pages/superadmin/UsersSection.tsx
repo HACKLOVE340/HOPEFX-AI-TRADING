@@ -244,9 +244,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         {tab === 'activity' && (
           <div>
             {activityLoading ? (
-              <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>Loading activity…</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>Loading activity…</div>
             ) : activity.length === 0 ? (
-              <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No activity recorded.</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>No activity recorded.</div>
             ) : (
               activity.map((a, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--hairline)', alignItems: 'flex-start' }}>
@@ -285,7 +285,7 @@ const BulkResultToast: React.FC<{ result: BulkUserResult; onClose: () => void }>
     animation: 'sa-fadein 0.2s ease',
   }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>Bulk Operation Complete</span>
+      <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>Bulk Operation Complete</span>
       <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>x</button>
     </div>
     <div style={{ fontSize: 12, color: 'var(--gain)' }}>✅ {result.succeeded.length} succeeded</div>
@@ -474,7 +474,7 @@ const UsersSection: React.FC = () => {
         {/* Table */}
         {loading ? <LoadingRows rows={8} /> : error ? <ErrorState message={error} onRetry={load} /> : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '8px 12px', width: 36 }}>
@@ -551,7 +551,7 @@ const UsersSection: React.FC = () => {
               </tbody>
             </table>
             {users.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-faint)', fontSize: 13 }}>
+              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
                 No users match the current filters.
               </div>
             )}

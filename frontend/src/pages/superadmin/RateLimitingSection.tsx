@@ -186,7 +186,7 @@ const RateLimitingSection: React.FC = () => {
             background: tab === t ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
             borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
-            padding: '7px 16px', fontSize: 13, cursor: 'pointer',
+            padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer',
           }}>
             {t === 'rules' ? `Rules (${rules.length})` : `Violations (${violations.length})`}
           </button>
@@ -220,7 +220,7 @@ const RateLimitingSection: React.FC = () => {
           )}
 
           <SectionCard title="Rate Limit Rules" icon={<Lock size={18} aria-hidden />} accent="#60a5fa" noPad>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Endpoint', 'Limit / Window', 'Scope', 'Hits', 'Enabled', 'Actions'].map(h => (
@@ -307,9 +307,9 @@ const RateLimitingSection: React.FC = () => {
       {tab === 'violations' && (
         <SectionCard title="Rate Limit Violations" icon={<Ban size={18} aria-hidden />} accent="#f87171" noPad>
           {violations.length === 0 ? (
-            <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 32 }}>No violations recorded</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No violations recorded</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Endpoint', 'IP / User', 'Count', 'Time'].map(h => (

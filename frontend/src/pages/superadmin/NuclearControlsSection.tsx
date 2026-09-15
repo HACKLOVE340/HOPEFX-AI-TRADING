@@ -272,7 +272,7 @@ const NuclearControlsSection: React.FC = () => {
       <SectionCard title="Nuclear Action Log" icon={<ClipboardList size={18} aria-hidden />} accent="#64748b"
         subtitle="Immutable log of all emergency actions">
         {log.length === 0 ? (
-          <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No nuclear actions recorded</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>No nuclear actions recorded</div>
         ) : (
           <div>
             {log.slice(0, 50).map((entry, i) => (
@@ -353,7 +353,7 @@ const PropFirmBreachPanel: React.FC = () => {
   return (
     <SectionCard title="Prop Firm Breach Tracker" icon={<BarChart3 size={18} aria-hidden />} accent="#f59e0b">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Real-time prop firm rule violation monitoring</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Real-time prop firm rule violation monitoring</div>
         <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
           {loading ? '…' : '↻'}
         </button>
@@ -378,14 +378,14 @@ const PropFirmBreachPanel: React.FC = () => {
       {loadErr && (
         <div style={{
           background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 8,
-          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: 'var(--loss)',
+          padding: '10px 14px', marginBottom: 12, fontSize: 'var(--fs-body)', color: 'var(--loss)',
         }} role="alert">
           ⚠️ {loadErr}
         </div>
       )}
 
       {breaches.length === 0 && !loading && !loadErr && (
-        <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: 13, padding: '16px 0' }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
           ✅ No active prop firm breaches detected
         </div>
       )}
@@ -397,7 +397,7 @@ const PropFirmBreachPanel: React.FC = () => {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)' }}>{String(b.username ?? b.user_id ?? '')}</span>
+              <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{String(b.username ?? b.user_id ?? '')}</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{String(b.breach_type ?? '').replace(/_/g, ' ')}</span>
             </div>
             <span style={{ fontSize: 11, fontWeight: 700, color: severityColor(String(b.severity ?? '')), textTransform: 'uppercase' }}>

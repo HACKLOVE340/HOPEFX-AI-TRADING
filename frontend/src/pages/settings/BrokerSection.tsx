@@ -160,7 +160,7 @@ const BrokerSection: React.FC = () => {
                 Current connection
               </div>
               {brokerStatus.connected && brokerStatus.balance !== undefined && (
-                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
                   Balance: <span style={{ color: '#22c55e', fontWeight: 600 }}>
                     {brokerStatus.currency ?? 'USD'} {brokerStatus.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
@@ -235,10 +235,10 @@ const BrokerSection: React.FC = () => {
                 Test connection
               </Button>
               {testStatus === 'ok' && (
-                <span style={{ fontSize: 13, color: '#22c55e' }}>✅ {testMsg}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}>✅ {testMsg}</span>
               )}
               {testStatus === 'fail' && (
-                <span style={{ fontSize: 13, color: 'var(--loss)' }}>❌ {testMsg}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>❌ {testMsg}</span>
               )}
             </div>
           </>
@@ -247,7 +247,7 @@ const BrokerSection: React.FC = () => {
         {form.type === 'paper' && (
           <div style={{
             marginTop: 12, padding: '12px 16px', background: '#0c1a2e',
-            border: '1px solid #1e3a5f', borderRadius: 8, fontSize: 13, color: 'var(--link)',
+            border: '1px solid #1e3a5f', borderRadius: 8, fontSize: 'var(--fs-body)', color: 'var(--link)',
           }}>
             Paper trading uses a simulated account with no real funds. All strategies and risk settings apply normally.
           </div>

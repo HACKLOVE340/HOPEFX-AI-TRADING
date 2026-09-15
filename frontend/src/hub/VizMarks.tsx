@@ -244,7 +244,7 @@ export const NetworkGraph: React.FC<{ nodes: Node[]; edges: Edge[]; onDrill?: (l
       {categories.length >= 2 && (
         <ul style={{ display: 'flex', flexWrap: 'wrap', gap: 10, listStyle: 'none', margin: '4px 0 0', padding: 0 }}>
           {categories.map((category, i) => (
-            <li key={category} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: INK.secondary }}>
+            <li key={category} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-micro)', color: INK.secondary }}>
               <span
                 aria-hidden
                 style={{ width: 8, height: 8, borderRadius: 2, background: categoryColour(i), flex: '0 0 auto' }}
@@ -350,7 +350,7 @@ export const Timeline: React.FC<{ events: Event[]; onDrill?: (label: string) => 
         <span>{new Date(last).toLocaleTimeString()}</span>
       </div>
       {hovered !== null && (
-        <p style={{ margin: '4px 0 0', fontSize: 11.5, color: INK.secondary }}>{events[hovered]?.label}</p>
+        <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-label)', color: INK.secondary }}>{events[hovered]?.label}</p>
       )}
     </div>
   );

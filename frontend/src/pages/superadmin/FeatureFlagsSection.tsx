@@ -126,7 +126,7 @@ const FeatureFlagsSection: React.FC = () => {
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-strong)' }}>{flag.name}</span>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{flag.name}</span>
                 {flag.user_overrides > 0 && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: 'var(--warn)',
@@ -178,7 +178,7 @@ const FeatureFlagsSection: React.FC = () => {
           </div>
         ))}
         {flags.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 13 }}>No feature flags configured.</div>
+          <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No feature flags configured.</div>
         )}
         <ActionBanner message={msg} ok={msgOk} />
       </SectionCard>
@@ -217,7 +217,7 @@ const FeatureFlagsSection: React.FC = () => {
                   padding: '10px 0', borderBottom: '1px solid var(--border)',
                 }}>
                   <div>
-                    <span style={{ fontSize: 13, color: 'var(--text-strong)', fontWeight: 500 }}>{flag.name}</span>
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-strong)', fontWeight: 500 }}>{flag.name}</span>
                     {hasOverride && (
                       <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--warn)', fontWeight: 700 }}>OVERRIDDEN</span>
                     )}

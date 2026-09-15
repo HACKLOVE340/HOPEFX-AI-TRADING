@@ -88,7 +88,7 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
     }}>
       {/* Header: symbol + direction + strength */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-strong)' }}>{signal.symbol}</span>
+        <span style={{ fontSize: 'var(--fs-value)', fontWeight: 800, color: 'var(--text-strong)' }}>{signal.symbol}</span>
         <span style={{
           fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           color: dir.color, background: `${dir.color}1a`, border: `1px solid ${dir.color}40`,
@@ -122,12 +122,12 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
         ] as const).map(([label, val, color]) => (
           <div key={label} style={{ flex: 1 }}>
             <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{label}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color }}>{num(val)}</div>
+            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color }}>{num(val)}</div>
           </div>
         ))}
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>R:R</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: signal.risk_reward_ratio >= 1.5 ? '#22c55e' : 'var(--warn)' }}>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: signal.risk_reward_ratio >= 1.5 ? '#22c55e' : 'var(--warn)' }}>
             {num(signal.risk_reward_ratio, 2)}
           </div>
         </div>

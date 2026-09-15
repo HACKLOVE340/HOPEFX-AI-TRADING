@@ -154,7 +154,7 @@ export default function Support(): React.ReactElement {
           {list.isLoading ? (
             <p style={{ padding: 22, color: C.muted, margin: 0 }}>Loading your tickets…</p>
           ) : list.isError ? (
-            <p data-testid="list-error" style={{ padding: 18, margin: 0, color: C.urgent, fontSize: 13 }}>
+            <p data-testid="list-error" style={{ padding: 18, margin: 0, color: C.urgent, fontSize: 'var(--fs-body)'}}>
               <AlertTriangle size={14} aria-hidden="true" style={{ verticalAlign: -2, marginRight: 6 }} />
               Your tickets could not be loaded, so this is not an empty list — it is an unknown one.
               {' '}{refusalText(list.error)}
@@ -184,7 +184,7 @@ export default function Support(): React.ReactElement {
                     }}
                   >
                     <span style={{ display: 'block', fontWeight: 500, overflowWrap: 'anywhere' }}>{t.subject}</span>
-                    <span style={{ display: 'block', marginTop: 4, fontSize: 11.5, color: C.muted }}>
+                    <span style={{ display: 'block', marginTop: 4, fontSize: 'var(--fs-label)', color: C.muted }}>
                       {t.status === 'resolved'
                         ? 'Resolved'
                         : t.needs_human
@@ -203,7 +203,7 @@ export default function Support(): React.ReactElement {
         <section style={{ ...panel, display: 'flex', flexDirection: 'column', minWidth: 0 }} aria-label="Ticket">
           {composing ? (
             <div style={{ padding: 16 }}>
-              <h2 style={{ margin: '0 0 12px', fontSize: 15 }}>Tell us what is happening</h2>
+              <h2 style={{ margin: '0 0 12px', fontSize: 'var(--fs-value)'}}>Tell us what is happening</h2>
 
               {error ? (
                 <p data-testid="compose-error" style={{
@@ -237,7 +237,7 @@ export default function Support(): React.ReactElement {
               />
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
-                <span style={{ flex: 1, fontSize: 11.5, color: C.muted }}>
+                <span style={{ flex: 1, fontSize: 'var(--fs-label)', color: C.muted }}>
                   Our assistant answers what it can. Anything about your money, your account or a
                   complaint always goes to a person.
                 </span>
@@ -282,7 +282,7 @@ export default function Support(): React.ReactElement {
           ) : current ? (
             <>
               <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
-                <h2 data-testid="thread-subject" style={{ margin: 0, fontSize: 15 }}>{current.subject}</h2>
+                <h2 data-testid="thread-subject" style={{ margin: 0, fontSize: 'var(--fs-value)'}}>{current.subject}</h2>
               </div>
 
               {current.needs_human && !resolved ? (
@@ -341,7 +341,7 @@ export default function Support(): React.ReactElement {
                   }}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                  <span style={{ flex: 1, fontSize: 11.5, color: C.muted }}>
+                  <span style={{ flex: 1, fontSize: 'var(--fs-label)', color: C.muted }}>
                     {resolved ? 'This ticket is resolved — replying reopens it.' : 'We will reply here.'}
                   </span>
                   <button

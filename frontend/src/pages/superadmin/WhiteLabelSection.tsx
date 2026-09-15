@@ -194,7 +194,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
               ].map(m => (
                 <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
                   <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 3 }}>{m.label}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.value}</div>
+                  <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{m.value}</div>
                 </div>
               ))}
             </div>
@@ -245,7 +245,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
               <ActionBtn label="Rotate Key" onClick={rotateKey} loading={busy === 'rotate'} variant="warning" icon={<RefreshCw size={18} aria-hidden />} size="sm" />
             </div>
             {keysLoading ? (
-              <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: 24 }}>Loading keys…</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', padding: 24 }}>Loading keys…</div>
             ) : keys.length === 0 ? (
               <EmptyState compact icon={KeyRound} title="No API keys found" description="Tenant API keys will appear here once generated." />
             ) : (
@@ -268,9 +268,9 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
         {tab === 'usage' && (
           <div>
             {usageLoading ? (
-              <div style={{ color: 'var(--text-faint)', fontSize: 13, padding: 24 }}>Loading usage…</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', padding: 24 }}>Loading usage…</div>
             ) : !usage ? (
-              <div style={{ color: 'var(--text-faint)', fontSize: 13, textAlign: 'center', padding: 24 }}>No usage data available.</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>No usage data available.</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[
