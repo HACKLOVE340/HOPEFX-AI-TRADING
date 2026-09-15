@@ -1026,7 +1026,7 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "14",
         "C",
         "Event-triggered tasks",
-        "live",
+        "staged",
         "ai.bus.triggers:TriggerRegistry",
         "A trigger ENQUEUES and never executes: running the task inside the "
         "subscriber callback would make the message bus an execution path, "
@@ -1489,7 +1489,7 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "18",
         "A",
         "Screen and camera source selection",
-        "live",
+        "staged",
         "frontend/src/hub/visionSource.ts:selectSource",
         "The half worth getting right is that a SCREEN SHARE AND A WEBCAM ARE "
         "DIFFERENT CONSENTS. A webcam shows a face; a screen share shows the "
@@ -1895,7 +1895,7 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "23",
         "D",
         "Schema-driven panel generation",
-        "live",
+        "staged",
         "frontend/src/hub/panelSchema.ts:describePanel",
         "The request schema existed and no engine read it. Now a SurfaceRequest "
         "becomes a descriptor nobody hand-wrote \u2014 and one that CANNOT EXIST "
@@ -1913,7 +1913,7 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "23",
         "D",
         "Layout engine independent of content",
-        "live",
+        "staged",
         "frontend/src/hub/layoutStrategy.ts:geometryFor",
         "It was independent of content and had a single geometry: everything "
         "place() produced was a twelve-column grid. A second strategy sits on "
@@ -2017,7 +2017,7 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "23",
         "D",
         "Accessibility and reduced-motion support",
-        "live",
+        "staged",
         "frontend/src/hub/panelSchema.ts:PanelA11y",
         "Generated panels are exactly where accessibility quietly dies: a "
         "hand-built panel gets a label because somebody typed one, and a "
@@ -2357,7 +2357,7 @@ _DECLARED: Final[tuple[Capability, ...]] = (
         "23",
         "D",
         "Cognitive stream — user-facing explanation distinct from internal trace",
-        "live",
+        "staged",
         "frontend/src/hub/cognitiveStream.ts:CognitiveStream",
         "\u00a73 listed this as existing and it was not in this repository. They are "
         "TWO streams and merging them is a leak, not a tidy-up: the trace "

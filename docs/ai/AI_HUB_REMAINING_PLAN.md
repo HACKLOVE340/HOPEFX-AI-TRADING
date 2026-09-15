@@ -13,6 +13,13 @@ At the time of writing: **230 capabilities · 223 live · 7 staged · 0 planned 
 > 233/233 evidence resolves · 0 discrepancies.** Every number in this document
 > is a snapshot; `python scripts/backlog_report.py` is the state.
 
+> **Deep audit, 2026-09-15:** the verifier measures **233 rows · 224 live · 9
+> staged · 0 planned · 233/233 evidence resolves · 0 discrepancies**. The caller
+> screen now inspects both live and staged evidence-backed rows: **0 live rows
+> are unreached**, while the staged rows remain visible as unfinished work rather
+> than being hidden by a live-only filter. This current measurement supersedes
+> the older snapshots below; historical sections retain their original dates.
+
 That live count went **down** by one, and the percentage with it. §4's four
 layer roll-ups stopped being typed and started being derived, and the
 derivation found `arch.layer_c.workforce` claiming `live` with two of its

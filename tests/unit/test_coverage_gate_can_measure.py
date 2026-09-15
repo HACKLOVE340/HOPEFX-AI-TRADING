@@ -75,11 +75,11 @@ class TestItAsksCoverageForSomethingItCanResolve:
             f"--cov must name the package; a dotted module makes coverage double-load numpy. Got {cov_args}"
         )
 
-    def test_a_nested_module_still_targets_its_top_level_package(self, hook) -> None:
+    def test_a_nested_module_targets_its_immediate_package(self, hook) -> None:
         cmd = hook._coverage_command(
             pathlib.Path("api/superadmin/ml_ai.py"), [pathlib.Path("tests/unit/test_superadmin.py")]
         )
-        assert "--cov=api" in cmd
+        assert "--cov=api.superadmin" in cmd
 
     def test_the_rcfile_fail_under_is_neutralised(self, hook) -> None:
         # .coveragerc sets fail_under=70 for the whole project. The hook judges a
@@ -155,6 +155,11 @@ class TestItMeasuresEveryTestThatExercisesTheModule:
         """
         names = {p.name for p in hook._find_test_files(pathlib.Path("ai/ledger/decisions.py"))}
         assert "test_decision_ledger.py" in names, names
+
+    def test_capability_registry_uses_its_focused_suite(self, hook) -> None:
+        """Incidental registry imports must not make this coverage run unbounded."""
+        found = hook._find_test_files(pathlib.Path("ai/hub/capabilities.py"))
+        assert found == [pathlib.Path("tests/unit/test_hub_capability_registry.py")]
 
     def test_a_module_nothing_imports_returns_nothing(self, hook) -> None:
         assert hook._find_test_files(pathlib.Path("no/such/module.py")) == []

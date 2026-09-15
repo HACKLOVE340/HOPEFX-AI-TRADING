@@ -33,7 +33,7 @@ Environment variables
 COVERAGE_THRESHOLD   : minimum line coverage % (default: 80)
 SKIP_COVERAGE_GATE   : set to "1" to skip this hook (emergency bypass)
 CI_FAST              : set to "1" to use reduced estimators (faster CI)
-COVERAGE_MODULE_TIMEOUT_SECONDS : maximum seconds for one module run (default: 60)
+COVERAGE_MODULE_TIMEOUT_SECONDS : base seconds for one module run (default: 60; broad test sets receive a bounded extension)
 COVERAGE_TOTAL_TIMEOUT_SECONDS  : maximum seconds for one hook run (default: 300)
 
 Usage (called by pre-commit framework)
@@ -233,6 +233,15 @@ def _find_test_files(module_path: Path) -> list[Path]:
     if not tests.exists():
         return []
 
+    # The registry is imported by many integration tests only to inspect a
+    # capability row. Running all of them makes this small declarative module
+    # pay for unrelated orchestration fixtures and exceeded the bounded module
+    # budget. Its dedicated registry suite exercises the implementation itself
+    # and measures above the floor; keep the pairing explicit and reviewable.
+    if module_path.as_posix() == "ai/hub/capabilities.py":
+        focused = tests / "unit" / "test_hub_capability_registry.py"
+        return [focused] if focused.exists() else []
+
     found = list(_name_matched(module_path))
     for candidate in sorted(tests.rglob("test_*.py")):
         if candidate in found:
@@ -261,13 +270,16 @@ def _coverage_target(module_path: Path) -> str:
     measure a single one — and reported that as "the test may not import the
     module", which blames the test and invites ``SKIP_COVERAGE_GATE=1``.
 
-    A *package* name resolves as a directory and does not import anything, so
-    ``--cov=risk`` works where ``--cov=risk.manager`` cannot. The module's own
-    figure is then read out of the report by `_parse_module_coverage`.
+    The module's immediate *package* name resolves as a directory and does not
+    import anything, so ``--cov=ai.hub`` works where ``--cov=ai.hub.capabilities``
+    cannot. Instrumenting the top-level ``ai`` package would load every AI
+    department and make a small registry change pay for the whole subsystem.
+    The module's own figure is then read out of the report by
+    `_parse_module_coverage`.
     """
     parts = Path(str(module_path).replace("\\", "/")).parts
     if len(parts) > 1:
-        return parts[0]
+        return ".".join(parts[:-1])
     # A module at the repository root has no package to name, and its bare stem
     # would be a dotted module again. `.` measures the tree; the row is read the
     # same way either way.
@@ -355,7 +367,10 @@ def _run_coverage(module_path: Path, test_paths: list[Path]) -> tuple[float | No
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=_MODULE_TIMEOUT_SECONDS,
+                # A module imported by many focused tests needs more time than a
+                # small leaf module, but the extension is bounded so one broad
+                # pairing cannot make the hook unbounded again.
+                timeout=max(_MODULE_TIMEOUT_SECONDS, min(180, 10 * len(test_paths))),
                 env=env,
             )
             output = result.stdout + result.stderr
@@ -484,7 +499,7 @@ def _judge(
         # timeout that advice is wrong — run.py is imported by 74 resolved test
         # files, nothing is missing, the gate simply ran out of budget — and it
         # sends the reader looking for something that is already there.
-        timed_out = bool(unmeasured_reason) and "timed out" in unmeasured_reason.lower()
+        timed_out = unmeasured_reason is not None and "timed out" in unmeasured_reason.lower()
         if omitted:
             why = (
                 f"{shown}: EXCLUDED by .coveragerc [run] omit, so it cannot be measured. "

@@ -213,7 +213,7 @@ def assert_sweep_works(repo: Path | None = None) -> int:
 
 
 def sweep(repo: Path | None = None) -> list[Row]:
-    """Every live capability whose evidence names a symbol, with its caller count."""
+    """Every live or staged capability whose evidence names a symbol, with caller counts."""
     base = repo or REPO
     assert_sweep_works(base)
 
@@ -221,7 +221,7 @@ def sweep(repo: Path | None = None) -> list[Row]:
 
     rows: list[Row] = []
     for cap in REGISTRY:
-        if cap.state != "live" or ":" not in (cap.evidence or ""):
+        if cap.state not in {"live", "staged"} or ":" not in (cap.evidence or ""):
             continue
         # A derived roll-up has no caller of its id BY DESIGN — `layer_state()`
         # computes it from the rows beneath. Screening it produced four
@@ -262,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     symbol_only = [r for r in flagged if r.priority == "symbol-only"]
 
     print(f"control: {CONTROL_SYMBOL} found in {control} production files — sweep is reading the repo")
-    print(f"screened: {len(rows)} live rows with a symbol locator (derived roll-ups excluded)")
+    print(f"screened: {len(rows)} live/staged rows with a symbol locator (derived roll-ups excluded)")
     print(f"flagged:  {len(flagged)} with no production caller beyond their own definition")
     print(f"          {len(unreached)} unreached · {len(symbol_only)} symbol-only\n")
 

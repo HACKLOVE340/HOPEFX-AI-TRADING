@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../hooks/useApi';
+import { FrameSummary, FrameTriage } from '../../hub/frameTriage';
 import { Camera, CheckCircle2, CircleDot, Eye, Pause, Play, RotateCcw, ScanLine, ShieldCheck, Sparkles, StopCircle, XCircle } from 'lucide-react';
 
 type Tone = 'green' | 'amber' | 'red' | 'blue' | 'muted';
@@ -8,6 +9,34 @@ const panel: React.CSSProperties = { background: 'linear-gradient(145deg, rgba(1
 const label: React.CSSProperties = { color: '#70809a', fontSize: 10, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase' };
 
 const Badge = ({ children, tone = 'muted' }: { children: React.ReactNode; tone?: Tone }) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 7px', border: `1px solid ${colors[tone]}55`, borderRadius: 5, color: colors[tone], background: `${colors[tone]}12`, fontSize: 10, fontWeight: 800 }}>{children}</span>;
+
+function summarizeFrame(canvas: HTMLCanvasElement): FrameSummary | null {
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  try {
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let hash = 2166136261;
+    let count = 0;
+    let mean = 0;
+    let squared = 0;
+    for (let i = 0; i < pixels.length; i += 16) {
+      const luminance = (0.299 * (pixels[i] ?? 0) + 0.587 * (pixels[i + 1] ?? 0) + 0.114 * (pixels[i + 2] ?? 0)) / 255;
+      mean += luminance;
+      squared += luminance * luminance;
+      hash ^= pixels[i] ?? 0;
+      hash = Math.imul(hash, 16777619);
+      count += 1;
+    }
+    if (!count) return null;
+    return {
+      fingerprint: `${hash >>> 0}:${canvas.width}x${canvas.height}`,
+      variance: Math.max(0, squared / count - (mean / count) ** 2),
+      at: performance.now(),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export const HologramPanel: React.FC<{ degraded?: boolean }> = ({ degraded = false }) => {
   const [state, setState] = useState<'ready' | 'analyzing' | 'approval' | 'degraded'>('ready');
@@ -40,12 +69,14 @@ export const HologramPanel: React.FC<{ degraded?: boolean }> = ({ degraded = fal
 
 export const VisionScanner: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null); const streamRef = useRef<MediaStream | null>(null); const [status, setStatus] = useState<'idle' | 'requesting' | 'ready' | 'captured' | 'processing' | 'denied'>('idle'); const [result, setResult] = useState('');
+  const triageRef = useRef(new FrameTriage());
+  const frameSummaryRef = useRef<FrameSummary | null>(null);
   // The captured frame as base64 JPEG. A ref rather than state: it is not
   // rendered, and putting a megabyte of image data in state would re-render the
   // panel for no reason. Cleared on stop so a frame from a previous session can
   // never be sent against a later scan.
   const frameRef = useRef<string>('');
-  const stop = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; if (videoRef.current) videoRef.current.srcObject = null; frameRef.current = ''; setStatus('idle'); };
+  const stop = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; if (videoRef.current) videoRef.current.srcObject = null; frameRef.current = ''; frameSummaryRef.current = null; setStatus('idle'); };
   useEffect(() => () => stop(), []);
   const start = async () => { if (!navigator.mediaDevices?.getUserMedia) { setStatus('denied'); return; } setStatus('requesting'); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); streamRef.current = stream; if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); } setStatus('ready'); } catch { setStatus('denied'); } };
   // The longest edge we send. A phone hands back a 4K frame; reading a chart
@@ -84,8 +115,10 @@ export const VisionScanner: React.FC = () => {
     try {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       frameRef.current = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : '';
+      frameSummaryRef.current = summarizeFrame(canvas);
     } catch {
       frameRef.current = '';
+      frameSummaryRef.current = null;
     }
     setStatus('captured');
     setResult(
@@ -109,6 +142,18 @@ export const VisionScanner: React.FC = () => {
     // trip is pure waste and the operator gets the same sentence sooner.
     if (!frameRef.current) {
       setResult('There is no captured frame to scan. Take one first.');
+      setStatus('captured');
+      return;
+    }
+    const summary = frameSummaryRef.current;
+    if (!summary) {
+      setResult('The frame could not be triaged locally, so it was not uploaded.');
+      setStatus('captured');
+      return;
+    }
+    const decision = triageRef.current.consider(summary, { consented: true });
+    if (!decision.send) {
+      setResult(`Local triage kept this frame on the device: ${decision.reason}.`);
       setStatus('captured');
       return;
     }

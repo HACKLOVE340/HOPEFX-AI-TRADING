@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { voiceApi } from './useApi';
 import { publishSpeech } from '../hub/speechBus';
+import { pronounce } from '../hub/pronunciation';
 
 // ── Cloud TTS availability (cached once per page load) ────────────────────────
 // The backend /api/voice/* routes provide higher-quality cloud TTS/STT when a
@@ -255,7 +256,7 @@ export function useVoice(lang = 'en-US'): UseVoice {
   const speak = useCallback((text: string) => {
     // Flattened before it reaches any engine — cloud or Web Speech — because
     // both pronounce Markdown. See `speechText`.
-    const t = speechText(text ?? '').trim();
+    const t = pronounce(speechText(text ?? '').trim());
     if (!t) return;
     // Prefer cloud TTS when configured; fall back to Web Speech on any failure.
     void cloudTtsAvailable().then((cloud) => {

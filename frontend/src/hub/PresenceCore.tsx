@@ -57,6 +57,7 @@ import {
 } from './headModes';
 import type { Representation } from './projection';
 import { liveRegions } from './a11yLiveRegion';
+import { attentionFrom, idleMotion } from './attention';
 
 /** Colour per tone, from the platform's own palette (COLOR in AICore.tsx). */
 const TONE: Record<PresenceTone, string> = {
@@ -570,7 +571,18 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
   /** The painted surface, cached per head. See `newSurfaceCache`. */
   const surfaceCache = useRef<SurfaceCache>(newSurfaceCache());
   const latest = useRef(presence);
+  const lastInputAt = useRef<number | null>(null);
   latest.current = presence;
+
+  useEffect(() => {
+    const markInput = () => { lastInputAt.current = performance.now(); };
+    window.addEventListener('pointerdown', markInput, { passive: true });
+    window.addEventListener('keydown', markInput, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', markInput);
+      window.removeEventListener('keydown', markInput);
+    };
+  }, []);
 
   // Take the app's polite live region, and give it back on unmount. Claiming
   // by name is what lets a second claimant be refused with the incumbent's
@@ -606,6 +618,12 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
       const hue = TONE[p.tone];
       const S = canvas.width;
       const C = S / 2;
+      const attention = attentionFrom({
+        visible: typeof document === 'undefined' ? undefined : document.visibilityState === 'visible',
+        focused: typeof document === 'undefined' ? undefined : document.hasFocus(),
+        msSinceInput: lastInputAt.current === null ? undefined : now - lastInputAt.current,
+      });
+      const motion = idleMotion(attention, still);
 
       if (!still && p.state !== 'offline') spin += dt * 0.0006 * (0.4 + p.intensity * 1.6);
       ctx.clearRect(0, 0, S, S);
@@ -671,7 +689,7 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
       ctx.restore();
 
       // Inner — the presence itself. Breathes at rest, pulses while it works.
-      const breathe = still ? 0.5 : Math.sin(now * 0.0016) * 0.5 + 0.5;
+      const breathe = still ? 0.5 : (Math.sin(now * 0.0016) * 0.5 + 0.5) * motion.amplitude;
       const r = C * 0.39 + breathe * 10 * (0.25 + p.intensity * 0.75);
       // A halo behind the head, not a wash over it. At the old peak alpha the
       // wireframe was measurably there and unreadable — the mesh and the glow

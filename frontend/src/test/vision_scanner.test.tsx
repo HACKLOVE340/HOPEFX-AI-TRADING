@@ -80,7 +80,15 @@ async function captureAFrame(user: ReturnType<typeof userEvent.setup>) {
   });
   Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
     configurable: true,
-    value: () => ({ drawImage: vi.fn() }),
+    value: () => ({
+      drawImage: vi.fn(),
+      getImageData: vi.fn(() => ({
+        data: new Uint8ClampedArray([
+          0, 0, 0, 255, 30, 180, 90, 255, 220, 40, 160, 255, 60, 210, 230, 255,
+          255, 255, 255, 255, 10, 80, 190, 255, 240, 220, 70, 255, 80, 30, 120, 255,
+        ]),
+      })),
+    }),
   });
   // jsdom's own toDataURL needs the native `canvas` package, which this repo
   // does not install. Stubbed so capture() can read the frame back.
