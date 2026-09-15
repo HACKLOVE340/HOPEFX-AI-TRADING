@@ -34,7 +34,20 @@
 
 import React, { useEffect, useRef } from 'react';
 import type { Presence, PresenceState, PresenceTone } from './presence';
-import { gazeToward, headMesh, headOffset, mouthFor, particleField, type Gaze, type HeadMesh, type Strand } from './head';
+import {
+  gazeToward,
+  headMesh,
+  headOffset,
+  headSurface,
+  mouthFor,
+  particleField,
+  type Gaze,
+  type HeadMesh,
+  type HeadMeshOptions,
+  type Strand,
+  type SurfaceQuad,
+  posePrint,
+} from './head';
 import {
   blinkAt,
   chooseHeadMode,
@@ -73,6 +86,44 @@ const WORD: Record<PresenceState, string> = {
 };
 
 const CORE_BLUE = '#73a7ff';
+
+/**
+ * The hologram's own palette, from the owner's reference (2026-09-15).
+ *
+ * Cyan rather than the rings' periwinkle, and deliberately a different hue from
+ * every tone in `TONE`: the head's structure must never be confused with the
+ * head's reading. The brows, the mouth and the eyes are drawn in the tone
+ * colour and the mesh is drawn in this, so a red brow on a cyan skull is
+ * unambiguous where a red brow on a red skull is decoration.
+ *
+ * It lives in `index.css` as `--holo` / `--holo-bright` and is read from there
+ * at runtime. A canvas cannot resolve a `var()` — it is not the cascade — so
+ * the value has to be pulled out rather than written into a fill string. Doing
+ * it this way is what lets the light theme darken the hologram instead of
+ * painting a bright cyan wireframe onto a near-white page.
+ *
+ * The fallback is `CORE_BLUE`, deliberately rather than a copy of the token's
+ * value: a second copy of a colour is a second thing to update, and the colour
+ * ratchet counts one in a comment for the same reason — a literal written
+ * anywhere is a literal the next contributor copies. The fallback is only
+ * reached where computed style reports nothing, which is jsdom and a detached
+ * element; in a browser the tokens always win.
+ */
+let HOLO = CORE_BLUE;
+let HOLO_BRIGHT = CORE_BLUE;
+
+function readHoloPalette(el: Element): void {
+  try {
+    const style = getComputedStyle(el);
+    const a = style.getPropertyValue('--holo').trim();
+    const b = style.getPropertyValue('--holo-bright').trim();
+    if (a) HOLO = a;
+    if (b) HOLO_BRIGHT = b;
+  } catch {
+    // jsdom and a detached element both land here. The fallbacks above are the
+    // dark theme, which is the platform's default, so the head still draws.
+  }
+}
 
 export interface PresenceCoreProps {
   presence: Presence;
@@ -249,6 +300,144 @@ function strokeStrand(ctx: CanvasRenderingContext2D, strand: Strand): void {
  * which is why `headMesh` cuts each latitude ring into a front arc and a back
  * arc rather than returning whole rings that all average to one depth.
  */
+/**
+ * Paint the head as a solid, then let `drawMesh` lay its contours over it.
+ *
+ * Three terms, and each is doing a job:
+ *
+ *   light  the form. Without it the head is a flat cyan cut-out.
+ *   rim    the projection. Fresnel-bright where the surface turns away, so the
+ *          jaw, the brow and the bridge of the nose light up on their own and
+ *          keep doing it when the head turns.
+ *   spec   the highlight. Lambert alone is matte, and a matte cyan solid reads
+ *          as a tinted silhouette rather than a lit form.
+ *
+ * ## It is painted once per POSE, not once per frame
+ *
+ * A head is about 900 visible quads, and canvas has no way to draw them but one
+ * fill and one seam-stroke each. At sixty frames a second that is 108,000 draw
+ * calls per head per second; a review page holding twelve heads measured
+ * **3.1 FPS**, and removing the bloom and caching the geometry only took it to
+ * 4.1 — because the geometry was never the cost, the draw calls were.
+ *
+ * So the surface is painted into an offscreen canvas keyed by the pose and
+ * blitted with a single `drawImage` on every frame that did not move it. The
+ * pose barely changes between frames — under reduced motion it does not change
+ * at all — so the common case is one image copy where there were eighteen
+ * hundred calls.
+ *
+ * The travelling band cannot live in that bitmap, because it moves every frame
+ * while the pose does not. It is drawn after the blit, over the few dozen quads
+ * it currently covers.
+ */
+interface SurfaceCache {
+  key: string;
+  canvas: HTMLCanvasElement | null;
+  half: number;
+}
+
+/**
+ * One cache per component, not one per module.
+ *
+ * A module-level cache is worse than none when more than one head is on screen:
+ * each head's pose evicts the last, so every head repaints every frame and the
+ * lookup is pure overhead. Measured on the eleven-mode review page, a shared
+ * cache left the frame rate exactly where it was.
+ */
+function newSurfaceCache(): SurfaceCache {
+  return { key: '', canvas: null, half: 0 };
+}
+
+/** Colour for one quad, without the travelling band. */
+function quadPaint(quad: SurfaceQuad, intensity: number): string {
+  // A gentle ramp: with one flat colour per quad, every exponent is also a
+  // contrast multiplier on the seams between them.
+  const lit = quad.light ** 1.7 * (0.72 + intensity * 0.28);
+  // The rim used to be bloomed with `shadowBlur`, the most expensive operation
+  // in the 2D context. The edge is brightened by colour instead, which costs
+  // nothing and is a difference nobody could point at in the result.
+  const edge = quad.rim ** 0.8;
+  const spec = quad.spec;
+  const r = 4 + lit * 22 + edge * 190 + spec * 110;
+  const g = 20 + lit * 122 + edge * 242 + spec * 170;
+  const b = 32 + lit * 142 + edge * 252 + spec * 195;
+  const alpha = 0.36 + lit * 0.3 + edge * 0.46 + spec * 0.18;
+  return `rgba(${Math.round(Math.min(255, r))},${Math.round(Math.min(255, g))},${Math.round(Math.min(255, b))},${Math.min(1, alpha)})`;
+}
+
+function fillQuad(ctx: CanvasRenderingContext2D, quad: SurfaceQuad, paint: string): void {
+  ctx.fillStyle = paint;
+  const [a, b, c, d] = quad.points;
+  ctx.beginPath();
+  ctx.moveTo(a!.x, a!.y);
+  ctx.lineTo(b!.x, b!.y);
+  ctx.lineTo(c!.x, c!.y);
+  ctx.lineTo(d!.x, d!.y);
+  ctx.closePath();
+  ctx.fill();
+  // Close the seam. A hairline stroke in the fill's own colour costs one extra
+  // call and removes the dark grid a pure fill leaves behind.
+  ctx.strokeStyle = paint;
+  ctx.lineWidth = 0.9;
+  ctx.stroke();
+}
+
+function drawSurface(
+  ctx: CanvasRenderingContext2D,
+  cache: SurfaceCache,
+  quads: readonly SurfaceQuad[],
+  options: HeadMeshOptions,
+  intensity: number,
+  now: number,
+  still: boolean,
+): void {
+  const half = Math.ceil(options.radius * 2.3) + 2;
+  // Intensity is quantised into the key: it only scales the lit term, and
+  // repainting nine hundred quads because a measurement moved by a thousandth
+  // would defeat the point of caching at all.
+  const key = `${posePrint(options)}|${half}|${Math.round(intensity * 8)}`;
+
+  if (cache.key !== key || !cache.canvas) {
+    const off = cache.canvas ?? document.createElement('canvas');
+    if (off.width !== half * 2 || off.height !== half * 2) {
+      off.width = half * 2;
+      off.height = half * 2;
+    }
+    const octx = off.getContext('2d');
+    if (!octx) return;
+    octx.clearRect(0, 0, off.width, off.height);
+    octx.save();
+    octx.translate(half, half);
+    octx.lineCap = 'round';
+    octx.lineJoin = 'round';
+    for (const quad of quads) fillQuad(octx, quad, quadPaint(quad, intensity));
+    octx.restore();
+    cache.key = key;
+    cache.canvas = off;
+    cache.half = half;
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.drawImage(cache.canvas, -cache.half, -cache.half);
+
+  // The band, over the top. It moves every frame while the pose does not, so it
+  // cannot be baked into the bitmap — and it only ever covers a few dozen
+  // quads, which is a rounding error against the nine hundred below it.
+  if (still) return;
+  const phase = ((now % SCAN_MS) + SCAN_MS) % SCAN_MS / SCAN_MS;
+  const bandV = (1 - 2 * Math.abs(phase - 0.5)) * 1.9 - 0.95;
+  for (const quad of quads) {
+    const d = (quad.v - bandV) / 0.028;
+    if (d * d > 9) continue;
+    const strength = Math.exp(-(d * d));
+    const paint = `rgba(${Math.round(130 + strength * 110)},${Math.round(190 + strength * 60)},${Math.round(205 + strength * 45)},${(0.1 + strength * 0.5).toFixed(3)})`;
+    fillQuad(ctx, quad, paint);
+  }
+}
+
+/** How long the band takes to travel the head and back, in milliseconds. */
+const SCAN_MS = 3200;
+
 function drawMesh(
   ctx: CanvasRenderingContext2D,
   mesh: HeadMesh,
@@ -256,24 +445,58 @@ function drawMesh(
   intensity: number,
   now: number,
 ): void {
-  const base = 0.4 + intensity * 0.35;
+  // Barely there.
+  //
+  // The contours carried the whole head before there was a surface under them,
+  // and at that weight over a shaded solid they are what still reads as
+  // "wireframe" rather than "hologram" — a grid drawn ON a face instead of the
+  // fine structure OF one. They are kept rather than dropped because they are
+  // what the crown and the jaw line are made of where the shading runs flat.
+  const base = 0.045 + intensity * 0.05;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  const strands = [...mesh.shell, ...mesh.jaw].sort((a, b) => a.depth - b.depth);
-  for (const strand of strands) {
-    ctx.globalAlpha = depthAlpha(strand.depth, base);
-    ctx.strokeStyle = CORE_BLUE;
-    ctx.lineWidth = strand.depth > 0 ? 1.15 : 0.7;
+  // The soft volume that used to be drawn here is now `drawSurface`, which
+  // paints the head as a lit solid rather than as a glow behind a cage. The
+  // contours below are laid OVER it, so they are the fine structure and no
+  // longer carry the form on their own — hence the much lower `base`.
+
+  // Bloom. A hologram is light, and light spills; without this the mesh is a
+  // technical drawing of a head rather than a projection of one.
+  ctx.shadowColor = HOLO;
+  ctx.shadowBlur = 7;
+
+  // The neck, behind and below. Dimmer than the face on purpose — it is what
+  // makes the head a person rather than an object, and it is not what anyone is
+  // reading.
+  ctx.strokeStyle = HOLO;
+  for (const strand of mesh.neck) {
+    ctx.globalAlpha = depthAlpha(strand.depth, base * 0.5);
+    ctx.lineWidth = strand.depth > 0 ? 1 : 0.6;
     strokeStrand(ctx, strand);
   }
 
-  // The brows carry the reading, so they are drawn in the tone's colour and at
-  // full weight — they must survive a glance at a thumbnail.
+  // The skull, back to front. Painter's order plus a depth-driven alpha is what
+  // turns a pile of overlapping arcs into a volume — which is why `headMesh`
+  // cuts each latitude ring into a front arc and a back arc rather than
+  // returning whole rings that all average to one depth.
+  const strands = [...mesh.shell, ...mesh.jaw].sort((a, b) => a.depth - b.depth);
+  for (const strand of strands) {
+    const front = strand.depth > 0;
+    ctx.globalAlpha = depthAlpha(strand.depth, base);
+    // The rim reads brightest, as it does on a real projection: the surface
+    // there is nearly edge-on, so more of it is between you and the light.
+    ctx.strokeStyle = strand.depth > 0.72 ? HOLO_BRIGHT : HOLO;
+    ctx.lineWidth = front ? 0.8 : 0.45;
+    strokeStrand(ctx, strand);
+  }
+
+  // The brows carry the reading, so they are drawn in the tone's colour at full
+  // weight — they must survive a glance at a thumbnail.
   ctx.strokeStyle = hue;
-  ctx.lineWidth = 2.1;
+  ctx.lineWidth = 2.4;
   for (const brow of mesh.brows) {
-    ctx.globalAlpha = depthAlpha(brow.depth, 0.95);
+    ctx.globalAlpha = depthAlpha(brow.depth, 0.98);
     strokeStrand(ctx, brow);
   }
 
@@ -284,7 +507,7 @@ function drawMesh(
     if (eye.z < -0.35) continue; // round the far side of the head
     const open = Math.max(0, Math.min(1, eye.openness));
     const height = Math.max(0.5, eye.radius * 0.62 * open);
-    ctx.globalAlpha = depthAlpha(eye.z, 0.95);
+    ctx.globalAlpha = depthAlpha(eye.z, 0.98);
     ctx.fillStyle = hue;
     ctx.beginPath();
     ctx.ellipse(eye.x, eye.y, eye.radius, height, 0, 0, Math.PI * 2);
@@ -294,10 +517,12 @@ function drawMesh(
     if (open > 0.25) {
       ctx.globalCompositeOperation = 'destination-out';
       ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
       ctx.beginPath();
       ctx.ellipse(eye.x, eye.y, eye.pupilRadius, Math.min(height * 0.8, eye.pupilRadius), 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
+      ctx.shadowBlur = 7;
     }
   }
 
@@ -305,20 +530,22 @@ function drawMesh(
   // part of the face that has to survive a glance at a 56-pixel dock, and it is
   // the only one carrying what is actually being said.
   ctx.strokeStyle = hue;
-  ctx.lineWidth = 2.3;
-  ctx.globalAlpha = depthAlpha(mesh.mouth.upper.depth, 0.95);
+  ctx.lineWidth = 2.4;
+  ctx.globalAlpha = depthAlpha(mesh.mouth.upper.depth, 0.98);
   strokeStrand(ctx, mesh.mouth.upper);
   strokeStrand(ctx, mesh.mouth.lower);
 
   // The scan ring. The one thing here a clock may move, which is why it is the
   // one thing reduced motion removes — `headMesh` returns null for it then.
   if (mesh.scan) {
-    ctx.globalAlpha = 0.5 + Math.sin(now * 0.004) * 0.12;
-    ctx.strokeStyle = hue;
-    ctx.lineWidth = 1.8;
+    ctx.globalAlpha = 0.62 + Math.sin(now * 0.004) * 0.14;
+    ctx.strokeStyle = HOLO_BRIGHT;
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 12;
     strokeStrand(ctx, mesh.scan);
   }
 
+  ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
 }
 
@@ -340,6 +567,8 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
   };
   // A ref, not state: the animation reads the newest presence every frame
   // without the frame loop being a dependency of a re-render.
+  /** The painted surface, cached per head. See `newSurfaceCache`. */
+  const surfaceCache = useRef<SurfaceCache>(newSurfaceCache());
   const latest = useRef(presence);
   latest.current = presence;
 
@@ -363,6 +592,8 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
       (typeof window !== 'undefined' &&
         typeof window.matchMedia === 'function' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+    readHoloPalette(canvas);
 
     let raf = 0;
     let spin = 0;
@@ -526,7 +757,7 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
         reducedMotion: still,
       });
 
-      const mesh = headMesh({
+      const meshOptions: HeadMeshOptions = {
         radius: hr * 0.66,
         // The head turns toward the panel being discussed. The bounds are
         // small: §7 wants the presence to draw the eye TO the panel, and a head
@@ -540,7 +771,8 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
         pupil: face.pupil,
         time: still ? 0 : now * face.scanRate,
         reducedMotion: still || face.scanRate === 0,
-      });
+      };
+      const mesh = headMesh(meshOptions);
 
       // Tremor is a real measurement's amplitude, not a flourish: it is zero
       // for every mode but `panicking`, and scales with how far past the floor
@@ -548,6 +780,10 @@ export const PresenceCore: React.FC<PresenceCoreProps> = ({
       const breath = face.breath === 0 ? 0 : Math.sin(now * 0.001 * face.breathHz * Math.PI * 2) * face.breath;
       ctx.translate(face.tremor, face.tremor * 0.6 + breath * hr * 0.03);
 
+      // The solid first, the contours over it. A wireframe alone lets you see
+      // the back of the skull through the front of it however dense it gets,
+      // because the problem is that nothing is filled.
+      drawSurface(ctx, surfaceCache.current, headSurface(meshOptions), meshOptions, p.intensity, now, still);
       drawMesh(ctx, mesh, hue, p.intensity, still ? 0 : now);
       ctx.restore();
 

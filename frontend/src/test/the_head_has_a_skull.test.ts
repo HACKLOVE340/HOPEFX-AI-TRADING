@@ -90,7 +90,11 @@ describe('headMesh — it is a head', () => {
         const points = allPoints(headMesh({ ...BASE, yaw, pitch, mouthOpenness: 1 }));
         for (const p of points) {
           expect(Math.abs(p.x)).toBeLessThanOrEqual(BASE.radius * 1.7);
-          expect(Math.abs(p.y)).toBeLessThanOrEqual(BASE.radius * 1.7);
+          // Taller than wide, and the mandible translates down at full opening
+          // as a real one does — so the vertical bound is not the horizontal
+          // one. The number that protects the canvas is the `headScale` clamp
+          // in PresenceCore; this is the coarse backstop.
+          expect(Math.abs(p.y)).toBeLessThanOrEqual(BASE.radius * 1.95);
         }
       }
     }

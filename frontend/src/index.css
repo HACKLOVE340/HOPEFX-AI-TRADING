@@ -111,6 +111,15 @@
     --orb-blue:      rgba(59, 130, 246, .42);
     --orb-indigo:    rgba(99, 102, 241, .30);
     --orb-cyan:      rgba(34, 211, 238, .26);
+
+    /* The presence's hologram. Its own hue, deliberately unlike every tone in
+       hub/presence.ts: the head's STRUCTURE is drawn in this and the head's
+       READING — brows, mouth, eyes — in the tone colour, so a red brow on a
+       cyan skull is unambiguous where a red brow on a red skull is decoration.
+       Read at runtime by PresenceCore, because a canvas is not the cascade and
+       cannot resolve a var() on its own. */
+    --holo:          #2bd8f0;
+    --holo-bright:   #a9f2fb;
     --orb-gold:      rgba(240, 180, 41, .16);
     --spark-up:      #3ddc97;
     --spark-down:    #ff5c6c;
@@ -252,6 +261,11 @@
     --orb-blue:      rgba(59, 130, 246, .12);
     --orb-indigo:    rgba(99, 102, 241, .10);
     --orb-cyan:      rgba(14, 165, 233, .09);
+
+    /* Light theme: the same hologram against a pale ground needs to be darker,
+       not brighter. A #2bd8f0 wireframe on #f6f7fa is invisible. */
+    --holo:          #0b7c92;
+    --holo-bright:   #0e9fbc;
     --orb-gold:      rgba(138, 90, 0, .07);
     --spark-up:      #047857;
     --spark-down:    #b91c1c;
