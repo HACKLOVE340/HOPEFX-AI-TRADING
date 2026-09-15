@@ -164,17 +164,49 @@ def test_the_committed_baseline_matches_the_tree():
     assert result.returncode == 0, result.stderr
 
 
-def test_the_baseline_records_the_audited_scale():
-    """A sanity floor: if this number collapses, the counter broke, not the debt.
+def test_every_recorded_file_really_contains_what_the_record_claims():
+    """A sanity check on the counter that does not go stale as the debt is paid.
 
-    The 2026-09-09 audit measured 7,340 literals across pages and components,
-    and this ratchet's wider scope recorded 8,021 across all of `frontend/src`.
-    A total that suddenly reads in the hundreds means the glob or the regex
-    stopped matching — the failure mode the coverage gate already had once,
-    where a broken measurement read as 361 clean modules.
+    This asserted `total > 5000` — a floor set when the measurement was 8,021 on
+    2026-09-09 — to catch the failure mode the coverage gate already had once,
+    where a broken measurement read as 361 clean modules. The intent was right
+    and the implementation was backwards: retiring colour literals is the WORK,
+    so the check failed at 3,557 for the one reason that is not a defect. A floor
+    under a number whose job is to fall forbids finishing, and the only ways past
+    it are to weaken it or to stop — which is how a gate teaches people to route
+    around gates. (The emoji ratchet's identical floor was corrected the same way
+    on 2026-09-14; this one was still failing, and had been since the colour
+    migration crossed it.)
+
+    So assert the property the floor was standing in for: that the record
+    describes the tree. Every recorded file exists and really does contain the
+    number of literals recorded against it. A counter that broke and returned
+    near-zero, or that drifted from the files it names, fails this at any debt
+    level — including zero, where it passes vacuously and correctly, because
+    there is then nothing left to describe.
+
+    It checks the SCAN and the AGGREGATION, not the definition of a colour
+    literal: it reuses the script's own `HEX_RE` and exemptions. The definition
+    is held by the injection tests above.
     """
     baseline = REPO / "docs" / "FRONTEND_COLOUR_DEBT.json"
     if not baseline.exists():
         pytest.skip("baseline not adopted yet")
-    total = sum(json.loads(baseline.read_text())["files"].values())
-    assert total > 5000, f"baseline total {total} is far below the recorded 8,021 — check the counter"
+
+    sys.path.insert(0, str(REPO / "scripts"))
+    try:
+        from frontend_colour_ratchet import count_literals
+    finally:
+        sys.path.pop(0)
+
+    recorded = json.loads(baseline.read_text())["files"]
+    measured = count_literals(REPO)
+
+    wrong = []
+    for rel, n in recorded.items():
+        if not (REPO / rel).exists():
+            wrong.append(f"{rel}: recorded {n}, file does not exist")
+        elif measured.get(rel) != n:
+            wrong.append(f"{rel}: recorded {n}, tree has {measured.get(rel, 0)}")
+    assert not wrong, "the record does not describe the tree:\n  " + "\n  ".join(wrong[:10])
+    assert all(v > 0 for v in recorded.values()), "an entry recording zero describes nothing"

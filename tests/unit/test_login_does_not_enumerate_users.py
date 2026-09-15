@@ -104,6 +104,14 @@ def _register(session_factory, hashed: str) -> str:
                 username=uuid.uuid4().hex[:12],
                 hashed_password=hashed,
                 status=UserStatus.ACTIVE,
+                # Verified, because these tests are about ENUMERATION and must
+                # not depend on a flag they do not exercise. Unverified, they
+                # passed or failed according to whether some other file had
+                # already flipped `auth.service._REQUIRE_EMAIL_VERIFICATION` —
+                # which `tests/integration/test_auth_flow.py` did, at import
+                # time, for the whole session. That is fixed at its source; this
+                # is the second lock on the same door.
+                is_email_verified=True,
                 role="trader",
             )
         )

@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import builtins
 import json
-import time
 
 import numpy as np
 import pandas as pd
@@ -53,7 +52,17 @@ def engine():
 
 @pytest.fixture
 def model_file(tmp_path, monkeypatch):
-    """An artifact whose mtime the tests control."""
+    """An artifact whose recorded TRAINING TIME the tests control.
+
+    It used to be an artifact whose mtime they controlled, via `os.utime`. That
+    stopped being the gate's input on 2026-09-14: reading the mtime meant a
+    90-day-old model became fresh when it was copied or touched, so deploying a
+    stale model was how the staleness gate got cleared. Age now comes from a
+    timestamp bound to the artifact's sha256 in `registry.json` — see
+    `tests/unit/test_model_age_is_training_age.py`, which holds that property.
+
+    Every assertion in this file is unchanged; only how a model is made old is.
+    """
     path = tmp_path / "advanced_oos.pkl"
     path.write_bytes(b"model")
     monkeypatch.setattr(ie, "_saved", lambda name: tmp_path / name)
@@ -61,10 +70,30 @@ def model_file(tmp_path, monkeypatch):
 
 
 def _age(path, days):
-    when = time.time() - days * 86_400.0
-    import os
+    """Record that `path`'s exact bytes were trained `days` ago.
 
-    os.utime(path, (when, when))
+    Bound to the sha256, so — unlike the `os.utime` this replaced — copying or
+    touching the file cannot change the age it yields.
+    """
+    import hashlib
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    trained = datetime.now(timezone.utc) - timedelta(days=days)
+    (path.parent / "registry.json").write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "v1": {
+                        "file": path.name,
+                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                        "trained_at": trained.isoformat(),
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 # ── model staleness ───────────────────────────────────────────────────────────
