@@ -35,6 +35,7 @@ import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative, extractApiError, sameSymbol, positionSide } from '../lib/utils';
 import type { PriceTick } from '../store';
+import { assessBars } from '../lib/barQuality';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -256,6 +257,17 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   const hydrated = useHasHydrated();
 
   const [chartError, setChartError] = useState<string | null>(null);
+  /*
+   * What the bars themselves are worth.
+   *
+   * `chartError` covers "nothing arrived" — the endpoint's 503, which already
+   * names the symbol, the timeframe and the feed to configure. This covers the
+   * other failure: bars that DID arrive and are not candles. Measured on the
+   * daily series this terminal can serve with no live feed, 62 of 500 have no
+   * body or no wicks, and every chart drew them as though the market had been
+   * still. See `lib/barQuality.ts`.
+   */
+  const [barNotice, setBarNotice] = useState<string | null>(null);
   const [loading, setLoading]       = useState(true);
   const [showVolume, setShowVolume] = useState(true);
   const [showMA, setShowMA]         = useState(true);
@@ -382,6 +394,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
           candleRef.current?.setData([]);
           volRef.current?.setData([]);
           maRef.current?.setData([]);
+          setBarNotice(null);
           setCandles([]);
           setChartError('No OHLCV data for this symbol/timeframe');
           return;
@@ -398,6 +411,9 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         const newest = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
         lastBarTimeRef.current = newest ? toUTC(newest.timestamp) : null;
 
+        setBarNotice(assessBars(sorted.map((c) => ({
+          time: toUTC(c.timestamp), open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume,
+        }))).notice);
         candleRef.current!.setData(sorted.map((c) => ({
           time: toUTC(c.timestamp), open: c.open, high: c.high, low: c.low, close: c.close,
         })));
@@ -433,6 +449,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         volRef.current?.setData([]);
         maRef.current?.setData([]);
         setCandles([]);
+        setBarNotice(null);
         setChartError(extractApiError(err, 'Failed to load chart data'));
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -534,6 +551,16 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         )}
         {/* Container is always rendered so the chart has a real size on init */}
         <div ref={containerRef} style={{ width: '100%', height: 340 }} />
+        {/*
+          Beside the chart, not over it. These bars are still worth looking at —
+          the point is that the operator knows what they are looking at. An
+          overlay would hide the thing it is describing.
+        */}
+        {barNotice && !chartError && (
+          <div role="status" className="px-2 pb-1 text-[10px] leading-snug text-[var(--warn)]">
+            {barNotice}
+          </div>
+        )}
       </div>
     </div>
   );
