@@ -358,27 +358,64 @@ is one component, and the count corrects itself to 62 pages.
 page-level components has the same defect waiting. Grep `App.tsx` for
 `element={wrap(` followed by `<>`.
 
-### 3. Pages that render but fetch nothing
+### 3. ~~Pages that render but fetch nothing~~ — WITHDRAWN, the measurement was wrong
 
-Eleven routed pages call no API at all:
+**Do not act on the list this section used to carry.** It named eleven routed
+pages as calling no API, and five as "worth wiring": `AIAssistant`,
+`NuclearDashboardPage`, `SystemReliability`, `PositionDetail` and
+`GeopoliticalRiskPage`.
 
+Re-measured 2026-09-15, **all five were already data-wired** — by three
+different mechanisms, none of which a grep of the page file can see:
+
+| Page | How its data actually arrives |
+|---|---|
+| `AIAssistant` | renders `<AIChat>`, which calls `aiAssistantApi.send`; also reaches `hooks/useVoice.ts` |
+| `NuclearDashboardPage` | renders `<NuclearDashboard>`, whose `GeopoliticalPanel` uses `useQuery` |
+| `SystemReliability` | lazy-loads `superadmin/SystemReliabilitySection`, which calls the API directly |
+| `GeopoliticalRiskPage` | calls `useQuery(fetchWorldMonitorViews)` in its own file |
+| `PositionDetail` | reads `useStore(selectPositions)` — the global store, hydrated by whoever fetched the positions |
+
+The old list came from looking for a fetch **in the page file**. A page that
+delegates to a child, or reads a store someone else filled, is indistinguishable
+from a page with nothing behind it. The section had already hand-exempted
+`Settings` and `Hub` as "shells whose children fetch" — that exemption was the
+tell that the predicate was wrong, not that those two were special.
+
+Acting on it would have been **worse than ignoring it**: adding a second fetch
+to a page whose child already fetches duplicates a request and can put two
+sources of truth on one screen.
+
+**The replacement measures the import graph**, which is what "does this page
+show live data" means:
+
+```bash
+python scripts/frontend_data_reachability.py          # the report
+python scripts/frontend_data_reachability.py --json   # machine-readable
 ```
-AIAssistant (51)   Hub (114)            NuclearDashboardPage (95)
-SystemReliability (82)                  PositionDetail (274)
-GeopoliticalRiskPage (549)              Settings (554)
-DocsPage (429)     NotFound (169)       PrivacyPolicy (248)
-TermsAndRiskDisclosure (429)
-```
 
-Four of those are **correct** and must stay that way: `DocsPage`,
-`PrivacyPolicy`, `TermsAndRiskDisclosure` and `NotFound` are static by design.
-`Settings` and `Hub` are shells whose children fetch.
+Measured 2026-09-15: **70 of 73 routed pages reach live data** — 67 in their own
+file, 3 through a child or the store. The three with nothing behind them are
+`DocsPage`, `PrivacyPolicy` and `TermsAndRiskDisclosure`, and all three are
+correctly static: they are documents.
 
-The five worth wiring are `AIAssistant`, `NuclearDashboardPage`,
-`SystemReliability`, `PositionDetail` and `GeopoliticalRiskPage` — each shows a
-surface with no live data behind it. **Check before you wire:** the endpoint may
-not exist. Adding a fetch to a 404 is worse than a static page, because it
-produces an error state where there was none.
+It does **not** block and is not a ratchet, deliberately. A static page is a
+legitimate page, and a gate that pushed a privacy policy to fetch something
+would be making the product worse to move a number.
+
+Two wrong answers the script itself gave before it was trusted, both now pinned
+as tests in `tests/unit/test_frontend_data_reachability.py`:
+
+* it reported `TwoFactorSetup` — the page that enrols a second factor, with five
+  `api.get<T>(...)` calls — as having no data, because a TypeScript generic sits
+  between the method name and the parenthesis;
+* it reported `DocsPage`, whose only state is a search box, as reaching live
+  data, because every page reaches `hooks/useApi.ts` through `PageShell`.
+  Importing the module that *defines* `tradingApi` is not calling it.
+
+Comments and string bodies are stripped before the markers are matched — F255,
+the fifth time a checker in this repository has been caught reading prose as
+code. All five stripping and walking behaviours are injection-proven.
 
 ### 4. The three surfaces the owner asked for and nobody has built
 

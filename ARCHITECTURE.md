@@ -182,6 +182,7 @@ this file. Each is a **command**, so its answer is current rather than a snapsho
 | `python scripts/model_provenance_report.py --check` | ml/ modules that load a model and reach no integrity check, and committed artifacts no baseline records; both lists may only fall (A8) |
 | `python scripts/schema_migration_check.py --check` | Every ORM `__tablename__` is created by a migration, not only by `create_all()` (F218) |
 | `python scripts/frontend_page_shell_ratchet.py --check` | Pages not yet built on `PageShell` — may only fall, and a NEW page that skips it blocks |
+| `python scripts/frontend_data_reachability.py` | Which routed pages reach live data, through the import graph rather than the page file. Reports only — a static page is legitimate |
 | `npx vitest run src/test/design_tokens.test.ts` (in `frontend/`) | The token layer is complete: every base colour has a light value, no token is light-only, nothing references an undeclared token, the type scale is seven ascending steps, and the AI surface never redefines `--bull`/`--bear`/`--gain`/`--loss` |
 | `cd frontend && npm run lint` | Controls with no accessible name — inputs and textareas, not buttons: of the 138 first measured, exactly one was a button. Error everywhere except `frontend/a11y-debt.json`, which may only shrink (F172) |
 | `python scripts/group4_preservation.py` | Whether any specification title has been dropped |
