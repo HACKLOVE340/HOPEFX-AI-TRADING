@@ -28,7 +28,8 @@ import {
   Activity, AlertTriangle, BadgeCheck, Ban, Brain, CheckCircle2, CircleSlash,
   Coins, Database, KeyRound, Layers3, RefreshCw, ScrollText, ShieldCheck, XCircle,
 } from 'lucide-react';
-import { PageHeader, EmptyState, ErrorBanner } from '../components';
+import { EmptyState, ErrorBanner } from '../components';
+import { PageShell } from '../components/system/PageShell';
 import { InstrumentSurface } from '../components/system/InstrumentSurface';
 import { GenerationWorkbench } from '../components/ai/GenerationWorkbench';
 import { PresencePanel } from '../components/ai/PresencePanel';
@@ -266,19 +267,31 @@ export const AICore: React.FC = () => {
 
   const s = summary.data;
 
+  /*
+   * On the standard shell, inside the instrument surface.
+   *
+   * The page carried `maxWidth: 1360` and its own padding — a bespoke width,
+   * which is the twelfth `PageShell` exists to replace. `wide` is 1440, so the
+   * plane gets MORE room than it had, not less; nothing is cropped.
+   *
+   * `InstrumentSurface` stays outside the shell. It paints the AI palette and
+   * the plotting field for everything inside it, and that includes the page
+   * header — an instrument whose title bar was dressed as an ordinary page
+   * would be two surfaces on one screen.
+   */
   return (
     <InstrumentSurface>
-    <div style={{ padding: '18px 20px 40px', maxWidth: 1360, margin: '0 auto' }}>
-      <PageHeader
-        title="AI Core"
-        subtitle="Which model answers, what it cost, what was refused, and why — read live from the gateway."
-        icon={Brain}
-        actions={(
-          <button type="button" style={button} onClick={refreshAll} aria-label="Refresh every AI Core panel">
-            <RefreshCw size={14} aria-hidden /> Refresh
-          </button>
-        )}
-      />
+    <PageShell
+      title="AI Core"
+      subtitle="Which model answers, what it cost, what was refused, and why — read live from the gateway."
+      icon={Brain}
+      width="wide"
+      actions={(
+        <button type="button" style={button} onClick={refreshAll} aria-label="Refresh every AI Core panel">
+          <RefreshCw size={14} aria-hidden /> Refresh
+        </button>
+      )}
+    >
 
       {/* Tabs. Native buttons so keyboard order matches visual order. */}
       <div role="tablist" aria-label="AI Core workspaces" style={{ display: 'flex', gap: 8, margin: '14px 0', ...scrollBox }}>
@@ -677,7 +690,7 @@ export const AICore: React.FC = () => {
           </Section>
         </>
       )}
-    </div>
+    </PageShell>
     </InstrumentSurface>
   );
 };

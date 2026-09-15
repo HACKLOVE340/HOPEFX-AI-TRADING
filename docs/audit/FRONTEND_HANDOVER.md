@@ -30,7 +30,7 @@ Measured 2026-09-15, immediately before this document was written:
 | Measure | Value |
 |---|---|
 | Correction register | 97 findings · OPEN 1 · PARTIAL 9 · OWNER 8 · FIXED 79 |
-| Pages on the standard shell | 58 of 63 — **5 off** |
+| Pages on the standard shell | 59 of 62 — **3 off** |
 | Colour literals | 3,552 across 190 files |
 | Emoji used as icons | 750 across 125 files |
 | Inline `fontSize` the cascade cannot reach | 2,108 (was 2,871) |
@@ -289,10 +289,12 @@ were audited for this.
 
 **What is left, and why each is last:**
 
-* `AICore`, `Trading`, `TradingDashboard` — workspaces. The fourth width now
-  exists, so these are unblocked; they are large (685, 1096, 272 lines) and each
-  owns a bespoke grid, so they want a session each rather than a batch.
-* `SuperAdminDashboard` — a tab shell whose children are the real pages.
+* `Trading` (1,096 lines) — the `/terminal` page. A workspace; the fourth width
+  unblocks it, but it is large and owns a bespoke grid, so it wants a session of
+  its own.
+* `SuperAdminDashboard` (576 lines) — a tab shell whose children are the real
+  pages. It already has its own h1 at line 405; the migration is moving that
+  header into the shell, as `Settings` was.
 * `DocsPage` — **deliberately last, and possibly never.** It is a documentation
   landing page with a designed hero: its own breadcrumb, a brand-styled h1 where
   "FX" is accent-coloured, a subtitle and a live status badge, in a 48px band
@@ -300,6 +302,23 @@ were audited for this.
   it as-is would flatten the hero — which is removing what the page displays,
   not improving it. Either give `PageShell` a hero affordance first, or leave
   this one off the shell on purpose and say so here.
+
+**`TradingDashboard` is no longer counted, and that is a fix not an exemption.**
+`/observability` rendered `<><Observability /><TradingDashboard /></>` as
+siblings. `Observability` is on `PageShell`, so its header, body AND "Where to
+next" footer rendered — and then several hundred pixels of engine grid rendered
+after it, outside the shell. **The footer sat in the middle of the page.**
+
+It also made `TradingDashboard` unmigratable in the obvious way: giving it its
+own shell would have put two h1s and two footers on the route, which is what the
+ratchet was asking for. The ratchet was not wrong — `_routed_pages` counts any
+component named in a `<Route element=…>`, and that is the right rule; the ROUTE
+was wrong. `Observability` now renders the grid inside its own shell, the route
+is one component, and the count corrects itself to 62 pages.
+
+**Look for this shape elsewhere.** Any route whose element is a fragment of two
+page-level components has the same defect waiting. Grep `App.tsx` for
+`element={wrap(` followed by `<>`.
 
 ### 3. Pages that render but fetch nothing
 

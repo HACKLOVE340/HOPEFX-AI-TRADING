@@ -16,6 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 
 const BASE = {
   role: 'superadmin', is_superadmin: true,
@@ -31,9 +32,16 @@ async function renderWith(durability: unknown) {
   qc.setQueryData(['ai-core', 'summary'], { ...BASE, durability });
   const { AICore } = await import('../pages/AICore');
   return render(
-    <QueryClientProvider client={qc}>
-      <AICore />
-    </QueryClientProvider>,
+    // AICore is on `PageShell` as of 2026-09-15, and the shell reads
+    // `useLocation()` to derive its onward links. Rendering a page outside a
+    // Router only worked while this one used no router hook; every other page's
+    // test has always wrapped, and this is the harness catching up rather than
+    // a behaviour change — in the app it is always inside the router.
+    <MemoryRouter initialEntries={['/ai-core']}>
+      <QueryClientProvider client={qc}>
+        <AICore />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 

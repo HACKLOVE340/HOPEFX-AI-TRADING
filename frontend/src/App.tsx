@@ -58,7 +58,6 @@ const DocsPage                = React.lazy(() => import('./pages/DocsPage'));
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 const Dashboard        = React.lazy(() => import('./pages/Dashboard'));
-const TradingDashboard = React.lazy(() => import('./pages/TradingDashboard'));
 const TradingTerminal  = React.lazy(() => import('./pages/Trading'));
 const Trade            = React.lazy(() => import('./pages/Trade'));
 const Portfolio        = React.lazy(() => import('./pages/Portfolio'));
@@ -672,15 +671,12 @@ const AppShell: React.FC = () => {
             <Route path="/backtest"     element={<Navigate to="/ai-strategy" replace />} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
-            <Route
-              path="/observability"
-              element={wrap(adminOnly(
-                <>
-                  <Observability />
-                  <TradingDashboard />
-                </>,
-              ))}
-            />
+            {/* One page, not two components side by side. `Observability`
+                renders the engine grid inside its own shell now — as a fragment
+                here, the shell closed and its "Where to next" footer landed in
+                the middle of the page, with the whole microstructure grid
+                below it. */}
+            <Route path="/observability" element={wrap(adminOnly(<Observability />))} />
             <Route path="/ml-ops"        element={wrap(adminOnly(<MLDashboard />))} />
             <Route path="/ai-core"       element={wrap(adminOnly(<AICore />))} />
             <Route path="/support-console" element={wrap(adminOnly(<SupportConsole />))} />

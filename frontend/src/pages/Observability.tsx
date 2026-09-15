@@ -11,6 +11,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { observabilityApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import TradingDashboard from './TradingDashboard';
 
 interface Metrics {
   cpu_percent?: number; memory_percent?: number; request_rate?: number;
@@ -143,6 +144,24 @@ const Observability: React.FC = () => {
           </div>
         </>
       )}
+
+      {/*
+       * The engine grid, INSIDE this page's shell.
+       *
+       * `/observability` used to render `<><Observability /><TradingDashboard /></>`
+       * as siblings, so this shell closed — header, body and the "Where to
+       * next" footer — and several hundred pixels of microstructure then
+       * rendered after it. The footer sat in the middle of the page.
+       *
+       * It also made `TradingDashboard` unmigratable: giving it its own
+       * `PageShell` would have put two h1s and two footers on this route, which
+       * is what the shell ratchet was asking for — it counts any component
+       * named in a `<Route element=…>` and cannot see that this one holds two.
+       *
+       * The grid is a SECTION of observability, not a page, so this page
+       * renders it.
+       */}
+      <TradingDashboard />
     </PageShell>
   );
 };
