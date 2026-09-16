@@ -48,13 +48,13 @@ describe('the fourth width', () => {
   it('leaves the three existing widths exactly as they were', () => {
     // If any of these changes, 56 migrated pages move, and the fourth width was
     // supposed to cost them nothing.
-    for (const [width, token] of [
-      ['wide', '--page-wide'],
-      ['standard', '--page-standard'],
-      ['narrow', '--page-narrow'],
+    for (const [width, expectedClass] of [
+      ['wide', 'max-w-[var(--page-wide)]'],
+      ['standard', 'max-w-[var(--page-standard)]'],
+      ['narrow', 'max-w-[var(--page-narrow)]'],
     ] as const) {
       cleanup();
-      expect(shellAt({ width }).className).toContain(`max-w-[var(${token})]`);
+      expect(shellAt({ width }).className).toContain(expectedClass);
     }
   });
 
