@@ -260,9 +260,9 @@ class TestRedisTickWriterWrite:
     @pytest.mark.asyncio
     async def test_error_count_increments_on_redis_failure(self):
         w, _ = await _make_writer()
-        # Corrupt the redis reference to force a _flush_one error.
+        # Corrupt the redis reference to force a _flush_one error intentionally.
         payload = {"symbol": "XAUUSD", "price": 1950.0, "source": "yfinance", "ts": 0, "timestamp": ""}
-        w._redis = object()  # type: ignore — not a real Redis client
+        w._redis = object()
         try:
             await w._flush_one(payload)
         except Exception:
