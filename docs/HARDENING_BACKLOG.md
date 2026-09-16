@@ -408,6 +408,14 @@ per `docs/INVARIANT_ROLLOUT.md` will **not** fix it — the check will still pas
 `HOPEFXDecisionEngine._phase3_risk` into `exec_signal`, and make
 `trade_executor.py:330` reject rather than mint a missing token.
 
+**Additional fail-closed hardening (2026-09-16):** an exception while evaluating
+`enforce_order_authorization()` now returns a rejected `ExecutionResult` and
+cannot reach journalling or `broker.place_market_order()`. The authorization
+invariant is a preventive trading control; an unavailable control is therefore
+treated as a blocked order rather than an execution-path error that can fail
+open. Regression coverage is in
+`tests/unit/test_trade_executor_comprehensive.py::test_authorization_control_exception_fails_closed`.
+
 ### S1-06 — Kelly sizing is a constant (HIGH)
 
 Three defects compound in `calculate_position_size`:
