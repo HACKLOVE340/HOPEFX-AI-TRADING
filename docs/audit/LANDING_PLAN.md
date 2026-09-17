@@ -1,6 +1,6 @@
 # Landing the audit branch
 
-`claude/add-new-skills-lys862` is **652 commits and 1,556 files ahead of `main`**
+`claude/add-new-skills-lys862` is **653 commits and 1,556 files ahead of `main`**
 (measured 2026-09-14; this read 551 and 1,227 when the plan was written, and 565 and
 1,246 on 2026-09-13). Both figures are now measured by
 `scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —
@@ -176,6 +176,65 @@ The remaining 90 were not driven to zero, deliberately — each further package
 added pulls the slice closer to the whole branch, which is the thing this plan
 exists to avoid. The number to act on is the shape of the dependency, not its
 tail.
+
+### Option 1 was executed. It is not sufficient, and the reason is structural
+
+`docs/ai/specs/` and `docs/ai/MASTER_OUTSTANDING.md` were folded in and the
+slice driven as far as it goes. It does not reach green, and the residue is not
+a fold that was missed.
+
+| Step | Failed | Passed |
+|---|---:|---:|
+| Slice 1 as the table specifies it, 33 test files | 147 | 402 |
+| \+ `docs/ai/specs/` and `MASTER_OUTSTANDING.md` | 95 | 422 |
+| \+ move the three `ai/`-coupled gates out, pull in every test `GATE_EVIDENCE.toml` cites, trim the indices | 24 | 470 |
+| \+ move every subsystem gate out (frontend, ml, api, alembic, coverage) — 115 files, 24 test files | **5** | 336 |
+
+The fold did work: `group4_preservation` went green and `doc_metrics` stopped
+reporting a missing document. It then refused for a second reason —
+`spatial_capabilities`, which `doc_metrics.measure()` calls unconditionally,
+cannot resolve `ai.spatial`. Folding `ai/spatial/` and `ai/hub/` in (11 files)
+did not close it either: the spatial register's evidence locators name
+`ai/departments/` and `frontend/src/hub/spatial.ts`, and `capability_callers`
+refuses because its positive control `PresenceAnywhere` lives in the frontend.
+Both refusals are correct — neither gate will report a number it cannot stand
+behind — and both are unreachable before slices 6 and 8.
+
+**The five that remain are all one thing, and no fold fixes them:**
+
+```
+gate_evidence  : gate_chroma_embedded_only, gate_j_circular_imports have no row
+                 — their evidence tests are in later slices
+aos_conformance: AOS-API-001 names scripts/api_documentation_generator.py, gone with slice 7
+docs_freshness : its positive control hard-codes ai/gateway/, so the parent is absent
+correction_reg.: the model probes degrade to UNVERIFIED with no ml/ to import
+```
+
+**Slice 1 is the measurement layer, and every artefact in it is a
+whole-repository index** — the correction register, the gate-evidence ledger,
+the document registry, the freshness baseline, the coverage baseline, the AOS
+register. An index of a tree that is not there cannot be complete, and the
+entries it is missing *are* the other eight slices. This is not a dependency
+that can be moved forward; it is the slice's own subject matter.
+
+Two consequences for landing, and they replace the recommendation above:
+
+1. **Slice 1's tests cannot be its merge gate in isolation.** What slice 1
+   should be reviewed for is the machinery — that each gate is correct and can
+   fail — and that is proven on the full tree, where the whole suite passes
+   (25,242 passed, 43 skipped, 0 failed, measured 2026-09-17). Demanding green
+   in isolation demands that the measurement layer measure nothing.
+2. **Every index regenerates at every slice, not just the register.** §"One
+   wrinkle in slice 1" says this for `CORRECTION_REGISTER.md`. It is true of
+   `GATE_EVIDENCE.toml`, `REGISTRY.toml`, `FRESHNESS_BASELINE.toml`, the
+   coverage baseline and `AOS_INVARIANT_REGISTER.toml` as well, and each of
+   those has an `--adopt` or `--generate` for exactly that.
+
+A gate travels with the subsystem it measures, the same rule the plan already
+applies to tests. On that rule slice 1 holds 23 gates rather than 33; the
+frontend ratchets go to slice 8, the model and coverage gates to slice 5, the
+API documentation gate to slice 7, the migration gate to slice 4, and
+`spatial_capabilities`, `capability_callers` and `doc_metrics` to slice 6.
 
 ### One wrinkle in slice 1
 
