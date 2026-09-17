@@ -41,10 +41,24 @@ import argparse
 import re
 import subprocess
 from dataclasses import dataclass
+import sys
 from pathlib import Path
 from typing import Final
 
 REPO = Path(__file__).resolve().parent.parent
+
+# `sweep()` imports `ai.hub.capabilities` to read the registry it screens. Run
+# the way this module's own docstring tells a contributor to run it — `python
+# scripts/capability_callers.py` — `sys.path[0]` is `scripts/`, and that import
+# died with ModuleNotFoundError before a single row was screened. The screen
+# worked only from inside pytest, which puts the root on the path for it.
+#
+# Loud rather than silent, so nothing was ever certified on a blind sweep. That
+# is the only reason this was an inconvenience instead of the F176 defect: a
+# screen that had caught the ImportError and gone on to report zero flagged rows
+# would have cleared every capability in the registry.
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 
 #: A symbol that is certainly called in production. If the sweep cannot find this,
 #: the sweep is broken and every other result is meaningless.

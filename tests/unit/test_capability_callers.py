@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 import pytest
 
 from scripts.capability_callers import (
@@ -102,3 +104,38 @@ class TestTheLiveSweep:
         rows = sweep(REPO)
         flagged = [r for r in rows if r.uncalled]
         assert len(flagged) < len(rows) / 2
+
+
+def test_the_screen_runs_as_a_command_line_not_only_as_an_import():
+    """`python scripts/capability_callers.py`, with nothing on PYTHONPATH.
+
+    Every other test here reaches the sweep through `from scripts.capability_callers
+    import ...`, which resolves only because pytest puts the repository root on
+    `sys.path`. Run the way its own docstring tells a contributor to run it, the
+    script died before screening anything:
+
+        ModuleNotFoundError: No module named 'ai'
+
+    `sys.path[0]` is `scripts/` for a script invoked by path, and `sweep()`
+    imports `ai.hub.capabilities`. The traceback is at least loud — this is the
+    diagnostic that decides whether a capability row may claim `live`, so a
+    version that had instead caught the ImportError and screened zero rows would
+    have reported every row clean.
+    """
+    import os
+    import subprocess
+    import sys
+
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    r = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "capability_callers.py")],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+        env=env,
+    )
+    assert "ModuleNotFoundError" not in r.stderr, r.stderr[-2000:]
+    assert r.returncode == 0, f"the screen must run from the command line:\n{r.stdout[-1500:]}\n{r.stderr[-1500:]}"
+    assert "screened:" in r.stdout

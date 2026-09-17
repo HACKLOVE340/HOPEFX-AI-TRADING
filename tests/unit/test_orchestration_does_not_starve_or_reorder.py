@@ -610,10 +610,51 @@ def test_resolving_with_no_positions_at_all_is_refused():
 # ── the registry ──────────────────────────────────────────────────────────────
 
 
-def test_the_phase_b_rows_are_live_and_their_evidence_resolves():
+def test_the_phase_b_rows_evidence_resolves_and_their_state_matches_who_calls_them():
+    """Each Phase B row's claim, checked against whether anything actually calls it.
+
+    This asserted all three rows were `live`. That was true when it was written
+    in 77429f7, and stopped being true at be941fe1 — the commit that built
+    `scripts/capability_callers.py`, screened the registry with it, and honestly
+    downgraded six rows from `live` to `staged` because nothing in production
+    named their evidence. `parallel.event_triggered` was one of them. The
+    assertion kept stating the old claim, so it has been red on the branch head
+    ever since, which nobody saw because CI has assigned no runner since
+    2026-09-06.
+
+    Re-asserting `live` to get it green would have been precisely the F176
+    defect this registry exists to prevent: a capability certified by a
+    hand-typed literal while the code it names is reachable from nothing.
+    Verified by hand, not only by the screen — `TriggerRegistry` appears in
+    exactly three files, its own definition in `ai/bus/triggers.py`, the
+    registry row that names it, and this test file. `ai/bus/__init__.py` does
+    not export it. The behaviour inside it is written and correct; no caller
+    reaches it, which is what `staged` means here.
+
+    So no state is typed here any more. Each row is compared against
+    `Row.uncalled` from the screen itself rather than against a literal, and the
+    predicate is imported rather than re-derived — a second copy of "does
+    anything call this" is how the two answers drift apart. Wiring the trigger
+    to a caller now makes this test fail and say the row should be promoted,
+    instead of leaving a `staged` row nobody revisits.
+    """
+    from scripts.capability_callers import sweep
+
     from ai.hub import capabilities
 
     assert capabilities.verify().discrepancies == ()
     rows = {c.id: c for c in capabilities.REGISTRY}
+    screened = {r.capability: r for r in sweep()}
+
     for row in ("parallel.priority_queues", "parallel.event_triggered", "agents.orchestrator"):
-        assert rows[row].state == "live", f"{row} is {rows[row].state}"
+        cap = rows[row]
+        assert cap.state in {"live", "staged"}, f"{row} is {cap.state}, so Phase B did not land it"
+        assert cap.evidence, f"{row} claims {cap.state} with no evidence locator"
+
+        screen = screened.get(row)
+        assert screen is not None, f"{row} is not covered by the caller screen — it should be"
+        assert cap.state == ("staged" if screen.uncalled else "live"), (
+            f"{row} is recorded {cap.state}, but the caller screen "
+            f"{'finds no production caller beyond its own definition' if screen.uncalled else 'finds a production caller'}"
+            f" ({screen.symbol}, prod={screen.production_files}). Promote or demote the row to match."
+        )
