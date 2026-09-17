@@ -66,6 +66,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Two probes below import a repository package — `ml.inference_engine`, to read
+# the shipped model's age and its provenance. Run the obvious way, as
+# `python scripts/correction_register.py`, `sys.path[0]` is `scripts/` and those
+# imports raised ModuleNotFoundError, so both probes degraded to UNVERIFIED. Run
+# from a shell with the repository root on PYTHONPATH — an activated dev
+# environment, or `python -m` — the same imports resolved and both measured
+# OWNER. One commit, two headlines, and `--check` passing or failing with them.
+#
+# A register whose status column depends on how the reader invoked it is not
+# measuring the repository. It is worse than a wrong answer in one particular
+# way: UNVERIFIED is reserved here for "cannot honestly be called open or
+# fixed", and it was being produced by a measurement that never ran, on two
+# findings that are squarely the owner's to resolve.
+#
+# So the path is settled here rather than left to the caller. Inserted at the
+# front because `scripts/` is already `sys.path[0]` and shadows nothing at the
+# root; appending would leave a `scripts/ml.py` able to win the lookup.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 # The document this script reads and writes. `HOPEFX_CORRECTION_REGISTER` points
 # it somewhere else, and exists for one reason: the gate's own tests need a
 # register they are allowed to vandalise. They used to vandalise the committed

@@ -142,6 +142,52 @@ def test_a_missing_register_is_refused(register_copy):
     assert "MISSING" in r.stdout
 
 
+def test_the_verdict_does_not_depend_on_pythonpath():
+    """The same tree must measure the same way however the script is invoked.
+
+    Two probes import `ml.inference_engine` to read the shipped model's age and
+    provenance. Run as `python scripts/correction_register.py`, `sys.path[0]` is
+    `scripts/`, so that import raised ModuleNotFoundError and both probes
+    degraded to UNVERIFIED. Run with the repository root on PYTHONPATH — which
+    is how an activated dev shell and this container both invoke it — the import
+    succeeded and both resolved OWNER. Same commit, same code, two headlines,
+    and `--check` passed or failed accordingly.
+
+    That made the register's own gate a report on the reader's shell. Worse in
+    one direction than the other: UNVERIFIED is what the register uses for
+    "cannot honestly be called open or fixed", and here it was being produced by
+    a measurement that never ran, on two findings that are squarely the owner's.
+
+    Asserts stdout as well as the exit code: two runs that agree only on "exit
+    0" could still be reporting different counts.
+    """
+    clean = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    with_root = dict(clean, PYTHONPATH=str(ROOT))
+
+    def run(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--check"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+            env=env,
+        )
+
+    bare, rooted = run(clean), run(with_root)
+
+    assert bare.stdout == rooted.stdout, (
+        "the register measures differently depending on PYTHONPATH:\n"
+        f"  without: {bare.stdout}\n  with:    {rooted.stdout}"
+    )
+    assert bare.returncode == rooted.returncode
+    assert "UNVERIFIED 0" in bare.stdout, (
+        "the model probes must measure rather than degrade — UNVERIFIED here "
+        "would mean the import is still failing, in both environments this time"
+    )
+
+
 def test_the_suite_leaves_the_committed_register_untouched():
     """The tests above must not write to the document they are about.
 

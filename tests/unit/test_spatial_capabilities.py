@@ -26,9 +26,17 @@ The rules, each tested below:
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from scripts import spatial_capabilities as sc
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "scripts" / "spatial_capabilities.py"
 
 pytestmark = pytest.mark.unit
 
@@ -181,3 +189,33 @@ def test_the_shipped_register_covers_every_capability_in_the_specification():
     report = sc.check()
     assert report.entries == 16
     assert report.built + report.partial + report.planned == report.entries
+
+
+def test_the_gate_passes_the_way_pre_commit_invokes_it():
+    """`python scripts/spatial_capabilities.py --check`, with nothing on PYTHONPATH.
+
+    Every other test in this file reaches the checker through
+    `from scripts import spatial_capabilities`, which resolves only because
+    pytest puts the repository root on `sys.path`. Pre-commit does not: its entry
+    is `python scripts/spatial_capabilities.py --check`, and there `sys.path[0]`
+    is `scripts/`, so `importlib.import_module("ai.spatial.world")` raises and
+    the gate REFUSES with exit 2.
+
+    That refusal is the right behaviour for an unresolvable universe — every
+    `built` row would otherwise read the same whether or not the code exists —
+    but it meant the hook could not pass in a fresh clone, and passed only for a
+    developer whose shell happened to export the root. The whole suite agreed it
+    was fine, because the suite never invoked it the way the hook does.
+    """
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    r = subprocess.run(
+        [sys.executable, str(SCRIPT), "--check"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+        env=env,
+    )
+    assert r.returncode == 0, f"the gate must pass as pre-commit runs it:\n{r.stdout}\n{r.stderr}"
+    assert "REFUSED" not in r.stderr

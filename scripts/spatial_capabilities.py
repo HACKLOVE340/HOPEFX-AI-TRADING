@@ -54,6 +54,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+
+# This checker resolves every `built` claim by importing `ai.spatial.*`. Run the
+# way pre-commit runs it — `python scripts/spatial_capabilities.py --check` —
+# `sys.path[0]` is `scripts/`, so that import raised and the gate REFUSED with
+# exit 2. The refusal is correct in itself: an unresolvable universe makes every
+# claim read identically, which is not an answer. But it made the hook
+# unpassable in a fresh clone, and passable only for a developer whose shell
+# happened to export the repository root on PYTHONPATH.
+#
+# The suite never caught it because every test here reaches the module through
+# `from scripts import spatial_capabilities`, which pytest resolves for them.
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
 REGISTER = REPO / "docs" / "ai" / "specs" / "SPATIAL_CAPABILITIES.toml"
 
 BUILT = "built"
