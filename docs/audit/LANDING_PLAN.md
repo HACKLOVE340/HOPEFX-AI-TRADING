@@ -1,6 +1,6 @@
 # Landing the audit branch
 
-`claude/add-new-skills-lys862` is **651 commits and 1,556 files ahead of `main`**
+`claude/add-new-skills-lys862` is **652 commits and 1,556 files ahead of `main`**
 (measured 2026-09-14; this read 551 and 1,227 when the plan was written, and 565 and
 1,246 on 2026-09-13). Both figures are now measured by
 `scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —
@@ -127,6 +127,55 @@ pre-commit run --all-files                                    # must be clean
 Only then cut the branch and open the PR. A slice whose tests do not pass in
 isolation has an undeclared dependency on a later slice — move the dependency
 forward rather than merging out of order.
+
+### Slice 1 does not pass in isolation — measured 2026-09-17
+
+That rule was applied to slice 1 as this table specifies it, and slice 1 fails
+it. The "30 passed" above was true when the slice was three scripts; the slice
+is now 52 scripts and 20 test files, and the gates in it read documents and
+import packages that this plan schedules for slices 6 and 9.
+
+Cut onto `origin/main` exactly as the recipe says, with the 33 test files that
+name `scripts`:
+
+| Slice 1 contains | Result |
+|---|---:|
+| 58 files (52 `scripts/`, 5 `docs/`, `.pre-commit-config.yaml`) + tests | **147 failed, 402 passed** |
+| \+ `docs/ai/specs/` (11 files, from slice 9) | 128 failed, 421 passed |
+| \+ `ai/` and `invariants/` (from slice 6) | **90 failed, 459 passed** |
+
+The dependency is not incidental, and it is not a bug in the gates. Two of them
+refuse rather than reporting a number they cannot stand behind:
+
+```
+group4_preservation : source not found: docs/ai/specs/GROUP4_master_ai_operating_system.txt
+doc_metrics         : REFUSED — docs/ai/MASTER_OUTSTANDING.md is missing — refusing to report a count
+```
+
+`doc_metrics` is the clearest case and the 54 failures that did not move at any
+step above: it exists to check that living documents state the measured figures,
+so it cannot be green on a tree that does not carry those documents. **A
+figure-checking gate is inseparable from the documents it polices.**
+
+So the ordering needs one of these decisions, and it is the owner's:
+
+1. **Fold the data into slice 1** — `docs/ai/specs/` and `docs/ai/MASTER_OUTSTANDING.md`
+   travel with the gates that read them. Smallest change, and it keeps the
+   "ratchets first" principle that motivates the order.
+2. **Land slice 1 with its document-reading gates disabled**, and enable them in
+   slice 9. Keeps the slice small; ships a hook that does not run, which is the
+   defect the `hopefx-dead-controls` skill exists to prevent.
+3. **Reorder** so documents precede gates. Loses the guarantee that everything
+   after slice 1 is guarded.
+
+Option 1 is the recommendation: the failures are concentrated in gates whose
+inputs are data files, not code, so moving the data forward costs one slice a
+few documents rather than restructuring the sequence.
+
+The remaining 90 were not driven to zero, deliberately — each further package
+added pulls the slice closer to the whole branch, which is the thing this plan
+exists to avoid. The number to act on is the shape of the dependency, not its
+tail.
 
 ### One wrinkle in slice 1
 
