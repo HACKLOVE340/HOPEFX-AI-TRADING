@@ -1,6 +1,6 @@
 # Landing the audit branch
 
-`claude/add-new-skills-lys862` is **650 commits and 1,556 files ahead of `main`**
+`claude/add-new-skills-lys862` is **651 commits and 1,556 files ahead of `main`**
 (measured 2026-09-14; this read 551 and 1,227 when the plan was written, and 565 and
 1,246 on 2026-09-13). Both figures are now measured by
 `scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —
@@ -30,15 +30,21 @@ Measured against `origin/main`, not estimated:
 
 | | Files | Note |
 |---:|---:|---|
-| **Added** | 889 | Tests, docs, new `ai/` and `frontend/` modules. Additive, low review risk. |
-| **Modified** | 357 | The real review surface. |
-| — of those, money/safety path | **62** | `payments/ monetization/ execution/ risk/ brokers/ invariants/ auth/ security/ database/ alembic/` |
-| Total | 1,246 | +280,168 / −5,859 |
+| **Added** | 1,010 | Tests, docs, new `ai/` and `frontend/` modules. Additive, low review risk. |
+| **Renamed** | 39 | 34 are pure renames (`R100`); 5 carry edits. |
+| **Modified** | 507 | The real review surface. |
+| — of those, money/safety path | **53** | `payments/ monetization/ execution/ risk/ brokers/ invariants/ auth/ security/ database/ alembic/` |
+| Total | 1,556 | +313,638 / −11,470 |
 
-**Nothing is deleted** — `git diff --name-status` reports 0 `D` entries. 889 of
-the 1,246 files did not exist on `main`, so most
-of the diff cannot break anything that currently runs. A reviewer's attention
-belongs on the 54.
+**Nothing is deleted** — `git diff --name-status` reports 0 `D` entries. 1,010 of
+the 1,556 files did not exist on `main`, so most of the diff cannot break
+anything that currently runs. A reviewer's attention belongs on the 53.
+
+These figures were 889 / 357 / 62 / 1,246 when this plan was written on
+2026-09-14 and are re-measured above on 2026-09-17. Only the header line's two
+figures are maintained by `scripts/doc_metrics.py --sync`; this table is not,
+so it drifted while the header stayed current — re-measure it with
+`git diff --name-status origin/main...HEAD` rather than trusting it.
 
 ## 2. What it delivers, measured rather than claimed
 
@@ -80,14 +86,14 @@ python scripts/correction_register.py                  # this branch's state
 
 ## 3. Why not one pull request
 
-1,246 files cannot be reviewed. A PR that size is approved on trust, which
+1,556 files cannot be reviewed. A PR that size is approved on trust, which
 defeats the point of review — and this branch touches order routing, payouts,
 authentication and model loading.
 
 ## 4. The slices
 
 Each is cut **by path from the branch head onto `main`**, so every PR is a
-coherent diff of final state rather than a temporal cut through 551 interleaved
+coherent diff of final state rather than a temporal cut through 650 interleaved
 commits. Order matters: tooling first, so the ratchets are on `main` guarding
 everything that follows.
 
@@ -129,7 +135,7 @@ Landed on `main` alone, it measures **51 OPEN**, not the branch's 14, so slice 1
 must ship a register regenerated against `main`:
 
 ```bash
-python scripts/correction_register.py --markdown   # regenerate §3 of the register
+python scripts/correction_register.py --write   # regenerate §3, keeping the prose
 ```
 
 Each later slice then flips its own findings and regenerates again. That is the
