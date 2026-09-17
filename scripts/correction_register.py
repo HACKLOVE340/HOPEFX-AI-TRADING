@@ -60,6 +60,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -5408,19 +5409,24 @@ def cmd_markdown(rows: list[tuple[Finding, str, str]]) -> None:
             print()
 
 
-def cmd_check(rows: list[tuple[Finding, str, str]]) -> int:
-    """Fail if the register document disagrees with the probes."""
-    if not REGISTER.exists():
+def cmd_check(rows: list[tuple[Finding, str, str]], path: Path = REGISTER) -> int:
+    """Fail if the register document disagrees with the probes.
+
+    `path` is the document to judge, defaulting to the committed register — the
+    same shape `cmd_write` already had. `cmd_selftest` passes a throwaway copy,
+    so proving this gate can fail no longer requires breaking the real one.
+    """
+    if not path.exists():
         # `relative_to` raises for a register outside the tree, which is the
         # normal case under HOPEFX_CORRECTION_REGISTER — and raising here would
         # turn "the document is missing" into a traceback.
         try:
-            shown: Path | str = REGISTER.relative_to(ROOT)
+            shown: Path | str = path.relative_to(ROOT)
         except ValueError:
-            shown = REGISTER
+            shown = path
         print(f"MISSING {shown} — run --write")
         return 1
-    body = REGISTER.read_text()
+    body = path.read_text()
     c = _counts(rows)
     expected = (
         f"**{len(rows)} tracked · OPEN {c[OPEN]} · PARTIAL {c[PARTIAL]} · "
@@ -5445,7 +5451,15 @@ def cmd_check(rows: list[tuple[Finding, str, str]]) -> int:
 
 
 def cmd_selftest() -> int:
-    """Prove --check can fail. A gate nobody has watched fail is not a gate."""
+    """Prove --check can fail. A gate nobody has watched fail is not a gate.
+
+    The wrong headline goes into a throwaway copy, never into the committed
+    register. It used to go into the real document, with the original restored in
+    a `finally` — so the one command a contributor is invited to run by hand left
+    `docs/audit/CORRECTION_REGISTER.md` holding a deliberately false headline for
+    as long as the probes took to run, and anything that killed the process in
+    that window left it there.
+    """
     if not REGISTER.exists():
         print("selftest: no register to mutate")
         return 1
@@ -5455,11 +5469,10 @@ def cmd_selftest() -> int:
         print("selftest: no headline to mutate")
         return 1
     broken = original.replace(m.group(0), f"**{int(m.group(1)) + 99} tracked", 1)
-    try:
-        REGISTER.write_text(broken)
-        rc = cmd_check(_measure_all())
-    finally:
-        REGISTER.write_text(original)
+    with tempfile.TemporaryDirectory() as tmp:
+        scratch = Path(tmp) / "CORRECTION_REGISTER.md"
+        scratch.write_text(broken, encoding="utf-8")
+        rc = cmd_check(_measure_all(), path=scratch)
     if rc == 0:
         print("SELFTEST FAILED: --check accepted a wrong count")
         return 1

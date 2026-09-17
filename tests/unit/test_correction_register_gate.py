@@ -142,6 +142,46 @@ def test_a_missing_register_is_refused(register_copy):
     assert "MISSING" in r.stdout
 
 
+def test_selftest_proves_the_gate_can_fail_without_touching_the_committed_register():
+    """`--selftest` must not vandalise the document to demonstrate the gate.
+
+    It exists for a good reason — a gate nobody has watched fail is not a gate —
+    and it proved that by writing a wrong headline into
+    `docs/audit/CORRECTION_REGISTER.md`, running `--check` against it, and
+    restoring the original in a `finally`. Same destructive window as the four
+    injection tests that used to do this, and in the one command a contributor is
+    actually invited to run by hand: between the two writes the register held a
+    deliberately false headline, and a `kill -9`, an OOM kill or a closed
+    terminal left it that way.
+
+    Both halves are asserted. mtime, because a rewrite-and-restore leaves the
+    bytes identical and a content check would pass against the defect. And exit
+    0, because `--selftest` returns non-zero when `--check` accepts a wrong
+    count — so a version that quietly stopped mutating anything at all, and
+    therefore stopped proving anything, would fail here rather than read as a
+    clean run.
+    """
+    before_bytes = REGISTER.read_bytes()
+    before_mtime = REGISTER.stat().st_mtime_ns
+
+    r = subprocess.run(
+        [sys.executable, str(SCRIPT), "--selftest"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+
+    assert r.returncode == 0, f"--selftest must still prove --check refuses a wrong count:\n{r.stdout}\n{r.stderr}"
+    assert REGISTER.exists(), "--selftest deleted the committed register"
+    assert REGISTER.read_bytes() == before_bytes, "--selftest changed the committed register"
+    assert REGISTER.stat().st_mtime_ns == before_mtime, (
+        "--selftest wrote to the committed register and put it back — the bytes "
+        "match, but the file was broken on disk in between"
+    )
+
+
 def test_the_verdict_does_not_depend_on_pythonpath():
     """The same tree must measure the same way however the script is invoked.
 
