@@ -56,6 +56,7 @@ import ast
 import contextlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -64,7 +65,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REGISTER = ROOT / "docs" / "audit" / "CORRECTION_REGISTER.md"
+
+# The document this script reads and writes. `HOPEFX_CORRECTION_REGISTER` points
+# it somewhere else, and exists for one reason: the gate's own tests need a
+# register they are allowed to vandalise. They used to vandalise the committed
+# one — editing `docs/audit/CORRECTION_REGISTER.md` in place and restoring it in
+# a fixture's `finally`, including one test that `unlink()`ed it. Between the
+# unlink and the restore the register did not exist, so any hard stop in that
+# window (an OOM, a container kill, a cancelled CI job) left the single list of
+# outstanding work deleted in the working tree. The override costs one
+# environment variable and removes that window entirely.
+#
+# Nothing in production sets it: unset, this is exactly the path it always was.
+_REGISTER_OVERRIDE = os.environ.get("HOPEFX_CORRECTION_REGISTER")
+REGISTER = Path(_REGISTER_OVERRIDE) if _REGISTER_OVERRIDE else ROOT / "docs" / "audit" / "CORRECTION_REGISTER.md"
 
 # Status vocabulary — the audit plan's taxonomy, narrowed to what a probe can
 # distinguish. PARTIAL and OWNER are not weaker forms of OPEN: PARTIAL means the
@@ -5377,7 +5391,14 @@ def cmd_markdown(rows: list[tuple[Finding, str, str]]) -> None:
 def cmd_check(rows: list[tuple[Finding, str, str]]) -> int:
     """Fail if the register document disagrees with the probes."""
     if not REGISTER.exists():
-        print(f"MISSING {REGISTER.relative_to(ROOT)} — run --write")
+        # `relative_to` raises for a register outside the tree, which is the
+        # normal case under HOPEFX_CORRECTION_REGISTER — and raising here would
+        # turn "the document is missing" into a traceback.
+        try:
+            shown: Path | str = REGISTER.relative_to(ROOT)
+        except ValueError:
+            shown = REGISTER
+        print(f"MISSING {shown} — run --write")
         return 1
     body = REGISTER.read_text()
     c = _counts(rows)

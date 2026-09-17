@@ -10,12 +10,20 @@ hook nobody has watched fail is not a hook — Group 2 Rule 1 — so each test b
 introduces a specific way the register can go wrong and asserts `--check`
 refuses it.
 
-The register is restored after every test; none of these mutate the tree that
-survives the run.
+No test here writes to `docs/audit/CORRECTION_REGISTER.md`. The injections run
+against a copy in `tmp_path`, reached through `HOPEFX_CORRECTION_REGISTER`.
+
+This paragraph used to read "the register is restored after every test; none of
+these mutate the tree that survives the run". That was true of every run that
+*survived*, and it is why the real behaviour went unexamined: the tests did edit
+the committed register, and one deleted it, restoring it in a fixture's
+`finally`. `test_the_suite_leaves_the_committed_register_untouched` now asserts
+the stronger claim this paragraph makes, so it cannot quietly stop being true.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -30,7 +38,11 @@ SCRIPT = ROOT / "scripts" / "correction_register.py"
 REGISTER = ROOT / "docs" / "audit" / "CORRECTION_REGISTER.md"
 
 
-def _check() -> subprocess.CompletedProcess[str]:
+def _check(register: Path | None = None) -> subprocess.CompletedProcess[str]:
+    """Run the gate, optionally against a register held somewhere else."""
+    env = dict(os.environ)
+    if register is not None:
+        env["HOPEFX_CORRECTION_REGISTER"] = str(register)
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--check"],
         cwd=ROOT,
@@ -38,17 +50,26 @@ def _check() -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=120,
         check=False,
+        env=env,
     )
 
 
 @pytest.fixture
-def register_restored():
-    """Hand back the original bytes whatever the test does to the file."""
+def register_copy(tmp_path: Path) -> tuple[Path, str]:
+    """A scratch copy of the register, and its text. The committed file is not touched.
+
+    This used to be `register_restored`, which handed back the real document's
+    bytes, let the test edit `docs/audit/CORRECTION_REGISTER.md` in place, and
+    put it back in a `finally`. That worked for every run that finished. It also
+    meant the single list of outstanding work spent part of every test run in a
+    deliberately broken state — and, in `test_a_missing_register_is_refused`,
+    deleted outright. A `finally` does not run for `kill -9`, an OOM kill, or a
+    container stopped mid-run, so the window was real.
+    """
+    copy = tmp_path / "CORRECTION_REGISTER.md"
     original = REGISTER.read_text()
-    try:
-        yield original
-    finally:
-        REGISTER.write_text(original)
+    copy.write_text(original, encoding="utf-8")
+    return copy, original
 
 
 def test_the_gate_passes_on_the_committed_register():
@@ -62,62 +83,126 @@ def test_the_gate_passes_on_the_committed_register():
     assert "document agrees" in r.stdout
 
 
-def test_a_wrong_headline_count_is_refused(register_restored):
+def test_a_wrong_headline_count_is_refused(register_copy):
     """The drift that made fifteen separate fix lists untrustworthy.
 
     A register whose counts no longer match the code is the checkbox problem in
     a new file. This is the case that fires when someone lands a fix and does
     not regenerate.
     """
-    original = register_restored
+    copy, original = register_copy
     m = re.search(r"\*\*(\d+) tracked", original)
     assert m, "the register has no headline to check"
-    REGISTER.write_text(original.replace(m.group(0), f"**{int(m.group(1)) + 7} tracked", 1))
+    copy.write_text(original.replace(m.group(0), f"**{int(m.group(1)) + 7} tracked", 1))
 
-    r = _check()
+    r = _check(copy)
     assert r.returncode != 0, "a wrong count must not pass"
     assert "STALE" in r.stdout
 
 
-def test_a_changed_status_count_is_refused(register_restored):
+def test_a_changed_status_count_is_refused(register_copy):
     """Not just the total — the OPEN/FIXED split is the part people read.
 
     A register that keeps the right total while calling an open item fixed is
     worse than one that is obviously stale, because it reads as current.
     """
-    original = register_restored
+    copy, original = register_copy
     m = re.search(r"OPEN (\d+) · PARTIAL (\d+)", original)
     assert m, "the register has no status breakdown"
-    REGISTER.write_text(original.replace(m.group(0), f"OPEN {int(m.group(1)) - 1} · PARTIAL {int(m.group(2)) + 1}", 1))
+    copy.write_text(original.replace(m.group(0), f"OPEN {int(m.group(1)) - 1} · PARTIAL {int(m.group(2)) + 1}", 1))
 
-    r = _check()
+    r = _check(copy)
     assert r.returncode != 0, "a wrong OPEN/PARTIAL split must not pass"
     assert "STALE" in r.stdout
 
 
-def test_a_dropped_finding_is_refused(register_restored):
+def test_a_dropped_finding_is_refused(register_copy):
     """Deleting an entry must not be a way to make the register agree.
 
     The counts alone would not catch this if someone edited both; the gate also
     asserts every tracked finding still has a section.
     """
-    original = register_restored
+    copy, original = register_copy
     m = re.search(r"^#### (\S+) ·", original, re.MULTILINE)
     assert m, "the register has no finding sections"
     heading = m.group(0)
-    REGISTER.write_text(original.replace(heading, "#### (removed) ·", 1))
+    copy.write_text(original.replace(heading, "#### (removed) ·", 1))
 
-    r = _check()
+    r = _check(copy)
     assert r.returncode != 0, f"a dropped finding must not pass:\n{r.stdout}"
     assert "absent from the register" in r.stdout
 
 
-def test_a_missing_register_is_refused(register_restored):
+def test_a_missing_register_is_refused(register_copy):
     """Fail closed. Deleting the document must not read as 'nothing outstanding'."""
-    REGISTER.unlink()
-    r = _check()
+    copy, _ = register_copy
+    copy.unlink()
+    r = _check(copy)
     assert r.returncode != 0, "a missing register must not pass"
     assert "MISSING" in r.stdout
+
+
+def test_the_suite_leaves_the_committed_register_untouched():
+    """The tests above must not write to the document they are about.
+
+    They used to. `test_a_missing_register_is_refused` called `REGISTER.unlink()`
+    on `docs/audit/CORRECTION_REGISTER.md` and relied on a fixture's `finally` to
+    put it back; the other three rewrote it with a deliberately wrong headline.
+    Every completed run restored it, so `git status` was clean afterwards and
+    nothing ever reported a problem — which is exactly why this went unnoticed.
+    A `finally` does not run for `kill -9`, an OOM kill, or a container stopped
+    mid-run, and the register was observed mid-deletion during this audit:
+    `git diff` reported 1,180 deletions and the path missing from the work tree.
+
+    mtime is the assertion, not the bytes: a run that rewrites the file and
+    restores it byte-for-byte leaves the content identical, so comparing content
+    alone would pass against the defect this test exists to catch.
+
+    Only the injection tests are re-run here — they are the four that held the
+    old fixture — which keeps this to a few seconds rather than re-running the
+    module's probe-heavy cases.
+    """
+    before_bytes = REGISTER.read_bytes()
+    before_mtime = REGISTER.stat().st_mtime_ns
+
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            str(Path(__file__)),
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-k",
+            "refused",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+
+    # 0 = all passed, 1 = some failed. Anything else (2 interrupted, 3 internal
+    # error, 4 usage, 5 nothing collected) means the inner run did not execute
+    # the injections, and a register left alone by a run that never happened
+    # proves nothing — the harness has to be live before its result counts.
+    #
+    # Whether those injections PASS is deliberately not asserted here. They are
+    # sensitive to `PYTHONPATH`: with the repository root on it, `ml` imports,
+    # two probes resolve OWNER instead of UNVERIFIED, and the gate reports STALE
+    # against a register that is correct for the way pre-commit invokes it. That
+    # is a real defect and it is recorded separately; binding it to this test
+    # would mean this one goes red for a reason that has nothing to do with the
+    # file it is watching.
+    assert r.returncode in (0, 1), f"the injection tests did not run:\n{r.stdout[-3000:]}\n{r.stderr[-2000:]}"
+    assert REGISTER.exists(), "the run deleted the committed register"
+    assert REGISTER.read_bytes() == before_bytes, "the run changed the committed register"
+    assert REGISTER.stat().st_mtime_ns == before_mtime, (
+        "the run wrote to the committed register and restored it — the bytes "
+        "match, but the file was open for writing, which is the window"
+    )
 
 
 def test_a_probe_that_raises_does_not_report_the_finding_fixed():

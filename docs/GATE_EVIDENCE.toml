@@ -147,7 +147,7 @@ id = "docs-freshness"
 kind = "precommit_hook"
 runs = "scripts/docs_freshness.py"
 evidence = "tests/unit/test_docs_freshness.py"
-injected = "A semantic claim that contradicts the tree, and a reference to a file that does not exist"
+injected = "A semantic claim that contradicts the tree, and a reference to a file that does not exist. Also proven NOT to block: a path inside `.git/`. That directory is not part of the work tree, so `git check-ignore` exits 1 for it and the gate's gitignore escape hatch never fired — and `.git/hooks/pre-commit`, written per-clone by `pre-commit install` and never committed, blocked every fresh checkout while passing on any machine where somebody had run that command. The exemption is matched exactly rather than by prefix, and a companion test drives `.github/workflows/gone.yml` through the same path to prove it still blocks, because `startswith('.git')` would have exempted every workflow file in the repository while leaving the first test green."
 
 [[gate]]
 id = "docs-registry"
@@ -256,7 +256,7 @@ id = "correction-register"
 kind = "pre_commit"
 runs = "scripts/correction_register.py --check"
 evidence = "tests/unit/test_correction_register_gate.py"
-injected = "Five ways the register can stop being true, each refused: a headline total inflated by 7; an OPEN/PARTIAL split shifted by one while the total stays right (the case that reads as current and is not); a finding section deleted so the counts alone would not catch it; the document removed entirely, which must fail closed rather than read as nothing outstanding; and a probe that raises, which resolves to UNVERIFIED and never to FIXED — a measurement that cannot fail is the defect this register exists to avoid. The positive control is the sixth: the committed register passes, so the refusals above are not a checker that refuses everything"
+injected = "Five ways the register can stop being true, each refused: a headline total inflated by 7; an OPEN/PARTIAL split shifted by one while the total stays right (the case that reads as current and is not); a finding section deleted so the counts alone would not catch it; the document removed entirely, which must fail closed rather than read as nothing outstanding; and a probe that raises, which resolves to UNVERIFIED and never to FIXED — a measurement that cannot fail is the defect this register exists to avoid. The positive control is the sixth: the committed register passes, so the refusals above are not a checker that refuses everything. A seventh watches the suite rather than the gate: the four injections run against a copy in `tmp_path` reached through `HOPEFX_CORRECTION_REGISTER`, and the committed document's mtime is asserted unchanged across them. They used to edit `docs/audit/CORRECTION_REGISTER.md` itself, and one `unlink()`ed it, restoring it in a fixture's `finally` — so every completed run left `git status` clean and nothing ever reported it, while any hard stop in that window (OOM, `kill -9`, a cancelled job) deleted the single list of outstanding work. mtime is the assertion and the bytes are the weaker second check, because a rewrite-and-restore leaves the content identical. The inner run's pass/fail is deliberately NOT asserted — only that it was a real run (pytest exit 0 or 1, never 5) — since those injections are sensitive to PYTHONPATH and coupling them would make this test red for a reason unrelated to the file it watches."
 
 [[gate]]
 id = "model-artifact-manifest"

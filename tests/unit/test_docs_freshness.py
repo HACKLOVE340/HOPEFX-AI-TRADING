@@ -109,6 +109,28 @@ class TestPrecisionOverRecall:
         doc = _doc(repo, "d.md", "Put it in `made_up/thing.py` when you get there.\n")
         assert check_document(doc, repo) == []
 
+    def test_a_path_inside_the_git_directory_is_not_a_stale_reference(self, repo: Path) -> None:
+        # `.git/` is not part of the work tree. Git can neither track nor ignore
+        # it, so the `_is_ignored` guard — which asks `git check-ignore` — returns
+        # False and lets the finding through. `.git/hooks/pre-commit` is written
+        # by `pre-commit install` on each developer's machine and is never
+        # committed, so flagging it blocks every fresh clone while passing on any
+        # machine where somebody happened to run that command. That is a verdict
+        # about the reader, not about the repository.
+        (repo / ".git" / "hooks").mkdir(parents=True)
+        doc = _doc(repo, "d.md", "no hook before, `.git/hooks/pre-commit` after.\n")
+        assert check_document(doc, repo) == []
+
+    def test_a_path_under_dot_github_is_still_reported(self, repo: Path) -> None:
+        # The positive control for the guard above, which must match `.git/`
+        # exactly. `.github/` is tracked like any other directory, and a guard
+        # written as a prefix test — `candidate.startswith(".git")` — would have
+        # exempted every workflow file in the repository while still passing the
+        # test above.
+        (repo / ".github" / "workflows").mkdir(parents=True)
+        doc = _doc(repo, "d.md", "See `.github/workflows/gone.yml`.\n")
+        assert [f.rule for f in check_document(doc, repo)] == ["stale_path"]
+
     def test_a_module_reference_without_its_extension_resolves(self, repo: Path) -> None:
         # `ml/inference_engine` is an ordinary way to name `ml/inference_engine.py`.
         # Both of the first version's findings in the CONSTITUTION documents were

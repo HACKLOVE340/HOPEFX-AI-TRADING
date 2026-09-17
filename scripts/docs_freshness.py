@@ -225,6 +225,21 @@ def check_document(path: Path, repo: Path) -> list[Finding]:
             if candidate.startswith("/"):
                 # An absolute path is about the host, not this repository.
                 continue
+            if candidate == ".git" or candidate.startswith(".git/"):
+                # Git's administrative directory is not part of the work tree, so
+                # the `_is_ignored` guard below cannot speak for it: `git
+                # check-ignore .git/hooks/pre-commit` exits 1, because git neither
+                # tracks the path nor ignores it. The contents are per-clone —
+                # `.git/hooks/pre-commit` is written by `pre-commit install` on
+                # each developer's machine and is never committed — so a finding
+                # here reports whether the reader ran that command, not whether
+                # the document is stale. It blocked every fresh clone, on a line
+                # that was narrating how the hook came to be installed.
+                #
+                # Matched exactly rather than by prefix: `.github/` and
+                # `.gitignore` are tracked like anything else, and the test above
+                # this one exists to keep that true.
+                continue
             target = repo / candidate
             if _resolves(target):
                 continue
