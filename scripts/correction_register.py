@@ -3176,6 +3176,41 @@ def _p_chart_gate_vacuous() -> tuple[str, str]:
     )
 
 
+def _p_leakage_guard_checked_nothing() -> tuple[str, str]:
+    """Does the calibration-leakage guard assert against code that exists?
+
+    It patched `sklearn.calibration.CalibratedClassifierCV` and read the `cv=`
+    argument. `cv='prefit'` was removed in scikit-learn 1.4 and the code moved
+    to `_calibrate_prefit`, which fits an `IsotonicRegression` on the base
+    model's output — so nothing constructed a `CalibratedClassifierCV`, the
+    tracking list was always empty, and every `for cv_arg in ...` loop ran zero
+    times.
+    """
+    test = _read("tests/unit/test_mtf_ensemble_leakage.py")
+    if not test:
+        return ("UNKNOWN", "tests/unit/test_mtf_ensemble_leakage.py is not present")
+
+    source = _read("scripts/retrain_mtf_accuracy.py")
+    still_uses_cccv = "CalibratedClassifierCV(" in source
+    guard_patches_cccv = 'patch("sklearn.calibration.CalibratedClassifierCV"' in test
+    asserts_one_fit = "must not re-fit it" in test
+    asserts_it_measured = "so nothing was checked" in test
+
+    if guard_patches_cccv and not still_uses_cccv:
+        return (
+            "OPEN",
+            "the guard patches CalibratedClassifierCV, which retrain_mtf_accuracy no longer "
+            "constructs \u2014 the tracking list is always empty and the assertions run zero times",
+        )
+    if asserts_one_fit and asserts_it_measured:
+        return (
+            "FIXED",
+            "the guard asserts the base model is fitted exactly once and that it observed a "
+            "fit at all, against _calibrate_prefit as it is actually written",
+        )
+    return ("PARTIAL", "the guard no longer chases CalibratedClassifierCV but does not assert it measured anything")
+
+
 def _p_density_cannot_reach() -> tuple[str, str]:
     """Is the density control able to reach the interface it is stamped on?
 
@@ -3561,6 +3596,42 @@ FINDINGS: list[Finding] = [
         "python scripts/correction_register.py --id DOCKER-NPM-PEER-CRASH",
         _p_docker_build_crashed_on_optional_peers,
         [S_VBC, S_TDD],
+    ),
+    Finding(
+        "LEAKAGE-GUARD-CHECKED-NOTHING",
+        "The calibration-leakage guard asserted a mechanism the code no longer has",
+        "P1",
+        "ML",
+        "Proven by injection 2026-09-18, after a 120s timeout drew attention to the test",
+        "`tests/unit/test_mtf_ensemble_leakage.py` exists because "
+        "`CalibratedClassifierCV(cv=3)` re-trained the stacking ensemble's base learners on "
+        "sub-splits of the test fold and produced ~99% walk-forward accuracy that was not "
+        "there. The guard patched `sklearn.calibration.CalibratedClassifierCV`, collected the "
+        "`cv=` argument of every construction, and asserted each was `'prefit'`. "
+        "**`cv='prefit'` was removed in scikit-learn 1.4**, and the code was rewritten to fit an "
+        "`IsotonicRegression` on the base model's output (`_calibrate_prefit`). Nothing has "
+        "constructed a `CalibratedClassifierCV` since, so the tracking list was always empty "
+        "and `for cv_arg in captured_cv_args` ran zero times \u2014 the F176 shape, a measurement "
+        "that cannot fail, on the control protecting the number this model is judged by. "
+        "The `except Exception: pass` around the call hid the other half: on a machine without "
+        "xgboost the guard was green having called nothing. Both were found because the test "
+        "took 131s against a 120s `pytest-timeout` \u2014 it was flaky whenever the machine was "
+        "busy, which is when CI runs, and CI has never run (F95). "
+        "Rewritten to assert the PROPERTY against the mechanism that is there: the estimator "
+        "the returned wrapper carries is the same object that was fitted, it was fitted exactly "
+        "once, and the isotonic layer is handed a 1-D probability vector rather than the "
+        "feature matrix \u2014 which is what makes a re-fit impossible by construction. Clamping "
+        "`n_estimators` to 5 (it has nothing to do with the assertion) took the file from 131s "
+        "to 2.4s.",
+        "Proven by injection, not by reading: `_calibrate_prefit` was deleted from "
+        "`train_xgboost` so it returned an uncalibrated model, and the OLD file stayed green "
+        "\u2014 twice, at full runtime. The same injection turns the new "
+        "`test_train_xgboost_does_not_refit_the_base_model` red, and every assertion is "
+        "preceded by one that the test observed anything at all (`so nothing was checked`), "
+        "because an empty list satisfies a `for` loop.",
+        "python scripts/correction_register.py --id LEAKAGE-GUARD-CHECKED-NOTHING",
+        _p_leakage_guard_checked_nothing,
+        [S_DEAD, S_TDD, S_VBC],
     ),
     Finding(
         "DENSITY-CANNOT-REACH",
