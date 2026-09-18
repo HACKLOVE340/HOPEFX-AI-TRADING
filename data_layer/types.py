@@ -60,10 +60,23 @@ class FeedSource(StrEnum):
 
 
 class TickQuality(StrEnum):
+    #: Assessed by `data_layer.quality.engine.DataQualityEngine` and found sound.
+    #: A *conclusion*, and the only value that may be assigned without measuring
+    #: is the one below it.
     GOOD = "good"
     STALE = "stale"
     SUSPECT = "suspect"
     REJECTED = "rejected"
+    #: Nobody assessed this tick. **This is the default everywhere**, because the
+    #: alternative — defaulting to GOOD — states a measurement that was never
+    #: taken, which is the defect class this repository's audit exists to remove.
+    #:
+    #: It deliberately passes the same `!= REJECTED` filters GOOD does, so no
+    #: tick that flows today stops flowing. Whether an unknown-quality tick may
+    #: reach the trading path is a policy question for the owner; the point of
+    #: this member is that the question can now be *asked*, which it could not be
+    #: while the field could only say "good".
+    UNKNOWN = "unknown"
 
 
 class NewsSource(StrEnum):
@@ -110,7 +123,7 @@ class GoldTick:
     ask: float
     mid: float
     source: FeedSource
-    quality: TickQuality = TickQuality.GOOD
+    quality: TickQuality = TickQuality.UNKNOWN
     confidence: float = 1.0  # 0-1, multi-source weighted
     spread: float = 0.0
     lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))

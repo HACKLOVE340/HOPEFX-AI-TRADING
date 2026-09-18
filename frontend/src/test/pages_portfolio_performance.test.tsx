@@ -428,18 +428,18 @@ describe('Performance page', () => {
 
   it('renders tab navigation', async () => {
     await renderPerformance();
-    expect(screen.getByRole('button', { name: /overview/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument();
   });
 
   it('renders trades tab button', async () => {
     await renderPerformance();
-    expect(screen.getByRole('button', { name: /trades/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /trades/i })).toBeInTheDocument();
   });
 
   it('renders weekly tab button', async () => {
     await renderPerformance();
     // Multiple "weekly" buttons may exist (tab + other controls)
-    expect(screen.getAllByRole('button', { name: /weekly/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('tab', { name: /weekly/i }).length).toBeGreaterThan(0);
   });
 
   it('renders refresh button', async () => {
@@ -482,7 +482,7 @@ describe('Performance page', () => {
 
   it('switches to trades tab', async () => {
     await renderPerformance();
-    const tradesBtn = screen.getByRole('button', { name: /trades/i });
+    const tradesBtn = screen.getByRole('tab', { name: /trades/i });
     fireEvent.click(tradesBtn);
     await waitFor(() => {
       expect(screen.getByText(/trade history/i)).toBeInTheDocument();
@@ -492,7 +492,7 @@ describe('Performance page', () => {
   it('switches to weekly tab', async () => {
     await renderPerformance();
     // Use the first weekly button (the tab button in the nav strip)
-    const weeklyBtns = screen.getAllByRole('button', { name: /weekly/i });
+    const weeklyBtns = screen.getAllByRole('tab', { name: /weekly/i });
     fireEvent.click(weeklyBtns[0]!);
     await waitFor(() => {
       // Page renders "Weekly Performance Report" as h3 heading
@@ -502,7 +502,7 @@ describe('Performance page', () => {
 
   it('renders trade filter input on trades tab', async () => {
     await renderPerformance();
-    fireEvent.click(screen.getByRole('button', { name: /trades/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /trades/i }));
     await waitFor(() => {
       // Performance page uses "Symbol…" placeholder on the trade filter input
       expect(screen.getByPlaceholderText(/symbol/i)).toBeInTheDocument();
@@ -511,7 +511,7 @@ describe('Performance page', () => {
 
   it('shows no trades found when empty', async () => {
     await renderPerformance();
-    fireEvent.click(screen.getByRole('button', { name: /trades/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /trades/i }));
     await waitFor(() => {
       expect(screen.getByText(/no trades found/i)).toBeInTheDocument();
     }, { timeout: 3000 });

@@ -14,20 +14,25 @@
  *     — now correctly parsed instead of treating flat keys as rates.
  *   - Confirmation polling: replaced setInterval counter with real
  *     GET /api/payments/crypto/status/{id} polling every 5 s.
- *   - Plan pre-selection: reads ?plan= and ?billing= from URL search params.
+ *   - Plan pre-selection: reads ?plan= from URL search params. It does NOT
+ *     read ?billing=: /api/billing/plans exposes price_usd_monthly and
+ *     nothing else, so a billing cycle is not a choice this page can honour,
+ *     and the parameter was read into a variable nothing used.
  *   - Plan list: fetched from /api/billing/plans at runtime; hardcoded
  *     constants are fallback-only while the request is in-flight.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import QRCode from '../components/QRCode';
 import { useRefreshPlan } from '../hooks/usePlan';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { PLAN_COLORS } from '../lib/subscription';
 import { extractApiError } from '../lib/utils';
+import { useDataFreshness } from '../hooks/useDataFreshness';
+import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,13 +84,24 @@ const FALLBACK_PLANS: Plan[] = [
   { id: 'elite',        name: 'Elite',        price_usd: 10000, features: ['Everything in Enterprise', 'Dedicated support'] },
 ];
 
-const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: string; networks?: USDTNetwork[] }> = {
+const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: React.ReactNode; networks?: USDTNetwork[] }> = {
   BTC:  { name: 'Bitcoin',  color: '#f7931a', icon: '₿' },
   ETH:  { name: 'Ethereum', color: '#627eea', icon: 'Ξ' },
   USDT: { name: 'Tether',   color: '#26a17b', icon: '₮', networks: ['TRC20', 'ERC20', 'BEP20'] },
 };
 
-const POLL_INTERVAL_MS = 5000;
+/** Status-poll cadence. Exported so a test advances real time by the real
+  * interval rather than a guessed one that silently stops matching. */
+export const POLL_INTERVAL_MS = 5000;
+
+/**
+ * Consecutive failed status polls before the page admits it has lost contact.
+ *
+ * Not 1: a single dropped request is normal and saying so on every blip trains
+ * the customer to ignore the notice. Not 10 either — at this cadence that is
+ * most of a minute of a page claiming to watch for money it cannot see.
+ */
+export const POLL_FAILURES_BEFORE_DEGRADED = 3;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -143,7 +159,7 @@ const PlanCard: React.FC<{ plan: Plan; selected: boolean; onSelect: () => void }
   const accent = PLAN_COLORS[plan.id as keyof typeof PLAN_COLORS] ?? '#475569';
   return (
     <div onClick={onSelect} style={{
-      background: selected ? '#1e3a5f' : '#1e293b',
+      background: selected ? '#1e3a5f' : 'var(--raised)',
       border: '2px solid ' + (selected ? accent : '#334155'),
       borderRadius: 12, padding: '16px 14px', cursor: 'pointer',
       transition: 'border-color 0.15s, background 0.15s',
@@ -152,11 +168,11 @@ const PlanCard: React.FC<{ plan: Plan; selected: boolean; onSelect: () => void }
         textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
         {plan.name}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 8 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-strong)', marginBottom: 8 }}>
         ${plan.price_usd.toLocaleString()}
-        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>/mo</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>/mo</span>
       </div>
-      <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
+      <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7 }}>
         {plan.features.slice(0, 3).map(f => <li key={f}>{f}</li>)}
       </ul>
       {selected && (
@@ -174,13 +190,13 @@ const CryptoButton: React.FC<{ currency: CryptoOption; selected: boolean; onSele
     <button onClick={onSelect} style={{
       display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
       border: '2px solid ' + (selected ? meta.color : '#334155'),
-      background: selected ? meta.color + '18' : '#1e293b',
+      background: selected ? meta.color + '18' : 'var(--raised)',
       borderRadius: 10, cursor: 'pointer', flex: 1, minWidth: 100,
     }}>
       <span style={{ fontSize: 22, color: meta.color }}>{meta.icon}</span>
       <div style={{ textAlign: 'left' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{meta.name}</div>
-        <div style={{ fontSize: 11, color: '#64748b' }}>{currency}</div>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{meta.name}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currency}</div>
       </div>
     </button>
   );
@@ -202,7 +218,7 @@ const ExpiryCountdown: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
   const secs = remaining % 60;
   const urgent = remaining < 300;
   return (
-    <span style={{ color: urgent ? '#ef4444' : '#f1f5f9', fontWeight: 700 }}>
+    <span style={{ color: urgent ? '#ef4444' : 'var(--text-strong)', fontWeight: 700 }}>
       {mins}:{secs.toString().padStart(2, '0')}
     </span>
   );
@@ -210,13 +226,11 @@ const ExpiryCountdown: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
 // ── Main component ────────────────────────────────────────────────────────────
 
 const CryptoCheckout: React.FC = () => {
-  const navigate      = useNavigate();
   const refreshPlan   = useRefreshPlan();
   const [searchParams] = useSearchParams();
 
   // URL params: ?plan=starter&billing=monthly
   const urlPlanId  = searchParams.get('plan') ?? '';
-  const urlBilling = searchParams.get('billing') ?? 'monthly';
 
   const [plans, setPlans]                   = useState<Plan[]>(FALLBACK_PLANS);
   const [plansLoading, setPlansLoading]     = useState(true);
@@ -232,6 +246,10 @@ const CryptoCheckout: React.FC = () => {
   const [addressError, setAddressError]     = useState<string | null>(null);
   const [copied, setCopied]                 = useState(false);
   const [paymentStatus, setPaymentStatus]   = useState<PaymentStatus | null>(null);
+  // The status poll may fail without the payment failing, so it degrades
+  // rather than stopping — but it must say so. See POLL_FAILURES_BEFORE_DEGRADED.
+  const statusFreshness = useDataFreshness('payment status');
+  const pollFailures = useRef(0);
   const [liveRates, setLiveRates]           = useState<Record<CryptoOption, number>>({ BTC: 0, ETH: 0, USDT: 1 });
   const [ratesErr, setRatesErr]             = useState<string | null>(null);
   const [flwLoading, setFlwLoading]         = useState(false);
@@ -318,6 +336,8 @@ const CryptoCheckout: React.FC = () => {
     pollRef.current = setInterval(async () => {
       try {
         const res = await api.get<PaymentStatus>('/payments/crypto/status/' + paymentId);
+        pollFailures.current = 0;
+        statusFreshness.markOk();
         setPaymentStatus(res.data);
         if (res.data.status === 'complete') {
           clearInterval(pollRef.current!);
@@ -334,10 +354,19 @@ const CryptoCheckout: React.FC = () => {
           setStep('select');
         }
       } catch {
-        // Non-fatal — keep polling
+        // Keep polling — a failed status read is not a failed payment, and the
+        // customer may already have sent funds. But do not keep the failure to
+        // ourselves: this screen states a confirmation count and the sentence
+        // "This page polls automatically every N seconds", and neither is true
+        // once the endpoint has stopped answering. Silently substituting the
+        // last known state is the F1-01 defect (see hooks/useDataFreshness).
+        pollFailures.current += 1;
+        if (pollFailures.current >= POLL_FAILURES_BEFORE_DEGRADED) {
+          statusFreshness.markFailed('payment status');
+        }
       }
     }, POLL_INTERVAL_MS);
-  }, [refreshPlan]);
+  }, [refreshPlan, statusFreshness]);
 
   const handleConfirmSent = () => {
     if (!depositInfo) return;
@@ -380,11 +409,11 @@ const CryptoCheckout: React.FC = () => {
   // ── Step: Select ───────────────────────────────────────────────────────────
   if (step === 'select') {
     return (
-      <div className="page-content">
-        <PageHeader title="Crypto Checkout" subtitle="Pay with Bitcoin, Ethereum, or USDT — no card required."
+      <PageShell title="Crypto Checkout" subtitle="Pay with Bitcoin, Ethereum, or USDT — no card required."
           breadcrumbs={breadcrumbs}
           actions={<Link to="/upgrade" style={st.headerLink}>← All Plans</Link>}
-        />
+      >
+
         {catalogueErr && <div style={st.warnBox} role="alert">{catalogueErr}</div>}
         {ratesErr && <div style={st.warnBox}>{ratesErr}</div>}
         {addressError && <div style={st.errorBox}>{addressError}</div>}
@@ -392,7 +421,7 @@ const CryptoCheckout: React.FC = () => {
         <section style={st.section}>
           <h2 style={st.sectionTitle}>1. Choose a plan</h2>
           {plansLoading ? (
-            <div style={{ color: '#64748b', fontSize: 14 }}>Loading plans…</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Loading plans…</div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
               {plans.map(p => (
@@ -413,13 +442,13 @@ const CryptoCheckout: React.FC = () => {
           </div>
           {selectedCrypto === 'USDT' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: '#64748b' }}>Network:</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Network:</span>
               {(['TRC20', 'ERC20', 'BEP20'] as USDTNetwork[]).map(n => (
                 <button key={n} onClick={() => setUsdtNetwork(n)} style={{
                   padding: '5px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                   background: usdtNetwork === n ? '#26a17b22' : 'transparent',
                   border: '1px solid ' + (usdtNetwork === n ? '#26a17b' : '#334155'),
-                  color: usdtNetwork === n ? '#26a17b' : '#94a3b8',
+                  color: usdtNetwork === n ? '#26a17b' : 'var(--text-dim)',
                 }}>{n}</button>
               ))}
             </div>
@@ -427,10 +456,10 @@ const CryptoCheckout: React.FC = () => {
         </section>
 
         {flwEnabled && (
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
             padding: '20px 24px', marginBottom: 20 }}>
-            <div style={{ fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>Pay with Flutterwave</div>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 12px' }}>
+            <div style={{ fontWeight: 600, color: 'var(--text-strong)', marginBottom: 6 }}>Pay with Flutterwave</div>
+            <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: '0 0 12px' }}>
               Recommended for West &amp; Central Africa — card, bank transfer, mobile money.
             </p>
             <button onClick={handleFlutterwavePay} disabled={flwLoading} style={{
@@ -441,14 +470,14 @@ const CryptoCheckout: React.FC = () => {
           </div>
         )}
 
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
           padding: '16px 20px', display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{selectedPlan.name}</span>
-            <span style={{ color: '#64748b' }}> — ${selectedPlan.price_usd.toLocaleString()}/mo</span>
+            <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{selectedPlan.name}</span>
+            <span style={{ color: 'var(--text-muted)' }}> — ${selectedPlan.price_usd.toLocaleString()}/mo</span>
             {cryptoAmount !== null && (
-              <span style={{ color: '#94a3b8', fontSize: 13 }}>
+              <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>
                 {' '}≈ {fmtCrypto(cryptoAmount, selectedCrypto)}
               </span>
             )}
@@ -466,26 +495,26 @@ const CryptoCheckout: React.FC = () => {
           { label: '⚙️ Settings',    href: '/settings', color: '#34d399' },
           { label: '📊 Dashboard',   href: '/dashboard',color: '#fbbf24' },
         ]}/>
-      </div>
+      </PageShell>
     );
   }
 
   // ── Step: Address ───────────────────────────────────────────────────────────
   if (step === 'address' && depositInfo) {
     return (
-      <div className="page-content">
-        <PageHeader title="Send Payment" breadcrumbs={breadcrumbs}
+      <PageShell title="Send Payment" breadcrumbs={breadcrumbs}
           actions={<button onClick={() => setStep('select')} style={st.backBtn}>← Back</button>}
-        />
+      >
+
         <div style={st.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
             <span style={{ color: meta.color, fontSize: 32 }}>{meta.icon}</span>
             <div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>Send exactly</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc' }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Send exactly</div>
+              <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)' }}>
                 {fmtCrypto(depositInfo.amount_crypto, selectedCrypto)}
               </div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                 ≈ ${fmt(selectedPlan.price_usd)} · {depositInfo.network.toUpperCase()} network
               </div>
             </div>
@@ -500,11 +529,11 @@ const CryptoCheckout: React.FC = () => {
               size={180}
               alt={`Payment QR code for ${selectedCrypto} deposit address ${depositInfo.address}`}
               fallback={
-                <div style={{ width: 180, height: 180, background: '#0f172a', border: '1px solid #334155',
+                <div style={{ width: 180, height: 180, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                   borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 8 }}>
                   <span style={{ fontSize: 32 }}>📷</span>
-                  <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', padding: '0 12px' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '0 12px' }}>
                     QR unavailable — copy address below
                   </div>
                 </div>
@@ -513,11 +542,11 @@ const CryptoCheckout: React.FC = () => {
           </div>
 
           {/* Address */}
-          <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
             padding: '12px 14px', marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: '#475569', marginBottom: 6 }}>Deposit address</div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 6 }}>Deposit address</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <code style={{ flex: 1, fontSize: 12, color: '#94a3b8', wordBreak: 'break-all',
+              <code style={{ flex: 1, fontSize: 12, color: 'var(--text-dim)', wordBreak: 'break-all',
                 lineHeight: 1.5 }}>{depositInfo.address}</code>
               <button onClick={copyAddress} style={{ ...st.copyBtn, flexShrink: 0 }}>
                 {copied ? '✅' : 'Copy'}
@@ -526,15 +555,15 @@ const CryptoCheckout: React.FC = () => {
           </div>
 
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-            padding: '10px 14px', fontSize: 13, color: '#fbbf24', marginBottom: 14 }}>
+            padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--warn)', marginBottom: 14 }}>
             ⚠️ Send only <strong>{selectedCrypto}</strong> on the{' '}
             <strong>{depositInfo.network.toUpperCase()}</strong> network.
             Sending a different asset will result in permanent loss.
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13,
-            color: '#64748b', marginBottom: 20 }}>
-            <span>Confirmations required: <strong style={{ color: '#f8fafc' }}>{depositInfo.confirmations_required}</strong></span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-body)',
+            color: 'var(--text-muted)', marginBottom: 20 }}>
+            <span>Confirmations required: <strong style={{ color: 'var(--text-strong)' }}>{depositInfo.confirmations_required}</strong></span>
             <span>Expires in: <ExpiryCountdown expiresAt={depositInfo.expires_at} /></span>
           </div>
 
@@ -542,7 +571,7 @@ const CryptoCheckout: React.FC = () => {
             I've sent the payment →
           </button>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -552,14 +581,20 @@ const CryptoCheckout: React.FC = () => {
     const confirmed = paymentStatus?.confirmations ?? 0;
     const pct = Math.min(100, required > 0 ? (confirmed / required) * 100 : 0);
     return (
-      <div className="page-content">
-        <PageHeader title="Confirming Payment" breadcrumbs={breadcrumbs} />
+      <PageShell title="Confirming Payment" breadcrumbs={breadcrumbs}
+      >
+
+        <StaleDataNotice
+          failed={statusFreshness.failed}
+          what="payment status"
+          className="mb-4"
+        />
         <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: '#f8fafc', marginBottom: 8 }}>
+          <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>
             Waiting for blockchain confirmations
           </div>
-          <div style={{ color: '#64748b', marginBottom: 24 }}>
+          <div style={{ color: 'var(--text-muted)', marginBottom: 24 }}>
             {confirmed} / {required} confirmations
             {paymentStatus?.tx_hash && (
               <div style={{ fontSize: 12, marginTop: 6, wordBreak: 'break-all' }}>
@@ -567,52 +602,57 @@ const CryptoCheckout: React.FC = () => {
               </div>
             )}
           </div>
-          <div style={{ width: '100%', height: 8, background: '#1e293b', borderRadius: 4,
+          <div style={{ width: '100%', height: 8, background: 'var(--raised)', borderRadius: 4,
             overflow: 'hidden', marginBottom: 16 }}>
             <div style={{ height: '100%', borderRadius: 4, background: meta.color,
               width: pct + '%', transition: 'width 0.5s ease' }} />
           </div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             This typically takes {selectedCrypto === 'BTC' ? '30–60 minutes' : '2–5 minutes'}.
-            This page polls automatically every {POLL_INTERVAL_MS / 1000} seconds.
+            {/* Only claim the poll is working while it is. Saying "polls
+                automatically" under a dead connection is the sentence that made
+                this screen indistinguishable from a healthy one. */}
+            {statusFreshness.failed
+              ? ' Still retrying every ' + POLL_INTERVAL_MS / 1000 + ' seconds — the count above is the last one we could read.'
+              : ' This page polls automatically every ' + POLL_INTERVAL_MS / 1000 + ' seconds.'}
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // ── Step: Complete ──────────────────────────────────────────────────────────
   if (step === 'complete') {
     return (
-      <div className="page-content">
-        <PageHeader title="Payment Confirmed" breadcrumbs={breadcrumbs} />
+      <PageShell title="Payment Confirmed" breadcrumbs={breadcrumbs}
+      >
+
         <div style={{ ...st.card, textAlign: 'center', padding: '48px 32px' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#f8fafc', marginBottom: 8 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
             Payment confirmed!
           </h2>
-          <p style={{ color: '#94a3b8', marginBottom: 28 }}>
-            Your <strong style={{ color: '#f8fafc' }}>{selectedPlan.name}</strong> subscription is now active.
+          <p style={{ color: 'var(--text-dim)', marginBottom: 28 }}>
+            Your <strong style={{ color: 'var(--text-strong)' }}>{selectedPlan.name}</strong> subscription is now active.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/dashboard" style={{ ...st.proceedBtn, textDecoration: 'none', display: 'inline-block' }}>
               Go to Dashboard →
             </Link>
-            <Link to="/settings" style={{ ...st.proceedBtn, background: '#334155',
+            <Link to="/settings" style={{ ...st.proceedBtn, background: 'var(--surface-hover)',
               textDecoration: 'none', display: 'inline-block' }}>
               Account Settings
             </Link>
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Fallback: step='address' or 'confirming' but depositInfo not yet set
   // (can occur during the React batch-render between setDepositInfo + setStep)
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell
         title={step === 'confirming' ? 'Confirming Payment' : 'Send Payment'}
         breadcrumbs={breadcrumbs}
         actions={
@@ -620,15 +660,16 @@ const CryptoCheckout: React.FC = () => {
             ← Back
           </button>
         }
-      />
+    >
+
       <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
         {addressError ? (
           <>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#f87171', marginBottom: 8 }}>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>
               Failed to generate deposit address
             </div>
-            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20 }}>{addressError}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 20 }}>{addressError}</div>
             <button
               onClick={() => { setAddressError(null); setStep('select'); }}
               style={st.backBtn}
@@ -640,40 +681,40 @@ const CryptoCheckout: React.FC = () => {
           <>
             <div style={{
               width: 36, height: 36,
-              border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+              border: '3px solid var(--border)', borderTopColor: '#3b82f6',
               borderRadius: '50%', animation: 'spin 0.7s linear infinite',
               margin: '0 auto 16px',
             }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            <div style={{ color: '#64748b', fontSize: 14 }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
               {loadingAddress ? 'Generating deposit address…' : 'Loading payment details…'}
             </div>
           </>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const st: Record<string, React.CSSProperties> = {
-  page:       { maxWidth: 800, margin: '0 auto', padding: '24px 16px', color: '#f1f5f9' },
+  page:       { maxWidth: 800, margin: '0 auto', padding: '24px 16px', color: 'var(--text-strong)' },
   section:    { marginBottom: 28 },
-  sectionTitle: { fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: '0 0 12px' },
-  card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 16 },
+  sectionTitle: { fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', margin: '0 0 12px' },
+  card:       { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24, marginBottom: 16 },
   proceedBtn: { padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none',
     borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
-  backBtn:    { background: 'none', border: '1px solid #334155', borderRadius: 6,
-    color: '#94a3b8', fontSize: 13, padding: '6px 14px', cursor: 'pointer' },
-  copyBtn:    { background: '#334155', border: 'none', borderRadius: 6,
-    color: '#e2e8f0', fontSize: 12, padding: '5px 12px', cursor: 'pointer' },
-  headerLink: { fontSize: 13, color: '#64748b', textDecoration: 'none',
-    padding: '6px 14px', border: '1px solid #334155', borderRadius: 6 },
+  backBtn:    { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
+    color: 'var(--text-dim)', fontSize: 'var(--fs-body)', padding: '6px 14px', cursor: 'pointer' },
+  copyBtn:    { background: 'var(--surface-hover)', border: 'none', borderRadius: 6,
+    color: 'var(--text)', fontSize: 12, padding: '5px 12px', cursor: 'pointer' },
+  headerLink: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none',
+    padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6 },
   warnBox:    { background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-    padding: '10px 14px', color: '#fbbf24', fontSize: 13, marginBottom: 16 },
+    padding: '10px 14px', color: 'var(--warn)', fontSize: 'var(--fs-body)', marginBottom: 16 },
   errorBox:   { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
-    padding: '10px 14px', color: '#f87171', fontSize: 13, marginBottom: 16 },
+    padding: '10px 14px', color: 'var(--loss)', fontSize: 'var(--fs-body)', marginBottom: 16 },
 };
 
 export default CryptoCheckout;

@@ -17,7 +17,7 @@ from typing import Any
 
 import pandas as pd
 
-from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
+from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig, first_non_empty
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class RSIStrategy(BaseStrategy):
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute RSI from OHLCV data dict."""
-        prices = data.get("prices") or data.get("close")
+        prices = first_non_empty(data.get("prices"), data.get("close"))
         if prices is None:
             return {"rsi": None, "error": "no price data"}
         series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
@@ -117,8 +117,22 @@ class RSIStrategy(BaseStrategy):
         loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean().fillna(0.0)
 
         rs = gain / loss.replace(0, float("nan"))
-        rsi = (100 - (100 / (1 + rs))).fillna(50.0)
-        return rsi
+        rsi = 100 - (100 / (1 + rs))
+
+        # A window with no losses is not a neutral reading — it is the most
+        # overbought RSI can be, and 100 is what the definition gives. Dividing
+        # by a zeroed loss produced NaN, and `.fillna(50.0)` then called it
+        # neutral: measured on a monotonic rally of 40 bars, this returned
+        # **50.0**, so the overbought branch could not fire during the strongest
+        # uptrend the strategy will ever see. The defect was one-sided — a
+        # monotonic slide correctly returned 0.0, because there `rs` is 0/0 → 0
+        # rather than NaN — which left the strategy able to see oversold and not
+        # overbought.
+        rsi = rsi.where(~((loss == 0) & (gain > 0)), 100.0)
+
+        # Only a window with neither gains nor losses is genuinely neutral, and
+        # that includes the warm-up bars before the rolling window fills.
+        return rsi.fillna(50.0)
 
     def _generate_dict_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """Generate dict-style signal from OHLCV DataFrame (used by backtesting)."""

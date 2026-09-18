@@ -49,9 +49,9 @@ function statusColor(s: StatusLevel | string): string {
 
 function statusBg(s: StatusLevel | string): string {
   switch (s) {
-    case 'ok':       return 'bg-[#00e676]/10';
+    case 'ok':       return 'bg-[var(--bull)]/10';
     case 'degraded': return 'bg-[#ffb800]/10';
-    case 'error':    return 'bg-[#ff1744]/10';
+    case 'error':    return 'bg-[var(--bear)]/10';
     case 'offline':  return 'bg-[#475569]/10';
     default:         return 'bg-[#334155]/10';
   }
@@ -80,7 +80,7 @@ function ComponentCell({
       className={cn(
         'flex flex-col gap-1 px-2.5 py-2 rounded border transition-colors',
         statusBg(status),
-        'border-[#1e2d3d]',
+        'border-[var(--border)]',
       )}
       title={error ?? undefined}
     >
@@ -105,7 +105,7 @@ function ComponentCell({
         )}
       </div>
       {error && (
-        <span className="text-[9px] text-[#ff1744] truncate" title={error}>
+        <span className="text-[9px] text-[var(--bear)] truncate" title={error}>
           {error.slice(0, 40)}
         </span>
       )}
@@ -121,7 +121,7 @@ function FeedRow({ name, data }: { name: string; data: unknown }) {
   const color  = statusColor(status);
 
   return (
-    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-[#0d1421] border border-[#1e2d3d]">
+    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-[var(--surface)] border border-[var(--border)]">
       <span
         className="w-1.5 h-1.5 rounded-full shrink-0"
         style={{ background: color }}
@@ -164,8 +164,8 @@ function OverallBadge({ health }: { health: OrchestratorHealth }) {
       {health.quality_score != null && (
         <span className={cn(
           'text-[10px] font-semibold',
-          health.quality_score >= 0.8 ? 'text-[#00e676]' :
-          health.quality_score >= 0.5 ? 'text-[#ffb800]' : 'text-[#ff1744]',
+          health.quality_score >= 0.8 ? 'text-[var(--bull)]' :
+          health.quality_score >= 0.5 ? 'text-[#ffb800]' : 'text-[var(--bear)]',
         )}>
           Q: {(health.quality_score * 100).toFixed(0)}%
         </span>
@@ -213,8 +213,8 @@ function OrchestratorHealthGridInner() {
               className={cn(
                 'px-3 py-1 rounded text-[11px] font-semibold border transition-colors capitalize',
                 tab === t
-                  ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                  : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                  ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+                  : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
               )}
             >
               {t}
@@ -227,7 +227,7 @@ function OrchestratorHealthGridInner() {
           <>
             {healthQ.isLoading && <PanelSkeleton rows={6} />}
             {healthQ.isError && (
-              <div className="text-[11px] text-[#ff1744]">Failed to load health data</div>
+              <div className="text-[11px] text-[var(--bear)]">Failed to load health data</div>
             )}
             {health && (
               <>
@@ -245,7 +245,7 @@ function OrchestratorHealthGridInner() {
 
                 {/* Latest tick strip */}
                 {health.latest_tick && (
-                  <div className="flex gap-3 px-2.5 py-2 rounded bg-[#0d1421] border border-[#1e2d3d] text-[10px]">
+                  <div className="flex gap-3 px-2.5 py-2 rounded bg-[var(--surface)] border border-[var(--border)] text-[10px]">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-slate-500">Symbol</span>
                       <span className="text-slate-200 font-semibold">{health.latest_tick.symbol}</span>
@@ -256,11 +256,11 @@ function OrchestratorHealthGridInner() {
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-slate-500">Source</span>
-                      <span className="text-[#60a5fa]">{health.latest_tick.source}</span>
+                      <span className="text-[var(--link)]">{health.latest_tick.source}</span>
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-slate-500">Quality</span>
-                      <span className="text-[#00e676]">{health.latest_tick.quality}</span>
+                      <span className="text-[var(--bull)]">{health.latest_tick.quality}</span>
                     </div>
                   </div>
                 )}
@@ -274,7 +274,7 @@ function OrchestratorHealthGridInner() {
           <>
             {feedsQ.isLoading && <PanelSkeleton rows={5} />}
             {feedsQ.isError && (
-              <div className="text-[11px] text-[#ff1744]">Failed to load feed health</div>
+              <div className="text-[11px] text-[var(--bear)]">Failed to load feed health</div>
             )}
             {feedsQ.data && (
               <div className="flex flex-col gap-3">
@@ -314,7 +314,7 @@ function OrchestratorHealthGridInner() {
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
                       {Object.entries(feedsQ.data.cache_stats ?? {}).map(([k, v]) => (
-                        <div key={k} className="flex justify-between px-2 py-1 rounded bg-[#0d1421] border border-[#1e2d3d]">
+                        <div key={k} className="flex justify-between px-2 py-1 rounded bg-[var(--surface)] border border-[var(--border)]">
                           <span className="text-[10px] text-slate-500 capitalize">{k.replace(/_/g, ' ')}</span>
                           <span className="text-[10px] text-slate-300 tabular-nums font-mono">
                             {typeof v === 'number' ? v.toLocaleString() : String(v)}

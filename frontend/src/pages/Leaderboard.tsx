@@ -6,9 +6,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { EmptyState, CrossLinkBar } from '../components';
+import { RelatedPages } from '../components';
+import { Medal, Trophy, BadgeCheck, Users, Radar, BookOpen, LineChart } from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { extractApiError, fmtPctRaw, fmtRatio } from '../lib/utils';
+import { PageShell } from '../components/system/PageShell';
 
 /** Guarded sort value / integer formatter for possibly missing trader fields. */
 const sv = (v: number | null | undefined) => (Number.isFinite(v as number) ? (v as number) : 0);
@@ -33,8 +36,10 @@ interface Trader {
   strategy_tag?: string;
 }
 
-const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
-const MEDAL_COLORS: Record<number, string> = { 1: '#eab308', 2: '#94a3b8', 3: '#b45309' };
+// Rank badges. Emoji medals render differently on every OS and cannot inherit
+// the colour map below; a single Lucide medal tinted per rank does (F170).
+const MEDAL_LABEL: Record<number, string> = { 1: 'First place', 2: 'Second place', 3: 'Third place' };
+const MEDAL_COLORS: Record<number, string> = { 1: '#eab308', 2: 'var(--text-dim)', 3: '#b45309' };
 
 // ── Podium card ───────────────────────────────────────────────────────────────
 
@@ -45,7 +50,7 @@ const PodiumCard: React.FC<{ trader: Trader; tall?: boolean }> = ({ trader, tall
     : '/copy-trading';
   return (
     <div className={`flex-1 rounded-xl p-5 flex flex-col items-center gap-2 border transition-all hover:scale-[1.02] ${tall ? 'mt-0' : 'mt-6'}`}
-      style={{ background: '#1e293b', borderColor: color + '55' }}>
+      style={{ background: 'var(--raised)', borderColor: color + '55' }}>
       <div className="w-9 h-9 rounded-full flex items-center justify-center font-black text-sm"
         style={{ background: color, color: '#0f172a' }}>
         {trader.rank}
@@ -125,10 +130,9 @@ const Leaderboard: React.FC = () => {
   const top3 = sorted.slice(0, 3);
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Global Leaderboard"
-        icon="🥇"
+        icon={Medal}
         subtitle="Top traders ranked by performance. Click a trader to copy their strategy."
         breadcrumbs={[
           { label: 'Dashboard',    href: '/dashboard' },
@@ -152,7 +156,7 @@ const Leaderboard: React.FC = () => {
             <Link to="/signals"      className="px-3 py-1.5 bg-violet-500/10 border border-violet-500/30 rounded-lg text-violet-400 text-xs font-semibold no-underline hover:bg-violet-500/20 transition-colors">📡 Signals</Link>
           </div>
         }
-      />
+    >
 
       {loading ? (
         <div className="space-y-3">
@@ -164,7 +168,7 @@ const Leaderboard: React.FC = () => {
         <div className="bg-red-950/40 border border-red-800 rounded-xl p-4 text-red-400 text-sm">⚠️ {loadErr}</div>
       ) : traders.length === 0 ? (
         <EmptyState
-          icon="🏆"
+          icon={Trophy}
           title="No traders ranked yet"
           description="The leaderboard populates once traders have closed positions. Start trading to appear here."
           action={
@@ -193,7 +197,7 @@ const Leaderboard: React.FC = () => {
           {/* Filters row — stacks on mobile */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4">
             <div className="flex gap-2 flex-1">
-              <input
+              <input aria-label="Search trader"
                 type="text"
                 placeholder="Search trader…"
                 value={search}
@@ -243,20 +247,33 @@ const Leaderboard: React.FC = () => {
                       <td className="px-3 sm:px-4 py-3">
                         <div className="flex items-center gap-1">
                           {trader.rank <= 3
-                            ? <span className="text-base sm:text-lg">{MEDAL[trader.rank]}</span>
+                            ? <Medal
+                                size={16} strokeWidth={2}
+                                aria-label={MEDAL_LABEL[trader.rank]}
+                                style={{ color: MEDAL_COLORS[trader.rank] }}
+                                className="shrink-0"
+                              />
                             : <span className="text-slate-500 text-sm">#{trader.rank}</span>}
                           {/* A green ▲ used to appear for every trader in the top
                               five, which reads as "moved up" — nothing here
                               measures movement, and the API returns no previous
                               rank. Showing a trend we do not have is worse than
-                              showing none. */}
-                          {trader.rank > 10 && trader.rank <= 15 && <span className="text-2xs text-red-400 font-bold">▼</span>}
+                              showing none.
+                              The red ▼ that survived that fix had the same
+                              problem: it keyed off `rank > 10 && rank <= 15`,
+                              an arbitrary band, and told the reader those five
+                              traders had fallen. Nothing measured that either,
+                              so it is gone too. Restore both together when the
+                              API returns a previous rank. */}
                         </div>
                       </td>
                       <td className="px-3 sm:px-4 py-3">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-semibold text-slate-100 text-sm whitespace-nowrap">{trader.name}</span>
-                          {trader.verified && <span className="text-blue-400 text-xs">✓</span>}
+                          {trader.verified && (
+                            <BadgeCheck size={13} strokeWidth={2} aria-label="Verified trader"
+                              className="text-blue-400 shrink-0" />
+                          )}
                           {trader.rank === 1 && <span className="text-2xs px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/40 rounded text-amber-400 font-bold">TOP</span>}
                           {trader.strategy_tag && <span className="text-2xs px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/30 rounded text-violet-400 hidden sm:inline">{trader.strategy_tag}</span>}
                         </div>
@@ -307,7 +324,15 @@ const Leaderboard: React.FC = () => {
         { label: '💬 Chat',         href: '/chat',         color: '#fbbf24' },
         { label: '📊 Performance',  href: '/performance',  color: '#f97316' },
       ]}/>
-    </div>
+      <RelatedPages
+        links={[
+          { to: '/copy-trading', label: 'Copy trading', hint: 'Follow a trader automatically',     icon: Users },
+          { to: '/signals',      label: 'Signal feed',  hint: 'What these traders are acting on',  icon: Radar },
+          { to: '/performance',  label: 'Your performance', hint: 'How you compare',               icon: LineChart },
+          { to: '/journal',      label: 'Trade journal', hint: 'Your own record',                  icon: BookOpen },
+        ]}
+      />
+    </PageShell>
   );
 };
 

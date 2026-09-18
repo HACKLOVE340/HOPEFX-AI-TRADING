@@ -35,12 +35,12 @@ export const ActionBanner: React.FC<{
       aria-live={ok ? 'polite' : 'assertive'}
       style={{
         background: ok ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
-        border: `1px solid ${ok ? '#4ade80' : '#f87171'}`,
+        border: `1px solid ${ok ? 'var(--gain)' : 'var(--loss)'}`,
         borderRadius: 8,
         padding: '10px 14px',
         marginBottom: 16,
-        fontSize: 13,
-        color: ok ? '#4ade80' : '#f87171',
+        fontSize: 'var(--fs-body)',
+        color: ok ? 'var(--gain)' : 'var(--loss)',
         display: 'flex',
         justifyContent: 'space-between',
         gap: 12,
@@ -57,7 +57,7 @@ export const ActionBanner: React.FC<{
             color: 'inherit',
             cursor: 'pointer',
             flexShrink: 0,
-            fontSize: 15,
+            fontSize: 'var(--fs-value)',
             lineHeight: 1,
           }}
         >

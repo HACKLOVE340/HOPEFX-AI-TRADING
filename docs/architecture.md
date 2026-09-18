@@ -329,11 +329,11 @@ Price data methods raise `MarketDataForbidden` — use `orchestrator.get_latest_
 |-----------|------|------|-------|
 | OANDA | `brokers/oanda_broker.py` | Live + Practice | Primary execution broker |
 | IBKR | `brokers/ibkr_broker.py` | Live + Paper | TWS/IB Gateway via ib_insync |
-| Alpaca | `brokers/alpaca_broker.py` | Live + Paper | REST + WebSocket |
-| Binance | `brokers/binance_broker.py` | Live + Testnet | Spot + Futures |
-| Bybit | `brokers/bybit_broker.py` | Live + Sandbox | XAUUSDT perpetuals |
+| Alpaca | `brokers/alpaca.py` | Live + Paper | REST + WebSocket |
+| Binance | `brokers/binance.py` | Live + Testnet | Spot + Futures |
+| Bybit | `brokers/bybit_connector.py` | Live + Sandbox | XAUUSDT perpetuals |
 | MT5 | `brokers/mt5_broker.py` | Live | MetaTrader 5 via MetaTrader5 |
-| Paper | `brokers/paper_broker.py` | Simulation | Default when no broker configured |
+| Paper | `brokers/paper_trading.py` | Simulation | Default when no broker configured |
 | FIX | `execution/fix_adapter.py` | Live | FIX 4.4 for institutional connectivity |
 
 `SmartRouter` manages multi-broker routing and failover. Broker health is checked

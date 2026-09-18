@@ -258,6 +258,12 @@ export interface MlHealth {
   readonly feature_count:           number;
   readonly oos_accuracy:            number | null;
   readonly last_trained_at:         string | null;
+  /** The sha256-bound training timestamp the freshness gate measured, from
+   *  ml/saved_models/registry.json. Differs from last_trained_at, which comes
+   *  from advanced_oos_meta.json — see MODEL-PROVENANCE-DISAGREES. Null when the
+   *  gate could not read provenance; model_provenance_reason then says why. */
+  readonly model_provenance_at?:    string | null;
+  readonly model_provenance_reason?: string;
   readonly predict_count:           number;
   readonly fallback_count:          number;
   readonly fallback_rate:           number;
@@ -315,12 +321,27 @@ export interface AccountMetrics {
   readonly daily_pnl?:     number;
   readonly daily_pnl_pct?: number;
   readonly total_pnl?:     number;
-  /** Absent until at least one trade has closed. */
+  /**
+   * Percentage 0-100 (e.g. 62.5), pre-multiplied by the API — both paths of
+   * GET /api/trading/account compute it as `wins / closed * 100`.
+   *
+   * The unit was not stated here, and three screens read it as a fraction and
+   * multiplied by 100 again. A real 62.5% would have rendered as 6250.0%, and
+   * the `>= 0.55` colour threshold passed any win rate above half a percent.
+   * Nobody saw it because the field was pinned at 0 until the endpoint learned
+   * to send null. Render with `fmtPctRaw`, never `fmtPct`.
+   *
+   * Absent until at least one trade has closed.
+   */
   readonly win_rate?:      number;
-  /** Absent until enough closed trades exist to compute it. */
+  /** Unitless ratio, sent as-is. Absent until enough closed trades exist. */
   readonly sharpe_ratio?:  number;
+  /** Unitless ratio, sent as-is. */
   readonly sortino_ratio?: number;
-  /** Absent on a new account. */
+  /**
+   * Percentage 0-100 (e.g. 12.4), pre-multiplied by the API. Same trap as
+   * `win_rate` above. Absent on a new account.
+   */
   readonly max_drawdown?:  number;
   readonly open_trades?:   number;
   readonly open_risk_pct?: number;   // % of equity at risk across open positions

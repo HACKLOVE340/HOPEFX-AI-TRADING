@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -184,7 +185,47 @@ def _route_owner(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
     return None
 
 
-def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+def _verified_auth_aliases(tree: ast.Module) -> set[str]:
+    """
+    Return module-local names that are *verified* auth dependencies.
+
+    A router may share one alias across its endpoints:
+
+        def _admin(user: TokenPayload = Depends(require_role("admin"))) -> TokenPayload:
+            return user
+
+        @router.post("/x")
+        async def x(user: TokenPayload = Depends(_admin)): ...
+
+    FastAPI resolves that nested dependency and the route *is* protected, but a
+    marker list keyed on names alone cannot see it — which is why 22 genuinely
+    authenticated endpoints in api/safe_agent_platform.py and
+    api/professional_control_plane.py were reported as missing auth.
+
+    The fix resolves the alias instead of trusting its name: a name is returned
+    only when its own definition carries a recognised auth marker. `def _admin():
+    return None` is therefore still a violation, and adding a name to
+    AUTH_DEPENDS_MARKERS remains the weaker option — that trusts a spelling this
+    function actually checks.
+    """
+    aliases: set[str] = set()
+    for node in tree.body:
+        # def _admin(user = Depends(require_role("admin"))) -> ...
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            defaults = list(node.args.defaults) + [d for d in node.args.kw_defaults if d is not None]
+            if any(marker in ast.unparse(d) for d in defaults for marker in AUTH_DEPENDS_MARKERS):
+                aliases.add(node.name)
+        # _require_superadmin = require_role("superadmin")
+        elif isinstance(node, ast.Assign):
+            value_src = ast.unparse(node.value)
+            if any(marker in value_src for marker in AUTH_DEPENDS_MARKERS):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        aliases.add(target.id)
+    return aliases
+
+
+def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef, auth_aliases: frozenset[str] = frozenset()) -> bool:
     """
     Return True if the function is protected by auth, either via:
       (a) a parameter default containing Depends(<auth_func>), or
@@ -196,6 +237,11 @@ def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     for default in all_defaults:
         src = ast.unparse(default)
         if any(marker in src for marker in AUTH_DEPENDS_MARKERS):
+            return True
+        # A verified module-local alias: Depends(_admin) where _admin itself
+        # depends on require_role(...). Resolved, not trusted — see
+        # _verified_auth_aliases.
+        if any(re.search(rf"Depends\(\s*{re.escape(alias)}\s*[),]", src) for alias in auth_aliases):
             return True
 
     # (b) body-level imperative auth call
@@ -234,6 +280,7 @@ def check_file(path: Path) -> list[str]:
     # protect every endpoint registered on *that* router — those need no
     # per-function check. Routers without it get checked function by function.
     guarded_routers = _guarded_router_names(tree)
+    auth_aliases = frozenset(_verified_auth_aliases(tree))
 
     violations: list[str] = []
     for node in ast.walk(tree):
@@ -245,7 +292,7 @@ def check_file(path: Path) -> list[str]:
             continue
         if _route_owner(node) in guarded_routers:
             continue
-        if not _has_auth_depends(node):
+        if not _has_auth_depends(node, auth_aliases):
             rel = path.relative_to(REPO_ROOT)
             violations.append(f"  {rel}:{node.lineno}  {node.name}()")
     return violations

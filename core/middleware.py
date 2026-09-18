@@ -58,14 +58,32 @@ def _build_csp(allowed_origins: list[str]) -> str:
     # doesn't need it.  Keep unsafe-inline for styles (Tailwind + LWC inline styles).
     script_src = "'self'" if _is_production() else "'self' 'unsafe-inline'"
 
+    # Swagger UI fetches swagger-ui-bundle.js and swagger-ui.css from jsDelivr,
+    # and neither script-src nor style-src admitted it, so /docs rendered blank
+    # everywhere it exists — the failure visible only in the browser console
+    # (F200).
+    #
+    # Allowed exactly where the page is mounted, and nowhere else. `app.py` and
+    # `api/server.py` both set `docs_url=None if APP_ENV == "production"`, so
+    # production has no /docs to serve and gains nothing from the CDN;
+    # production's `script-src 'self'` is deliberately left untouched and is
+    # guarded by a test.
+    #
+    # Vendoring swagger-ui-dist is the usual answer and is the wrong trade here:
+    # `static/` is gitignored, so it would mean committing ~1.5 MB of vendor
+    # JavaScript to serve a page that does not exist in the environment the CSP
+    # is protecting. Development already permits 'unsafe-inline'; a pinned CDN
+    # is not the weakest link there.
+    docs_cdn = "" if _is_production() else " https://cdn.jsdelivr.net"
+
     # Production adds upgrade-insecure-requests to force HTTPS sub-resources
     upgrade = "upgrade-insecure-requests; " if _is_production() else ""
 
     return (
         f"{upgrade}"
         f"default-src 'self'; "
-        f"script-src {script_src}; "
-        f"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        f"script-src {script_src}{docs_cdn}; "
+        f"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com{docs_cdn}; "
         # QR code images for 2FA setup (api.qrserver.com), data URIs for LWC charts,
         # and OpenStreetMap tiles for the Security Operations attack map.
         f"img-src 'self' data: blob: https://api.qrserver.com https://*.tile.openstreetmap.org; "

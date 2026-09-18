@@ -7,7 +7,7 @@
 import React, { memo, useEffect, useRef } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor, severityLabel } from '../types/nuclear';
-import type { NuclearState, GeopoliticalGauge } from '../types/nuclear';
+import type { NuclearState } from '../types/nuclear';
 
 // ─── Gauge bar ────────────────────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'color 0.4s ease',
   },
   actionLabel: {
-    fontSize: 10, color: '#64748b', letterSpacing: 1.5, fontWeight: 600,
+    fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1.5, fontWeight: 600,
   },
   centerSection: {
     flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0,
@@ -208,7 +208,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
   },
   gaugeCaption: {
-    fontSize: 10, color: '#475569', letterSpacing: 2, fontWeight: 700,
+    fontSize: 10, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700,
   },
   gaugeScore: {
     fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
@@ -224,7 +224,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   gaugeMarker: {
     position: 'absolute', top: -2, width: 1, height: 10,
-    background: '#334155', transform: 'translateX(-50%)',
+    background: 'var(--surface-hover)', transform: 'translateX(-50%)',
   },
   termRow: {
     display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2,
@@ -232,12 +232,12 @@ const s: Record<string, React.CSSProperties> = {
   termPill: {
     display: 'flex', alignItems: 'center', gap: 4,
     padding: '2px 8px', borderRadius: 10,
-    border: '1px solid', fontSize: 10, color: '#94a3b8',
+    border: '1px solid', fontSize: 10, color: 'var(--text-dim)',
     background: 'rgba(255,255,255,0.03)',
     fontFamily: 'monospace',
   },
   termWeight: {
-    color: '#475569', fontSize: 9,
+    color: 'var(--text-faint)', fontSize: 9,
   },
   rightSection: {
     display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0,
@@ -246,16 +246,16 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2,
   },
   rlLabel: {
-    fontSize: 9, color: '#475569', letterSpacing: 2, fontWeight: 700,
+    fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700,
   },
   rlAction: {
-    fontSize: 13, fontWeight: 800, letterSpacing: 1,
+    fontSize: 'var(--fs-body)', fontWeight: 800, letterSpacing: 1,
     padding: '2px 8px', border: '1px solid', borderRadius: 4,
     fontFamily: 'monospace',
     transition: 'color 0.4s ease, border-color 0.4s ease',
   },
   rlConf: {
-    fontSize: 10, color: '#64748b', fontFamily: 'monospace',
+    fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace',
   },
   explainBtn: {
     background: 'transparent', border: '1px solid',

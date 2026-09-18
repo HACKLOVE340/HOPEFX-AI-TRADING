@@ -42,6 +42,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from ai.policy.roles import quorum
 from api.auth import require_role
 
 from api.auth import TokenPayload
@@ -231,12 +232,15 @@ async def approve_fix(
     """
     payload = _require_admin(request)
     approved_by = body.approved_by or payload.get("sub", "dashboard")
+    approver = payload.get("sub") or approved_by
+    approver_role = payload.get("role", "")
     endpoint = body.endpoint
 
     redis = await _get_redis()
 
     # Find matching pending record
     fix_record: dict[str, Any] | None = None
+    raw_match: str | None = None
     if redis:
         raw_list = await redis.lrange("fixes:queue", 0, 199)
         for raw in raw_list:
@@ -244,7 +248,7 @@ async def approve_fix(
                 rec = json.loads(raw)
                 if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
                     fix_record = rec
-                    await redis.lrem("fixes:queue", 1, raw)
+                    raw_match = raw
                     break
             except json.JSONDecodeError:
                 continue
@@ -254,6 +258,61 @@ async def approve_fix(
             status_code=404,
             detail=f"No pending fix found for endpoint '{endpoint}'",
         )
+
+    # ── Approval quorum ───────────────────────────────────────────────────────
+    #
+    # This endpoint required a single `admin`, and it is the gate an AI-authored
+    # code patch actually passes on its way to a pull request. `ai/policy/roles.py`
+    # already declared that a repair needs two distinct approvers, at least one a
+    # superadmin -- and `api/safe_agent_platform.py:decide_approval` enforced
+    # exactly that on a DIFFERENT queue. One admin could approve AI-written code
+    # here on their own while the rule sat one module away.
+    #
+    # The rule now lives in one place and both callers use it.
+    approvals: list[dict[str, Any]] = list(fix_record.get("approvals") or [])
+    if any(a.get("approver") == approver for a in approvals):
+        raise HTTPException(
+            status_code=409,
+            detail="This approver has already decided on the fix; a quorum needs distinct people",
+        )
+    approvals.append(
+        {
+            "approver": approver,
+            "approver_role": approver_role,
+            "decision": "approve",
+            "at": datetime.now(UTC).isoformat(),
+        }
+    )
+    fix_record["approvals"] = approvals
+
+    kind = fix_record.get("kind") or ("repair" if fix_record.get("origin") == "ai" else "manual")
+    verdict = quorum(approvals, kind=kind)
+    if not verdict.met:
+        # Put the record back with the approval recorded on it. Removing it here
+        # and re-adding it on the second approval would lose it if this process
+        # died in between.
+        if redis and raw_match is not None:
+            await redis.lrem("fixes:queue", 1, raw_match)
+            await redis.rpush("fixes:queue", json.dumps(fix_record))
+        logger.info(
+            "fixes router: approval recorded for %s by %s (%s) -- %s",
+            endpoint,
+            approver,
+            approver_role or "unknown role",
+            verdict.reason,
+        )
+        return {
+            "status": "awaiting_approval",
+            "endpoint": endpoint,
+            "reason": verdict.reason,
+            "distinct_approvers": verdict.distinct_approvers,
+            "required": verdict.required,
+            "needs_superadmin": verdict.needs_superadmin,
+            "approvals": approvals,
+        }
+
+    if redis and raw_match is not None:
+        await redis.lrem("fixes:queue", 1, raw_match)
 
     # Trigger GitHub PR pipeline
     pr_result: dict[str, Any] = {"status": "skipped"}
@@ -276,6 +335,8 @@ async def approve_fix(
         **fix_record,
         "status": "approved",
         "approved_by": approved_by,
+        "approvals": approvals,
+        "quorum": verdict.reason,
         "approved_at": datetime.now(UTC).isoformat(),
         "pr_url": pr_result.get("pr_url"),
         "pr_number": pr_result.get("pr_number"),

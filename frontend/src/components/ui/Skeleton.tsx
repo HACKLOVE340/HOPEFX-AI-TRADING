@@ -19,7 +19,7 @@ export function Skeleton({ className, width, height, style }: SkeletonProps) {
   return (
     <div
       className={cn(
-        'rounded bg-[#1e2d3d] relative overflow-hidden',
+        'rounded bg-[var(--border)] relative overflow-hidden',
         className,
       )}
       style={{ width, height, ...style }}
@@ -40,9 +40,9 @@ export function Skeleton({ className, width, height, style }: SkeletonProps) {
 
 export function PanelSkeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="flex flex-col gap-3 p-4 h-full bg-[#0d1421] border border-[#1e2d3d] rounded-lg">
+    <div className="flex flex-col gap-3 p-4 h-full bg-[var(--surface)] border border-[var(--border)] rounded-lg">
       {/* Header */}
-      <div className="flex items-center justify-between pb-2 border-b border-[#1e2d3d]">
+      <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
         <Skeleton className="h-2.5 w-24" />
         <Skeleton className="h-2.5 w-16" />
       </div>
@@ -61,7 +61,7 @@ export function PanelSkeleton({ rows = 4 }: { rows?: number }) {
 
 export function TickerSkeleton() {
   return (
-    <div className="flex items-center gap-8 px-5 py-3 bg-[#0d1421] border-b border-[#1e2d3d]">
+    <div className="flex items-center gap-8 px-5 py-3 bg-[var(--surface)] border-b border-[var(--border)]">
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="flex flex-col gap-1.5">
           <Skeleton className="h-2.5 w-16" />
@@ -77,8 +77,8 @@ export function TickerSkeleton() {
 
 export function ChartSkeleton() {
   return (
-    <div className="flex flex-col gap-3 p-4 h-full bg-[#0d1421] border border-[#1e2d3d] rounded-lg">
-      <div className="flex items-center justify-between pb-2 border-b border-[#1e2d3d]">
+    <div className="flex flex-col gap-3 p-4 h-full bg-[var(--surface)] border border-[var(--border)] rounded-lg">
+      <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
         <Skeleton className="h-2.5 w-28" />
         <div className="flex gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -91,7 +91,7 @@ export function ChartSkeleton() {
         <Skeleton className="absolute inset-0 rounded" />
       </div>
       {/* Footer stats */}
-      <div className="flex gap-4 pt-2 border-t border-[#1e2d3d]">
+      <div className="flex gap-4 pt-2 border-t border-[var(--border)]">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex flex-col gap-1">
             <Skeleton className="h-2 w-12" />

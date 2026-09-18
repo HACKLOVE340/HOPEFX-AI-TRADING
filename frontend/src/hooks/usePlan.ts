@@ -109,6 +109,5 @@ export function usePlan(): void {
 
     return () => { cancelled = true; };
   // token in deps: re-fetch on every login/refresh so plan stays in sync
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, isAuth, token, setPlan]);
 }

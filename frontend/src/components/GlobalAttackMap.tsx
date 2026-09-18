@@ -50,7 +50,7 @@ interface GlobalAttackMapProps {
 const INTENT_COLOUR: Record<string, string> = {
   probe: '#facc15',       // yellow
   bruteforce: '#f97316',  // orange
-  unknown: '#94a3b8',     // slate
+  unknown: 'var(--text-dim)',     // slate
   exfil: '#ef4444',       // red
   ddos: '#dc2626',        // crimson
 };
@@ -114,7 +114,7 @@ export const GlobalAttackMap: React.FC<GlobalAttackMapProps> = ({
         maxZoom: 18,
       }).addTo(map);
 
-      mapRef.current = map;
+      mapRef.current ??= map;
     })();
 
     return () => {
@@ -202,7 +202,7 @@ export const GlobalAttackMap: React.FC<GlobalAttackMapProps> = ({
 
         {loading && (
           <div style={overlayStyle}>
-            <span style={{ color: '#94a3b8', fontSize: 13 }}>Loading attack data…</span>
+            <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>Loading attack data…</span>
           </div>
         )}
       </div>
@@ -243,8 +243,8 @@ function buildPopupHTML(ip: string, record: AttackRecord): string {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const wrapperStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
+  background: 'var(--surface, var(--raised))',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 10,
   overflow: 'hidden',
   display: 'flex',
@@ -257,12 +257,12 @@ const headerStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '12px 16px',
-  borderBottom: '1px solid var(--border, #334155)',
+  borderBottom: '1px solid var(--border, var(--border-strong))',
 };
 
 const titleStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
-  fontSize: 13,
+  color: 'var(--text, var(--text-strong))',
+  fontSize: 'var(--fs-body)',
   fontWeight: 700,
   letterSpacing: 0.3,
 };
@@ -289,14 +289,14 @@ const legendStyle: React.CSSProperties = {
   flexWrap: 'wrap',
   gap: '8px 16px',
   padding: '10px 16px',
-  borderTop: '1px solid var(--border, #334155)',
+  borderTop: '1px solid var(--border, var(--border-strong))',
 };
 
 const legendItemStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 5,
-  color: 'var(--text-muted, #94a3b8)',
+  color: 'var(--text-muted, var(--text-dim))',
   fontSize: 11,
   textTransform: 'capitalize',
 };

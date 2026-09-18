@@ -10,6 +10,7 @@ import {
 import type { AlertRule } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { Bell, Circle, Plus, Radio, Siren } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -145,35 +146,56 @@ const AlertingSection: React.FC = () => {
       {silenceId && (
         <ConfirmDialog
           title="Silence Alert"
-          message={`Silence this alert for ${silenceDuration} minutes?`}
-          confirmLabel="Silence"
+          message="The rule keeps evaluating; it just stops notifying until the window ends."
+          confirmLabel={`Silence for ${silenceDuration} min`}
+          variant="warning"
           onConfirm={silenceRule}
           onCancel={() => setSilenceId(null)}
-        />
+        >
+          {/* The duration was hardcoded to 60 and the state that was meant to
+              change it had no control, so an operator could silence an alert
+              for exactly one length of time. */}
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-dim)' }}>
+            How long
+            <Select
+              value={silenceDuration}
+              onChange={e => setSilenceDuration(e.target.value)}
+              options={[
+                { value: '15',   label: '15 minutes' },
+                { value: '30',   label: '30 minutes' },
+                { value: '60',   label: '1 hour' },
+                { value: '240',  label: '4 hours' },
+                { value: '720',  label: '12 hours' },
+                { value: '1440', label: '24 hours' },
+              ]}
+              style={{ marginTop: 6 }}
+            />
+          </label>
+        </ConfirmDialog>
       )}
 
       <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon="🔔" accent="#60a5fa" />
-        <KpiTile label="Fired (24h)" value={fired.length} icon="🚨" accent={fired.length > 0 ? '#fbbf24' : '#22c55e'} />
-        <KpiTile label="Critical Firing" value={criticalFired} icon="🔴" accent={criticalFired > 0 ? '#ef4444' : '#22c55e'} />
-        <KpiTile label="Prometheus" value={promStatus?.available ? 'Connected' : 'Offline'} icon="📡" accent={promStatus?.available ? '#22c55e' : '#f87171'} />
+        <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon={<Bell size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Fired (24h)" value={fired.length} icon={<Siren size={18} aria-hidden />} accent={fired.length > 0 ? '#fbbf24' : '#22c55e'} />
+        <KpiTile label="Critical Firing" value={criticalFired} icon={<Circle size={18} aria-hidden />} accent={criticalFired > 0 ? '#ef4444' : '#22c55e'} />
+        <KpiTile label="Prometheus" value={promStatus?.available ? 'Connected' : 'Offline'} icon={<Radio size={18} aria-hidden />} accent={promStatus?.available ? '#22c55e' : '#f87171'} />
       </div>
 
       {/* Prometheus status */}
       {promStatus && (
         <div style={{
-          background: '#0f172a', border: `1px solid ${promStatus.available ? '#16a34a' : '#7f1d1d'}`,
+          background: 'var(--surface)', border: `1px solid ${promStatus.available ? '#16a34a' : '#7f1d1d'}`,
           borderRadius: 10, padding: '12px 16px', marginBottom: 16,
-          display: 'flex', alignItems: 'center', gap: 12, fontSize: 13,
+          display: 'flex', alignItems: 'center', gap: 12, fontSize: 'var(--fs-body)',
         }}>
           <span style={{ fontSize: 16 }}>{promStatus.available ? '✅' : '❌'}</span>
-          <span style={{ color: promStatus.available ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+          <span style={{ color: promStatus.available ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
             Prometheus {promStatus.available ? 'connected' : 'offline'}
           </span>
           {promStatus.available && (
-            <span style={{ color: '#64748b' }}>
+            <span style={{ color: 'var(--text-muted)' }}>
               — {promStatus.active_rules} rules · {promStatus.firing_alerts} firing
             </span>
           )}
@@ -183,10 +205,10 @@ const AlertingSection: React.FC = () => {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['rules', 'fired'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            background: tab === t ? '#1e293b' : 'transparent',
+            background: tab === t ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
-            borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b',
-            padding: '7px 16px', fontSize: 13, cursor: 'pointer',
+            borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
+            padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer',
           }}>
             {t === 'rules' ? `Rules (${rules.length})` : `Fired Alerts (${fired.length})`}
           </button>
@@ -199,7 +221,7 @@ const AlertingSection: React.FC = () => {
       {tab === 'rules' && (
         <>
           {showCreate && (
-            <SectionCard title="Create Alert Rule" icon="➕" accent="#3b82f6">
+            <SectionCard title="Create Alert Rule" icon={<Plus size={18} aria-hidden />} accent="#3b82f6">
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <Input label="Rule name" placeholder="High CPU Usage" value={newRule.name} onChange={e => setNewRule(p => ({ ...p, name: e.target.value }))} />
@@ -219,24 +241,24 @@ const AlertingSection: React.FC = () => {
             </SectionCard>
           )}
 
-          <SectionCard title="Alert Rules" icon="🔔" accent="#60a5fa" noPad>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <SectionCard title="Alert Rules" icon={<Bell size={18} aria-hidden />} accent="#60a5fa" noPad>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Name', 'Condition', 'Severity', 'Channels', 'Last Fired', 'Fires', 'Enabled', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rules.map(rule => (
-                  <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 600 }}>{rule.name}</td>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: '#94a3b8' }}>{rule.condition}</td>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-dim)' }}>{rule.condition}</td>
                     <td style={{ padding: '10px 16px' }}><SeverityBadge severity={rule.severity} /></td>
-                    <td style={{ padding: '10px 16px', fontSize: 11, color: '#64748b' }}>{rule.channels.join(', ')}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 11, color: '#64748b' }}>{fmtDate(rule.last_fired)}</td>
-                    <td style={{ padding: '10px 16px', color: rule.fire_count > 0 ? '#fbbf24' : '#475569' }}>{rule.fire_count}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{rule.channels.join(', ')}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{fmtDate(rule.last_fired)}</td>
+                    <td style={{ padding: '10px 16px', color: rule.fire_count > 0 ? 'var(--warn)' : 'var(--text-faint)' }}>{rule.fire_count}</td>
                     <td style={{ padding: '10px 16px' }}>
                       <Toggle checked={rule.enabled} onChange={() => toggleRule(rule)} disabled={busy === rule.rule_id} />
                     </td>
@@ -255,25 +277,25 @@ const AlertingSection: React.FC = () => {
       )}
 
       {tab === 'fired' && (
-        <SectionCard title="Fired Alerts" icon="🚨" accent="#fbbf24" noPad>
+        <SectionCard title="Fired Alerts" icon={<Siren size={18} aria-hidden />} accent="#fbbf24" noPad>
           {fired.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No alerts fired recently</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No alerts fired recently</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Rule', 'Severity', 'Message', 'Fired At'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {fired.slice(0, 100).map((a, i) => (
-                  <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 600 }}>{a.name}</td>
                     <td style={{ padding: '10px 16px' }}><SeverityBadge severity={a.severity} /></td>
-                    <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{a.message ?? a.value ?? '—'}</td>
-                    <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(a.fired_at)}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{a.message ?? a.value ?? '—'}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(a.fired_at)}</td>
                   </tr>
                 ))}
               </tbody>

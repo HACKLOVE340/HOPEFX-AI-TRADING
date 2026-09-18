@@ -151,15 +151,16 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')
 
+    # Training produces reviewable artifacts only. Promotion and repository
+    # updates happen through a reviewed pull request, never from a schedule.
     permissions:
-      contents: write   # needed to commit artefacts back
+      contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Set up Python 3.11
@@ -256,21 +257,10 @@ jobs:
           done
           exit $missing
 
-      - name: Commit updated model registry back to branch
+      - name: Promotion handoff
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add \
-            ml/saved_models/registry.json \
-            ml/saved_models/advanced_training_report.json \
-            ml/saved_models/feature_stats.json \
-            ml/saved_models/feature_importances.json
-          if git diff --cached --quiet; then
-            echo "No model registry changes to commit."
-          else
-            git commit -m "chore(ml): automated weekly retrain $(date -u +'%Y-%m-%d')"
-            git push origin HEAD
-          fi
+          echo "Training artifacts are available for reviewed promotion."
+          echo "No model or registry changes are committed automatically."
 
   # ────────────────────────────────────────────────────────────────────────────
   # Notify on failure

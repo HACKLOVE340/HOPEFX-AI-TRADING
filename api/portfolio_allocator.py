@@ -27,6 +27,8 @@ GET  /api/portfolio/allocator/registry         — raw edge registry JSON (admin
 
 from __future__ import annotations
 
+import asyncio
+
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -341,7 +343,7 @@ async def get_registry(
             "note": "Registry file not yet created — register a pod to initialise it.",
         }
     try:
-        return json.loads(REGISTRY_PATH.read_text())
+        return json.loads(await asyncio.to_thread(REGISTRY_PATH.read_text))
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

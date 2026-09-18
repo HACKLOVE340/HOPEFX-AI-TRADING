@@ -150,7 +150,7 @@ const NuclearDashboard = memo(() => {
       {/* Explain panel toggle — always visible */}
       <div style={{
         display: 'flex', justifyContent: 'flex-end',
-        padding: '4px 12px', borderBottom: '1px solid #0d1421',
+        padding: '4px 12px', borderBottom: '1px solid var(--surface)',
         background: '#020408', gap: 8,
       }}>
         <button
@@ -159,7 +159,7 @@ const NuclearDashboard = memo(() => {
             padding: '4px 12px', borderRadius: 4,
             background: showExplainPanel ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.04)',
             border: `1px solid ${showExplainPanel ? '#8b5cf6' : '#1e293b'}`,
-            color: showExplainPanel ? '#a78bfa' : '#64748b',
+            color: showExplainPanel ? 'var(--ai-model)' : 'var(--text-muted)',
             fontSize: 11, cursor: 'pointer', fontFamily: 'monospace',
             display: 'flex', alignItems: 'center', gap: 6,
           }}
@@ -196,7 +196,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column',
     height: '100%', width: '100%',
     background: '#020408',
-    color: '#f1f5f9',
+    color: 'var(--text-strong)',
     fontFamily: 'monospace, system-ui, sans-serif',
     overflow: 'hidden',
     position: 'relative',
@@ -217,7 +217,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'color 0.3s ease',
   },
   wsNote: {
-    fontSize: 10, color: '#334155', marginLeft: 'auto',
+    fontSize: 10, color: 'var(--text-faint)', marginLeft: 'auto',
   },
   protectedBanner: {
     display: 'flex', alignItems: 'center', gap: 10,

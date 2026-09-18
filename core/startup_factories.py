@@ -164,6 +164,36 @@ async def init_env(s: Any) -> bool:
     except Exception as exc:
         logger.warning("Env validator unavailable: %s", exc)
 
+    # Teach the AI output guardrail this deployment's real credentials, now
+    # that they are resolved in the process.
+    #
+    # `ai/guardrails/output.py` scans model output two ways: regex shapes for
+    # credentials with a distinctive form, and exact matches against the values
+    # this deployment actually holds. The second arm is the only one that can
+    # catch a leaked JWT signing key, a broker password, or a system prompt
+    # echoed back — none of which have a shape a regex can find.
+    #
+    # `register_known_secret`'s docstring has always said it is "called at
+    # startup with values already in the process". Nothing called it, so the
+    # registry was empty in every running process and that arm scanned against
+    # nothing (F176; surfaced by scripts/capability_callers.py as `sec.secrets`
+    # with no production caller). This is that call.
+    #
+    # Never blocks startup: a guardrail that cannot be armed is a serious
+    # warning, not a reason to refuse to serve — but it is logged at ERROR
+    # rather than swallowed, because a silent failure here leaves the leak
+    # detection off with nobody aware of it.
+    try:
+        from ai.guardrails.output import register_deployment_secrets
+
+        register_deployment_secrets()
+    except Exception as exc:
+        logger.error(
+            "output guardrail NOT armed: deployment credentials could not be registered (%s); "
+            "leaked secrets in model output will not be detected by exact match",
+            exc,
+        )
+
     return True
 
 
@@ -625,6 +655,496 @@ async def init_data_scheduler(s: Any) -> Any:
     return ds
 
 
+async def init_ai_response_cache(s: Any) -> Any:
+    """Install the process-wide model response cache.
+
+    `install_shared_cache()` had zero production callers, so no deployment had
+    one and every model call reached a provider.
+
+    Installing it is safe only because of the policy in `ai/cache/store.py`: a
+    request that does not declare `tool_state` is not cached at all. Not one
+    production caller declared it when this was written, so a naive install
+    would have served an hour-old market view — computed under different
+    positions and a different regime — as though it were current. Silence means
+    do not cache.
+    """
+    from ai.cache.store import ResponseCache, install_shared_cache
+    from api.admin import log_activity
+
+    ttl_s = float(os.getenv("AI_CACHE_TTL_S", "") or 300.0)
+    max_entries = int(os.getenv("AI_CACHE_MAX_ENTRIES", "") or 512)
+    cache = install_shared_cache(ResponseCache(ttl_s=ttl_s, max_entries=max_entries))
+    s.ai_response_cache = cache
+    log_activity(
+        f"AI response cache installed — ttl={ttl_s:.0f}s max_entries={max_entries}; "
+        "only requests declaring tool_state are cached",
+    )
+    return cache
+
+
+async def init_ai_job_progress(s: Any) -> Any:
+    """Push AI job state to the operator's screen instead of making it poll.
+
+    The workbench polls every 900ms while anything is live. Pushing each change
+    over the WebSocket already carrying prices removes both the latency floor
+    and the load on a page nobody is watching.
+
+    Polling stays the fallback: if this does not install, panels still update,
+    just a little later. That is why it is required=False and why a failure here
+    is a warning rather than an error.
+    """
+    from ai.jobs import progress
+    from api.admin import log_activity
+    from api.ws_live import get_live_manager
+
+    # `get_live_manager()` — not a module-level `manager`, which does not exist.
+    # The first draft of this factory imported that name; it registered fine and
+    # would have raised ImportError on the first startup, because a factory that
+    # is registered is not a factory that has run. The test below it now calls it.
+    manager = get_live_manager()
+    progress.install(send_to_user=manager.send_to_user, loop=asyncio.get_running_loop())
+    log_activity("AI job progress streaming to operators over the ai_jobs channel")
+    return manager
+
+
+async def init_ai_agent_bus(s: Any) -> Any:
+    """Give §12's agent bus its cross-worker leg.
+
+    The bus delivers in-process on its own and needs nothing from startup to do
+    that. What it cannot do alone is reach the other API workers: `API_WORKERS`
+    can be greater than 1, and then a message published in worker 2 is invisible
+    to a subscriber in worker 1.
+
+    This points its fan-out at `core.event_bus`, which is already connected by
+    the `event_bus` factory this one depends on.
+
+    **Fan-out is publish only.** Receiving another worker's messages needs a
+    reader loop per operator (`ai.bus.agent_bus.consume`), and nothing starts one
+    yet. That gap is reported in words by every `Delivery.fanout`, rather than
+    being left for a reader to infer from a number that looks fine.
+    """
+    from ai.bus.agent_bus import get_agent_bus, install_redis_fanout
+    from api.admin import log_activity
+
+    bus = get_agent_bus()
+    label = install_redis_fanout(bus, asyncio.get_running_loop())
+    s.ai_agent_bus = bus
+    log_activity(f"AI agent bus cross-worker fan-out installed — {label}")
+    return bus
+
+
+async def init_ai_improvement_cycle(s: Any) -> Any:
+    """Start the self-improvement cycle, if an owner has turned it on.
+
+    Owner request, 2026-09-07: the AI should always be awake to improve itself.
+    "Awake" is a scheduled walk of all the code, findings filed as proposals,
+    and two humans deciding — not an agent editing the repository.
+
+    **Off unless `AI_IMPROVE_CYCLE_HOURS` is a positive number.** A
+    self-improvement loop that starts itself on first deployment is a change
+    nobody chose, and the mistake it protects against is a typo being read as
+    "run continuously".
+
+    **The patch generator is a SECOND switch.** `AI_IMPROVE_CYCLE_HOURS` starts
+    the walk; `AI_IMPROVE_PATCHER` lets a model author candidate patches. They
+    are deliberately separate, because turning the schedule on and letting a
+    model write code unattended are two decisions, and one variable for both
+    would re-merge them where nobody would notice. Without the second, the cycle
+    walks, reports findings, files nothing, and says exactly that rather than
+    reading as a clean bill.
+
+    A generated patch gains nothing from being generated: it passes the same
+    five gates in `ai/improve/proposal.py` and needs the same two approvers, one
+    a superadmin.
+
+    Runs on a background task like the awareness watchers, so a slow walk never
+    delays the trading engine.
+    """
+    from ai.improve import cycle, patcher
+    from api.admin import log_activity
+
+    interval = cycle.interval_s()
+    if interval is None:
+        return {"started": False, "reason": "AI_IMPROVE_CYCLE_HOURS is not set to a positive number"}
+
+    generator = patcher.build_patcher()
+
+    redis = None
+    try:
+        from cache.redis_client import get_redis
+
+        redis = await get_redis()
+    except Exception as exc:
+        logger.debug("init_ai_improvement_cycle: Redis unavailable: %s", exc)
+
+    task = asyncio.create_task(cycle.run_forever(interval, redis=redis, patcher=generator))
+    task.add_done_callback(lambda _t: None)
+    s.ai_improvement_cycle = task
+    log_activity(
+        f"AI self-improvement cycle scheduled every {interval / 3600:.1f}h \u2014 "
+        f"{'authoring patches with a model' if generator else 'reporting findings only'}, "
+        f"filed for two-approver review; halt with `set {cycle.HALT_KEY} 1`"
+    )
+    return {"started": True, "interval_s": interval, "patcher": generator is not None, "task": task}
+
+
+async def init_ai_awareness(s: Any) -> Any:
+    """Start the department watchers. Spec §2's `awareness/`.
+
+    The last of the four anatomy parts. Until this, every department was purely
+    reactive — it could answer a question an operator asked and could not tell
+    anyone that something had changed.
+
+    **A watcher raises a proposal and never acts.** `ai/awareness` does not
+    import the tool bus, so the unsafe thing is not expressible rather than
+    merely discouraged. What lands here is a `pending` entry in the same
+    approval queue a human proposal lands in.
+
+    Runs on a background task like `init_hourly_trainer`, so a slow watcher
+    never delays the trading engine. The interval is deliberately not tight: a
+    watcher exists to notice a condition within a minute or two, not to poll.
+    """
+    from ai.awareness import watchers
+    from api.admin import log_activity
+
+    interval_s = float(os.getenv("AI_AWARENESS_INTERVAL_S", "") or 120.0)
+    watchers.install_default_watchers()
+
+    def _queue(proposal: dict[str, Any]) -> None:
+        # Imported here rather than at module scope: the API package pulls in
+        # most of the app, and a startup factory must not widen the import graph
+        # for every consumer of this module.
+        from api.safe_agent_platform import queue_observation_proposal
+
+        queue_observation_proposal(proposal)
+
+    watchers.set_proposal_sink(_queue)
+
+    async def _loop() -> None:
+        while True:
+            try:
+                await asyncio.to_thread(watchers.run_all)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # The loop itself must survive anything a watcher does; run_all
+                # already isolates each watcher individually.
+                logger.exception("AI awareness pass failed; the loop continues")
+            await asyncio.sleep(interval_s)
+
+    task = asyncio.create_task(_loop())
+    s.background_tasks.append(task)
+    log_activity(f"AI awareness watchers started — {len(watchers.registered())} watchers, every {interval_s:.0f}s")
+    return task
+
+
+async def init_ai_agent_sweep(s: Any) -> Any:
+    """Schedule the agentic loop's health sweep. Spec §2's `agent/`, wired.
+
+    `ai/agent/loop.py` was built, tested and documented, and called by nothing
+    outside its own tests — while `ai/hub/capabilities.py` cited it as the
+    evidence that `arch.layer_b.intelligence` is live. The registry could not
+    see the gap: `verify()` asks whether the module imports and the symbol
+    exists, not whether anything runs it. This factory is the caller that makes
+    the claim true.
+
+    Deterministic planner, read-only actions only, and the loop's own bounds —
+    it refuses anything outside `permitted_actions(department)` before the bus
+    is reached, and the bus consults the permission registry and
+    `enforce_agent_action` again after that. The sweep narrows once more on top
+    of both: only named health checks, never `run_tests`, `run_backtest` or
+    `shadow_place_order`, all of which the registry would otherwise permit
+    because every read-only handler defaults its arguments.
+
+    Background task, like `init_ai_awareness` — a slow department must never
+    delay the trading engine. The interval is deliberately loose: this notices
+    a condition, it does not poll.
+    """
+    from ai.agent.sweep import run_health_sweep
+    from api.admin import log_activity
+
+    bus = getattr(s, "ai_tool_bus", None)
+    if bus is None:
+        # No bus means the departments factory did not build one. Running a
+        # sweep against nothing would report a clean pass it never measured.
+        log_activity("AI agent sweep not started — no tool bus on app state")
+        return None
+
+    interval_s = float(os.getenv("AI_AGENT_SWEEP_INTERVAL_S", "") or 900.0)
+    departments = [d.strip() for d in (os.getenv("AI_AGENT_SWEEP_DEPARTMENTS", "") or "system_ops").split(",")]
+    departments = [d for d in departments if d]
+
+    async def _loop() -> None:
+        while True:
+            for department in departments:
+                try:
+                    run = await asyncio.to_thread(run_health_sweep, bus=bus, operator="system", department=department)
+                    logger.info(
+                        "AI agent sweep %s: %s, %d tool call(s) — %s",
+                        department,
+                        "completed" if run.completed else "stopped",
+                        run.tool_calls,
+                        run.stopped_reason,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    # One department's sweep failing must not stop the others,
+                    # nor end the schedule.
+                    logger.exception("AI agent sweep failed for %s; the schedule continues", department)
+            await asyncio.sleep(interval_s)
+
+    task = asyncio.create_task(_loop())
+    s.background_tasks.append(task)
+    log_activity(f"AI agent sweep started — departments={departments}, every {interval_s:.0f}s")
+    return task
+
+
+async def init_ai_memory(s: Any) -> Any:
+    """Give department memory a store that outlives the process.
+
+    Spec §2's `memory/`. Without this, everything a department observes lives in
+    a process-local deque and evaporates on restart — the same defect the
+    gateway audit trail had, in the layer the awareness watchers and the agentic
+    loop are built on. A department that forgets every deploy cannot notice that
+    a violation has happened before.
+
+    required=False and non-fatal: a deployment with no database keeps the
+    in-process memory rather than losing the departments entirely.
+    `store.backend_is_durable()` reports which of the two happened.
+    """
+    from ai.memory import store
+    from ai.memory.sql_backend import SqlMemoryBackend
+    from api.admin import log_activity
+
+    session_factory = getattr(s, "session_factory", None) or getattr(s, "db_session_factory", None)
+    if session_factory is None:
+        from database.connection import SessionLocal
+
+        session_factory = SessionLocal
+
+    if session_factory is None:
+        logger.warning(
+            "AI department memory is process-local — no database session factory. "
+            "Everything a department observes will be lost on restart.",
+        )
+        return None
+
+    store.set_backend(SqlMemoryBackend(session_factory))
+    log_activity("AI department memory bound to ai_department_memory (survives restart)")
+    return session_factory
+
+
+async def init_ai_budget_store(s: Any) -> Any:
+    """Give the AI spend ceiling a counter that outlives the process.
+
+    `ai/gateway/budget.py` kept the month's spend in a module global, so a
+    restart reset it to $0 and each extra `API_WORKERS` process got its own full
+    allowance. The configured ceiling therefore meant something different from
+    what the settings form said, with nothing to indicate it.
+
+    Installing the store is deliberately not fatal: a deployment with no Redis
+    keeps the previous in-memory behaviour rather than losing the AI entirely.
+    But it is reported at WARNING when absent, because "the ceiling is
+    per-process" is a fact an operator needs, and `budget.store_is_shared()`
+    reads it back for the health surface.
+    """
+    from ai.gateway import budget
+    from ai.gateway.budget_store import build_from_env
+    from api.admin import log_activity
+
+    store = build_from_env()
+    if store is None:
+        logger.warning(
+            "AI budget store not installed — no REDIS_URL, or Redis unreachable. "
+            "The monthly ceiling is per-process: it resets on restart, and with "
+            "API_WORKERS>1 each worker gets its own full allowance.",
+        )
+        return None
+
+    budget.set_store(store)
+    log_activity("AI budget ceiling bound to the shared Redis counter (survives restart, shared across workers)")
+    return store
+
+
+async def init_ai_eval_store(s: Any) -> Any:
+    """Give the promotion gate evidence that outlives this process.
+
+    The gate read `_EVAL_REPORT`, a module global in `api/safe_agent_platform`.
+    After any restart it was None and canary promotion refused `no_eval_report`
+    until somebody remembered to run the suite by hand; with `API_WORKERS>1` a
+    second worker never saw the first worker's report at all. Because the gate
+    is fail-closed this reads as an availability problem — which is exactly how
+    it ends up "fixed" by raising the 24h staleness bound to a month.
+
+    Not fatal when absent, for the same reason the budget store is not: a
+    deployment with no Redis keeps the previous behaviour. Reported at WARNING,
+    because "the gate forgets on restart" is a fact an operator needs, and
+    `store.store_is_shared()` reads it back for the health surface.
+    """
+    from ai.evals import store
+    from api.admin import log_activity
+
+    shared = store.build_from_env()
+    if shared is None:
+        logger.warning(
+            "AI eval report store not installed — no REDIS_URL, or Redis unreachable. "
+            "The promotion gate's evidence is per-process: it is lost on restart, and "
+            "with API_WORKERS>1 a worker that did not run the suite will refuse promotion.",
+        )
+        return None
+
+    store.set_store(shared)
+    restored = store.load()
+    if restored is not None:
+        log_activity(
+            f"AI promotion gate restored an eval report scoring {restored.score:.2f} "
+            "(the gate's own age bound still applies to it)"
+        )
+    else:
+        log_activity("AI eval report store bound to Redis (survives restart, shared across workers)")
+    return shared
+
+
+async def init_ai_eval_schedule(s: Any) -> Any:
+    """Run the eval suite on an interval, when a deployment has asked for one.
+
+    OFF unless `AI_EVAL_SCHEDULE_HOURS` is set to a positive number, and it
+    stays off for a zero, a negative or anything unparseable. Every case is a
+    paid model call, and `ai/evals/runner.py` is right that a startup which
+    quietly spends money is hard to notice and harder to stop — so an
+    unconfigured deployment starts nothing, and a typo is never read as "run
+    continuously".
+
+    The loop sleeps before its first run, so a restart is not a purchase and a
+    crash-looping deployment is not a bill.
+    """
+    from ai.evals import schedule
+    from api.admin import log_activity
+
+    interval = schedule.interval_s()
+    if interval is None:
+        # Not a warning: off is the default and a perfectly good choice. The
+        # consequence is worth stating once, though, because it is not obvious
+        # that it lands on the promotion gate.
+        # Read from the gate rather than restated here: two numbers that must
+        # agree are one number that will not.
+        from ai.evals.gate import DEFAULT_MAX_AGE_S
+
+        logger.info(
+            "AI eval schedule is off (AI_EVAL_SCHEDULE_HOURS unset). Eval reports age out after "
+            "%.0fh, after which canary promotion refuses until the suite is run by hand.",
+            DEFAULT_MAX_AGE_S / 3600,
+        )
+        return None
+
+    task = asyncio.create_task(schedule.run_forever(interval))
+    s.background_tasks.append(task)
+    log_activity(f"AI eval suite scheduled every {interval / 3600:.1f}h (each run is a paid model call)")
+    return task
+
+
+async def init_ai_audit_sink(s: Any) -> Any:
+    """Point the gateway audit trail at the durable, tamper-evident chain.
+
+    `ai/gateway/audit.py` retained 500 records in a Python list and its comment
+    claimed "the durable sink is the config store via the control plane". No
+    code wrote there. So every model call -- who made it, which vendor served
+    it, what it cost -- was erased by a restart, while spec §6 promised an
+    immutable, exportable, regulatory-grade trail.
+
+    The sink is `ComplianceManager.log_ai_call`, which is already the writer for
+    the `audit_log` table's hash chain. Reusing it keeps ONE sequence and ONE
+    chain; a second independent writer would make `verify_integrity` report a
+    violation on a log nobody had tampered with.
+
+    required=False, because an audit sink failing to install must not stop the
+    trading platform from starting -- but unlike the other optional factories,
+    the failure is reported at ERROR rather than debug. A deployment running
+    without a durable trail is a deployment whose compliance posture differs
+    from what its documentation says, and that must not be quiet.
+    `audit.durable_sink_installed()` is what the health surface reads back.
+    """
+    from ai.gateway import audit
+    from api.admin import log_activity
+
+    manager = getattr(s, "compliance_manager", None)
+    if manager is None or not hasattr(manager, "log_ai_call"):
+        logger.error(
+            "AI audit sink NOT installed — no compliance manager on app state. "
+            "The gateway audit trail will not survive a restart, and spec §6 "
+            "export is unavailable until this is resolved.",
+        )
+        return None
+
+    audit.set_durable_sink(manager.log_ai_call)
+    log_activity("AI gateway audit trail bound to the durable compliance chain")
+    return manager
+
+
+async def init_ai_departments(s: Any) -> Any:
+    """Build the Cluster A tool bus and hang it on app state.
+
+    Spec §4. This is the factory that gives `ToolBus.invoke` and
+    `invariants.enforcement.enforce_agent_action` their first production
+    callers: both were built, tested and documented, and invoked by nothing.
+
+    `live_mode` is False unless LIVE_TRADING_ENABLED says otherwise. A
+    LIVE_TRADING tool is refused without it, so defaulting it on would remove
+    one of the two refusals standing in front of `place_order` — the other
+    being the explicit human approval the registry also demands.
+    """
+    from ai.departments import build_tool_bus, implemented_actions
+    from api.admin import log_activity
+
+    live_mode = (os.getenv("LIVE_TRADING_ENABLED", "") or "").strip().lower() in {"1", "true", "yes", "on"}
+    bus = build_tool_bus(live_mode=live_mode)
+    s.ai_tool_bus = bus
+
+    log_activity(
+        f"AI departments ready — {len(implemented_actions())} actions registered on the tool bus, "
+        f"live_mode={live_mode}",
+    )
+    return bus
+
+
+async def init_local_model_runtime(s: Any) -> Any:
+    """Start the on-hardware inference server and warm its models.
+
+    Owner requirement, 2026-09-06 (plan §1A.5.1): the local LLM and any other
+    local models must come up with the application, so they are running on the
+    VPS without anyone starting them by hand.
+
+    Enabled only when LOCAL_MODEL_AUTOSTART=true, and even then the runtime
+    refuses a tier the machine cannot hold — an oversized model does not
+    degrade, it swaps the box to a standstill, and this box also executes
+    orders.
+
+    Best-effort and non-blocking, the same shape as init_hourly_trainer: the
+    work runs on a background task so a model download never delays the trading
+    engine, and a failure leaves the hosted model chain untouched.
+    """
+    from ai.local_model import autostart_enabled, get_local_model_runtime
+    from api.admin import log_activity
+
+    runtime = get_local_model_runtime()
+    s.local_model_runtime = runtime
+
+    if not autostart_enabled():
+        log_activity(
+            "Local model autostart disabled (LOCAL_MODEL_AUTOSTART not set). "
+            "Set LOCAL_MODEL_AUTOSTART=true to run models on this machine.",
+        )
+        return runtime
+
+    t = asyncio.create_task(runtime.start())
+    s.background_tasks.append(t)
+    log_activity(
+        f"Local model runtime starting — tier={runtime.tier} models={list(runtime.models)}",
+    )
+    return runtime
+
+
 async def init_hourly_trainer(s: Any) -> Any:
     """
     Start the hourly ML model training loop.
@@ -696,10 +1216,27 @@ async def init_alert_engine(s: Any, app: Any) -> Any:
 
 
 async def init_order_flow(s: Any, app: Any) -> Any:
-    from analysis.order_flow import OrderFlowAnalyzer, create_order_flow_router
+    """Register the order-flow analyzer as a startup service.
 
-    ofa = OrderFlowAnalyzer()
-    app.include_router(create_order_flow_router(ofa))
+    Returns the SAME instance `core/router_registry.py` mounts. It used to build
+    its own `OrderFlowAnalyzer()` and mount a second copy of the same paths with
+    a plain `include_router`, while the registry mounted the module-level router
+    built on the global. FastAPI resolves to the first registration, so this
+    one's routes were shadowed and the object returned here — the registered
+    startup service, and therefore the obvious thing to wire a tick feed to —
+    could never serve a request. Measured: two trades into it, and
+    `/api/orderflow/{symbol}/delta` still answered 0 (F147).
+
+    The router is mounted through the deduped helper because the registry has
+    very likely mounted these paths already; including them twice is what
+    created the shadow.
+    """
+    from analysis.order_flow import create_order_flow_router, get_order_flow_analyzer
+
+    from core.router_registry import _include_router_deduped
+
+    ofa = get_order_flow_analyzer()
+    _include_router_deduped(app, create_order_flow_router(ofa))
     return ofa
 
 
@@ -1153,6 +1690,31 @@ async def _try_connect_oanda(
         from brokers.oanda import AsyncOANDAConnector
 
         broker = AsyncOANDAConnector(api_key=token, account_id=account_id, practice=practice)
+
+        # Verify the connector can actually place an order before reporting the
+        # broker as ready. AsyncOANDAConnector is an alias for OANDABroker,
+        # which NOW implements place_market_order (brokers/oanda.py:422) over
+        # place_order — the method execution/trade_executor.py:434 calls. This
+        # comment used to say it did not, which was true when the guard was
+        # written and stopped being true when the adapter landed; the guard is
+        # kept because it is what makes the property enforced rather than
+        # believed. This configuration used to boot cleanly, log "OANDA broker
+        # connected", and raise AttributeError on the first signal instead
+        # (F61/F107). deployments/k8s/k8s-configmap.yaml:33-34 already sets
+        # BROKER_TYPE=oanda with OANDA_PRACTICE=false.
+        #
+        # Refusing at startup is the whole point: a deployment that cannot trade
+        # should say so while someone is watching the logs, not on the first
+        # live order.
+        _required = ("place_market_order", "get_account_info", "get_positions")
+        _missing = [m for m in _required if not hasattr(broker, m)]
+        if _missing:
+            raise RuntimeError(
+                f"BROKER_TYPE=oanda selected, but {type(broker).__name__} is missing "
+                f"{_missing}. This deployment cannot place an order. Refusing to start "
+                "rather than failing on the first signal (F61/F107)."
+            )
+
         if not await broker.connect():
             logger.warning(
                 "OANDA connection failed — falling back to paper broker. "
@@ -1166,6 +1728,12 @@ async def _try_connect_oanda(
         _start_oanda_paper_clock(account_id, practice)
         return broker
 
+    except RuntimeError:
+        # The interface check above. Re-raised deliberately: silently falling back
+        # to paper would mean a deployment that asked for a LIVE venue trades on
+        # a simulated one and reports success, which is a worse failure than not
+        # starting.
+        raise
     except Exception as exc:
         logger.warning("OANDA broker init failed (%s) — falling back to paper broker.", exc)
         return None
@@ -1198,8 +1766,19 @@ async def _try_connect_factory_broker(broker_type: str, log_activity: Any) -> An
     """Instantiate + connect a BrokerFactory-registered connector (alpaca, binance,
     bybit, ccxt, ibkr, cme, …). Returns the connected broker or None on failure.
 
-    These connectors implement BrokerConnector and inherit place_market_order
-    from the base adapter, so the live order router drives them uniformly.
+    These connectors are expected to implement BrokerConnector and inherit
+    place_market_order from the base adapter, so the live order router drives
+    them uniformly. That sentence used to be the only thing standing behind the
+    claim, and a docstring is not a control: measured across the 22 registered
+    names, 21 satisfy it and `oanda` -> `OANDAConnector` does not (its base is
+    `object`). Nothing reaches that one by a path calling place_market_order
+    today — startup dispatches oanda to `_try_connect_oanda`, which has always
+    checked — but the asymmetry was the defect: the one branch that verified was
+    the one broker anybody had looked at.
+
+    So the same check runs here, for every type. Refusing at startup is the
+    whole point: a deployment that cannot place an order should say so while
+    someone is watching the logs, not on the first live signal (F61/F107).
     """
     try:
         from brokers.factory import BrokerFactory
@@ -1208,6 +1787,20 @@ async def _try_connect_factory_broker(broker_type: str, log_activity: Any) -> An
         if broker is None:
             logger.warning("[BROKER] factory has no connector registered for '%s'", broker_type)
             return None
+
+        _required = ("place_market_order", "get_account_info", "get_positions")
+        _missing = [m for m in _required if not hasattr(broker, m)]
+        if _missing:
+            logger.error(
+                "[BROKER] %s resolved to %s, which is missing %s. This deployment cannot "
+                "place an order; refusing it rather than reporting the broker ready and "
+                "raising on the first signal (F61/F107).",
+                broker_type,
+                type(broker).__name__,
+                _missing,
+            )
+            return None
+
         connect = broker.connect()
         ok = await connect if asyncio.iscoroutine(connect) else connect
         if not ok:
@@ -1507,6 +2100,58 @@ async def init_aml(s: Any) -> bool:
     from compliance.aml import init_aml_gate
 
     init_aml_gate(session_factory=s.db_session_factory)
+    return True
+
+
+async def init_revenue_ledger(s: Any) -> bool:
+    """Wire the creator revenue ledger to the database.
+
+    The three creator ledger tables, the write-through and the reload all
+    existed and none of them ran: ``monetization.revenue_split.revenue_engine``
+    was constructed with no session factory and nothing assigned one, so every
+    write returned immediately and a restart erased every creator balance.
+    Without this registration the persistence is a no-op no matter how correct
+    it is.
+    """
+    from monetization.revenue_split import init_revenue_engine
+
+    factory = getattr(s, "db_session_factory", None)
+    if factory is None:
+        # Not a detail for DEBUG. Without a factory the engine reverts to the
+        # in-memory mode this component exists to end, and it does so silently:
+        # every write still "succeeds", and the loss only shows up as creator
+        # balances that vanished at the next restart.
+        logger.error(
+            "Creator revenue ledger NOT persisted: no db_session_factory at startup. "
+            "Creator sales, balances and payouts will be lost on restart."
+        )
+        return False
+
+    init_revenue_engine(factory)
+    return True
+
+
+async def init_affiliate_ledger(s: Any) -> bool:
+    """Wire the affiliate ledger to the database.
+
+    Until it was wired, `AffiliateManager` kept every affiliate, referral and
+    payout in module dictionaries: a restart erased what every affiliate was
+    owed, and each worker held its own disjoint copy (F31/F32).
+    """
+    from monetization.affiliate import init_affiliate_manager
+
+    factory = getattr(s, "db_session_factory", None)
+    if factory is None:
+        # Not a detail for DEBUG — see init_revenue_ledger. Without a factory
+        # the manager reverts to the in-memory mode this component exists to
+        # end, and it does so silently.
+        logger.error(
+            "Affiliate ledger NOT persisted: no db_session_factory at startup. "
+            "Affiliate accounts, referrals and commissions will be lost on restart."
+        )
+        return False
+
+    init_affiliate_manager(factory)
     return True
 
 
@@ -2696,6 +3341,8 @@ def build_component_registry(app, feature_flags):
             deps=["compliance_manager"],
         )
         .register("aml", F.init_aml, required=False, deps=["database"])
+        .register("revenue_ledger", F.init_revenue_ledger, required=False, deps=["database"])
+        .register("affiliate_ledger", F.init_affiliate_ledger, required=False, deps=["database"])
         .register("strategy_brain", F.init_strategy_brain, required=False, deps=["config"])
         .register("event_store", F.init_event_store, required=False, deps=["config"])
         .register(
@@ -2783,6 +3430,114 @@ def build_component_registry(app, feature_flags):
             F.init_hourly_trainer,
             required=False,
             deps=["data_scheduler"],
+        )
+        # On-hardware inference (plan §1A.5.1). required=False and gated on
+        # LOCAL_MODEL_AUTOSTART, so a deployment that does not want it is
+        # unaffected and one that does gets it without a manual step.
+        .register(
+            "local_model_runtime",
+            F.init_local_model_runtime,
+            required=False,
+            deps=["config"],
+        )
+        # Spec §4 Cluster A. required=False: an AI department failing to build
+        # must never stop the trading platform from starting.
+        .register(
+            "ai_departments",
+            F.init_ai_departments,
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "ai_response_cache",
+            F.init_ai_response_cache,
+            required=False,
+            deps=["config"],
+        )
+        # Spec §6 — the model-call trail has to outlive the process. Depends on
+        # compliance_manager because that owns the hash chain it writes into.
+        .register(
+            "ai_audit_sink",
+            F.init_ai_audit_sink,
+            required=False,
+            deps=["compliance_manager"],
+        )
+        # The spend ceiling has to outlive the process too, and be shared
+        # between workers. deps=["config"] only: it reads REDIS_URL directly
+        # and must install before the first model call, not after the cache.
+        .register(
+            "ai_budget_store",
+            F.init_ai_budget_store,
+            required=False,
+            deps=["config"],
+        )
+        # The promotion gate's evidence, so it is not lost on restart and is
+        # not per-worker. Before the schedule, which files into it.
+        .register(
+            "ai_eval_store",
+            F.init_ai_eval_store,
+            required=False,
+            deps=["config"],
+        )
+        # Off unless AI_EVAL_SCHEDULE_HOURS is set: every case is a paid model
+        # call. After the budget store so the ceiling it consults is the shared
+        # one rather than this worker's private copy.
+        .register(
+            "ai_eval_schedule",
+            F.init_ai_eval_schedule,
+            required=False,
+            deps=["config"],
+        )
+        # Spec §2 memory/. Depends on database because that is where it writes.
+        .register(
+            "ai_memory",
+            F.init_ai_memory,
+            required=False,
+            deps=["database"],
+        )
+        # Spec §2 awareness/. After memory, because every observation is
+        # recorded there, and after departments, whose read handlers it
+        # observes through.
+        # Push job state to the screen. After ai_departments only so the
+        # WebSocket manager exists; polling is the fallback if it does not.
+        .register(
+            "ai_job_progress",
+            F.init_ai_job_progress,
+            required=False,
+            deps=["config"],
+        )
+        # Spec §12 agent-to-agent messaging. Depends on event_bus because that
+        # is the transport its cross-worker leg publishes through; in-process
+        # delivery works with or without this factory.
+        .register(
+            "ai_agent_bus",
+            F.init_ai_agent_bus,
+            required=False,
+            deps=["event_bus"],
+        )
+        # Track S. Off unless AI_IMPROVE_CYCLE_HOURS is a positive number, and
+        # it files proposals rather than applying anything. After ai_departments
+        # because the walk it runs is the same one exposed there.
+        .register(
+            "ai_improvement_cycle",
+            F.init_ai_improvement_cycle,
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "ai_awareness",
+            F.init_ai_awareness,
+            required=False,
+            deps=["ai_memory", "ai_departments"],
+        )
+        # The agentic loop's caller. required=False for the same reason as the
+        # rest of Cluster A: a health sweep failing to start must never stop
+        # the trading platform from starting.
+        .register(
+            "ai_agent_sweep",
+            F.init_ai_agent_sweep,
+            required=False,
+            deps=["ai_memory", "ai_departments"],
         )
         .register(
             "online_learner_store",
@@ -3891,8 +4646,24 @@ async def init_decision_engine(s: Any) -> Any:
             try:
                 from risk.gatekeeper import Gatekeeper
 
+                # `data_orchestrator` is assigned nowhere in this codebase.
+                # core/startup_helpers.py stores the live one as
+                # `data_layer_orchestrator`, one word away, so this read always
+                # produced None and the Gatekeeper ran unwired — and because a
+                # missing orchestrator used to score a perfect 1.0 rather than
+                # raising, nothing ever surfaced it.
+                _gk_orch = (
+                    getattr(s, "data_layer_orchestrator", None)
+                    or getattr(s, "data_orchestrator", None)
+                    or getattr(s, "orchestrator", None)
+                )
+                if _gk_orch is None:
+                    logger.warning(
+                        "init_decision_engine: no data-layer orchestrator on app_state — the "
+                        "Gatekeeper's data-quality gate will block every signal until one is wired"
+                    )
                 gatekeeper = Gatekeeper(
-                    orchestrator=getattr(s, "data_orchestrator", None),
+                    orchestrator=_gk_orch,
                     risk_manager=getattr(s, "risk_manager", None),
                 )
                 logger.info("init_decision_engine: built Gatekeeper inline")

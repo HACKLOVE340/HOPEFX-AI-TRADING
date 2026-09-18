@@ -263,7 +263,7 @@ class MobileAnalytics:
             logger.debug("MobileAnalytics: flushed %d events to DB", len(events))
             return len(events)
         except Exception:
-            logger.exception("MobileAnalytics: flush failed: %s")
+            logger.exception("MobileAnalytics: flush failed")
             # Re-buffer events on failure to avoid data loss
             with self._lock:
                 self._buffer = events + self._buffer

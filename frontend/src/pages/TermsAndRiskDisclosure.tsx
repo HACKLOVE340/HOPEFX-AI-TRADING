@@ -269,11 +269,11 @@ const TermsAndRiskDisclosure: React.FC = () => {
               <button onClick={() => handleTabChange('terms')} style={s.footerNavLink}>
                 Terms of Service
               </button>
-              <span style={{ color: '#334155' }}>·</span>
+              <span style={{ color: 'var(--text-faint)' }}>·</span>
               <button onClick={() => handleTabChange('risk')} style={s.footerNavLink}>
                 Risk Disclosure
               </button>
-              <span style={{ color: '#334155' }}>·</span>
+              <span style={{ color: 'var(--text-faint)' }}>·</span>
               <Link to="/" style={{...s.footerNavLink, textDecoration:'none'}}>
                 Back to Home
               </Link>
@@ -290,12 +290,12 @@ const TermsAndRiskDisclosure: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: '#0f172a',
-    color: '#e2e8f0',
+    background: 'var(--surface)',
+    color: 'var(--text)',
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
   },
   header: {
-    borderBottom: '1px solid #1e293b',
+    borderBottom: '1px solid var(--border)',
     background: 'rgba(15,23,42,0.95)',
     position: 'sticky',
     top: 0,
@@ -314,7 +314,7 @@ const s: Record<string, React.CSSProperties> = {
   logo: {
     fontSize: 22,
     fontWeight: 800,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     background: 'none',
     border: 'none',
     cursor: 'pointer',
@@ -324,7 +324,7 @@ const s: Record<string, React.CSSProperties> = {
   navLink: {
     background: 'none',
     border: 'none',
-    color: '#94a3b8',
+    color: 'var(--text-dim)',
     fontSize: 14,
     cursor: 'pointer',
     padding: '6px 12px',
@@ -346,7 +346,7 @@ const s: Record<string, React.CSSProperties> = {
   tabs: {
     display: 'flex',
     gap: 4,
-    background: '#1e293b',
+    background: 'var(--raised)',
     borderRadius: 10,
     padding: 4,
     marginBottom: 40,
@@ -355,7 +355,7 @@ const s: Record<string, React.CSSProperties> = {
   tab: {
     background: 'none',
     border: 'none',
-    color: '#64748b',
+    color: 'var(--text-muted)',
     fontSize: 14,
     fontWeight: 500,
     cursor: 'pointer',
@@ -364,8 +364,8 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s',
   },
   tabActive: {
-    background: '#0f172a',
-    color: '#f8fafc',
+    background: 'var(--surface)',
+    color: 'var(--text-strong)',
     fontWeight: 600,
     boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
   },
@@ -373,15 +373,15 @@ const s: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 32,
     fontWeight: 800,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     margin: '0 0 8px',
     letterSpacing: -0.5,
   },
-  subtitle: { fontSize: 15, color: '#64748b', margin: 0 },
+  subtitle: { fontSize: 'var(--fs-value)', color: 'var(--text-muted)', margin: 0 },
   sections: { display: 'flex', flexDirection: 'column', gap: 24 },
   section: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     padding: '28px 32px',
   },
@@ -390,36 +390,36 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(239,68,68,0.3)',
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 'var(--fs-title)',
     fontWeight: 700,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     margin: '0 0 16px',
   },
   sectionBody: { display: 'flex', flexDirection: 'column', gap: 12 },
   para: {
     fontSize: 14,
     lineHeight: 1.7,
-    color: '#94a3b8',
+    color: 'var(--text-dim)',
     margin: 0,
     whiteSpace: 'pre-line',
   },
   footerNote: {
     marginTop: 48,
     paddingTop: 24,
-    borderTop: '1px solid #1e293b',
+    borderTop: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: 12,
   },
-  footerText: { fontSize: 13, color: '#475569', margin: 0 },
+  footerText: { fontSize: 'var(--fs-body)', color: 'var(--text-faint)', margin: 0 },
   footerLink: { color: '#3b82f6', textDecoration: 'none' },
   footerLinks: { display: 'flex', gap: 12, alignItems: 'center' },
   footerNavLink: {
     background: 'none',
     border: 'none',
-    color: '#475569',
-    fontSize: 13,
+    color: 'var(--text-faint)',
+    fontSize: 'var(--fs-body)',
     cursor: 'pointer',
     padding: 0,
     transition: 'color 0.2s',

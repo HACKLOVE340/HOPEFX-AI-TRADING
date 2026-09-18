@@ -12,14 +12,14 @@
  *   GET /api/pnl/open-positions  — current open positions
  */
 
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { PageShell } from '../components/system/PageShell';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, CrossLinkBar } from '../components';
+import { CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
 import {
-  TrendingUp, TrendingDown, Activity, Shield,
-  Clock, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
+  Activity, AlertTriangle, ChevronLeft, ChevronRight, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
@@ -119,8 +119,13 @@ const COLOR_CLASSES: Record<CardColor, string> = {
   purple: 'bg-purple-500/10 text-purple-400',
 };
 
+/**
+ * A headline P&L figure. Given `to`, the card drills into the page that
+ * explains it; without `to` it stays inert rather than becoming an empty tab
+ * stop for keyboard users. See audit F187.
+ */
 function StatCard({
-  label, value, sub, icon: Icon, color = 'amber', warn = false,
+  label, value, sub, icon: Icon, color = 'amber', warn = false, to, toHint,
 }: {
   label: string;
   value: string;
@@ -128,18 +133,37 @@ function StatCard({
   icon: React.ElementType;
   color?: CardColor;
   warn?: boolean;
+  to?: string;
+  toHint?: string;
 }) {
-  return (
-    <div className={`bg-[#0d1421] rounded-lg border p-5 ${warn ? 'border-amber-500/40' : 'border-[#1e2d3d]'}`}>
+  const cls = `bg-[var(--surface)] rounded-lg border p-5 ${warn ? 'border-amber-500/40' : 'border-[var(--border)]'}`;
+  const body = (
+    <>
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-slate-400">{label}</span>
         <div className={`p-2 rounded-lg ${COLOR_CLASSES[color]}`}>
-          <Icon className="w-4 h-4" />
+          <Icon className="w-4 h-4" aria-hidden />
         </div>
       </div>
       <div className="text-2xl font-bold text-slate-100">{value}</div>
       {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
-    </div>
+    </>
+  );
+
+  if (!to) return <div className={cls}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className={`${cls} block no-underline cursor-pointer transition-colors duration-150
+                  hover:border-[var(--border-strong)] hover:bg-[var(--raised)] focus-visible:outline-none
+                  focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2
+                  focus-visible:ring-offset-[var(--bg)]`}
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -205,7 +229,7 @@ function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, [color]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [color]);
 
   useEffect(() => {
     if (!seriesRef.current || data.length < 2) return;
@@ -269,7 +293,7 @@ function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!seriesRef.current || data.length < 2) return;
@@ -295,7 +319,7 @@ const LiveEquityBadge: React.FC<{ equity: number | undefined }> = ({ equity }) =
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
         background: flash !== 'transparent' ? flash : 'rgba(0,230,118,0.08)',
-        color: '#00e676', border: '1px solid rgba(0,230,118,0.2)',
+        color: 'var(--bull)', border: '1px solid rgba(0,230,118,0.2)',
         transition: 'background 0.4s ease',
       }}
     >
@@ -404,9 +428,9 @@ const ExecutionQualityPanel: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {metrics.map(({ label, value, warn }) => (
-        <div key={label} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0a0f1a] border border-[#1e2d3d]">
+        <div key={label} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0a0f1a] border border-[var(--border)]">
           <span className="text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-          <span className={`text-[14px] font-bold tabular-nums ${warn ? 'text-[#ff1744]' : 'text-slate-200'}`}>{value}</span>
+          <span className={`text-[14px] font-bold tabular-nums ${warn ? 'text-[var(--bear)]' : 'text-slate-200'}`}>{value}</span>
         </div>
       ))}
     </div>
@@ -420,6 +444,8 @@ const PnLDashboard: React.FC = () => {
 
   const [page, setPage]         = useState(0);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [exporting, setExporting]     = useState(false);
+  const [exportErr, setExportErr]     = useState<string | null>(null);
 
   // ── Summary ────────────────────────────────────────────────────────────────
   const summaryQ = useQuery<PnLSummary>({
@@ -514,31 +540,76 @@ const PnLDashboard: React.FC = () => {
   const isLoading  = summaryQ.isLoading || fillsQ.isLoading;
   const error      = summaryQ.error ?? fillsQ.error ?? positionsQ.error;
 
-  return (
-    <div className="page-content space-y-4 sm:space-y-6">
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExporting(true);
+    setExportErr(null);
+    try {
+      const res = await pnlApi.export(format);
+      const blob = new Blob([res.data as BlobPart], {
+        type: format === 'csv' ? 'text/csv' : 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pnl-export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setExportErr(extractApiError(e, 'Export failed.'));
+    }
+    setExporting(false);
+  };
 
-      <PageHeader
-        title="P&L Dashboard"
-        icon="💹"
-        subtitle="Real fills from the live engine — no synthetic data"
-        breadcrumbs={[
+  return (
+    <PageShell
+      title="P&L breakdown"
+      icon={TrendingUp}
+      subtitle="Real fills from the live engine — no synthetic data"
+      breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Analytics', href: '/performance' },
           { label: 'P&L Dashboard' },
         ]}
-        actions={
+      actions={
           <div className="flex items-center gap-2 flex-wrap">
             <LiveEquityBadge equity={summary?.equity} />
-            <Link to="/performance" className="flex items-center gap-1 px-3 py-1.5 text-[#4ade80] rounded-lg text-xs font-semibold" style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', textDecoration: 'none' }}>📈 Performance</Link>
-            <Link to="/tca"         className="flex items-center gap-1 px-3 py-1.5 text-[#a78bfa] rounded-lg text-xs font-semibold" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', textDecoration: 'none' }}>📊 TCA</Link>
-            <Link to="/journal"     className="flex items-center gap-1 px-3 py-1.5 text-[#60a5fa] rounded-lg text-xs font-semibold" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', textDecoration: 'none' }}>📓 Journal</Link>
-            <button onClick={handleRefresh} disabled={isLoading} className="flex items-center gap-2 px-3 py-1.5 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-xs transition-colors disabled:opacity-50">
-              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+            {/* /pnl/export is served by the backend and had no caller
+                anywhere in the SPA (audit F185). */}
+            <button
+              onClick={() => void handleExport('csv')}
+              disabled={exporting}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
+                         font-semibold text-slate-300 ring-1 ring-inset ring-[var(--border)] cursor-pointer
+                         transition-colors duration-150 hover:bg-[#243447]
+                         disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none
+                         focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={isLoading}
+              aria-label={lastUpdated ? `Refresh — last updated ${lastUpdated}` : 'Refresh P&L data'}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[var(--border)] px-3.5
+                         text-xs text-slate-300 cursor-pointer transition-colors duration-150
+                         hover:bg-[#243447] disabled:cursor-not-allowed disabled:opacity-50
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} aria-hidden />
               {lastUpdated ? `Updated ${lastUpdated}` : 'Refresh'}
             </button>
           </div>
         }
-      />
+      width="standard"
+    >
+
+
+
+      {exportErr && (
+        <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300
+                                   ring-1 ring-inset ring-red-500/30">{exportErr}</p>
+      )}
 
       {/* Error */}
       {error && (
@@ -560,6 +631,8 @@ const PnLDashboard: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           label="Equity"
+          to="/portfolio"
+          toHint="Portfolio"
           value={summary ? fmtUSD(summary.equity) : '—'}
           sub={summary ? `Started ${fmtUSD(summary.starting_equity)}` : undefined}
           icon={TrendingUp}
@@ -567,6 +640,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Total Return"
+          to="/performance"
+          toHint="performance detail"
           value={summary ? fmtPctRaw(summary.total_return_pct) : '—'}
           sub={summary ? `${summary.total_fills} fills` : undefined}
           icon={Activity}
@@ -574,6 +649,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Sharpe Ratio"
+          to="/performance"
+          toHint="risk-adjusted performance"
           value={summary?.sharpe_ratio != null ? fmtNum(summary.sharpe_ratio, 3) : '—'}
           sub={
             summary?.sharpe_ratio == null
@@ -590,6 +667,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Max Drawdown"
+          to="/performance"
+          toHint="the drawdown curve"
           value={summary ? `${fmtNum(summary.max_drawdown_pct, 2)}%` : '—'}
           sub={summary ? `Current: ${fmtNum(summary.current_drawdown_pct, 2)}%` : undefined}
           icon={TrendingDown}
@@ -598,6 +677,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Win Rate"
+          to="/journal"
+          toHint="the trades behind it"
           value={summary?.win_rate != null ? `${fmtNum(summary.win_rate, 1)}%` : '—'}
           sub={summary?.win_rate == null ? 'Need 30+ fills' : `${summary.total_fills} fills`}
           icon={Shield}
@@ -605,6 +686,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Open Positions"
+          to="/portfolio"
+          toHint="your positions"
           value={summary ? String(summary.open_positions) : '—'}
           sub="Live"
           icon={Activity}
@@ -628,7 +711,7 @@ const PnLDashboard: React.FC = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] p-4">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-200">Equity Curve</h3>
             <span className="text-xs text-slate-500">Account currency</span>
@@ -643,7 +726,7 @@ const PnLDashboard: React.FC = () => {
           )}
           {!equityQ.isLoading && !equityQ.isError && <EquitySparkline data={equityData} />}
         </div>
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] p-4">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-200">Drawdown Curve</h3>
             <span className="text-xs text-slate-500">% from peak equity</span>
@@ -662,14 +745,14 @@ const PnLDashboard: React.FC = () => {
 
       {/* Open positions */}
       {positions.length > 0 && (
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#1e2d3d]">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] overflow-hidden">
+          <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="font-semibold text-slate-200">Open Positions ({positions.length})</h3>
           </div>
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-sm min-w-[640px]">
               <thead>
-                <tr className="text-xs text-slate-500 uppercase border-b border-[#1e2d3d]">
+                <tr className="text-xs text-slate-500 uppercase border-b border-[var(--border)]">
                   {['Symbol', 'Direction', 'Qty', 'Entry', 'Current', 'Unrealised P&L', 'SL', 'TP', 'Opened'].map((h) => (
                     <th key={h} className="px-3 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
                   ))}
@@ -679,7 +762,7 @@ const PnLDashboard: React.FC = () => {
                 {positions.map((pos, i) => {
                   const side = positionSide(pos);
                   return (
-                    <tr key={i} className="border-b border-[#1e2d3d]/50 hover:bg-[#1e2d3d]/30">
+                    <tr key={i} className="border-b border-[var(--border)]/50 hover:bg-[var(--border)]/30">
                       <td className="px-4 py-3 font-mono text-amber-400">{pos.symbol}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -713,8 +796,8 @@ const PnLDashboard: React.FC = () => {
       )}
 
       {/* Auditable trade log */}
-      <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#1e2d3d] flex items-center justify-between">
+      <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-slate-200">Auditable Trade Log</h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -744,7 +827,7 @@ const PnLDashboard: React.FC = () => {
             <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
               <table className="w-full text-sm min-w-[700px]">
                 <thead>
-                  <tr className="text-xs text-slate-500 uppercase border-b border-[#1e2d3d]">
+                  <tr className="text-xs text-slate-500 uppercase border-b border-[var(--border)]">
                     {['Time', 'Symbol', 'Dir', 'Qty', 'Fill Price', 'Expected', 'Slippage', 'Latency', 'Broker', 'Fill ID'].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
@@ -752,7 +835,7 @@ const PnLDashboard: React.FC = () => {
                 </thead>
                 <tbody>
                   {fills.map((f) => (
-                    <tr key={f.fill_id} className="border-b border-[#1e2d3d]/50 hover:bg-[#1e2d3d]/30">
+                    <tr key={f.fill_id} className="border-b border-[var(--border)]/50 hover:bg-[var(--border)]/30">
                       <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                         {fmtDateTime(f.filled_at)}
                       </td>
@@ -792,13 +875,13 @@ const PnLDashboard: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-5 py-3 border-t border-[#1e2d3d] flex items-center justify-between text-sm text-slate-400">
+              <div className="px-5 py-3 border-t border-[var(--border)] flex items-center justify-between text-sm text-slate-400">
                 <span>Page {page + 1} of {totalPages}</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage((p) => Math.max(0, p - 1))}
                     disabled={page === 0}
-                    className="p-1.5 rounded hover:bg-[#1e2d3d] disabled:opacity-30"
+                    className="p-1.5 rounded hover:bg-[var(--border)] disabled:opacity-30"
                     aria-label="Previous page"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -806,7 +889,7 @@ const PnLDashboard: React.FC = () => {
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
-                    className="p-1.5 rounded hover:bg-[#1e2d3d] disabled:opacity-30"
+                    className="p-1.5 rounded hover:bg-[var(--border)] disabled:opacity-30"
                     aria-label="Next page"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -819,7 +902,7 @@ const PnLDashboard: React.FC = () => {
 
         {/* MAE/MFE analysis */}
         {fills.length > 0 && (
-          <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <h3 className="text-[13px] font-semibold text-slate-200 mb-3">MAE / MFE Analysis</h3>
             <ExecutionQualityPanel fills={fills} />
           </div>
@@ -827,7 +910,7 @@ const PnLDashboard: React.FC = () => {
 
         {/* Trade distribution histogram */}
         {fills.length >= 5 && (
-          <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <h3 className="text-[13px] font-semibold text-slate-200 mb-3">Trade Distribution</h3>
             <TradeHistogram fills={fills} />
           </div>
@@ -842,7 +925,7 @@ const PnLDashboard: React.FC = () => {
           { label: '🛡️ Prop Tracker',  href: '/prop-firm',       color: '#f97316' },
         ]}/>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

@@ -48,6 +48,7 @@ import { render, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axios from 'axios';
+import { writeFileSync } from 'node:fs';
 
 import { api } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -360,9 +361,8 @@ describe('F1 — what every view does when the backend is broken', () => {
       silent.map((r) => r.page).join(', ') || '(none)',
     );
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require('fs').writeFileSync('/tmp/f1_matrix.json', JSON.stringify(rendered, null, 1));
-      require('fs').writeFileSync('/tmp/f1_calls.json', JSON.stringify(callsPerRender, null, 1));
+      writeFileSync('/tmp/f1_matrix.json', JSON.stringify(rendered, null, 1));
+      writeFileSync('/tmp/f1_calls.json', JSON.stringify(callsPerRender, null, 1));
     } catch { /* best effort */ }
     expect(Object.keys(rendered).length).toBeGreaterThan(0);
   });

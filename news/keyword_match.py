@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["contains_keyword", "count_keyword", "keyword_pattern"]
+__all__ = ["contains_keyword", "count_keyword", "keyword_pattern", "keyword_spans"]
 
 # Suffixes a keyword may pick up and still be the same word. Ordered longest
 # first so the alternation prefers the longest match.
@@ -94,3 +94,14 @@ def contains_keyword(text: str, keyword: str) -> bool:
 def count_keyword(text: str, keyword: str) -> int:
     """How many times ``keyword`` appears in ``text`` as a whole word."""
     return len(keyword_pattern(keyword).findall(text))
+
+
+def keyword_spans(text: str, keyword: str) -> list[tuple[int, int]]:
+    """Character spans of every whole-word match of ``keyword`` in ``text``.
+
+    ``count_keyword`` answers "how many", which is all two of the three scorers
+    need. A caller that has to decide about matches *individually* -- to
+    discount the ones used in a non-market sense, say -- needs to know where
+    they are, and cannot recover that from a count.
+    """
+    return [match.span() for match in keyword_pattern(keyword).finditer(text)]

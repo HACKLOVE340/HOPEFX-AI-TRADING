@@ -11,7 +11,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
 import { Modal } from '../components/Modal';
@@ -19,6 +19,7 @@ import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
 import { MetricCard } from '../components/MetricCard';
+import { Banknote, BarChart3, FolderTree, TrendingUp, Users } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,12 +76,12 @@ function buildAccCols(
       header: 'Label',
       sortKey: 'label',
       sortable: true,
-      render: (r) => <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{r.label}</span>,
+      render: (r) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{r.label}</span>,
     },
     {
       key: 'broker',
       header: 'Broker',
-      render: (r) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{r.broker}</span>,
+      render: (r) => <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{r.broker}</span>,
     },
     {
       key: 'balance',
@@ -105,7 +106,7 @@ function buildAccCols(
       sortKey: 'daily_pnl',
       sortable: true,
       render: (r) => (
-        <span style={{ color: r.daily_pnl >= 0 ? '#4ade80' : '#f87171', fontFamily: 'monospace', fontWeight: 600 }}>
+        <span style={{ color: r.daily_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontFamily: 'monospace', fontWeight: 600 }}>
           {r.daily_pnl >= 0 ? '+' : ''}{fmt(r.daily_pnl)}
         </span>
       ),
@@ -122,7 +123,7 @@ function buildAccCols(
       render: (r) => (
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => onEdit(r)} style={btnStyle}>Edit</button>
-          <button onClick={() => onDelete(r)} style={{ ...btnStyle, color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>Del</button>
+          <button onClick={() => onDelete(r)} style={{ ...btnStyle, color: 'var(--loss)', border: '1px solid rgba(248,113,113,0.3)' }}>Del</button>
         </div>
       ),
     },
@@ -141,12 +142,12 @@ function buildMemberCols(
       header: 'Username',
       sortKey: 'username',
       sortable: true,
-      render: (r) => <span style={{ color: '#60a5fa', fontWeight: 600 }}>{r.username}</span>,
+      render: (r) => <span style={{ color: 'var(--link)', fontWeight: 600 }}>{r.username}</span>,
     },
     {
       key: 'email',
       header: 'Email',
-      render: (r) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{r.email}</span>,
+      render: (r) => <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{r.email}</span>,
     },
     {
       key: 'role',
@@ -157,7 +158,7 @@ function buildMemberCols(
       key: 'joined_at',
       header: 'Joined',
       render: (r) => (
-        <span style={{ color: '#64748b', fontSize: 12 }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
           {new Date(r.joined_at).toLocaleDateString()}
         </span>
       ),
@@ -169,7 +170,7 @@ function buildMemberCols(
       render: (r) => (
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => onRoleChange(r)} style={btnStyle}>Role</button>
-          <button onClick={() => onRemove(r)} style={{ ...btnStyle, color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>Remove</button>
+          <button onClick={() => onRemove(r)} style={{ ...btnStyle, color: 'var(--loss)', border: '1px solid rgba(248,113,113,0.3)' }}>Remove</button>
         </div>
       ),
     },
@@ -355,37 +356,36 @@ const SubAccounts: React.FC = () => {
   const currentMembers = selectedTeam?.members ?? [];
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Sub-Accounts & Teams"
         subtitle="Manage trading accounts and team access"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/trade')}
-              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               ⚡ Trade
             </button>
             <button onClick={() => setShowCreateAcc(true)} style={s.primaryBtn}>+ Sub-Account</button>
             <button onClick={() => setShowCreateTeam(true)} style={s.secondaryBtn}>+ Team</button>
           </div>
         }
-      />
+    >
 
       {error && <ErrorBanner message={error} onDismiss={() => setError(null)} style={{ marginBottom: 16 }} />}
 
       {/* Summary metrics */}
       <div style={s.metrics}>
-        <MetricCard label="Total Balance"  value={fmt(totalBalance)}  icon="💰" loading={loading} />
-        <MetricCard label="Total Equity"   value={fmt(totalEquity)}   icon="📊" loading={loading} />
+        <MetricCard label="Total Balance"  value={fmt(totalBalance)}  icon={<Banknote size={18} aria-hidden />} loading={loading} />
+        <MetricCard label="Total Equity"   value={fmt(totalEquity)}   icon={<BarChart3 size={18} aria-hidden />} loading={loading} />
         <MetricCard
           label="Daily P&L"
           value={fmt(totalPnl)}
           delta={totalPnl >= 0 ? `+${fmt(totalPnl)}` : fmt(totalPnl)}
           deltaPositive={totalPnl >= 0}
-          icon="📈"
+          icon={<TrendingUp size={18} aria-hidden />}
           loading={loading}
         />
-        <MetricCard label="Sub-Accounts"   value={accounts.length}    icon="🗂️" loading={loading} />
+        <MetricCard label="Sub-Accounts"   value={accounts.length}    icon={<FolderTree size={18} aria-hidden />} loading={loading} />
       </div>
 
       {/* Sub-accounts table */}
@@ -393,7 +393,7 @@ const SubAccounts: React.FC = () => {
         <h2 style={s.sectionTitle}>Sub-Accounts</h2>
         {!loading && accounts.length === 0 ? (
           <EmptyState
-            icon="🗂️"
+            icon={FolderTree}
             title="No sub-accounts yet"
             description="Create a sub-account to track separate P&L, risk limits, or broker connections."
             action={<button onClick={() => setShowCreateAcc(true)} style={s.primaryBtn}>Create Sub-Account</button>}
@@ -431,7 +431,7 @@ const SubAccounts: React.FC = () => {
 
         {!loading && teams.length === 0 ? (
           <EmptyState
-            icon="👥"
+            icon={Users}
             title="No teams yet"
             description="Create a team to collaborate with other traders and share strategies."
             action={<button onClick={() => setShowCreateTeam(true)} style={s.primaryBtn}>Create Team</button>}
@@ -464,8 +464,8 @@ const SubAccounts: React.FC = () => {
         }
       >
         <div style={s.formGrid}>
-          <label style={s.label}>Label</label>
-          <input
+          <label id="subaccounts-label-label" htmlFor="subaccounts-label" style={s.label}>Label</label>
+          <input id="subaccounts-label" aria-labelledby="subaccounts-label-label"
             value={newAccLabel}
             onChange={(e) => setNewAccLabel(e.target.value)}
             placeholder="e.g. Paper Trading"
@@ -478,8 +478,8 @@ const SubAccounts: React.FC = () => {
             <option value="ibkr">Interactive Brokers</option>
             <option value="mt5">MetaTrader 5</option>
           </select>
-          <label style={s.label}>Initial Balance ($)</label>
-          <input
+          <label id="subaccounts-initial-balance-label" htmlFor="subaccounts-initial-balance" style={s.label}>Initial Balance ($)</label>
+          <input id="subaccounts-initial-balance" aria-labelledby="subaccounts-initial-balance-label"
             type="number"
             value={newAccBalance}
             onChange={(e) => setNewAccBalance(e.target.value)}
@@ -505,8 +505,8 @@ const SubAccounts: React.FC = () => {
       >
         {editAcc && (
           <div style={s.formGrid}>
-            <label style={s.label}>Label</label>
-            <input
+            <label id="subaccounts-label-2-label" htmlFor="subaccounts-label-2" style={s.label}>Label</label>
+            <input id="subaccounts-label-2" aria-labelledby="subaccounts-label-2-label"
               value={editAcc.label}
               onChange={(e) => setEditAcc({ ...editAcc, label: e.target.value })}
               style={s.input}
@@ -539,8 +539,8 @@ const SubAccounts: React.FC = () => {
         }
       >
         <div style={s.formGrid}>
-          <label style={s.label}>Team Name</label>
-          <input
+          <label id="subaccounts-team-name-label" htmlFor="subaccounts-team-name" style={s.label}>Team Name</label>
+          <input id="subaccounts-team-name" aria-labelledby="subaccounts-team-name-label"
             value={newTeamName}
             onChange={(e) => setNewTeamName(e.target.value)}
             placeholder="e.g. Alpha Desk"
@@ -568,12 +568,12 @@ const SubAccounts: React.FC = () => {
         }
       >
         <div style={s.formGrid}>
-          <label style={s.label}>User ID</label>
-          <input value={inviteUserId} onChange={(e) => setInviteUserId(e.target.value)} placeholder="user-xxx" style={s.input} />
-          <label style={s.label}>Username</label>
-          <input value={inviteUsername} onChange={(e) => setInviteUsername(e.target.value)} placeholder="trader_x" style={s.input} />
-          <label style={s.label}>Email</label>
-          <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="trader@example.com" style={s.input} />
+          <label id="subaccounts-user-id-label" htmlFor="subaccounts-user-id" style={s.label}>User ID</label>
+          <input id="subaccounts-user-id" aria-labelledby="subaccounts-user-id-label" value={inviteUserId} onChange={(e) => setInviteUserId(e.target.value)} placeholder="user-xxx" style={s.input} />
+          <label id="subaccounts-username-label" htmlFor="subaccounts-username" style={s.label}>Username</label>
+          <input id="subaccounts-username" aria-labelledby="subaccounts-username-label" value={inviteUsername} onChange={(e) => setInviteUsername(e.target.value)} placeholder="trader_x" style={s.input} />
+          <label id="subaccounts-email-label" htmlFor="subaccounts-email" style={s.label}>Email</label>
+          <input id="subaccounts-email" aria-labelledby="subaccounts-email-label" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="trader@example.com" style={s.input} />
           <label style={s.label}>Role</label>
           <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} style={s.input}>
             <option value="viewer">Viewer</option>
@@ -583,7 +583,7 @@ const SubAccounts: React.FC = () => {
           </select>
         </div>
       </Modal>
-    </div>
+    </PageShell>
   );
 };
 
@@ -591,9 +591,9 @@ const SubAccounts: React.FC = () => {
 
 const btnStyle: React.CSSProperties = {
   background: 'transparent',
-  border: '1px solid var(--border, #334155)',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 5,
-  color: '#94a3b8',
+  color: 'var(--text-dim)',
   cursor: 'pointer',
   fontSize: 11,
   padding: '3px 8px',
@@ -603,29 +603,29 @@ const s: Record<string, React.CSSProperties> = {
   page:    { padding: '24px 28px', maxWidth: 1200 },
   metrics: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 28 },
   section: { marginBottom: 32 },
-  sectionTitle: { color: 'var(--text, #f1f5f9)', fontSize: 15, fontWeight: 600, marginBottom: 12 },
+  sectionTitle: { color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-value)', fontWeight: 600, marginBottom: 12 },
   primaryBtn: {
     alignItems: 'center', background: '#3b82f6', border: 'none', borderRadius: 6,
-    color: '#fff', cursor: 'pointer', display: 'flex', fontSize: 13, fontWeight: 600,
+    color: '#fff', cursor: 'pointer', display: 'flex', fontSize: 'var(--fs-body)', fontWeight: 600,
     gap: 6, padding: '7px 16px',
   },
   secondaryBtn: {
-    background: 'transparent', border: '1px solid var(--border, #334155)', borderRadius: 6,
-    color: 'var(--text-muted, #94a3b8)', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
+    background: 'transparent', border: '1px solid var(--border, var(--border-strong))', borderRadius: 6,
+    color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '7px 14px',
   },
   cancelBtn: {
-    background: 'transparent', border: '1px solid var(--border, #334155)', borderRadius: 6,
-    color: 'var(--text-muted, #94a3b8)', cursor: 'pointer', fontSize: 13, padding: '7px 14px',
+    background: 'transparent', border: '1px solid var(--border, var(--border-strong))', borderRadius: 6,
+    color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '7px 14px',
   },
   formGrid: { display: 'flex', flexDirection: 'column', gap: 10 },
-  label:    { color: 'var(--text-muted, #94a3b8)', fontSize: 12, fontWeight: 600 },
+  label:    { color: 'var(--text-muted, var(--text-dim))', fontSize: 12, fontWeight: 600 },
   input: {
-    background: 'var(--surface-raised, #243044)', border: '1px solid var(--border, #334155)',
-    borderRadius: 6, color: 'var(--text, #f1f5f9)', fontSize: 13, outline: 'none', padding: '8px 12px',
+    background: 'var(--surface-raised, #243044)', border: '1px solid var(--border, var(--border-strong))',
+    borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-body)', outline: 'none', padding: '8px 12px',
   },
   select: {
-    background: 'var(--surface, #1e293b)', border: '1px solid var(--border, #334155)',
-    borderRadius: 6, color: 'var(--text, #f1f5f9)', fontSize: 13, padding: '6px 10px',
+    background: 'var(--surface, var(--raised))', border: '1px solid var(--border, var(--border-strong))',
+    borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-body)', padding: '6px 10px',
   },
 };
 

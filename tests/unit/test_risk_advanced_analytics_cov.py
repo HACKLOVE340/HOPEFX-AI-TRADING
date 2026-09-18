@@ -496,10 +496,25 @@ class TestRiskAdjustedMetrics:
         s = analytics.calculate_sortino_ratio(rets)
         assert isinstance(s, float)
 
-    def test_sortino_no_downside(self, analytics):
+    def test_sortino_no_downside_is_finite(self, analytics):
+        """No shortfall below target -> undefined ratio, reported as a finite 0.0.
+
+        This asserted ``s == float("inf") or s > 0``. The F120 completion made
+        `calculate_sortino_ratio` finite in every case, because the inf it used
+        to return reached `calculate_risk_metrics()["sortino_ratio"]`, which is
+        serialised to JSON and written to a numeric column — neither accepts it.
+
+        Recorded plainly because the miss is the same shape as the defect being
+        fixed: two test files asserted the old behaviour and only one was
+        updated in the commit that changed it, so the branch shipped red. The
+        rule that fix was written to demonstrate — count the other places with
+        the same shape — applies to the tests as well as the code.
+        """
+        import math
+
         positive = np.abs(_returns(100)) + 0.01
         s = analytics.calculate_sortino_ratio(positive)
-        assert s == float("inf") or s > 0
+        assert math.isfinite(s), f"Sortino must never be inf, got {s}"
 
     def test_sortino_all_negative(self, analytics):
         negative = -np.abs(_returns(100)) - 0.01

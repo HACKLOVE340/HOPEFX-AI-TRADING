@@ -20,6 +20,13 @@ counted as positive edge, on the strength of 2.1:1 odds nothing verified.
 The caller has the real numbers. These tests pin that ``b`` now comes from the
 stop and target when they are known, and that the classic sanity check holds: a
 1:1 trade must require ``p > 0.5`` before it sizes at all.
+
+These tests build a ``RiskManager`` with no orchestrator, so they pass
+``data_quality=1.0`` explicitly. That value used to arrive by itself: the gate
+in ``size_order`` read ``getattr(signal, "data_quality", 1.0)`` and
+``_MinimalSignal`` hardcoded ``1.0``, so an unmeasured feed scored perfect and
+the gate could not fire. Both are fixed (MASTER_OUTSTANDING §E12), and the
+assumption these tests were always making now has to be stated out loud.
 """
 
 from __future__ import annotations
@@ -152,6 +159,7 @@ def test_supplied_stops_reach_sizing_end_to_end():
         confidence=0.70,
         stop_loss_price=2340.0,
         take_profit_price=2360.0,  # 1:1
+        data_quality=1.0,
     )
     assert even_money.quantity == pytest.approx(0.0), (
         "a coin-flip trade at 1:1 odds was sized — the supplied stops are not reaching the Kelly payoff term"
@@ -167,6 +175,7 @@ def test_supplied_stops_reach_sizing_end_to_end():
         confidence=0.70,
         stop_loss_price=2340.0,
         take_profit_price=2380.0,  # 3:1
+        data_quality=1.0,
     )
     assert favourable.quantity > 0.0
 
@@ -193,6 +202,7 @@ def test_callers_without_stops_keep_their_existing_size():
             direction="long",
             probability=0.58,
             confidence=conf,
+            data_quality=1.0,
         ).kelly_f
 
     low, high = _kelly_f(0.40), _kelly_f(0.95)

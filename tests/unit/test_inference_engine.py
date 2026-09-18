@@ -8,6 +8,7 @@ No real model files or network calls — all external dependencies are mocked.
 from __future__ import annotations
 
 import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -73,20 +74,70 @@ class TestCheckModelStaleness:
         # No file created → not stale
         assert engine._check_model_staleness() is False
 
-    def test_fresh_file_returns_false(self, engine, tmp_path, monkeypatch):
+    def test_a_just_written_file_with_no_provenance_is_stale(self, engine, tmp_path, monkeypatch):
+        """This asserted `is False`, and was describing the defect.
+
+        A file written a moment ago used to be "fresh" because the gate read its
+        mtime — which is exactly how copying a 90-day-old model made it current.
+        With age read from sha-bound provenance, an artifact no registry entry
+        describes has an age nobody can state, and the gate fails CLOSED. The
+        old assertion is preserved here as what it used to claim, because a
+        successor who sees this test change needs to know it was not loosened.
+        """
+        import json
+
         monkeypatch.setattr(ie, "_MODEL_MAX_AGE_DAYS", 30.0)
         monkeypatch.setattr(ie, "_SAVED", tmp_path)
         (tmp_path / "advanced_oos.pkl").write_bytes(b"x")
+        assert engine._check_model_staleness() is True
+
+        # And with provenance, the same just-written file IS fresh — so this is
+        # fail-closed on unknown age, not "everything is stale now".
+        import hashlib
+
+        digest = hashlib.sha256(b"x").hexdigest()
+        (tmp_path / "registry.json").write_text(
+            json.dumps(
+                {
+                    "versions": {
+                        "v1": {
+                            "sha256": digest,
+                            "trained_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
         assert engine._check_model_staleness() is False
 
-    def test_old_file_returns_true(self, engine, tmp_path, monkeypatch):
-        import os
+    def test_old_model_returns_true(self, engine, tmp_path, monkeypatch):
+        """Unchanged in intent; the age now comes from provenance.
+
+        This used `os.utime` to age the file, which stopped being the input.
+        `test_model_age_is_training_age.py` holds the property that made the
+        change necessary: touching that file no longer makes it young.
+        """
+        import hashlib
+        import json
 
         monkeypatch.setattr(ie, "_MODEL_MAX_AGE_DAYS", 0.001)
         monkeypatch.setattr(ie, "_SAVED", tmp_path)
         f = tmp_path / "advanced_oos.pkl"
         f.write_bytes(b"x")
-        os.utime(f, (time.time() - 86400, time.time() - 86400))
+        (tmp_path / "registry.json").write_text(
+            json.dumps(
+                {
+                    "versions": {
+                        "v1": {
+                            "sha256": hashlib.sha256(b"x").hexdigest(),
+                            "trained_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
         assert engine._check_model_staleness() is True
         assert engine._model_age_days is not None and engine._model_age_days > 0
 
@@ -177,6 +228,14 @@ class TestDataLayerNudge:
 
 class TestPredict:
     def _patch_all(self, monkeypatch, engine, prob: float = 0.80):
+        # These tests are about the prediction path, not the freshness gate, and
+        # they must not depend on how old the committed artifact happens to be.
+        # They did, silently, until the gate started reading training provenance
+        # instead of the file's mtime: the mtime was rewritten by the clone, so
+        # every run saw a "0.69 day old" model and the gate never fired here.
+        # The artifact is in fact 166 days old against a 30-day limit. Pin the
+        # gate off so a failure in this class means the prediction path broke.
+        monkeypatch.setattr(ie, "_MODEL_MAX_AGE_DAYS", 0.0)
         pred = MagicMock()
         pred.is_available = True
         pred.version = "test-v1"
@@ -248,6 +307,7 @@ class TestPredict:
         assert result["direction"] == "neutral"
 
     def test_no_predictor_returns_neutral(self, engine, monkeypatch):
+        monkeypatch.setattr(ie, "_MODEL_MAX_AGE_DAYS", 0.0)  # see _patch_all
         no_pred = MagicMock()
         no_pred.is_available = False
         engine._get_predictor = lambda: no_pred
@@ -294,6 +354,14 @@ class TestPredict:
 
 
 class TestHealth:
+    @pytest.fixture(autouse=True)
+    def _freshness_gate_off(self, monkeypatch):
+        """`health()` consults the freshness gate, and these tests are about the
+        predictor's availability, not the committed artifact's age. The one test
+        here that IS about staleness stubs the check explicitly, as it always
+        did."""
+        monkeypatch.setattr(ie, "_MODEL_MAX_AGE_DAYS", 0.0)
+
     def test_ok_with_available_predictor(self, engine):
         pred = MagicMock()
         pred.is_available = True

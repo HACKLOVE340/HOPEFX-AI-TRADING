@@ -150,7 +150,7 @@ The application never silently degrades — you always know exactly which plan i
 
 ### What is the difference between Starter and Professional?
 
-Starter enables live trading with up to 3 strategies (MA Crossover, EMA Crossover, RSI Reversal, Ichimoku) and 1 broker connection. ML features, API access, pattern recognition, and news integration are not included.
+Starter enables paper trading with up to 3 strategies (MA Crossover, EMA Crossover, RSI Reversal, Ichimoku) and 1 broker connection. Live execution remains subject to the operational live-trading gate; ML features, API access, pattern recognition, and news integration are not included.
 
 Professional adds ML features, API access, pattern recognition, unlimited backtesting, priority support, up to 7 strategies (adds MACD, Bollinger Bands, Breakout, Mean Reversion, Stochastic), and 3 broker connections. It is the minimum tier for algorithmic trading with ML signals.
 
@@ -271,9 +271,7 @@ Signals are generated on every completed H1 (1-hour) bar. The ML model abstains 
 
 ### What is the win rate?
 
-The production model achieves 56.5% OOS accuracy on XAUUSD H1 (2,016 held-out bars, 8-year OOS period, p=0.0000). In live trading, after accounting for spread and slippage, the realized win rate is approximately 54–58%.
-
-Past performance does not guarantee future results. Always use proper risk management.
+Historical OOS reports describe model performance on specific held-out datasets; they are not a live-trading win-rate guarantee. Current model promotion requires fresh metadata, feature-stability evidence, a passing Sharpe gate, and reviewed artifact promotion. Past performance does not guarantee future results. Always use proper risk management.
 
 ### Can I use my own strategy?
 

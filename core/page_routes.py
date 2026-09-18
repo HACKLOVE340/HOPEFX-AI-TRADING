@@ -15,6 +15,7 @@ Register with:
     register_page_routes(app)
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -180,7 +181,7 @@ def register_page_routes(app: FastAPI) -> None:
         ]
         for _p in _ico_candidates:
             if _p.exists():
-                return Response(content=_p.read_bytes(), media_type="image/x-icon")
+                return Response(content=await asyncio.to_thread(_p.read_bytes), media_type="image/x-icon")
         # Minimal 1×1 transparent ICO (46 bytes) — avoids 404 noise in logs
         _ico_bytes = (
             b"\x00\x00\x01\x00\x01\x00\x01\x01\x00\x00\x01\x00\x18\x00"
@@ -402,10 +403,46 @@ def register_page_routes(app: FastAPI) -> None:
                 "mobile/",
                 "favicon.ico",
             )
-            if any(
-                full_path == p or full_path.startswith(p + "/") or full_path.startswith(p)
-                for p in _passthrough_prefixes
-            ):
+
+            # A bare name in the list above — "kyc", "mobile", "godmode" — is both
+            # an API namespace and an SPA page name, and the list cannot tell
+            # them apart. `full_path == p` therefore 404'd `/kyc` even though no
+            # route claims it: measured, `/kyc` has zero exact routes and zero
+            # sub-routes in this configuration, so the only thing refusing it was
+            # the string. A user following a KYC verification email got
+            # `{"detail":"No route for GET /kyc"}` on a regulatory gate (F198).
+            #
+            # Sub-paths still pass through on the prefix — `/kyc/webhooks/sumsub`
+            # must reach Sumsub's handler whether or not it is registered in this
+            # configuration, because answering a provider webhook with the SPA
+            # shell is worse than 404ing it. Only the EXACT bare path now asks
+            # the route table, and it passes through only when something really
+            # claims it. `/mobile` does (a Mount), so it still passes through;
+            # `/kyc` does not, so it reaches the page.
+            #
+            # The third clause `full_path.startswith(p)` is gone: it matched
+            # "kycsomething" and "mobilephones" as server paths too.
+            def _claimed_by_a_real_route(path: str) -> bool:
+                target = "/" + path
+                return any(
+                    getattr(route, "path", None) == target or str(getattr(route, "path", "")).startswith(target + "/")
+                    for route in app.routes
+                    if getattr(route, "endpoint", None) is not _spa_catchall
+                )
+
+            def _is_server_path(p: str) -> bool:
+                # The list holds two shapes — "api/" already carries its
+                # separator, "kyc" does not — so the sub-path test has to
+                # normalise. Appending "/" unconditionally builds "api//" and
+                # stops matching /api/anything, which returned the SPA shell for
+                # every unknown API path; caught by
+                # test_an_api_404_carries_a_body_naming_the_route.
+                sub = p if p.endswith("/") else p + "/"
+                if full_path.startswith(sub):
+                    return True
+                return full_path == p.rstrip("/") and _claimed_by_a_real_route(p.rstrip("/"))
+
+            if any(_is_server_path(p) for p in _passthrough_prefixes):
                 # Restore the trailing-slash redirect this route otherwise eats.
                 #
                 # The comment here used to say returning 404 "passes through so

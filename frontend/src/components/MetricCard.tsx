@@ -15,7 +15,12 @@ interface MetricCardProps {
   /** Positive delta = green, negative = red */
   deltaPositive?: boolean;
   subLabel?: string;
-  icon?: string;
+  /**
+   * A Lucide element is preferred: it inherits `currentColor` from the icon
+   * chip, so it tracks the card's accent. A string is a legacy emoji or glyph
+   * call site (audit F170/F175) and still renders.
+   */
+  icon?: React.ReactNode;
   /** Optional trend indicator: 'up' | 'down' | 'flat' */
   trend?: 'up' | 'down' | 'flat';
   /** Accent colour override for the card border/icon bg */

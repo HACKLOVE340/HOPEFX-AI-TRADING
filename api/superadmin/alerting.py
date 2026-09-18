@@ -248,11 +248,15 @@ async def test_alert_rule(
 
         engine = get_alert_engine()
         if engine:
-            await engine.send_alert(
+            delivered = await engine.send_alert(
                 rule["severity"],
                 f"[TEST] {rule['name']}: {rule['condition']}",
             )
-            sent_channels = rule.get("channels", [])
+            # Report what actually happened. This used to echo the rule's
+            # configured channel list unconditionally, so the operator's "send
+            # test alert" button reported delivery on channels the alert never
+            # reached (F159) — the exact failure a test alert exists to detect.
+            sent_channels = list(rule.get("channels", [])) if delivered else []
     except Exception as exc:
         logger.warning("Test alert send: %s", exc)
 

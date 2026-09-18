@@ -20,6 +20,7 @@ GET  /superadmin/system-health/dependencies              — dependency health g
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -27,7 +28,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
@@ -257,44 +258,27 @@ async def trigger_backup(
     backup_type = body.get("type", "incremental")
     backup_id = str(uuid.uuid4())
 
-    # Attempt real DB dump
+    # Route through the verified path from Phase R1 instead of reimplementing
+    # pg_dump/shutil here: run_backup() raises on failure rather than
+    # returning a falsy result, and verify_backup() proves the artefact is
+    # actually restorable (catches e.g. a WAL-mode SQLite copy that opens
+    # fine but contains none of the committed rows) before this reports
+    # success.
     size_mb = 0.0
-    status = "completed"
-    location = f"backups/{backup_id}.sql.gz"
+    status = "failed"
+    location = ""
+    error: str | None = None
     try:
-        import subprocess
-        import tempfile
+        from database.backup import run_backup
+        from database.restore import verify_backup
 
-        # Use the OS temp dir (cross-platform): "/tmp" doesn't exist on Windows,
-        # which made this endpoint fail/mislocate the dump on Windows hosts.
-        _tmp = tempfile.gettempdir()
-        db_url = os.getenv("DATABASE_URL", "")
-        if db_url.startswith("postgresql"):
-            # pg_dump
-            dump_path = os.path.join(_tmp, f"{backup_id}.dump")
-            result = subprocess.run(
-                ["pg_dump", "--format=custom", f"--file={dump_path}", db_url],
-                capture_output=True,
-                timeout=60,
-                check=False,
-            )
-            if result.returncode == 0:
-                size_mb = round(os.path.getsize(dump_path) / 1024 / 1024, 2)
-                location = dump_path
-            else:
-                status = "failed"
-        elif db_url.startswith("sqlite"):
-            import shutil
-
-            db_path = db_url.replace("sqlite:///", "").replace("sqlite://", "")
-            if os.path.exists(db_path):
-                dest = os.path.join(_tmp, f"{backup_id}.db")
-                shutil.copy2(db_path, dest)
-                size_mb = round(os.path.getsize(dest) / 1024 / 1024, 2)
-                location = dest
+        backup_path = await asyncio.to_thread(run_backup)
+        report = await asyncio.to_thread(verify_backup, backup_path)
+        location = str(backup_path)
+        size_mb = round(report.bytes_uncompressed / 1024 / 1024, 2)
+        status = "completed"
     except Exception as exc:
-        logger.warning("Backup trigger: %s", exc)
-        status = "completed"  # non-fatal
+        error = safe_error(exc, context="backup trigger")
 
     record: dict[str, Any] = {
         "backup_id": backup_id,
@@ -305,6 +289,8 @@ async def trigger_backup(
         "location": location,
         "triggered_by": user.sub,
     }
+    if error is not None:
+        record["error"] = error
 
     try:
         from cache.redis_client import get_sync_redis_client
@@ -318,8 +304,8 @@ async def trigger_backup(
     except Exception:  # nosec B110  # noqa: S110
         pass
 
-    _log_superadmin_action(user, "backup_trigger", {"backup_id": backup_id, "type": backup_type})
-    return {"ok": True, "backup": record}
+    _log_superadmin_action(user, "backup_trigger", {"backup_id": backup_id, "type": backup_type, "status": status})
+    return {"ok": status == "completed", "backup": record}
 
 
 @router.get("/system-health/jobs")
@@ -414,27 +400,42 @@ async def run_job_now(
     job_id: str,
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
-    # Try APScheduler
+    # This endpoint used to end in an unconditional:
+    #
+    #     return {"ok": True, ..., "note": "Scheduler not available — job queued"}
+    #
+    # which was reached both when the scheduler was missing AND when it was
+    # present but had no such job. Nothing queued anything in either case, so an
+    # operator triggering a job during an incident got `ok: true` for work that
+    # did not happen — and a note blaming a scheduler that was running fine.
+    # An unknown job is now a 404 and an unreachable scheduler is a 503.
+    scheduler_reachable = False
     try:
         from api.admin import app_state
 
-        if app_state and hasattr(app_state, "scheduler"):
+        if app_state and hasattr(app_state, "scheduler") and app_state.scheduler is not None:
             sched = app_state.scheduler
+            scheduler_reachable = True
             job = sched.get_job(job_id)
-            if job:
+            if job is not None:
                 job.modify(next_run_time=_utcnow())
-                _log_superadmin_action(user, "job_run_now", {"job_id": job_id})
+                _log_superadmin_action(user, "job_run_now", {"job_id": job_id, "outcome": "triggered"})
                 return {"ok": True, "job_id": job_id, "triggered_at": _utcnow().isoformat()}
     except Exception as exc:
-        logger.warning("Job run now: %s", exc)
+        # ERROR, not warning: an operator asked for a job to run and it did not.
+        logger.error("Job run now failed for %s: %s", job_id, exc, exc_info=True)
+        _log_superadmin_action(user, "job_run_now", {"job_id": job_id, "outcome": "error"})
+        raise HTTPException(status_code=503, detail=f"Scheduler error: {safe_error(exc)}") from exc
 
-    _log_superadmin_action(user, "job_run_now", {"job_id": job_id})
-    return {
-        "ok": True,
-        "job_id": job_id,
-        "triggered_at": _utcnow().isoformat(),
-        "note": "Scheduler not available — job queued",
-    }
+    if scheduler_reachable:
+        _log_superadmin_action(user, "job_run_now", {"job_id": job_id, "outcome": "unknown_job"})
+        raise HTTPException(status_code=404, detail=f"No scheduled job with id {job_id!r}")
+
+    _log_superadmin_action(user, "job_run_now", {"job_id": job_id, "outcome": "scheduler_unavailable"})
+    raise HTTPException(
+        status_code=503,
+        detail="Scheduler is not available — the job was NOT queued. Nothing has been scheduled.",
+    )
 
 
 @router.get("/system-health/resources")
@@ -532,23 +533,55 @@ async def revoke_system_api_key(
 ) -> dict:
     import json
 
+    # "I revoked that key" is a claim that has to be true. This used to return
+    # {"ok": True} unconditionally: the match loop could touch nothing (unknown
+    # key_id) and the whole block was skipped when Redis was absent (`if rc:`),
+    # yet both paths fell through to the same success. An operator revoking a
+    # leaked credential mid-incident was told it was done when no store had
+    # been written and no key had changed.
     try:
         from cache.redis_client import get_sync_redis_client
 
         rc = get_sync_redis_client()
-        if rc:
-            raw = rc.get("superadmin:security_infra:api_keys")
-            keys = json.loads(raw) if raw else []
-            for k in keys:
-                if k.get("key_id") == key_id:
-                    k["status"] = "revoked"
-                    k["revoked_at"] = _utcnow().isoformat()
-                    k["revoked_by"] = user.sub
-            rc.set("superadmin:security_infra:api_keys", json.dumps(keys), ex=86400 * 90)
     except Exception as exc:
-        return {"ok": False, "error": safe_error(exc)}
-    _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id})
-    return {"ok": True}
+        logger.error("API key revoke: key store unreachable: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Key store unreachable — key {key_id!r} was NOT revoked: {safe_error(exc)}",
+        ) from exc
+
+    if rc is None:
+        logger.error("API key revoke: no key store configured; %s NOT revoked", key_id)
+        raise HTTPException(
+            status_code=503,
+            detail=f"No key store configured — key {key_id!r} was NOT revoked.",
+        )
+
+    try:
+        raw = rc.get("superadmin:security_infra:api_keys")
+        keys = json.loads(raw) if raw else []
+        revoked = 0
+        for k in keys:
+            if k.get("key_id") == key_id:
+                k["status"] = "revoked"
+                k["revoked_at"] = _utcnow().isoformat()
+                k["revoked_by"] = user.sub
+                revoked += 1
+        if revoked == 0:
+            _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id, "outcome": "not_found"})
+            raise HTTPException(status_code=404, detail=f"No API key with id {key_id!r}")
+        rc.set("superadmin:security_infra:api_keys", json.dumps(keys), ex=86400 * 90)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("API key revoke failed for %s: %s", key_id, exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Key {key_id!r} was NOT revoked: {safe_error(exc)}",
+        ) from exc
+
+    _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id, "outcome": "revoked", "count": revoked})
+    return {"ok": True, "key_id": key_id, "revoked": revoked}
 
 
 @router.get("/system-health/dependencies")

@@ -12,8 +12,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
+import { AlertTriangle, Bandage, Bug, Folder, Microscope, Siren, XCircle, Zap } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,12 +76,12 @@ async function fetchHealStatus(): Promise<HealStatus> {
   return data;
 }
 
-async function fetchDrift(limit = 50): Promise<DriftEvent[]> {
+async function fetchDrift(_limit = 50): Promise<DriftEvent[]> {
   const res = await securityHealingApi.drift() as { data: DriftEvent[] | { events?: DriftEvent[] } };
   return (Array.isArray(res.data) ? res.data : (res.data as { events?: DriftEvent[] }).events) ?? [];
 }
 
-async function fetchPatches(limit = 50): Promise<PatchRecord[]> {
+async function fetchPatches(_limit = 50): Promise<PatchRecord[]> {
   const res = await securityHealingApi.patches() as { data: PatchRecord[] | { patches?: PatchRecord[] } };
   return (Array.isArray(res.data) ? res.data : (res.data as { patches?: PatchRecord[] }).patches) ?? [];
 }
@@ -145,26 +146,26 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
     onClick={onClose}
   >
     <div
-      style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 12, maxWidth: 860, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, maxWidth: 860, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       onClick={e => e.stopPropagation()}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #1e2d3d' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
         <div>
-          <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>Patch Diff — {patch.file}</div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+          <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 14 }}>Patch Diff — {patch.file}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {patch.endpoint} · {new Date(patch.applied_at).toLocaleString()}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: patch.success ? '#14532d' : '#450a0a', color: patch.success ? '#4ade80' : '#f87171' }}>
+          <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: patch.success ? '#14532d' : '#450a0a', color: patch.success ? 'var(--gain)' : 'var(--loss)' }}>
             {patch.success ? '✅ Applied' : '❌ Failed'}
           </span>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
       </div>
       <div style={{ overflowY: 'auto', padding: '16px 20px', flex: 1 }}>
         {patch.message && (
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 12 }}>
             {patch.message}
           </div>
         )}
@@ -173,7 +174,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
             {patch.diff.split('\n').map((line, i) => (
               <span key={i} style={{
                 display: 'block',
-                color: line.startsWith('+') ? '#4ade80' : line.startsWith('-') ? '#f87171' : line.startsWith('@@') ? '#60a5fa' : '#94a3b8',
+                color: line.startsWith('+') ? 'var(--gain)' : line.startsWith('-') ? 'var(--loss)' : line.startsWith('@@') ? 'var(--link)' : 'var(--text-dim)',
                 background: line.startsWith('+') ? 'rgba(74,222,128,0.05)' : line.startsWith('-') ? 'rgba(248,113,113,0.05)' : 'transparent',
               }}>
                 {line}
@@ -181,7 +182,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
             ))}
           </pre>
         ) : (
-          <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No diff available for this patch.</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No diff available for this patch.</div>
         )}
       </div>
     </div>
@@ -239,7 +240,7 @@ const ThreatTable: React.FC<{
             <span style={severityBadgeStyle(t.severity)}>{t.severity}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={monoStyle}>{t.path}</div>
-              <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>{t.detail}</div>
+              <div style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 2 }}>{t.detail}</div>
             </div>
             {!t.quarantined ? (
               <button
@@ -348,23 +349,22 @@ const AutoHealDashboard: React.FC = () => {
   const highThreats = threats.filter(t => t.severity === 'high' && !t.quarantined).length;
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Auto-Heal & Antivirus"
         subtitle="Code integrity monitor · Self-healing engine · Malware scanner"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/security')}
-              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               🛡 Security
             </button>
             <button onClick={() => navigate('/')}
-              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               📊 Dashboard
             </button>
           </div>
         }
-      />
+    >
 
       {error && <div style={errorBannerStyle}>{error}</div>}
 
@@ -375,7 +375,7 @@ const AutoHealDashboard: React.FC = () => {
             {scanning ? '🔍 Scanning…' : '🔍 Integrity Scan'}
           </button>
           {scanning && (
-            <div style={{ position: 'relative', width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+            <div style={{ position: 'relative', width: '100%', background: 'var(--raised)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, height: '100%', background: '#3b82f6', borderRadius: 4, animation: 'indeterminate 1.1s ease-in-out infinite' }} />
             </div>
           )}
@@ -388,7 +388,7 @@ const AutoHealDashboard: React.FC = () => {
             {avScanning ? '🛡️ AV Scan…' : '🛡️ AV Full Scan'}
           </button>
           {avScanning && (
-            <div style={{ position: 'relative', width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+            <div style={{ position: 'relative', width: '100%', background: 'var(--raised)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, height: '100%', background: '#7c3aed', borderRadius: 4, animation: 'indeterminate 1.1s ease-in-out infinite' }} />
             </div>
           )}
@@ -401,7 +401,7 @@ const AutoHealDashboard: React.FC = () => {
         <MetricCard
           label="Baseline Files"
           value={healStatus?.baseline_files ?? '—'}
-          icon="📁"
+          icon={<Folder size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
@@ -409,21 +409,21 @@ const AutoHealDashboard: React.FC = () => {
           value={healStatus?.drift_events ?? '—'}
           delta={healStatus && healStatus.drift_events > 0 ? 'Files changed unexpectedly' : undefined}
           deltaPositive={false}
-          icon="⚠️"
+          icon={<AlertTriangle size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Patches Applied"
           value={healStatus?.patches_applied ?? '—'}
           deltaPositive={true}
-          icon="🩹"
+          icon={<Bandage size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Patches Failed"
           value={healStatus?.patches_failed ?? '—'}
           deltaPositive={false}
-          icon="❌"
+          icon={<XCircle size={18} aria-hidden />}
           loading={loading}
         />
       </div>
@@ -436,21 +436,21 @@ const AutoHealDashboard: React.FC = () => {
           value={avStatus?.total_threats ?? '—'}
           delta={criticalThreats > 0 ? `${criticalThreats} critical` : undefined}
           deltaPositive={false}
-          icon="🦠"
+          icon={<Bug size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Critical"
           value={criticalThreats}
           deltaPositive={criticalThreats === 0}
-          icon="🚨"
+          icon={<Siren size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="High"
           value={highThreats}
           deltaPositive={highThreats === 0}
-          icon="⚡"
+          icon={<Zap size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
@@ -458,7 +458,7 @@ const AutoHealDashboard: React.FC = () => {
           value={avStatus?.yara_enabled ? 'ON' : 'OFF'}
           delta={avStatus?.clamd_enabled ? 'ClamAV ON' : 'ClamAV OFF'}
           deltaPositive={avStatus?.yara_enabled ?? false}
-          icon="🔬"
+          icon={<Microscope size={18} aria-hidden />}
           loading={loading}
         />
       </div>
@@ -479,16 +479,11 @@ const AutoHealDashboard: React.FC = () => {
       {/* LLM fix approval queue */}
       <div style={sectionLabelStyle}>LLM Fix Approval Queue</div>
       <FixApprovalQueue />
-    </div>
+    </PageShell>
   );
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-
-const pageStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 16,
-  padding: '20px 24px', maxWidth: 1400, margin: '0 auto',
-};
 
 const errorBannerStyle: React.CSSProperties = {
   background: '#f9731622', border: '1px solid #f97316',
@@ -506,7 +501,7 @@ const actionBtnStyle: React.CSSProperties = {
 };
 
 const sectionLabelStyle: React.CSSProperties = {
-  color: '#64748b', fontSize: 11, fontWeight: 700,
+  color: 'var(--text-muted)', fontSize: 11, fontWeight: 700,
   letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 4,
 };
 
@@ -521,27 +516,27 @@ const mainGridStyle: React.CSSProperties = {
 };
 
 const panelStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
+  background: 'var(--surface, var(--raised))',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 10, display: 'flex', flexDirection: 'column', overflow: 'hidden',
 };
 
 const panelHeaderStyle: React.CSSProperties = {
-  alignItems: 'center', borderBottom: '1px solid var(--border, #334155)',
+  alignItems: 'center', borderBottom: '1px solid var(--border, var(--border-strong))',
   display: 'flex', justifyContent: 'space-between', padding: '12px 16px',
 };
 
 const panelTitleStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)', fontSize: 13, fontWeight: 700,
+  color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-body)', fontWeight: 700,
 };
 
 const panelCountStyle: React.CSSProperties = {
-  background: '#334155', borderRadius: 10, color: '#94a3b8',
+  background: 'var(--surface-hover)', borderRadius: 10, color: 'var(--text-dim)',
   fontSize: 11, fontWeight: 700, padding: '2px 8px',
 };
 
 const emptyStyle: React.CSSProperties = {
-  color: '#64748b', fontSize: 12, padding: '20px 16px', textAlign: 'center',
+  color: 'var(--text-muted)', fontSize: 12, padding: '20px 16px', textAlign: 'center',
 };
 
 const tableWrapStyle: React.CSSProperties = {
@@ -549,21 +544,21 @@ const tableWrapStyle: React.CSSProperties = {
 };
 
 const tableRowStyle: React.CSSProperties = {
-  alignItems: 'center', borderBottom: '1px solid #1e293b',
+  alignItems: 'center', borderBottom: '1px solid var(--border)',
   display: 'flex', gap: 10, padding: '8px 16px',
 };
 
 const monoStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)', fontFamily: 'monospace',
+  color: 'var(--text, var(--text-strong))', fontFamily: 'monospace',
   fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 };
 
 const timeStyle: React.CSSProperties = {
-  color: '#64748b', fontSize: 11, flexShrink: 0,
+  color: 'var(--text-muted)', fontSize: 11, flexShrink: 0,
 };
 
 const diffStyle: React.CSSProperties = {
-  background: '#0f172a', color: '#94a3b8', fontFamily: 'monospace',
+  background: 'var(--surface)', color: 'var(--text-dim)', fontFamily: 'monospace',
   fontSize: 10, margin: 0, maxHeight: 200, overflowY: 'auto',
   padding: '8px 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
 };
@@ -604,13 +599,13 @@ function severityBadgeStyle(sev: string): React.CSSProperties {
 
 const quarantineBtnStyle: React.CSSProperties = {
   background: '#7c3aed22', border: '1px solid #7c3aed', borderRadius: 6,
-  color: '#a78bfa', cursor: 'pointer', fontSize: 11,
+  color: 'var(--ai-model)', cursor: 'pointer', fontSize: 11,
   fontWeight: 700, padding: '3px 10px', flexShrink: 0,
 };
 
 const quarantinedBadgeStyle: React.CSSProperties = {
-  background: '#33415522', border: '1px solid #475569', borderRadius: 10,
-  color: '#64748b', fontSize: 10, fontWeight: 700, padding: '2px 7px', flexShrink: 0,
+  background: '#33415522', border: '1px solid var(--border-strong)', borderRadius: 10,
+  color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, padding: '2px 7px', flexShrink: 0,
 };
 
 export default AutoHealDashboard;

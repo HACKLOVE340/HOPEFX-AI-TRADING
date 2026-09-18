@@ -167,7 +167,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
           </style>
 
           <div style={{
-            background: '#0d1421', border: '1px solid #1e293b',
+            background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 14, padding: '28px 28px 24px',
             maxWidth: 420, width: '90%',
             boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
@@ -183,12 +183,12 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
               {variant === 'danger' ? '🗑' : variant === 'warning' ? '⚠️' : '❓'}
             </div>
 
-            <h2 id="confirm-title" style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>
+            <h2 id="confirm-title" style={{ fontSize: 'var(--fs-title)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' }}>
               {opts.title}
             </h2>
 
             {opts.description && (
-              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 24px', lineHeight: 1.6 }}>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 24px', lineHeight: 1.6 }}>
                 {opts.description}
               </p>
             )}
@@ -198,9 +198,9 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                 autoFocus
                 onClick={() => resolve(false)}
                 style={{
-                  background: 'transparent', border: '1px solid #334155',
-                  borderRadius: 8, color: '#94a3b8', cursor: 'pointer',
-                  fontSize: 13, fontWeight: 600, padding: '9px 18px',
+                  background: 'transparent', border: '1px solid var(--border-strong)',
+                  borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
+                  fontSize: 'var(--fs-body)', fontWeight: 600, padding: '9px 18px',
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#475569'; (e.currentTarget as HTMLButtonElement).style.color = '#f1f5f9'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#334155'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
@@ -213,7 +213,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                 style={{
                   ...btnStyle,
                   borderRadius: 8, cursor: 'pointer',
-                  fontSize: 13, fontWeight: 700, padding: '9px 18px',
+                  fontSize: 'var(--fs-body)', fontWeight: 700, padding: '9px 18px',
                 }}
               >
                 {opts.confirmLabel ?? 'Confirm'}

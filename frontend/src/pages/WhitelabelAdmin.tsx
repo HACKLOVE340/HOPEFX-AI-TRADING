@@ -8,6 +8,7 @@
  * - Preview branded dashboard
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
@@ -95,31 +96,40 @@ const CreateModal: React.FC<{
 
         {error && <div style={s.errorBanner}>{error}</div>}
 
-        <label style={s.fieldLabel}>Company Name *</label>
-        <input style={s.textInput} value={name} onChange={(e) => setName(e.target.value)} placeholder="PropFirm Alpha" />
+        <label id="whitelabeladmin-company-name-label" htmlFor="whitelabeladmin-company-name" style={s.fieldLabel}>Company Name *</label>
+        <input id="whitelabeladmin-company-name" aria-labelledby="whitelabeladmin-company-name-label" style={s.textInput} value={name} onChange={(e) => setName(e.target.value)} placeholder="PropFirm Alpha" />
 
-        <label style={s.fieldLabel}>Owner Email *</label>
-        <input style={s.textInput} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@propfirm.com" type="email" />
+        <label id="whitelabeladmin-owner-email-label" htmlFor="whitelabeladmin-owner-email" style={s.fieldLabel}>Owner Email *</label>
+        <input id="whitelabeladmin-owner-email" aria-labelledby="whitelabeladmin-owner-email-label" style={s.textInput} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@propfirm.com" type="email" />
 
-        <label style={s.fieldLabel}>Trial Days (0 = active immediately)</label>
-        <input style={s.textInput} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} type="number" min="0" max="365" />
+        <label id="whitelabeladmin-trial-days-0-active-immediately-label" htmlFor="whitelabeladmin-trial-days-0-active-immediately" style={s.fieldLabel}>Trial Days (0 = active immediately)</label>
+        <input id="whitelabeladmin-trial-days-0-active-immediately" aria-labelledby="whitelabeladmin-trial-days-0-active-immediately-label" style={s.textInput} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} type="number" min="0" max="365" />
 
-        <label style={s.fieldLabel}>Primary Brand Colour</label>
+        <label id="whitelabel-primary-colour-label" style={s.fieldLabel}>Primary Brand Colour</label>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* Two controls, one visible label. Both reference it rather than
+              restating it; the colour well and the text box announce different
+              roles, which is what tells them apart. */}
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
+            aria-labelledby="whitelabel-primary-colour-label"
             style={{ width: 40, height: 36, border: 'none', background: 'none', cursor: 'pointer' }} />
-          <input style={{ ...s.textInput, flex: 1 }} value={color} onChange={(e) => setColor(e.target.value)} />
+          <input style={{ ...s.textInput, flex: 1 }} value={color} onChange={(e) => setColor(e.target.value)}
+            aria-labelledby="whitelabel-primary-colour-label" />
         </div>
 
-        <label style={s.fieldLabel}>Logo URL (optional)</label>
-        <input style={s.textInput} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
+        <label id="whitelabeladmin-logo-url-optional-label" htmlFor="whitelabeladmin-logo-url-optional" style={s.fieldLabel}>Logo URL (optional)</label>
+        <input id="whitelabeladmin-logo-url-optional" aria-labelledby="whitelabeladmin-logo-url-optional-label" style={s.textInput} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
 
         <label style={s.fieldLabel}>Features</label>
         <div style={s.featureGrid}>
           {ALL_FEATURES.map((f) => (
             <label key={f} style={s.featureCheck}>
-              <input type="checkbox" checked={features.includes(f)} onChange={() => toggleFeature(f)} />
-              <span style={{ marginLeft: 6, fontSize: 12 }}>{f}</span>
+              {/* The wrapping label already names this at runtime. The id makes
+                  that name readable from the control's own props, and it points
+                  at the same {f} the user sees, so the two cannot disagree. */}
+              <input type="checkbox" checked={features.includes(f)} onChange={() => toggleFeature(f)}
+                aria-labelledby={`whitelabel-feature-${f}-label`} />
+              <span id={`whitelabel-feature-${f}-label`} style={{ marginLeft: 6, fontSize: 12 }}>{f}</span>
             </label>
           ))}
         </div>
@@ -147,7 +157,7 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
         {/* Simulated branded dashboard */}
-        <div style={{ background: '#0f172a', borderRadius: 10, overflow: 'hidden', border: '1px solid #334155' }}>
+        <div style={{ background: 'var(--surface)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-strong)' }}>
           {/* Nav bar */}
           <div style={{ background: color, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
             {tenant.theme.logo_url
@@ -163,13 +173,13 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
           <div style={{ padding: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginBottom: 16 }}>
               {(['Balance', 'P&L', 'Win Rate'] as const).map((label) => (
-                <div key={label} style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
-                  <div style={{ fontSize: 12, color: '#94a3b8' }}>{label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>—</div>
+                <div key={label} style={{ background: 'var(--raised)', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>—</div>
                 </div>
               ))}
             </div>
-            <div style={{ background: '#1e293b', borderRadius: 8, padding: 16, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 13 }}>
+            <div style={{ background: 'var(--raised)', borderRadius: 8, padding: 16, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
               Equity chart — accent colour: <span style={{ color, marginLeft: 6, fontWeight: 700 }}>{color}</span>
             </div>
           </div>
@@ -212,7 +222,7 @@ const TenantRow: React.FC<{
           <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {tenant.name}
           </div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>{tenant.owner_email}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tenant.owner_email}</div>
         </div>
       </div>
 
@@ -220,7 +230,7 @@ const TenantRow: React.FC<{
         <span style={{ ...s.statusBadge, color: statusColor(tenant.status), border: `1px solid ${statusColor(tenant.status)}` }}>
           {tenant.status}
         </span>
-        <span style={{ fontSize: 12, color: '#64748b' }}>{tenant.features.length} features</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tenant.features.length} features</span>
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -229,10 +239,10 @@ const TenantRow: React.FC<{
           {tenant.has_api_key ? 'Regen Key' : 'Gen Key'}
         </button>
         {tenant.status === 'suspended'
-          ? <button style={{ ...s.actionBtn, color: '#4ade80' }} onClick={() => onAction(tenant.tenant_id, 'activate')}>Activate</button>
-          : <button style={{ ...s.actionBtn, color: '#f87171' }} onClick={() => onAction(tenant.tenant_id, 'suspend')}>Suspend</button>
+          ? <button style={{ ...s.actionBtn, color: 'var(--gain)' }} onClick={() => onAction(tenant.tenant_id, 'activate')}>Activate</button>
+          : <button style={{ ...s.actionBtn, color: 'var(--loss)' }} onClick={() => onAction(tenant.tenant_id, 'suspend')}>Suspend</button>
         }
-        <button style={{ ...s.actionBtn, color: '#f87171' }} onClick={() => onAction(tenant.tenant_id, 'delete')}>Delete</button>
+        <button style={{ ...s.actionBtn, color: 'var(--loss)' }} onClick={() => onAction(tenant.tenant_id, 'delete')}>Delete</button>
       </div>
     </div>
   );
@@ -302,7 +312,21 @@ const WhitelabelAdmin: React.FC = () => {
   const filtered = filter === 'all' ? tenants : tenants.filter((t) => t.status === filter);
 
   return (
-    <div className="page-content">
+    <PageShell
+      width="wide" title="Whitelabel Tenants"
+      subtitle="Manage prop-firm and reseller branded deployments."
+      actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => navigate('/trade')}
+            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ⚡ Trade
+          </button>
+          <button onClick={() => navigate('/performance')}
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📊 Performance
+          </button>
+          <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
+        </div></>}
+    >
       {creating && (
         <CreateModal
           onCreated={(t) => { setTenants((prev) => [t, ...prev]); setCreating(false); }}
@@ -312,23 +336,7 @@ const WhitelabelAdmin: React.FC = () => {
       {preview && <PreviewPanel tenant={preview} onClose={() => setPreview(null)} />}
 
       {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Whitelabel Tenants</h1>
-          <p style={s.subtitle}>Manage prop-firm and reseller branded deployments.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => navigate('/trade')}
-            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ⚡ Trade
-          </button>
-          <button onClick={() => navigate('/performance')}
-            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            📊 Performance
-          </button>
-          <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
-        </div>
-      </div>
+
 
       {/* API key message */}
       {apiKeyMsg && (
@@ -362,8 +370,8 @@ const WhitelabelAdmin: React.FC = () => {
               style={{ ...s.statCard, ...(filter === f ? { border: '1px solid #3b82f6' } : {}) }}
               onClick={() => setFilter(f)}
             >
-              <div style={{ fontSize: 24, fontWeight: 800, color: f === 'all' ? '#f8fafc' : statusColor(f) }}>{count}</div>
-              <div style={{ fontSize: 12, color: '#64748b', textTransform: 'capitalize' }}>{f}</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: f === 'all' ? 'var(--text-strong)' : statusColor(f) }}>{count}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{f}</div>
             </button>
           );
         })}
@@ -388,11 +396,11 @@ const WhitelabelAdmin: React.FC = () => {
 
       {/* Info */}
       <div style={s.infoBanner}>
-        <span style={{ color: '#60a5fa', fontWeight: 600 }}>ℹ Prop firm partnerships:</span>
+        <span style={{ color: 'var(--link)', fontWeight: 600 }}>ℹ Prop firm partnerships:</span>
         {' '}Each tenant gets a branded dashboard, their own API key, and configurable feature flags.
         Email FTMO / The5ers / Funded Next with the preview link to close deals.
       </div>
-    </div>
+    </PageShell>
   );
 };
 
@@ -400,57 +408,57 @@ const WhitelabelAdmin: React.FC = () => {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100vh', background: '#0f172a', color: '#f8fafc',
+    minHeight: '100vh', background: 'var(--surface)', color: 'var(--text-strong)',
     fontFamily: "'Inter', system-ui, sans-serif", padding: '24px',
   },
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
     marginBottom: 24, flexWrap: 'wrap', gap: 12,
   },
-  title:    { fontSize: 28, fontWeight: 700, margin: 0 },
-  subtitle: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
+  title:    { fontSize: 'var(--fs-hero)', fontWeight: 700, margin: 0 },
+  subtitle: { fontSize: 14, color: 'var(--text-dim)', marginTop: 4 },
   createBtn: {
     background: '#3b82f6', border: 'none', borderRadius: 8,
     color: '#fff', padding: '10px 20px', fontSize: 14, cursor: 'pointer', fontWeight: 600,
   },
   statsRow: { display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' },
   statCard: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10,
     padding: '14px 20px', cursor: 'pointer', textAlign: 'center', minWidth: 80,
   },
   card: {
-    background: '#1e293b', borderRadius: 12, border: '1px solid #334155',
+    background: 'var(--raised)', borderRadius: 12, border: '1px solid var(--border-strong)',
     overflow: 'hidden', marginBottom: 20,
   },
   tenantRow: {
     display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px',
-    borderBottom: '1px solid #0f172a', flexWrap: 'wrap',
+    borderBottom: '1px solid var(--hairline)', flexWrap: 'wrap',
   },
   statusBadge: {
     fontSize: 11, fontWeight: 700, padding: '2px 8px',
     borderRadius: 4, textTransform: 'capitalize',
   },
   actionBtn: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-    color: '#94a3b8', padding: '5px 10px', fontSize: 12, cursor: 'pointer',
+    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6,
+    color: 'var(--text-dim)', padding: '5px 10px', fontSize: 12, cursor: 'pointer',
   },
-  dim:   { color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 },
-  empty: { color: '#475569', fontSize: 14, textAlign: 'center', padding: 48 },
+  dim:   { color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 },
+  empty: { color: 'var(--text-faint)', fontSize: 14, textAlign: 'center', padding: 48 },
   apiKeyBanner: {
-    background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: 8,
-    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#4ade80',
+    background: 'rgba(74,222,128,0.1)', border: '1px solid var(--gain)', borderRadius: 8,
+    padding: '12px 16px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--gain)',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     wordBreak: 'break-all',
   },
   errorBanner: {
-    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8,
-    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#f87171',
+    background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 8,
+    padding: '12px 16px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--loss)',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     wordBreak: 'break-all',
   },
   infoBanner: {
-    background: '#1e293b', borderRadius: 8, padding: '12px 16px',
-    fontSize: 13, color: '#94a3b8', border: '1px solid #334155',
+    background: 'var(--raised)', borderRadius: 8, padding: '12px 16px',
+    fontSize: 'var(--fs-body)', color: 'var(--text-dim)', border: '1px solid var(--border-strong)',
   },
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -458,25 +466,25 @@ const s: Record<string, React.CSSProperties> = {
     padding: 16,
   },
   modal: {
-    background: '#1e293b', borderRadius: 16, padding: 28,
-    border: '1px solid #334155', width: '100%', maxWidth: 520,
+    background: 'var(--raised)', borderRadius: 16, padding: 28,
+    border: '1px solid var(--border-strong)', width: '100%', maxWidth: 520,
     maxHeight: '90vh', overflowY: 'auto',
   },
   modalHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20,
   },
   closeBtn: {
-    background: 'transparent', border: 'none', color: '#64748b', fontSize: 18, cursor: 'pointer',
+    background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer',
   },
   fieldLabel: {
-    fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 6, marginTop: 14,
+    fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 6, marginTop: 14,
   },
   textInput: {
-    width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-    color: '#f8fafc', padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+    width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
+    color: 'var(--text-strong)', padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
   },
   featureGrid: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  featureCheck: { display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, color: '#94a3b8' },
+  featureCheck: { display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, color: 'var(--text-dim)' },
   featurePill: {
     fontSize: 11, padding: '2px 8px', borderRadius: 4,
   },
@@ -485,8 +493,8 @@ const s: Record<string, React.CSSProperties> = {
     color: '#fff', padding: '10px', fontSize: 14, cursor: 'pointer', fontWeight: 600,
   },
   cancelBtn: {
-    flex: 1, background: '#334155', border: 'none', borderRadius: 8,
-    color: '#94a3b8', padding: '10px', fontSize: 14, cursor: 'pointer',
+    flex: 1, background: 'var(--surface-hover)', border: 'none', borderRadius: 8,
+    color: 'var(--text-dim)', padding: '10px', fontSize: 14, cursor: 'pointer',
   },
 };
 

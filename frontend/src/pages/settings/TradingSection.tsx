@@ -7,6 +7,7 @@ import { SYMBOLS, TIMEFRAMES } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { TrendingUp } from 'lucide-react';
 
 const DEFAULT: TradingPreferences = {
   default_symbol: 'XAU_USD',
@@ -101,8 +102,8 @@ const TradingSection: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading trading preferences…
     </div>
   );
@@ -111,7 +112,7 @@ const TradingSection: React.FC = () => {
   // limits, and defaults are indistinguishable from saved values.
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="📈" title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
+      <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
       <ErrorBanner message="Couldn't load your trading preferences. Nothing has been changed — reload to try again." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -121,7 +122,7 @@ const TradingSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="📈" title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
+      <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="Trading Preferences" description="Default symbols, risk limits, and automation settings." />
 
       {/* Account snapshot */}
       {account && (
@@ -133,9 +134,9 @@ const TradingSection: React.FC = () => {
             { label: 'Equity', value: `$${account.equity?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '—'}` },
             { label: 'Daily P&L', value: `$${account.daily_pnl?.toFixed(2) ?? '—'}`, color: (account.daily_pnl ?? 0) >= 0 ? '#22c55e' : '#f87171' },
           ].map(({ label, value, color }) => (
-            <div key={label} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 16px' }}>
-              <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: color ?? '#f1f5f9', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
+            <div key={label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: color ?? 'var(--text-strong)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
             </div>
           ))}
         </div>
@@ -143,7 +144,7 @@ const TradingSection: React.FC = () => {
 
       {/* Defaults */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>Defaults</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Defaults</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <Field label="Default symbol">
             <Select
@@ -181,7 +182,7 @@ const TradingSection: React.FC = () => {
 
       {/* Risk limits */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>Risk Limits</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Risk Limits</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <Field label="Max risk per trade (%)" description="% of account balance risked per trade.">
             <Input
@@ -217,13 +218,13 @@ const TradingSection: React.FC = () => {
 
         {/* Risk bar visual */}
         <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             <span>Risk per trade</span>
-            <span style={{ color: form.max_risk_per_trade > 3 ? '#fbbf24' : '#22c55e', fontWeight: 600 }}>
+            <span style={{ color: form.max_risk_per_trade > 3 ? 'var(--warn)' : '#22c55e', fontWeight: 600 }}>
               {form.max_risk_per_trade}%
             </span>
           </div>
-          <div style={{ height: 6, background: '#0f172a', borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{ height: 6, background: 'var(--surface)', borderRadius: 3, overflow: 'hidden' }}>
             <div style={{
               height: '100%', borderRadius: 3,
               width: `${Math.min(form.max_risk_per_trade * 10, 100)}%`,
@@ -236,7 +237,7 @@ const TradingSection: React.FC = () => {
 
       {/* Automation */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 8 }}>Automation</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Automation</h3>
         <Toggle
           id="auto-trade"
           label="Auto-trade enabled"
@@ -247,14 +248,14 @@ const TradingSection: React.FC = () => {
         {/* Not a form field. This is engine state, applied immediately and
             reported from the server — never saved along with lot size. */}
         <div style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 2 }}>Kill switch</div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>Kill switch</div>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 10 }}>
             Immediately halt all automated trading. Resuming requires an administrator.
           </div>
           {form.kill_switch_enabled ? (
             <div style={{
               padding: '10px 14px', background: '#450a0a',
-              border: '1px solid #7f1d1d', borderRadius: 8, fontSize: 13, color: '#f87171',
+              border: '1px solid #7f1d1d', borderRadius: 8, fontSize: 'var(--fs-body)', color: 'var(--loss)',
             }}>
               ⚠️ Kill switch is active. All automated trading is halted.
             </div>

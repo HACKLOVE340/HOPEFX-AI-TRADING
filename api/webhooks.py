@@ -29,8 +29,7 @@ TradingView alert message format (JSON body)
   "tp":         1.09100,           // optional — take profit
   "confidence": 0.75,              // optional — 0-1
   "timeframe":  "1h",              // optional
-  "comment":    "RSI oversold",    // optional — alert message text
-  "secret":     "<shared secret>"  // optional — body-level secret (legacy)
+  "comment":    "RSI oversold"     // optional — alert message text
 }
 """
 
@@ -65,7 +64,6 @@ class TradingViewAlert(BaseModel):
     confidence: float = Field(0.7, ge=0.0, le=1.0, description="Signal confidence 0-1")
     timeframe: str = Field("1h", description="Chart timeframe")
     comment: str = Field("", description="Alert message / comment")
-    secret: str | None = Field(None, description="Optional body-level shared secret (legacy)")
 
 
 class WebhookResponse(BaseModel):
@@ -129,9 +127,9 @@ async def tradingview_webhook(request: Request) -> WebhookResponse:
     in TradingView's alert webhook URL field.  The endpoint verifies the
     ``X-TV-Signature`` header (HMAC-SHA256 of the raw body).
 
-    As a fallback, if the alert JSON contains a ``secret`` field that
-    matches the configured secret, the request is also accepted.  This
-    supports TradingView's body-level secret pattern.
+    Body-level secrets are intentionally unsupported because request bodies
+    can be logged or retained by intermediaries. Configure the HMAC header
+    in the webhook client instead.
     """
     secret = _get_secret()
     if not secret:
@@ -156,12 +154,6 @@ async def tradingview_webhook(request: Request) -> WebhookResponse:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Request body must be valid JSON.",
         ) from exc
-
-    # Fallback: body-level secret field (legacy TradingView pattern)
-    if not sig_valid:
-        body_secret = str(payload.get("secret", "")).strip()
-        if body_secret and hmac.compare_digest(body_secret, secret):
-            sig_valid = True
 
     if not sig_valid:
         logger.warning(

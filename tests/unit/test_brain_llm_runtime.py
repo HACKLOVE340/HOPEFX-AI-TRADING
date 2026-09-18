@@ -104,17 +104,25 @@ class TestHealthNeverLeaksKey:
 
 
 class TestCompleteAnthropicBranch:
-    def test_complete_uses_anthropic_when_configured(self, client, monkeypatch):
-        import api.brain as brain_mod
+    def test_complete_goes_through_the_gateway_and_never_echoes_the_key(self, client, monkeypatch):
+        """The endpoint no longer builds the vendor request itself.
+
+        It used to post to api.anthropic.com inline, which put the platform's
+        only model endpoint outside the spend ceiling, the fall-through chain,
+        the guardrails and the audit record. The key-leak assertion this test
+        was written for still holds, one layer down: the credential goes in the
+        header, never in the body, and never in the response.
+        """
+        import ai.gateway.adapters as adapters_mod
 
         monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET_KEY)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
 
         class _FakeResp:
             status_code = 200
-
-            @staticmethod
-            def raise_for_status():
-                return None
 
             @staticmethod
             def json():
@@ -123,28 +131,15 @@ class TestCompleteAnthropicBranch:
                     "usage": {"input_tokens": 3, "output_tokens": 5},
                 }
 
-        class _FakeAsyncClient:
-            def __init__(self, *a, **k): ...
+        def _fake_post(url, *, headers, json, timeout):
+            assert json["model"] and SECRET_KEY not in json["model"]
+            assert headers["x-api-key"] == SECRET_KEY
+            assert SECRET_KEY not in str(json), "the key reached the request body"
+            return _FakeResp()
 
-            async def __aenter__(self):
-                return self
+        monkeypatch.setattr(adapters_mod.httpx, "post", _fake_post)
 
-            async def __aexit__(self, *a):
-                return False
-
-            async def post(self, url, **kwargs):
-                # the key goes in the header, never as the model
-                assert kwargs["json"]["model"] and SECRET_KEY not in kwargs["json"]["model"]
-                assert kwargs["headers"]["x-api-key"] == SECRET_KEY
-                return _FakeResp()
-
-        import httpx
-
-        with (
-            patch.object(brain_mod, "_detect_llm_runtime", return_value=("anthropic", "claude-sonnet-4-6")),
-            patch.object(httpx, "AsyncClient", _FakeAsyncClient),
-        ):
-            resp = client.post("/api/brain/complete", json={"prompt": "hi"})
+        resp = client.post("/api/brain/complete", json={"prompt": "hi"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -163,11 +158,16 @@ class TestCompleteAnthropicBranch:
 
 class TestEmbedAnthropicFallback:
     def test_embed_anthropic_without_embedding_backend_503s_accurately(self, client, monkeypatch):
+        """ "Anthropic is configured but cannot embed" is not "nothing is configured"."""
         import api.brain as brain_mod
 
+        monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET_KEY)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
         with patch.object(brain_mod, "_detect_llm_runtime", return_value=("anthropic", "claude-sonnet-4-6")):
             resp = client.post("/api/brain/embed", json={"input": "text"})
         assert resp.status_code == 503
         assert "no embeddings API" in resp.json()["detail"]
+        assert "OPENAI_API_KEY" in resp.json()["detail"], "the 503 must name the fix, not just the problem"

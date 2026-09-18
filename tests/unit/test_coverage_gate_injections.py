@@ -1,0 +1,355 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+"""`scripts/pre_commit_coverage.py` — the gate that stops coverage rotting.
+
+It had no test, and injecting into it found the most inverted failure yet:
+
+    module at 25% coverage   -> FAIL, exit 1     (correct)
+    module at  0% coverage   -> pass,  exit 0     (the defect)
+    test file that will not import -> pass, exit 0 (the defect)
+
+**The worse the coverage, the more likely the gate let it through.**
+
+The cause is exact. `_run_coverage` parses the `TOTAL` line out of pytest-cov's
+terminal report. When the module is never imported by its test, coverage collects
+nothing and prints no table at all — only:
+
+    CoverageWarning: Module mymod.thing was never imported. (module-not-imported)
+    CoverageWarning: No data was collected. (no-data-collected)
+    WARNING: Failed to generate report: No data to report.
+
+so the parser returns `None`, and `None` took the "warn but don't block" branch.
+Rule 2 says an unmeasured value is absent, never zero — here it was being treated
+as *success*, which is worse than zero.
+
+An unmeasurable module now fails. `SKIP_COVERAGE_GATE=1` was already the
+documented emergency bypass, so the fix needed no new escape hatch — a second one
+would just be a second thing to reach for.
+
+Every case runs against a disposable tree. The gate resolves test files by
+relative path and shells out to pytest in the working directory, so the mirror is
+a small real project rather than a mock.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess  # nosec B404 — runs the gate under test, fixed argument list
+import sys
+import textwrap
+from pathlib import Path
+
+import pytest
+
+pytestmark = [pytest.mark.unit]
+
+REPO = Path(__file__).resolve().parents[2]
+GATE = REPO / "scripts" / "pre_commit_coverage.py"
+
+_MODULE_WITH_FOUR_FUNCTIONS = """
+def covered(x):
+    return x + 1
+
+
+def uncovered_a(x):
+    if x > 0:
+        return "a"
+    return "b"
+
+
+def uncovered_b(x):
+    total = 0
+    for i in range(x):
+        total += i
+    return total
+
+
+def uncovered_c(x):
+    try:
+        return 1 / x
+    except ZeroDivisionError:
+        return None
+"""
+
+
+@pytest.fixture
+def project(tmp_path: Path) -> Path:
+    """A disposable project the gate can resolve paths inside."""
+    root = tmp_path / "proj"
+    (root / "scripts").mkdir(parents=True)
+    (root / "tests" / "unit").mkdir(parents=True)
+    (root / "mymod").mkdir()
+    shutil.copy2(GATE, root / "scripts" / GATE.name)
+    shutil.copy2(REPO / ".coveragerc", root / ".coveragerc")
+    (root / "mymod" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "mymod" / "thing.py").write_text(_MODULE_WITH_FOUR_FUNCTIONS, encoding="utf-8")
+    return root
+
+
+def _write_test(root: Path, body: str) -> None:
+    (root / "tests" / "unit" / "test_thing.py").write_text(textwrap.dedent(body), encoding="utf-8")
+
+
+def _run(root: Path, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment.update(env)
+    return subprocess.run(  # nosec B603 — fixed argument list, no shell
+        [sys.executable, "scripts/pre_commit_coverage.py", *(args or ("mymod/thing.py",))],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+
+
+class TestTheHarnessMeasuresSomething:
+    """A gate that measured nothing would pass every case below."""
+
+    def test_a_well_covered_module_passes(self, project: Path) -> None:
+        _write_test(
+            project,
+            """
+            from mymod.thing import covered, uncovered_a, uncovered_b, uncovered_c
+
+            def test_everything():
+                assert covered(1) == 2
+                assert uncovered_a(1) == "a"
+                assert uncovered_a(-1) == "b"
+                assert uncovered_b(3) == 3
+                assert uncovered_c(2) == 0.5
+                assert uncovered_c(0) is None
+            """,
+        )
+        result = _run(project)
+        assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+        assert "OK" in result.stdout, result.stdout
+
+    def test_an_under_covered_module_fails(self, project: Path) -> None:
+        _write_test(
+            project,
+            """
+            from mymod.thing import covered
+
+            def test_only_one_function():
+                assert covered(1) == 2
+            """,
+        )
+        result = _run(project)
+        assert result.returncode != 0, "an under-covered module passed the coverage gate"
+        assert "below" in result.stderr or "FAIL" in result.stderr
+
+
+class TestAnUnmeasurableModuleIsNotAPass:
+    """The defect. Both cases exited 0 before this phase."""
+
+    def test_a_module_the_test_never_imports_fails(self, project: Path) -> None:
+        # 0% coverage: coverage collects no data and prints no TOTAL line, so the
+        # parser returned None and the gate waved it through.
+        _write_test(
+            project,
+            """
+            def test_nothing_at_all():
+                assert True
+            """,
+        )
+        result = _run(project)
+        assert result.returncode != 0, (
+            "a module at 0% coverage passed the gate — the worse the coverage, the more likely it was let through"
+        )
+
+    def test_a_test_file_that_cannot_be_collected_fails(self, project: Path) -> None:
+        _write_test(
+            project,
+            """
+            import a_module_that_does_not_exist  # noqa: F401
+
+            from mymod.thing import covered
+
+            def test_one():
+                assert covered(1) == 2
+            """,
+        )
+        assert _run(project).returncode != 0, "a broken test import silently disabled the gate"
+
+    def test_the_failure_says_which_number_it_measured(self, project: Path) -> None:
+        """An operator must be able to tell "coverage is low" from "coverage is
+        unknown" — the two need different fixes.
+
+        This used to assert the words "could not measure", because a test that
+        never imports its module made `--cov=<dotted.module>` collect nothing and
+        print no table. Measuring the *package* instead reports the module's file
+        at 0.00%: coverage parsed it, counted its statements and saw none run.
+        That is a measurement, and reporting it as unknown would be the same
+        Rule 2 error in the opposite direction.
+
+        So the distinction the test was defending is now stronger, not weaker —
+        the gate says 0%, and reserves "could not be measured" for the case where
+        the module genuinely has no row at all.
+        """
+        _write_test(project, "def test_nothing():\n    assert True\n")
+        result = _run(project)
+        combined = (result.stderr + result.stdout).lower()
+        assert result.returncode != 0, combined
+        assert "0%" in combined or "could not" in combined or "unmeasur" in combined, combined
+
+
+class TestTheDocumentedBypassStillWorks:
+    """The other half of Rule 1. A gate with no working escape hatch gets
+    deleted rather than bypassed."""
+
+    def test_skip_coverage_gate_skips(self, project: Path) -> None:
+        _write_test(project, "def test_nothing():\n    assert True\n")
+        result = _run(project, SKIP_COVERAGE_GATE="1")
+        assert result.returncode == 0
+        assert "SKIP" in result.stdout
+
+    def test_a_module_with_no_test_file_is_still_skipped(self, project: Path) -> None:
+        # Documented behaviour: a new module with no tests yet is not the
+        # coverage gate's business.
+        (project / "mymod" / "untested.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+        assert _run(project, "mymod/untested.py").returncode == 0
+
+    def test_an_excluded_path_is_still_skipped(self, project: Path) -> None:
+        (project / "scripts" / "helper.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+        assert _run(project, "scripts/helper.py").returncode == 0
+
+
+class TestTheUnmeasurableBaselineIsARatchet:
+    """Making an unmeasurable module fail was correct, but a hard cutover would
+    have blocked every commit touching pre-existing debt — and a gate that
+    blocks work people must do gets switched off with SKIP_COVERAGE_GATE=1.
+
+    The debt is not small: **361 modules** resolve to a test file that never
+    imports them. So the recorded set is a generated file, the same ratchet the
+    document registry, the freshness checker and the gate-evidence ledger use.
+    """
+
+    def test_the_baseline_file_exists_and_is_populated(self) -> None:
+        from scripts.pre_commit_coverage import BASELINE_PATH, _load_baseline
+
+        assert BASELINE_PATH.exists(), (
+            f"{BASELINE_PATH.name} is missing. Regenerate with `python scripts/pre_commit_coverage.py --adopt`."
+        )
+        baseline = _load_baseline()
+        # A silently empty baseline would make every entry below "new" and block
+        # every commit — the failure mode this file exists to prevent.
+        assert len(baseline) > 50, f"baseline holds only {len(baseline)} entries — regenerate it"
+
+    def test_every_baselined_module_still_exists(self) -> None:
+        # An entry for a deleted file is debt that looks unpaid forever and
+        # hides the fact that it was actually resolved.
+        from scripts.pre_commit_coverage import _load_baseline
+
+        missing = sorted(rel for rel in _load_baseline() if not (REPO / rel).exists())
+        assert missing == [], f"baselined but deleted — drop these entries: {missing}"
+
+    def test_no_baselined_module_is_a_test_or_excluded_path(self) -> None:
+        from scripts.pre_commit_coverage import _is_excluded, _load_baseline
+
+        for rel in sorted(_load_baseline()):
+            path = Path(rel)
+            assert not _is_excluded(path), f"{rel} is excluded from the gate; it cannot be debt"
+            assert not path.name.startswith("test_"), rel
+
+    def test_a_baselined_module_does_not_block(self, project: Path, monkeypatch) -> None:
+        import scripts.pre_commit_coverage as gate
+
+        baseline_file = project / "baseline.txt"
+        baseline_file.write_text("mymod/thing.py\n", encoding="utf-8")
+        monkeypatch.setenv("PYTHONPATH", str(project))
+        _write_test(project, "def test_nothing():\n    assert True\n")
+
+        # Point the copied gate at this project's baseline through the env var
+        # the gate exposes for it.
+        #
+        # This used to read the copied script and string-replace the exact
+        # `BASELINE_PATH = Path(__file__)…` line. Splitting that line to
+        # introduce `REPO_ROOT` made the replacement stop matching — silently,
+        # because `str.replace` on a missing needle is a no-op — so the copied
+        # gate read the REAL repository's baseline, `mymod/thing.py` was not in
+        # it, and a test about the ratchet failed for a reason that had nothing
+        # to do with the ratchet. An env var is a seam; a string match on an
+        # implementation line is a trap for the next person to touch it.
+        result = _run(project, COVERAGE_BASELINE_PATH=str(baseline_file))
+        assert result.returncode == 0, f"a baselined module blocked:\n{result.stderr}"
+        # The word was "BASELINED" while an entry meant "cannot be measured".
+        # It now means recorded debt with a real number behind it, so the line
+        # reads DEBT — and stays on stderr, because a non-blocking notice on
+        # stdout is a notice nobody reads.
+        assert "DEBT" in result.stderr, result.stderr + result.stdout
+        assert "mymod/thing.py" in result.stderr
+        assert gate  # the constant is importable from the real module
+
+    def test_a_new_unmeasurable_module_still_blocks(self, project: Path) -> None:
+        # The whole purpose. The baseline is a record of what was, not a licence
+        # for what comes next.
+        (project / "mymod" / "fresh.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+        (project / "tests" / "unit" / "test_fresh.py").write_text(
+            "def test_nothing():\n    assert True\n", encoding="utf-8"
+        )
+        assert _run(project, "mymod/fresh.py").returncode != 0
+
+
+class TestTheHookItselfCanRunTheGateItNames:
+    """The logic above is proven; whether pre-commit can actually reach it
+    was not. `entry: python scripts/pre_commit_coverage.py` shells out to
+    `sys.executable -m pytest` against real test files that import the full
+    production stack (fastapi, sqlalchemy, ...). Under `language: python`,
+    pre-commit builds an isolated venv with none of that installed unless
+    `additional_dependencies` lists it — and this hook listed nothing, so
+    every module measurement failed with "No module named pytest" and was
+    reported as unmeasurable rather than measured. Every sibling hook that
+    needs to import project code (docs-freshness, gate-evidence, doc-metrics,
+    ...) uses `language: system` instead, which reuses whatever interpreter
+    is already on PATH — the one with the project's own dependencies.
+
+    Confirmed directly: running `python scripts/pre_commit_coverage.py
+    notifications/alert_engine.py` with the project's own .venv active
+    returns a real number (67% < 80%) instead of "could not be measured" —
+    the gate's logic works; only the isolated hook environment couldn't
+    reach it.
+    """
+
+    def test_the_coverage_gate_hook_uses_the_ambient_interpreter(self) -> None:
+        import yaml
+
+        config = yaml.safe_load(Path(".pre-commit-config.yaml").read_text(encoding="utf-8"))
+        hooks = {hook["id"]: hook for repo in config["repos"] for hook in repo["hooks"]}
+        gate_hook = hooks.get("coverage-gate")
+        assert gate_hook is not None, "the coverage-gate hook is gone from .pre-commit-config.yaml"
+        assert gate_hook.get("language") == "system", (
+            "coverage-gate uses language: "
+            f"{gate_hook.get('language')!r} — an isolated language: python venv has no "
+            "pytest/pytest-cov/fastapi/sqlalchemy unless additional_dependencies lists the "
+            "whole project, so every measurement silently degrades to 'could not be "
+            "measured'. Match the sibling hooks (docs-freshness, gate-evidence, ...) and use "
+            "language: system so it runs with the project's own interpreter."
+        )
+
+
+class TestTheCoverageBudgetIsBounded:
+    """The hook must stop instead of allowing an all-files run to run for hours."""
+
+    def test_total_budget_exhaustion_fails_closed(self, project: Path, monkeypatch) -> None:
+        import scripts.pre_commit_coverage as gate
+
+        second = project / "mymod" / "second.py"
+        second.write_text("def f():\n    return 2\n", encoding="utf-8")
+        test = project / "tests" / "unit" / "test_thing.py"
+        test.write_text("def test_nothing():\n    assert True\n", encoding="utf-8")
+
+        monkeypatch.setattr(gate, "_find_test_files", lambda _path: [test])
+        monkeypatch.setattr(gate, "_load_baseline", lambda: frozenset())
+        monkeypatch.setattr(gate, "_coveragerc_omits", lambda _path: False)
+        monkeypatch.setattr(gate, "_run_coverage", lambda _path, _tests: (80.0, ""))
+        monkeypatch.setattr(gate, "_TOTAL_TIMEOUT_SECONDS", 10)
+        clock = iter((0.0, 0.0, 11.0))
+        monkeypatch.setattr(gate.time, "monotonic", lambda: next(clock))
+        monkeypatch.chdir(project)
+
+        result = gate.main(["mymod/thing.py", "mymod/second.py"])
+
+        assert result == 1

@@ -8,17 +8,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';
-import { Badge } from '../ui/Badge';
 import { ConfidenceBar } from '../ui/ConfidenceBar';
-import { fmtPrice, fmtRelative, confColor, dirColor, cn } from '../../lib/utils';
+import { fmtPrice, fmtRelative, confColor } from '../../lib/utils';
 import type { Signal } from '../../types';
 
 type Filter = 'all' | 'long' | 'short' | 'active' | 'recent';
 
 // ── Direction arrow ───────────────────────────────────────────────────────────
 function DirectionArrow({ direction }: { direction: string }) {
-  if (direction === 'long')  return <span className="text-[#00e676] text-base leading-none">▲</span>;
-  if (direction === 'short') return <span className="text-[#ff1744] text-base leading-none">▼</span>;
+  if (direction === 'long')  return <span className="text-[var(--bull)] text-base leading-none">▲</span>;
+  if (direction === 'short') return <span className="text-[var(--bear)] text-base leading-none">▼</span>;
   return <span className="text-slate-500 text-base leading-none">◆</span>;
 }
 
@@ -50,7 +49,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
     >
       <div
         style={{
-          background: '#0d1421', border: `1px solid ${accentColor}40`,
+          background: 'var(--surface)', border: `1px solid ${accentColor}40`,
           borderRadius: 12, width: '100%', maxWidth: 480,
           boxShadow: `0 0 40px ${accentColor}20`,
           overflow: 'hidden',
@@ -65,17 +64,22 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 22 }}>{isLong ? '▲' : '▼'}</span>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#f1f5f9', fontFamily: 'monospace' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'monospace' }}>
                 {signal.symbol.replace('_', '/')}
               </div>
-              <div style={{ fontSize: 11, color: accentColor, fontWeight: 700, letterSpacing: 1 }}>
+              <div style={{ fontSize: 11, color: accentColor, fontWeight: 700, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+                {/* Built and never rendered, so direction was carried by the
+                    word alone — and by a colour, which is not a channel a
+                    red-green-deficient reader has. The glyph is the second
+                    channel; aria-hidden because the word beside it says it. */}
+                <span aria-hidden><DirectionArrow direction={signal.direction} /></span>
                 {signal.direction.toUpperCase()} · {signal.status.toUpperCase()}
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: 20, cursor: 'pointer' }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 20, cursor: 'pointer' }}
           >×</button>
         </div>
 
@@ -83,7 +87,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Confidence */}
           <div>
-            <div style={{ fontSize: 10, color: '#64748b', letterSpacing: 1.5, marginBottom: 6 }}>CONFIDENCE</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1.5, marginBottom: 6 }}>CONFIDENCE</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <ConfidenceBar value={signal.confidence} height="sm" className="flex-1" />
               <span style={{ fontSize: 14, fontWeight: 800, color: confColor(signal.confidence), fontFamily: 'monospace' }}>
@@ -100,11 +104,11 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
               { label: 'TAKE PROFIT', value: fmtPrice(signal.take_profit), color: '#00e676' },
             ].map(({ label, value, color }) => (
               <div key={label} style={{
-                background: '#111827', border: '1px solid #1e2d3d',
+                background: 'var(--raised)', border: '1px solid var(--border)',
                 borderRadius: 8, padding: '10px 12px',
               }}>
-                <div style={{ fontSize: 9, color: '#64748b', letterSpacing: 1.5, marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color, fontFamily: 'monospace' }}>{value}</div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color, fontFamily: 'monospace' }}>{value}</div>
               </div>
             ))}
           </div>
@@ -113,31 +117,31 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
           <div style={{ display: 'flex', gap: 12 }}>
             {rr != null && (
               <div style={{
-                flex: 1, background: '#111827', border: '1px solid #1e2d3d',
+                flex: 1, background: 'var(--raised)', border: '1px solid var(--border)',
                 borderRadius: 8, padding: '10px 12px',
               }}>
-                <div style={{ fontSize: 9, color: '#64748b', letterSpacing: 1.5, marginBottom: 4 }}>RISK : REWARD</div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, marginBottom: 4 }}>RISK : REWARD</div>
                 <div style={{
                   fontSize: 16, fontWeight: 900, fontFamily: 'monospace',
-                  color: rr >= 2 ? '#00e676' : rr >= 1 ? '#ffb800' : '#ff3b5c',
+                  color: rr >= 2 ? 'var(--bull)' : rr >= 1 ? '#ffb800' : '#ff3b5c',
                 }}>
                   1 : {rr.toFixed(2)}
                 </div>
               </div>
             )}
             <div style={{
-              flex: 2, background: '#111827', border: '1px solid #1e2d3d',
+              flex: 2, background: 'var(--raised)', border: '1px solid var(--border)',
               borderRadius: 8, padding: '10px 12px',
             }}>
-              <div style={{ fontSize: 9, color: '#64748b', letterSpacing: 1.5, marginBottom: 4 }}>MODEL</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, marginBottom: 4 }}>MODEL</div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
                 {signal.model || '—'}
               </div>
             </div>
           </div>
 
           {/* Timestamp */}
-          <div style={{ fontSize: 11, color: '#475569', textAlign: 'right' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'right' }}>
             Generated {fmtRelative(signal.generated_at)}
           </div>
 
@@ -158,8 +162,8 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
               onClick={onClose}
               style={{
                 padding: '12px 20px',
-                background: 'transparent', border: '1px solid #334155',
-                borderRadius: 8, color: '#64748b', fontSize: 13,
+                background: 'transparent', border: '1px solid var(--border-strong)',
+                borderRadius: 8, color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -190,7 +194,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
         borderLeft: `3px solid ${isExpired ? '#334155' : accentColor}`,
         background: isNew ? `${accentColor}08` : 'transparent',
         padding: '10px 12px',
-        borderBottom: '1px solid #1e2d3d',
+        borderBottom: '1px solid var(--border)',
         cursor: 'pointer',
         transition: 'background 0.2s ease',
         opacity: isExpired ? 0.45 : 1,
@@ -202,8 +206,8 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, color: accentColor }}>{isLong ? '▲' : '▼'}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace', letterSpacing: 0.5 }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: accentColor }}>{isLong ? '▲' : '▼'}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace', letterSpacing: 0.5 }}>
             {signal.symbol.replace('_', '/')}
           </span>
           <span style={{
@@ -215,7 +219,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
           {isNew && (
             <span style={{
               fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 4,
-              background: '#fbbf2420', color: '#fbbf24', letterSpacing: 1,
+              background: '#fbbf2420', color: 'var(--warn)', letterSpacing: 1,
               animation: 'signalPulse 1s ease infinite',
             }}>
               NEW
@@ -226,11 +230,11 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
           <span style={{
             fontSize: 9, padding: '1px 6px', borderRadius: 4,
             background: signal.status === 'active' ? '#00e67618' : '#33415518',
-            color: signal.status === 'active' ? '#00e676' : '#64748b',
+            color: signal.status === 'active' ? 'var(--bull)' : 'var(--text-muted)',
           }}>
             {signal.status}
           </span>
-          <span style={{ fontSize: 9, color: '#475569', fontFamily: 'monospace' }}>{fmtRelative(signal.generated_at)}</span>
+          <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{fmtRelative(signal.generated_at)}</span>
         </div>
       </div>
 
@@ -245,29 +249,29 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
       {/* Price levels */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
         <div>
-          <div style={{ fontSize: 9, color: '#64748b', letterSpacing: 1 }}>ENTRY</div>
-          <div style={{ fontSize: 11, color: '#e2e8f0', fontFamily: 'monospace' }}>{fmtPrice(signal.entry_price)}</div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1 }}>ENTRY</div>
+          <div style={{ fontSize: 11, color: 'var(--text)', fontFamily: 'monospace' }}>{fmtPrice(signal.entry_price)}</div>
         </div>
         <div>
           <div style={{ fontSize: 9, color: '#ff174490', letterSpacing: 1 }}>SL</div>
-          <div style={{ fontSize: 11, color: '#ff1744', fontFamily: 'monospace' }}>{fmtPrice(signal.stop_loss)}</div>
+          <div style={{ fontSize: 11, color: 'var(--bear)', fontFamily: 'monospace' }}>{fmtPrice(signal.stop_loss)}</div>
         </div>
         <div>
           <div style={{ fontSize: 9, color: '#00e67690', letterSpacing: 1 }}>TP</div>
-          <div style={{ fontSize: 11, color: '#00e676', fontFamily: 'monospace' }}>{fmtPrice(signal.take_profit)}</div>
+          <div style={{ fontSize: 11, color: 'var(--bull)', fontFamily: 'monospace' }}>{fmtPrice(signal.take_profit)}</div>
         </div>
       </div>
 
       {/* Footer */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-        <span style={{ fontSize: 9, color: '#475569', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+        <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
           {signal.model}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {rr != null && (
             <span style={{
               fontSize: 10, fontWeight: 700, fontFamily: 'monospace',
-              color: rr >= 2 ? '#00e676' : rr >= 1 ? '#ffb800' : '#ff3b5c',
+              color: rr >= 2 ? 'var(--bull)' : rr >= 1 ? '#ffb800' : '#ff3b5c',
             }}>
               R:R {rr.toFixed(1)}
             </span>
@@ -286,16 +290,16 @@ function PositionRow({ pos }: { pos: import('../../types').Position }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '8px 12px', borderBottom: '1px solid #1e2d3d',
-      borderLeft: `3px solid ${isLong ? '#00e676' : '#ff1744'}`,
+      padding: '8px 12px', borderBottom: '1px solid var(--border)',
+      borderLeft: `3px solid ${isLong ? 'var(--bull)' : 'var(--bear)'}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ color: isLong ? '#00e676' : '#ff1744', fontSize: 12 }}>{isLong ? '▲' : '▼'}</span>
-        <span style={{ fontSize: 11, color: '#e2e8f0', fontFamily: 'monospace' }}>{pos.symbol.replace('_', '/')}</span>
-        <span style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace' }}>×{pos.size}</span>
+        <span style={{ color: isLong ? 'var(--bull)' : 'var(--bear)', fontSize: 12 }}>{isLong ? '▲' : '▼'}</span>
+        <span style={{ fontSize: 11, color: 'var(--text)', fontFamily: 'monospace' }}>{pos.symbol.replace('_', '/')}</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>×{pos.size}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace' }}>@ {fmtPrice(pos.entry_price)}</span>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'monospace' }}>@ {fmtPrice(pos.entry_price)}</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: pnlColor, fontFamily: 'monospace' }}>
           {(pos.unrealized_pnl ?? 0) >= 0 ? '+' : ''}${(pos.unrealized_pnl ?? 0).toFixed(2)}
         </span>
@@ -352,11 +356,11 @@ export function LiveSignalFeed() {
 
   const headerRight = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#00e676', fontWeight: 700 }}>
+      <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--bull)', fontWeight: 700 }}>
         {activeCount} active
       </span>
-      <span style={{ fontSize: 10, color: '#334155' }}>|</span>
-      <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>
+      <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>|</span>
+      <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
         {openPositions.length} pos
       </span>
     </div>
@@ -380,7 +384,7 @@ export function LiveSignalFeed() {
         {/* Filter tabs */}
         <div style={{
           display: 'flex', gap: 4, padding: '8px 10px',
-          borderBottom: '1px solid #1e2d3d', flexWrap: 'wrap',
+          borderBottom: '1px solid var(--border)', flexWrap: 'wrap',
         }}>
           {FILTERS.map(({ id, label, color }) => (
             <button
@@ -390,7 +394,7 @@ export function LiveSignalFeed() {
                 padding: '3px 10px', borderRadius: 4,
                 background: filter === id ? `${color}20` : 'transparent',
                 border: `1px solid ${filter === id ? `${color}60` : '#1e293b'}`,
-                color: filter === id ? color : '#475569',
+                color: filter === id ? color : 'var(--text-faint)',
                 fontSize: 9, fontWeight: 700, letterSpacing: 1,
                 cursor: 'pointer', fontFamily: 'monospace',
                 transition: 'all 0.15s ease',
@@ -404,9 +408,9 @@ export function LiveSignalFeed() {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {/* Open positions */}
           {filter === 'all' && openPositions.length > 0 && (
-            <div style={{ borderBottom: '1px solid #1e2d3d' }}>
-              <div style={{ padding: '6px 12px', background: '#111827' }}>
-                <span style={{ fontSize: 9, color: '#64748b', letterSpacing: 1.5, textTransform: 'uppercase' }}>Open Positions</span>
+            <div style={{ borderBottom: '1px solid var(--border)' }}>
+              <div style={{ padding: '6px 12px', background: 'var(--raised)' }}>
+                <span style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase' }}>Open Positions</span>
               </div>
               {openPositions.map((p) => <PositionRow key={p.id} pos={p} />)}
             </div>
@@ -428,7 +432,7 @@ export function LiveSignalFeed() {
               justifyContent: 'center', padding: '32px 16px', gap: 8,
             }}>
               <span style={{ fontSize: 24, opacity: 0.3 }}>📡</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
                 {signals.length === 0 ? 'Awaiting signals from inference engine…' : `No ${filter} signals`}
               </span>
             </div>

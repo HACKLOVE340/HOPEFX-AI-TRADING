@@ -11,6 +11,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
+import { LineChart } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -137,11 +139,11 @@ const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
         alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: 20, fontWeight: 800, color }}>{nf(score, 0)}</span>
-        <span style={{ fontSize: 10, color: '#64748b' }}>/ 100</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>/ 100</span>
       </div>
       <div>
         <div style={{ fontSize: 16, fontWeight: 700, color }}>{label}</div>
-        <div style={{ fontSize: 12, color: '#64748b', maxWidth: 180 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 180 }}>
           Consistency of returns across all folds
         </div>
       </div>
@@ -157,7 +159,6 @@ const WalkForward: React.FC = () => {
   const [loading, setLoading]      = useState(true);
   const [apiError, setApiError]    = useState<string | null>(null);
   const [visibleFolds, setVisible] = useState<Set<number>>(new Set());
-  const [runId, setRunId]          = useState('');
   const [inputId, setInputId]      = useState('');
 
   const mountedRef = useRef(true);
@@ -196,61 +197,94 @@ const WalkForward: React.FC = () => {
   const toggleFold = (fold: number) => {
     setVisible((prev) => {
       const next = new Set(prev);
-      next.has(fold) ? next.delete(fold) : next.add(fold);
+      // A ternary evaluated for its side effects reads as a value and is not
+      // one; `no-unused-expressions` is flagging a real smell, not a style.
+      if (next.has(fold)) next.delete(fold);
+      else next.add(fold);
       return next;
     });
   };
 
-  if (loading) return <div style={s.loading}>Loading walk-forward results…</div>;
+  /* The page's identity, independent of whether its request succeeded. */
+  const shell = {
+    title: 'Walk-Forward Validation',
+    icon: LineChart,
+    width: 'wide' as const,
+    subtitle: 'Out-of-sample validation across rolling folds',
+  };
+
+  /*
+   * One shell, outliving the branches.
+   *
+   * These three states used to return their own roots: the loading one a bare
+   * styled div, the empty one a `page-content` with its own h1 reading
+   * "Walk-Forward Analysis", and the happy one a `page-content` with an h1
+   * reading "Walk-Forward Validation". So a page that was loading or that had
+   * failed showed no heading and no way onward — at the moment an operator most
+   * needs both — and the page had two different names depending on whether its
+   * request had succeeded.
+   *
+   * Nothing below is dropped. The loading sentence, the empty-state copy, the
+   * Retry and the link to Backtesting all still render; they are now the BODY
+   * of a page that has already said what it is.
+   */
+  if (loading) {
+    return (
+      <PageShell {...shell}>
+        <div style={s.loading}>Loading walk-forward results…</div>
+      </PageShell>
+    );
+  }
 
   if (apiError || !data) {
     return (
-      <div className="page-content">
-        <h1 style={s.title}>Walk-Forward Analysis</h1>
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: '#94a3b8', textAlign: 'center' }}>
+      <PageShell {...shell}>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: 'var(--text-dim)', textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
-          <div style={{ fontSize: 16, color: '#e2e8f0', marginBottom: 8 }}>
+          <div style={{ fontSize: 16, color: 'var(--text)', marginBottom: 8 }}>
             {apiError ?? 'No walk-forward data available.'}
           </div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             Go to the Backtesting page and run a walk-forward analysis to see results here.
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16 }}>
             <button onClick={() => load()} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
               ↻ Retry
             </button>
-            <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+            <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: 'var(--text-dim)', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
               📊 Go to Backtesting
             </button>
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
-  if (!data)   return <div style={s.loading}>No walk-forward data available.</div>;
+
+  /*
+   * `if (!data)` stood here and could never run: the branch above already
+   * returns for `apiError || !data`. Dead since it was written, and removed
+   * rather than carried — its sentence ("No walk-forward data available.") is
+   * the one the reachable branch already shows.
+   */
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Walk-Forward Validation</h1>
-          <p style={s.subtitle}>
-            {data.strategy ?? '—'} · {data.symbol ?? '—'} · {(data.folds ?? []).length} folds
-          </p>
-        </div>
+    <PageShell
+      {...shell}
+      subtitle={`${data.strategy ?? '—'} · ${data.symbol ?? '—'} · ${(data.folds ?? []).length} folds`}
+      actions={(
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => navigate('/ai-strategy')}
             style={{
               padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
               background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-              color: '#a78bfa', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
             }}
           >
             🤖 Generate Strategy
           </button>
           <div style={s.searchRow}>
-            <input
+            <input aria-label="Run ID"
               style={s.searchInput}
               placeholder="Run ID…"
               value={inputId}
@@ -259,8 +293,8 @@ const WalkForward: React.FC = () => {
             <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
           </div>
         </div>
-      </div>
-
+      )}
+    >
       {/* Summary metrics */}
       <div style={s.metricsRow}>
         <MetricCard label="Avg Sharpe"    value={(data.avg_sharpe   ?? 0).toFixed(2)}   color="#60a5fa" />
@@ -285,7 +319,7 @@ const WalkForward: React.FC = () => {
                   background: visibleFolds.has(f.fold)
                     ? FOLD_COLORS[(f.fold - 1) % FOLD_COLORS.length]
                     : '#1e293b',
-                  color: visibleFolds.has(f.fold) ? '#0f172a' : '#64748b',
+                  color: visibleFolds.has(f.fold) ? '#0f172a' : 'var(--text-muted)',
                 }}
                 onClick={() => toggleFold(f.fold)}
               >
@@ -321,14 +355,14 @@ const WalkForward: React.FC = () => {
                     {f.fold}
                   </td>
                   <td style={s.td}>{f.test_start} → {f.test_end}</td>
-                  <td style={{ ...s.td, color: f.accuracy >= 55 ? '#4ade80' : '#f87171' }}>
+                  <td style={{ ...s.td, color: f.accuracy >= 55 ? 'var(--gain)' : 'var(--loss)' }}>
                     {nf(f.accuracy, 1)}%
                   </td>
-                  <td style={{ ...s.td, color: f.sharpe >= 1 ? '#4ade80' : '#facc15' }}>
+                  <td style={{ ...s.td, color: f.sharpe >= 1 ? 'var(--gain)' : '#facc15' }}>
                     {nf(f.sharpe, 2)}
                   </td>
-                  <td style={{ ...s.td, color: '#f87171' }}>{nf(f.max_drawdown, 1)}%</td>
-                  <td style={{ ...s.td, color: (f.total_return ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                  <td style={{ ...s.td, color: 'var(--loss)' }}>{nf(f.max_drawdown, 1)}%</td>
+                  <td style={{ ...s.td, color: (f.total_return ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                     {Number.isFinite(f.total_return) ? `${f.total_return >= 0 ? '+' : ''}${f.total_return.toFixed(1)}%` : '—'}
                   </td>
                   <td style={s.td}>{f.total_trades}</td>
@@ -353,7 +387,7 @@ const WalkForward: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -368,7 +402,7 @@ const MetricCard: React.FC<{ label: string; value: string; color: string }> = ({
 
 const MCCard: React.FC<{ label: string; value: string; color: string }> = ({ label, value, color }) => (
   <div style={s.mcCard}>
-    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
   </div>
 );

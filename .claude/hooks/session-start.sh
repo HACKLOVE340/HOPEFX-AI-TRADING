@@ -65,6 +65,26 @@ if ! "$VENV/bin/python" -m pip install --retries 3 --timeout 60 -r requirements-
     pandas numpy aiosqlite || true
 fi
 
+# pre-commit is NOT in requirements-ci.txt — it lives in requirements-dev.txt,
+# which nothing here installs. So every remote session started without it, while
+# CLAUDE.md calls running the hooks "non-negotiable" before committing and
+# forbids `--no-verify`. A gate that is mandated in the strongest language the
+# repo has and is not installed is the exact defect `hopefx-dead-controls`
+# exists to catch, in the tooling that enforces the rules.
+#
+# The package install is seconds. `install-hooks` builds the ruff/bandit/
+# detect-secrets environments and costs a few minutes on a cold image, but it is
+# once per image and it is the difference between the gate being runnable and an
+# agent discovering mid-commit that it is not. Non-fatal: a failure here must
+# leave the session usable, just without the gate warmed.
+echo "session-start: installing pre-commit (the commit gate CLAUDE.md mandates)"
+if "$VENV/bin/python" -m pip install --quiet --retries 3 --timeout 60 'pre-commit>=4.1.0,<5.0.0'; then
+  "$VENV/bin/python" -m pre_commit install-hooks >/dev/null 2>&1 || \
+    echo "session-start: WARNING — pre-commit hook envs not pre-built; first run will build them"
+else
+  echo "session-start: WARNING — pre-commit install failed; run the hooks manually before committing"
+fi
+
 echo "session-start: installing frontend dependencies"
 if [ -d frontend ]; then
   # `npm install` rather than `npm ci` so a cached node_modules is reused instead

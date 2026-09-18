@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Iterable, TypeGuard
 
 CONSTITUTIONAL = "CONSTITUTIONAL"
 CRITICAL = "CRITICAL"
@@ -49,7 +49,7 @@ def _v(rule: str, sev: str, msg: str, **ctx: Any) -> Violation:
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
-def _is_finite_number(x: Any) -> bool:
+def _is_finite_number(x: Any) -> TypeGuard[int | float]:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
 

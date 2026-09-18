@@ -67,6 +67,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+from core.ai_contracts import _canonical_hash
+
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
@@ -140,6 +142,9 @@ class DecisionResult:
     latency_ms: float = 0.0
     gate_reason: str = ""
     error: str = ""
+    abstained: bool = False
+    abstention_reason: str = ""
+    evidence_hash: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -163,6 +168,9 @@ class DecisionResult:
             "latency_ms": self.latency_ms,
             "gate_reason": self.gate_reason,
             "error": self.error,
+            "abstained": self.abstained,
+            "abstention_reason": self.abstention_reason,
+            "evidence_hash": self.evidence_hash,
         }
 
 
@@ -249,6 +257,7 @@ class HOPEFXDecisionEngine:
             result = await self._pipeline(ctx)
 
         result.latency_ms = (time.monotonic() - t0) * 1000
+        result.evidence_hash = _canonical_hash({k: v for k, v in result.to_dict().items() if k != "evidence_hash"})
         self._cycles += 1
         if result.outcome == DecisionOutcome.EXECUTED:
             self._executed += 1
@@ -319,11 +328,16 @@ class HOPEFXDecisionEngine:
             return None
 
         if not brain_result.get("consensus_reached"):
-            logger.debug("Phase1 no consensus for %s: %s", ctx.symbol, brain_result.get("reason", ""))
+            reason = str(brain_result.get("reason", "no consensus"))
+            logger.debug("Phase1 no consensus for %s: %s", ctx.symbol, reason)
+            result.abstained = True
+            result.abstention_reason = f"no_consensus: {reason}"
             return None
 
         signal = brain_result.get("consensus_signal")
         if signal is None:
+            result.abstained = True
+            result.abstention_reason = "consensus_without_signal"
             return None
 
         direction: str = signal.signal_type.value if hasattr(signal.signal_type, "value") else str(signal.signal_type)
@@ -365,6 +379,8 @@ class HOPEFXDecisionEngine:
                     ctx.symbol,
                     exc,
                 )
+                result.abstained = True
+                result.abstention_reason = f"ml_safety_block: {exc}"
                 return None
             except Exception as exc:
                 logger.warning("Phase2 ML predict failed (using base confidence) for %s: %s", ctx.symbol, exc)

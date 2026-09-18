@@ -31,6 +31,12 @@
 
 > **Current status: Paper Trading active** — live OANDA run is the next milestone
 
+**Working on this repository?** Run `python scripts/backlog_report.py` — it reads
+the registries, the specifications and the working tree, so it answers "what is
+left to build or fix" as of right now. [`CLAUDE.md`](CLAUDE.md) routes every other
+question; [`docs/ai/MASTER_OUTSTANDING.md`](docs/ai/MASTER_OUTSTANDING.md) holds
+the decisions only the owner can make.
+
 </div>
 
 ---
@@ -368,7 +374,7 @@ All settings load from environment variables. See [`.env.example`](.env.example)
 | `BROKER_TYPE` | Optional | `oanda`, `ibkr`, `mt5`, or `paper` (default: `paper`) |
 | `STRIPE_SECRET_KEY` | Monetization | `sk_test_...` (test) or `sk_live_...` (production) |
 
-Feature flags are controlled via `FEATURE_*` env vars — see [`docs/FEATURES.md`](docs/archive/FEATURES.md).
+Feature flags are controlled via `FEATURE_*` env vars — see [`docs/archive/FEATURES.md`](docs/archive/FEATURES.md).
 
 ---
 
@@ -443,7 +449,9 @@ pytest tests/test_ibkr_broker.py -v
 pytest tests/ -m "not slow" --cov=. --cov-report=term-missing
 ```
 
-**Test matrix:** Python 3.10, 3.11, 3.12 · 2,560+ tests · 70% coverage gate
+**Test matrix:** Python 3.11 and 3.12 · 20,385 fast Python tests + 2,594 frontend tests · 70% coverage gate
+
+*(Measured 2026-09-08. This line previously read "Python 3.10, 3.11, 3.12 · 2,560+ tests": 3.10 is tested by nothing — `Dockerfile` runs 3.12 and the CI matrix is 3.11/3.12 — and the test count was an order of magnitude low.)*
 
 ---
 

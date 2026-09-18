@@ -9,6 +9,8 @@
  *   WS   /ws/notifications           — real-time push
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Bell } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -133,19 +135,25 @@ const NotificationsPage: React.FC = () => {
   const unreadCount = items.filter(n => !n.read).length;
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#f1f5f9', margin: 0 }}>
-            Notifications {unreadCount > 0 && (
-              <span style={{ fontSize: 14, background: '#3b82f6', color: '#fff', borderRadius: 12, padding: '2px 8px', marginLeft: 8 }}>
-                {unreadCount}
-              </span>
-            )}
-          </h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Real-time alerts and updates</p>
-        </div>
+    <PageShell
+      title="Notifications"
+      icon={Bell}
+      subtitle="Real-time alerts and updates"
+      width="standard"
+      /* The unread count keeps its place beside the title. It was a span inside
+         the h1 and PageShell has a slot for exactly this; a count that moved
+         into the body would stop answering the question the page is opened to
+         answer. The literal blue and white are gone with it — they were the
+         last two colour literals in this file. */
+      badge={unreadCount > 0 ? (
+        <span style={{
+          fontSize: 'var(--fs-label)', background: 'var(--link)', color: 'var(--bg)',
+          borderRadius: 12, padding: '2px 8px', fontWeight: 700,
+        }}>
+          {unreadCount}
+        </span>
+      ) : undefined}
+      actions={(
         <div style={{ display: 'flex', gap: 8 }}>
           {voice.ttsSupported && (
             <button
@@ -161,45 +169,45 @@ const NotificationsPage: React.FC = () => {
                 padding: '6px 13px',
                 background: voiceAlerts ? 'rgba(96,165,250,0.14)' : 'rgba(100,116,139,0.12)',
                 border: `1px solid ${voiceAlerts ? 'rgba(96,165,250,0.5)' : 'rgba(100,116,139,0.35)'}`,
-                borderRadius: 7, color: voiceAlerts ? '#60a5fa' : '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                borderRadius: 7, color: voiceAlerts ? 'var(--link)' : 'var(--text-dim)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
               }}>
               {voiceAlerts ? '🔊 Spoken alerts on' : '🔈 Spoken alerts off'}
             </button>
           )}
           <button onClick={() => navigate('/settings')}
-            style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: 'var(--text-dim)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ⚙️ Settings
           </button>
           {(['all', 'unread'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
-              background: filter === f ? '#1e3a5f' : '#1e293b',
+              background: filter === f ? '#1e3a5f' : 'var(--raised)',
               border: `1px solid ${filter === f ? '#3b82f6' : '#334155'}`,
-              borderRadius: 8, color: filter === f ? '#60a5fa' : '#64748b',
-              cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '6px 14px',
+              borderRadius: 8, color: filter === f ? 'var(--link)' : 'var(--text-muted)',
+              cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '6px 14px',
             }}>
               {f === 'all' ? 'All' : `Unread (${unreadCount})`}
             </button>
           ))}
           <button onClick={markAllRead} disabled={markingAll || unreadCount === 0} style={{
-            background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
-            color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '6px 14px',
+            background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8,
+            color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 14px',
           }}>
             {markingAll ? '…' : '✓ Mark all read'}
           </button>
         </div>
-      </div>
-
+      )}
+    >
       <ActionBanner message={err} ok={false} onDismiss={() => setErr('')} />
 
       {/* List */}
       {loading && page === 1 && (
-        <div style={{ textAlign: 'center', color: '#64748b', padding: 48 }}>Loading…</div>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 48 }}>Loading…</div>
       )}
       {!loading && items.length === 0 && !err && (
-        <div style={{ textAlign: 'center', color: '#475569', padding: 64 }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 64 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🔔</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#64748b' }}>No notifications</div>
-          <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>You're all caught up!</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-muted)' }}>No notifications</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginTop: 4 }}>You're all caught up!</div>
         </div>
       )}
       {items.map(n => (
@@ -207,7 +215,7 @@ const NotificationsPage: React.FC = () => {
           key={n.id}
           onClick={() => { if (!n.read) markRead(n.id); }}
           style={{
-            background: n.read ? '#0d1421' : '#0f1e35',
+            background: n.read ? 'var(--surface)' : '#0f1e35',
             border: `1px solid ${n.read ? '#1e293b' : '#1e3a5f'}`,
             borderRadius: 10, padding: '14px 16px', marginBottom: 10,
             cursor: n.read ? 'default' : 'pointer',
@@ -220,18 +228,18 @@ const NotificationsPage: React.FC = () => {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-              <div style={{ fontWeight: n.read ? 500 : 700, color: '#f1f5f9', fontSize: 14 }}>{n.title}</div>
+              <div style={{ fontWeight: n.read ? 500 : 700, color: 'var(--text-strong)', fontSize: 14 }}>{n.title}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 {!n.read && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />}
-                <span style={{ fontSize: 11, color: '#64748b' }}>{fmtDateTime(n.created_at)}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtDateTime(n.created_at)}</span>
                 <button
                   onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
-                  style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}
                   title="Delete"
                 >×</button>
               </div>
             </div>
-            <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
               {n.link && (
                 <a href={n.link} style={{ fontSize: 12, color: '#3b82f6', display: 'inline-block' }}>
@@ -241,7 +249,7 @@ const NotificationsPage: React.FC = () => {
               {(n.type === 'trade' || n.type === 'alert' || n.type === 'ai') && (
                 <button
                   onClick={e => { e.stopPropagation(); navigate('/trade'); }}
-                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
+                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                 >
                   ⚡ Trade
                 </button>
@@ -256,13 +264,13 @@ const NotificationsPage: React.FC = () => {
           <button
             onClick={() => load(page + 1, filter)}
             disabled={loading}
-            style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '8px 24px' }}
+            style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '8px 24px' }}
           >
             {loading ? 'Loading…' : 'Load more'}
           </button>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

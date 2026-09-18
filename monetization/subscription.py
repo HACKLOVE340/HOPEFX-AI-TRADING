@@ -850,7 +850,7 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
                 email=req.email,
             )
         except Exception:
-            logger.exception("subscribe endpoint error: %s")
+            logger.exception("subscribe endpoint error")
             raise HTTPException(status_code=500, detail="Subscription failed — check server logs") from None
 
         return session
@@ -871,7 +871,7 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
             logger.warning("Stripe webhook signature validation failed: %s", exc)
             raise HTTPException(status_code=400, detail="Invalid webhook signature") from None
         except Exception:
-            logger.exception("webhook processing error: %s")
+            logger.exception("webhook processing error")
             raise HTTPException(status_code=500, detail="Webhook processing failed") from None
 
         return result

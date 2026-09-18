@@ -1,0 +1,4660 @@
+openapi: 3.1.0
+info:
+  title: HOPEFX AI Trading API
+  version: 1.0.0
+  description: Production REST API for the HOPEFX AI Trading platform. All endpoints
+    require JWT authentication unless noted.
+  contact:
+    name: HOPEFX
+    url: https://github.com/HACKLOVE340/HOPEFX-AI-TRADING
+  license:
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+paths:
+  /api/accounts/sub-accounts:
+    get:
+      tags:
+      - accounts
+      summary: /sub-accounts
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - accounts
+      summary: /sub-accounts
+      responses:
+        '200':
+          description: OK
+  /api/accounts/sub-accounts/{account_id}:
+    get:
+      tags:
+      - accounts
+      summary: /sub-accounts/{account_id}
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - accounts
+      summary: /sub-accounts/{account_id}
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - accounts
+      summary: /sub-accounts/{account_id}
+      responses:
+        '200':
+          description: OK
+  /api/accounts/sub-accounts/{account_id}/transfer:
+    post:
+      tags:
+      - accounts
+      summary: /sub-accounts/{account_id}/transfer
+      responses:
+        '200':
+          description: OK
+  /api/accounts/teams:
+    get:
+      tags:
+      - accounts
+      summary: /teams
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - accounts
+      summary: /teams
+      responses:
+        '200':
+          description: OK
+  /api/accounts/teams/{team_id}/members:
+    post:
+      tags:
+      - accounts
+      summary: /teams/{team_id}/members
+      responses:
+        '200':
+          description: OK
+  /api/accounts/teams/{team_id}/members/{member_id}:
+    delete:
+      tags:
+      - accounts
+      summary: /teams/{team_id}/members/{member_id}
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - accounts
+      summary: /teams/{team_id}/members/{member_id}
+      responses:
+        '200':
+          description: OK
+  /api/admin/logs:
+    get:
+      tags:
+      - admin
+      summary: /logs
+      responses:
+        '200':
+          description: OK
+  /api/admin/kyc/pending:
+    get:
+      tags:
+      - admin
+      summary: /kyc/pending
+      responses:
+        '200':
+          description: OK
+  /api/admin/kyc/decide:
+    post:
+      tags:
+      - admin
+      summary: /kyc/decide
+      responses:
+        '200':
+          description: OK
+  /api/admin/kyc/{user_id}:
+    get:
+      tags:
+      - admin
+      summary: /kyc/{user_id}
+      responses:
+        '200':
+          description: OK
+  /api/admin/system-info:
+    get:
+      tags:
+      - admin
+      summary: /system-info
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings:
+    get:
+      tags:
+      - admin
+      summary: /settings
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - admin
+      summary: /settings
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings-data:
+    get:
+      tags:
+      - admin
+      summary: /settings-data
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - admin
+      summary: /settings-data
+      responses:
+        '200':
+          description: OK
+  /api/admin/activity:
+    get:
+      tags:
+      - admin
+      summary: /activity
+      responses:
+        '200':
+          description: OK
+  /api/admin/dashboard-data:
+    get:
+      tags:
+      - admin
+      summary: /dashboard-data
+      responses:
+        '200':
+          description: OK
+  /api/admin/system-metrics:
+    get:
+      tags:
+      - admin
+      summary: /system-metrics
+      responses:
+        '200':
+          description: OK
+  /api/admin/:
+    get:
+      tags:
+      - admin
+      summary: /
+      responses:
+        '200':
+          description: OK
+  /api/admin/strategies:
+    get:
+      tags:
+      - admin
+      summary: /strategies
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings-page:
+    get:
+      tags:
+      - admin
+      summary: /settings-page
+      responses:
+        '200':
+          description: OK
+  /api/admin/monitoring:
+    get:
+      tags:
+      - admin
+      summary: /monitoring
+      responses:
+        '200':
+          description: OK
+  /api/admin/overview:
+    get:
+      tags:
+      - admin
+      summary: /overview
+      responses:
+        '200':
+          description: OK
+  /api/admin/alerts:
+    get:
+      tags:
+      - admin
+      summary: /alerts
+      responses:
+        '200':
+          description: OK
+  /api/admin/status:
+    get:
+      tags:
+      - admin
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/admin/audit-log/export:
+    get:
+      tags:
+      - admin
+      summary: /audit-log/export
+      responses:
+        '200':
+          description: OK
+  /api/admin/users:
+    get:
+      tags:
+      - admin
+      summary: /users
+      responses:
+        '200':
+          description: OK
+  /api/admin/users/{user_id}:
+    get:
+      tags:
+      - admin
+      summary: /users/{user_id}
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - admin
+      summary: /users/{user_id}
+      responses:
+        '200':
+          description: OK
+  /api/admin/users/{user_id}/ban:
+    post:
+      tags:
+      - admin
+      summary: /users/{user_id}/ban
+      responses:
+        '200':
+          description: OK
+  /api/admin/users/{user_id}/unban:
+    post:
+      tags:
+      - admin
+      summary: /users/{user_id}/unban
+      responses:
+        '200':
+          description: OK
+  /api/admin/users/{user_id}/reset-password:
+    post:
+      tags:
+      - admin
+      summary: /users/{user_id}/reset-password
+      responses:
+        '200':
+          description: OK
+  /api/admin/audit-log:
+    get:
+      tags:
+      - admin
+      summary: /audit-log
+      responses:
+        '200':
+          description: OK
+  /api/admin/backup/trigger:
+    post:
+      tags:
+      - admin
+      summary: /backup/trigger
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings/system:
+    get:
+      tags:
+      - admin
+      summary: /settings/system
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - admin
+      summary: /settings/system
+      responses:
+        '200':
+          description: OK
+  /api/admin/maintenance:
+    get:
+      tags:
+      - admin
+      summary: /maintenance
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - admin
+      summary: /maintenance
+      responses:
+        '200':
+          description: OK
+  /api/admin/broadcast:
+    post:
+      tags:
+      - admin
+      summary: /broadcast
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings/test-smtp:
+    post:
+      tags:
+      - admin
+      summary: /settings/test-smtp
+      responses:
+        '200':
+          description: OK
+  /api/advanced-orders/oco:
+    post:
+      tags:
+      - advanced-orders
+      summary: /oco
+      responses:
+        '200':
+          description: OK
+  /api/advanced-orders/trailing-stop:
+    post:
+      tags:
+      - advanced-orders
+      summary: /trailing-stop
+      responses:
+        '200':
+          description: OK
+  /api/advanced-orders/stop-limit:
+    post:
+      tags:
+      - advanced-orders
+      summary: /stop-limit
+      responses:
+        '200':
+          description: OK
+  /api/advanced-orders/{order_id}:
+    delete:
+      tags:
+      - advanced-orders
+      summary: /{order_id}
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - advanced-orders
+      summary: /{order_id}
+      responses:
+        '200':
+          description: OK
+  /api/advanced-orders/active:
+    get:
+      tags:
+      - advanced-orders
+      summary: /active
+      responses:
+        '200':
+          description: OK
+  /api/advanced-orders/health:
+    get:
+      tags:
+      - advanced-orders
+      summary: /health
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/advanced/ab-tests/run:
+    post:
+      tags:
+      - advanced-trading
+      summary: /api/advanced/ab-tests/run
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/advanced/ab-tests:
+    get:
+      tags:
+      - advanced-trading
+      summary: /api/advanced/ab-tests
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/advanced/ab-tests/{test_id}:
+    get:
+      tags:
+      - advanced-trading
+      summary: /api/advanced/ab-tests/{test_id}
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/backtesting/{run_id}/share:
+    post:
+      tags:
+      - advanced-trading
+      summary: /api/backtesting/{run_id}/share
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/indicators/preview:
+    post:
+      tags:
+      - advanced-trading
+      summary: /api/indicators/preview
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/indicators:
+    get:
+      tags:
+      - advanced-trading
+      summary: /api/indicators
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - advanced-trading
+      summary: /api/indicators
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/indicators/{ind_id}:
+    delete:
+      tags:
+      - advanced-trading
+      summary: /api/indicators/{ind_id}
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - advanced-trading
+      summary: /api/indicators/{ind_id}
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/indicators/{ind_id}/apply:
+    post:
+      tags:
+      - advanced-trading
+      summary: /api/indicators/{ind_id}/apply
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/advanced/correlation:
+    get:
+      tags:
+      - advanced-trading
+      summary: /api/advanced/correlation
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/advanced/cot-sentiment:
+    get:
+      tags:
+      - advanced-trading
+      summary: /api/advanced/cot-sentiment
+      responses:
+        '200':
+          description: OK
+  /api/advanced-trading/api/backtesting/{run_id}/monte-carlo:
+    post:
+      tags:
+      - advanced-trading
+      summary: /api/backtesting/{run_id}/monte-carlo
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - advanced-trading
+      summary: /api/backtesting/{run_id}/monte-carlo
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/capabilities:
+    get:
+      tags:
+      - ai-core
+      summary: /capabilities
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/chain:
+    get:
+      tags:
+      - ai-core
+      summary: /chain
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/budget:
+    get:
+      tags:
+      - ai-core
+      summary: /budget
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/calls:
+    get:
+      tags:
+      - ai-core
+      summary: /calls
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/cache:
+    get:
+      tags:
+      - ai-core
+      summary: /cache
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/evals:
+    get:
+      tags:
+      - ai-core
+      summary: /evals
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/models:
+    get:
+      tags:
+      - ai-core
+      summary: /models
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/departments:
+    get:
+      tags:
+      - ai-core
+      summary: /departments
+      responses:
+        '200':
+          description: OK
+  /api/ai-core/summary:
+    get:
+      tags:
+      - ai-core
+      summary: /summary
+      responses:
+        '200':
+          description: OK
+  /api/alerts/:
+    post:
+      tags:
+      - alerts
+      summary: /
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - alerts
+      summary: /
+      responses:
+        '200':
+          description: OK
+  /api/alerts/history/triggers:
+    get:
+      tags:
+      - alerts
+      summary: /history/triggers
+      responses:
+        '200':
+          description: OK
+  /api/alerts/active:
+    get:
+      tags:
+      - alerts
+      summary: /active
+      responses:
+        '200':
+          description: OK
+  /api/alerts/{alert_id}:
+    get:
+      tags:
+      - alerts
+      summary: /{alert_id}
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - alerts
+      summary: /{alert_id}
+      responses:
+        '200':
+          description: OK
+  /api/alerts/{alert_id}/pause:
+    post:
+      tags:
+      - alerts
+      summary: /{alert_id}/pause
+      responses:
+        '200':
+          description: OK
+  /api/alerts/{alert_id}/resume:
+    post:
+      tags:
+      - alerts
+      summary: /{alert_id}/resume
+      responses:
+        '200':
+          description: OK
+  /api/analysis/correlation:
+    get:
+      tags:
+      - analysis
+      summary: /correlation
+      responses:
+        '200':
+          description: OK
+  /api/analysis/cot:
+    get:
+      tags:
+      - analysis
+      summary: /cot
+      responses:
+        '200':
+          description: OK
+  /api/auth/order:
+    post:
+      tags:
+      - auth
+      summary: /order
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/strategies:
+    get:
+      tags:
+      - backtesting
+      summary: /strategies
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/run:
+    post:
+      tags:
+      - backtesting
+      summary: /run
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/walk-forward:
+    get:
+      tags:
+      - backtesting
+      summary: /walk-forward
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/walk-forward/latest:
+    get:
+      tags:
+      - backtesting
+      summary: /walk-forward/latest
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/walk-forward/{run_id}:
+    get:
+      tags:
+      - backtesting
+      summary: /walk-forward/{run_id}
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/walk-forward/run:
+    post:
+      tags:
+      - backtesting
+      summary: /walk-forward/run
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/results:
+    get:
+      tags:
+      - backtesting
+      summary: /results
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/list:
+    get:
+      tags:
+      - backtesting
+      summary: /list
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/results/{run_id}:
+    get:
+      tags:
+      - backtesting
+      summary: /results/{run_id}
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/replay/run:
+    post:
+      tags:
+      - backtesting
+      summary: /replay/run
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/replay/stress:
+    post:
+      tags:
+      - backtesting
+      summary: /replay/stress
+      responses:
+        '200':
+          description: OK
+  /api/backtesting/replay/regimes:
+    get:
+      tags:
+      - backtesting
+      summary: /replay/regimes
+      responses:
+        '200':
+          description: OK
+  /api/billing/plans:
+    get:
+      tags:
+      - billing
+      summary: /plans
+      responses:
+        '200':
+          description: OK
+  /api/billing/subscription:
+    get:
+      tags:
+      - billing
+      summary: /subscription
+      responses:
+        '200':
+          description: OK
+  /api/billing/webhook/stripe:
+    post:
+      tags:
+      - billing
+      summary: /webhook/stripe
+      responses:
+        '200':
+          description: OK
+  /api/billing/stripe/config:
+    get:
+      tags:
+      - billing
+      summary: /stripe/config
+      responses:
+        '200':
+          description: OK
+  /api/billing/stripe/payment-intent:
+    post:
+      tags:
+      - billing
+      summary: /stripe/payment-intent
+      responses:
+        '200':
+          description: OK
+  /api/billing/affiliate/generate-link:
+    post:
+      tags:
+      - billing
+      summary: /affiliate/generate-link
+      responses:
+        '200':
+          description: OK
+  /api/billing/auth/activate-free-tier:
+    post:
+      tags:
+      - billing
+      summary: /auth/activate-free-tier
+      responses:
+        '200':
+          description: OK
+  /api/billing/payments/flutterwave/init:
+    post:
+      tags:
+      - billing
+      summary: /payments/flutterwave/init
+      responses:
+        '200':
+          description: OK
+  /api/billing/payments/flutterwave/verify:
+    post:
+      tags:
+      - billing
+      summary: /payments/flutterwave/verify
+      responses:
+        '200':
+          description: OK
+  /api/billing/payments/flutterwave/status:
+    get:
+      tags:
+      - billing
+      summary: /payments/flutterwave/status
+      responses:
+        '200':
+          description: OK
+  /api/billing/balance:
+    get:
+      tags:
+      - billing
+      summary: /balance
+      responses:
+        '200':
+          description: OK
+  /api/billing/payment-methods:
+    get:
+      tags:
+      - billing
+      summary: /payment-methods
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - billing
+      summary: /payment-methods
+      responses:
+        '200':
+          description: OK
+  /api/billing/payment-methods/{payment_method_id}:
+    delete:
+      tags:
+      - billing
+      summary: /payment-methods/{payment_method_id}
+      responses:
+        '200':
+          description: OK
+  /api/billing/transactions:
+    get:
+      tags:
+      - billing
+      summary: /transactions
+      responses:
+        '200':
+          description: OK
+  /api/billing/elite/account-manager:
+    get:
+      tags:
+      - billing
+      summary: /elite/account-manager
+      responses:
+        '200':
+          description: OK
+  /api/billing/elite/support/ticket:
+    post:
+      tags:
+      - billing
+      summary: /elite/support/ticket
+      responses:
+        '200':
+          description: OK
+  /api/billing/elite/support/tickets:
+    get:
+      tags:
+      - billing
+      summary: /elite/support/tickets
+      responses:
+        '200':
+          description: OK
+  /api/billing/elite/custom-dev/request:
+    post:
+      tags:
+      - billing
+      summary: /elite/custom-dev/request
+      responses:
+        '200':
+          description: OK
+  /api/billing/elite/custom-dev/requests:
+    get:
+      tags:
+      - billing
+      summary: /elite/custom-dev/requests
+      responses:
+        '200':
+          description: OK
+  /api/billing/subscription/cancel:
+    post:
+      tags:
+      - billing
+      summary: /subscription/cancel
+      responses:
+        '200':
+          description: OK
+  /api/billing/subscription/resume:
+    post:
+      tags:
+      - billing
+      summary: /subscription/resume
+      responses:
+        '200':
+          description: OK
+  /api/billing/subscription/change:
+    post:
+      tags:
+      - billing
+      summary: /subscription/change
+      responses:
+        '200':
+          description: OK
+  /api/billing/payment-methods/{payment_method_id}/default:
+    post:
+      tags:
+      - billing
+      summary: /payment-methods/{payment_method_id}/default
+      responses:
+        '200':
+          description: OK
+  /api/billing/invoices:
+    get:
+      tags:
+      - billing
+      summary: /invoices
+      responses:
+        '200':
+          description: OK
+  /api/billing/invoices/{invoice_id}:
+    get:
+      tags:
+      - billing
+      summary: /invoices/{invoice_id}
+      responses:
+        '200':
+          description: OK
+  /api/billing/crypto/order/{order_id}:
+    get:
+      tags:
+      - billing
+      summary: /crypto/order/{order_id}
+      responses:
+        '200':
+          description: OK
+  /api/billing/crypto/order/{order_id}/cancel:
+    post:
+      tags:
+      - billing
+      summary: /crypto/order/{order_id}/cancel
+      responses:
+        '200':
+          description: OK
+  /api/brain/generate-strategy:
+    post:
+      tags:
+      - brain
+      summary: /generate-strategy
+      responses:
+        '200':
+          description: OK
+  /api/brain/deploy-strategy:
+    post:
+      tags:
+      - brain
+      summary: /deploy-strategy
+      responses:
+        '200':
+          description: OK
+  /api/brain/chat:
+    post:
+      tags:
+      - brain
+      summary: /chat
+      responses:
+        '200':
+          description: OK
+  /api/brain/strategies:
+    get:
+      tags:
+      - brain
+      summary: /strategies
+      responses:
+        '200':
+          description: OK
+  /api/brain/strategies/{strategy_id}:
+    get:
+      tags:
+      - brain
+      summary: /strategies/{strategy_id}
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - brain
+      summary: /strategies/{strategy_id}
+      responses:
+        '200':
+          description: OK
+  /api/brain/strategies/{strategy_id}/backtest:
+    post:
+      tags:
+      - brain
+      summary: /strategies/{strategy_id}/backtest
+      responses:
+        '200':
+          description: OK
+  /api/brain/strategies/{strategy_id}/activate:
+    post:
+      tags:
+      - brain
+      summary: /strategies/{strategy_id}/activate
+      responses:
+        '200':
+          description: OK
+  /api/brain/strategies/{strategy_id}/deactivate:
+    post:
+      tags:
+      - brain
+      summary: /strategies/{strategy_id}/deactivate
+      responses:
+        '200':
+          description: OK
+  /api/brain/health:
+    get:
+      tags:
+      - brain
+      summary: /health
+      responses:
+        '200':
+          description: OK
+  /api/brain/complete:
+    post:
+      tags:
+      - brain
+      summary: /complete
+      responses:
+        '200':
+          description: OK
+  /api/brain/embed:
+    post:
+      tags:
+      - brain
+      summary: /embed
+      responses:
+        '200':
+          description: OK
+  /api/brain/status:
+    get:
+      tags:
+      - brain
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/brain/analyze:
+    post:
+      tags:
+      - brain
+      summary: /analyze
+      responses:
+        '200':
+          description: OK
+  /api/brain/market-analysis:
+    get:
+      tags:
+      - brain
+      summary: /market-analysis
+      responses:
+        '200':
+          description: OK
+  /api/brain/insights:
+    get:
+      tags:
+      - brain
+      summary: /insights
+      responses:
+        '200':
+          description: OK
+  /api/broker/test-connection:
+    post:
+      tags:
+      - broker
+      summary: /test-connection
+      responses:
+        '200':
+          description: OK
+  /api/broker/status:
+    get:
+      tags:
+      - broker
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/calendar/upcoming:
+    get:
+      tags:
+      - calendar
+      summary: /upcoming
+      responses:
+        '200':
+          description: OK
+  /api/calendar/today:
+    get:
+      tags:
+      - calendar
+      summary: /today
+      responses:
+        '200':
+          description: OK
+  /api/calendar/high-impact:
+    get:
+      tags:
+      - calendar
+      summary: /high-impact
+      responses:
+        '200':
+          description: OK
+  /api/calendar/auto-pause:
+    post:
+      tags:
+      - calendar
+      summary: /auto-pause
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - calendar
+      summary: /auto-pause
+      responses:
+        '200':
+          description: OK
+  /api/calendar/fomc:
+    get:
+      tags:
+      - calendar
+      summary: /fomc
+      responses:
+        '200':
+          description: OK
+  /api/calendar/fomc/regime:
+    post:
+      tags:
+      - calendar
+      summary: /fomc/regime
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - calendar
+      summary: /fomc/regime
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - calendar
+      summary: /fomc/regime
+      responses:
+        '200':
+          description: OK
+  /api/chaos/run:
+    post:
+      tags:
+      - chaos
+      summary: /run
+      responses:
+        '200':
+          description: OK
+  /api/chaos/scenario/{scenario_name}:
+    post:
+      tags:
+      - chaos
+      summary: /scenario/{scenario_name}
+      responses:
+        '200':
+          description: OK
+  /api/chaos/results:
+    get:
+      tags:
+      - chaos
+      summary: /results
+      responses:
+        '200':
+          description: OK
+  /api/chaos/mutation/run:
+    post:
+      tags:
+      - chaos
+      summary: /mutation/run
+      responses:
+        '200':
+          description: OK
+  /api/chaos/mutation/results:
+    get:
+      tags:
+      - chaos
+      summary: /mutation/results
+      responses:
+        '200':
+          description: OK
+  /api/chaos/status:
+    get:
+      tags:
+      - chaos
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/chat/history:
+    delete:
+      tags:
+      - chat
+      summary: /history
+      responses:
+        '200':
+          description: OK
+  /api/chat/status:
+    get:
+      tags:
+      - chat
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/rooms:
+    get:
+      tags:
+      - community-chat
+      summary: /rooms
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - community-chat
+      summary: /rooms
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/rooms/{room_id}:
+    get:
+      tags:
+      - community-chat
+      summary: /rooms/{room_id}
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/rooms/{room_id}/messages:
+    get:
+      tags:
+      - community-chat
+      summary: /rooms/{room_id}/messages
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - community-chat
+      summary: /rooms/{room_id}/messages
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/rooms/{room_id}/messages/{msg_id}:
+    delete:
+      tags:
+      - community-chat
+      summary: /rooms/{room_id}/messages/{msg_id}
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/rooms/{room_id}/messages/{msg_id}/reactions:
+    post:
+      tags:
+      - community-chat
+      summary: /rooms/{room_id}/messages/{msg_id}/reactions
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/rooms/{room_id}/messages/{msg_id}/reactions/{emoji}:
+    delete:
+      tags:
+      - community-chat
+      summary: /rooms/{room_id}/messages/{msg_id}/reactions/{emoji}
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/rooms/{room_id}/read:
+    post:
+      tags:
+      - community-chat
+      summary: /rooms/{room_id}/read
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/dm/{target_user_id}:
+    get:
+      tags:
+      - community-chat
+      summary: /dm/{target_user_id}
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - community-chat
+      summary: /dm/{target_user_id}
+      responses:
+        '200':
+          description: OK
+  /api/community-chat/online:
+    get:
+      tags:
+      - community-chat
+      summary: /online
+      responses:
+        '200':
+          description: OK
+  /api/copy-trading/my-copies:
+    get:
+      tags:
+      - copy-trading
+      summary: /my-copies
+      responses:
+        '200':
+          description: OK
+  /api/copy-trading/copies/{copy_id}/pause:
+    post:
+      tags:
+      - copy-trading
+      summary: /copies/{copy_id}/pause
+      responses:
+        '200':
+          description: OK
+  /api/copy-trading/copies/{copy_id}/resume:
+    post:
+      tags:
+      - copy-trading
+      summary: /copies/{copy_id}/resume
+      responses:
+        '200':
+          description: OK
+  /api/copy-trading/copies/{copy_id}/stop:
+    post:
+      tags:
+      - copy-trading
+      summary: /copies/{copy_id}/stop
+      responses:
+        '200':
+          description: OK
+  /api/copy-trading/copies/{copy_id}/risk:
+    patch:
+      tags:
+      - copy-trading
+      summary: /copies/{copy_id}/risk
+      responses:
+        '200':
+          description: OK
+  /api/copy-trading/copies/{copy_id}/performance:
+    get:
+      tags:
+      - copy-trading
+      summary: /copies/{copy_id}/performance
+      responses:
+        '200':
+          description: OK
+  /api/copy-trading/masters:
+    get:
+      tags:
+      - copy-trading
+      summary: /masters
+      responses:
+        '200':
+          description: OK
+  /api/custom-indicators:
+    get:
+      tags:
+      - custom-indicators
+      summary: ''
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - custom-indicators
+      summary: ''
+      responses:
+        '200':
+          description: OK
+  /api/custom-indicators/builtin:
+    get:
+      tags:
+      - custom-indicators
+      summary: /builtin
+      responses:
+        '200':
+          description: OK
+  /api/custom-indicators/calculate:
+    post:
+      tags:
+      - custom-indicators
+      summary: /calculate
+      responses:
+        '200':
+          description: OK
+  /api/custom-indicators/preview:
+    post:
+      tags:
+      - custom-indicators
+      summary: /preview
+      responses:
+        '200':
+          description: OK
+  /api/custom-indicators/{indicator_id}:
+    get:
+      tags:
+      - custom-indicators
+      summary: /{indicator_id}
+      responses:
+        '200':
+          description: OK
+    put:
+      tags:
+      - custom-indicators
+      summary: /{indicator_id}
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - custom-indicators
+      summary: /{indicator_id}
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - custom-indicators
+      summary: /{indicator_id}
+      responses:
+        '200':
+          description: OK
+  /api/custom-indicators/{indicator_id}/apply:
+    post:
+      tags:
+      - custom-indicators
+      summary: /{indicator_id}/apply
+      responses:
+        '200':
+          description: OK
+  /api/custom-indicators/{indicator_id}/test:
+    post:
+      tags:
+      - custom-indicators
+      summary: /{indicator_id}/test
+      responses:
+        '200':
+          description: OK
+  /api/custom-indicators/{indicator_id}/deploy:
+    post:
+      tags:
+      - custom-indicators
+      summary: /{indicator_id}/deploy
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/health:
+    get:
+      tags:
+      - data-layer
+      summary: /health
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/tick:
+    get:
+      tags:
+      - data-layer
+      summary: /tick
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/sentiment:
+    get:
+      tags:
+      - data-layer
+      summary: /sentiment
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/macro:
+    get:
+      tags:
+      - data-layer
+      summary: /macro
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/microstructure:
+    get:
+      tags:
+      - data-layer
+      summary: /microstructure
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/quality:
+    get:
+      tags:
+      - data-layer
+      summary: /quality
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/lineage:
+    get:
+      tags:
+      - data-layer
+      summary: /lineage
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/feeds:
+    get:
+      tags:
+      - data-layer
+      summary: /feeds
+      responses:
+        '200':
+          description: OK
+  /api/data-layer/ml-features:
+    get:
+      tags:
+      - data-layer
+      summary: /ml-features
+      responses:
+        '200':
+          description: OK
+  /api/dynamic-strategies/register:
+    post:
+      tags:
+      - dynamic-strategies
+      summary: /register
+      responses:
+        '200':
+          description: OK
+  /api/dynamic-strategies/activate:
+    post:
+      tags:
+      - dynamic-strategies
+      summary: /activate
+      responses:
+        '200':
+          description: OK
+  /api/dynamic-strategies/deactivate:
+    post:
+      tags:
+      - dynamic-strategies
+      summary: /deactivate
+      responses:
+        '200':
+          description: OK
+  /api/dynamic-strategies/list:
+    get:
+      tags:
+      - dynamic-strategies
+      summary: /list
+      responses:
+        '200':
+          description: OK
+  /api/dynamic-strategies/{name}/{action_type}:
+    post:
+      tags:
+      - dynamic-strategies
+      summary: /{name}/{action_type}
+      responses:
+        '200':
+          description: OK
+  /api/dynamic-strategies/active:
+    get:
+      tags:
+      - dynamic-strategies
+      summary: /active
+      responses:
+        '200':
+          description: OK
+  /api/dynamic-strategies/versions:
+    get:
+      tags:
+      - dynamic-strategies
+      summary: /versions
+      responses:
+        '200':
+          description: OK
+  /api/dynamic-strategies/health:
+    get:
+      tags:
+      - dynamic-strategies
+      summary: /health
+      responses:
+        '200':
+          description: OK
+  /api/journal:
+    get:
+      tags:
+      - journal
+      summary: ''
+      responses:
+        '200':
+          description: OK
+  /api/journal/trades:
+    get:
+      tags:
+      - journal
+      summary: /trades
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - journal
+      summary: /trades
+      responses:
+        '200':
+          description: OK
+  /api/journal/trades/{trade_id}:
+    get:
+      tags:
+      - journal
+      summary: /trades/{trade_id}
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - journal
+      summary: /trades/{trade_id}
+      responses:
+        '200':
+          description: OK
+  /api/journal/stats:
+    get:
+      tags:
+      - journal
+      summary: /stats
+      responses:
+        '200':
+          description: OK
+  /api/journal/mistakes:
+    get:
+      tags:
+      - journal
+      summary: /mistakes
+      responses:
+        '200':
+          description: OK
+  /api/journal/tags:
+    get:
+      tags:
+      - journal
+      summary: /tags
+      responses:
+        '200':
+          description: OK
+  /api/journal/emotion-stats:
+    get:
+      tags:
+      - journal
+      summary: /emotion-stats
+      responses:
+        '200':
+          description: OK
+  /api/journal/weekly-report:
+    get:
+      tags:
+      - journal
+      summary: /weekly-report
+      responses:
+        '200':
+          description: OK
+  /api/journal/export:
+    get:
+      tags:
+      - journal
+      summary: /export
+      responses:
+        '200':
+          description: OK
+  /api/journal/trades/{trade_id}/screenshot:
+    post:
+      tags:
+      - journal
+      summary: /trades/{trade_id}/screenshot
+      responses:
+        '200':
+          description: OK
+  /api/kyc/applicants:
+    post:
+      tags:
+      - kyc
+      summary: /applicants
+      responses:
+        '200':
+          description: OK
+  /api/kyc/applicants/{applicant_id}/status:
+    get:
+      tags:
+      - kyc
+      summary: /applicants/{applicant_id}/status
+      responses:
+        '200':
+          description: OK
+  /api/kyc/status:
+    get:
+      tags:
+      - kyc
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/kyc/webhooks/sumsub:
+    post:
+      tags:
+      - kyc
+      summary: /webhooks/sumsub
+      responses:
+        '200':
+          description: OK
+  /api/kyc/webhooks/onfido:
+    post:
+      tags:
+      - kyc
+      summary: /webhooks/onfido
+      responses:
+        '200':
+          description: OK
+  /api/kyc/sanctions/screen:
+    post:
+      tags:
+      - kyc
+      summary: /sanctions/screen
+      responses:
+        '200':
+          description: OK
+  /api/macro/snapshot:
+    get:
+      tags:
+      - macro
+      summary: /snapshot
+      responses:
+        '200':
+          description: OK
+  /api/macro/refresh:
+    get:
+      tags:
+      - macro
+      summary: /refresh
+      responses:
+        '200':
+          description: OK
+  /api/macro/features:
+    get:
+      tags:
+      - macro
+      summary: /features
+      responses:
+        '200':
+          description: OK
+  /api/macro/store:
+    get:
+      tags:
+      - macro
+      summary: /store
+      responses:
+        '200':
+          description: OK
+  /api/macro/store/update:
+    post:
+      tags:
+      - macro
+      summary: /store/update
+      responses:
+        '200':
+          description: OK
+  /api/ml/accuracy:
+    get:
+      tags:
+      - ml
+      summary: /accuracy
+      responses:
+        '200':
+          description: OK
+  /api/ml/models:
+    get:
+      tags:
+      - ml
+      summary: /models
+      responses:
+        '200':
+          description: OK
+  /api/ml/predict/{symbol}:
+    post:
+      tags:
+      - ml
+      summary: /predict/{symbol}
+      responses:
+        '200':
+          description: OK
+  /api/ml/rl/train:
+    post:
+      tags:
+      - ml
+      summary: /rl/train
+      responses:
+        '200':
+          description: OK
+  /api/ml/rl/walk-forward:
+    post:
+      tags:
+      - ml
+      summary: /rl/walk-forward
+      responses:
+        '200':
+          description: OK
+  /api/ml/rl/status:
+    get:
+      tags:
+      - ml
+      summary: /rl/status
+      responses:
+        '200':
+          description: OK
+  /api/ml-ops/health:
+    get:
+      tags:
+      - ml-ops
+      summary: /health
+      responses:
+        '200':
+          description: OK
+  /api/ml-ops/drift:
+    get:
+      tags:
+      - ml-ops
+      summary: /drift
+      responses:
+        '200':
+          description: OK
+  /api/ml-ops/retrain:
+    post:
+      tags:
+      - ml-ops
+      summary: /retrain
+      responses:
+        '200':
+          description: OK
+  /api/ml-ops/shadow:
+    get:
+      tags:
+      - ml-ops
+      summary: /shadow
+      responses:
+        '200':
+          description: OK
+  /api/ml-ops/promote/{version_id}:
+    post:
+      tags:
+      - ml-ops
+      summary: /promote/{version_id}
+      responses:
+        '200':
+          description: OK
+  /api/ml-ops/retrain/history:
+    get:
+      tags:
+      - ml-ops
+      summary: /retrain/history
+      responses:
+        '200':
+          description: OK
+  /api/ml-ops/models/{version_id}/metrics:
+    get:
+      tags:
+      - ml-ops
+      summary: /models/{version_id}/metrics
+      responses:
+        '200':
+          description: OK
+  /api/mobile/register-push:
+    post:
+      tags:
+      - mobile
+      summary: /register-push
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - mobile
+      summary: /register-push
+      responses:
+        '200':
+          description: OK
+  /api/mobile/test-push:
+    post:
+      tags:
+      - mobile
+      summary: /test-push
+      responses:
+        '200':
+          description: OK
+  /api/mobile/push-status:
+    get:
+      tags:
+      - mobile
+      summary: /push-status
+      responses:
+        '200':
+          description: OK
+  /api/mobile/push-token:
+    post:
+      tags:
+      - mobile
+      summary: /push-token
+      responses:
+        '200':
+          description: OK
+  /api/mobile/notification-prefs:
+    get:
+      tags:
+      - mobile
+      summary: /notification-prefs
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - mobile
+      summary: /notification-prefs
+      responses:
+        '200':
+          description: OK
+  /api/mobile/config:
+    get:
+      tags:
+      - mobile
+      summary: /config
+      responses:
+        '200':
+          description: OK
+  /api/mobile/sessions:
+    get:
+      tags:
+      - mobile
+      summary: /sessions
+      responses:
+        '200':
+          description: OK
+  /api/mobile/sessions/{session_id}:
+    delete:
+      tags:
+      - mobile
+      summary: /sessions/{session_id}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/pricing:
+    get:
+      tags:
+      - monetization
+      summary: /pricing
+      responses:
+        '200':
+          description: OK
+  /api/monetization/pricing/{tier}:
+    get:
+      tags:
+      - monetization
+      summary: /pricing/{tier}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/subscribe:
+    post:
+      tags:
+      - monetization
+      summary: /subscribe
+      responses:
+        '200':
+          description: OK
+  /api/monetization/subscription/{user_id}/limits:
+    get:
+      tags:
+      - monetization
+      summary: /subscription/{user_id}/limits
+      responses:
+        '200':
+          description: OK
+  /api/monetization/subscription/{user_id}:
+    get:
+      tags:
+      - monetization
+      summary: /subscription/{user_id}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/subscription/{subscription_id}/cancel:
+    post:
+      tags:
+      - monetization
+      summary: /subscription/{subscription_id}/cancel
+      responses:
+        '200':
+          description: OK
+  /api/monetization/license/validate:
+    post:
+      tags:
+      - monetization
+      summary: /license/validate
+      responses:
+        '200':
+          description: OK
+  /api/monetization/activate-code:
+    post:
+      tags:
+      - monetization
+      summary: /activate-code
+      responses:
+        '200':
+          description: OK
+  /api/monetization/validate-code/{code}:
+    get:
+      tags:
+      - monetization
+      summary: /validate-code/{code}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/affiliate/signup:
+    post:
+      tags:
+      - monetization
+      summary: /affiliate/signup
+      responses:
+        '200':
+          description: OK
+  /api/monetization/affiliate/leaderboard:
+    get:
+      tags:
+      - monetization
+      summary: /affiliate/leaderboard
+      responses:
+        '200':
+          description: OK
+  /api/monetization/affiliate/{affiliate_id}/referrals:
+    get:
+      tags:
+      - monetization
+      summary: /affiliate/{affiliate_id}/referrals
+      responses:
+        '200':
+          description: OK
+  /api/monetization/affiliate/{user_id}:
+    get:
+      tags:
+      - monetization
+      summary: /affiliate/{user_id}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/affiliate/referral:
+    post:
+      tags:
+      - monetization
+      summary: /affiliate/referral
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/list:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/list
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/strategies:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/strategies
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/strategies/{strategy_id}:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/strategies/{strategy_id}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/purchase:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/purchase
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/review:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/review
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/strategies/{strategy_id}/reviews:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/strategies/{strategy_id}/reviews
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/strategies/{strategy_id}/reviews
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/featured:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/featured
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/stats:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/stats
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/subscriptions:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/subscriptions
+      responses:
+        '200':
+          description: OK
+  /api/monetization/analytics/dashboard:
+    get:
+      tags:
+      - monetization
+      summary: /analytics/dashboard
+      responses:
+        '200':
+          description: OK
+  /api/monetization/analytics/report:
+    get:
+      tags:
+      - monetization
+      summary: /analytics/report
+      responses:
+        '200':
+          description: OK
+  /api/monetization/analytics/revenue:
+    get:
+      tags:
+      - monetization
+      summary: /analytics/revenue
+      responses:
+        '200':
+          description: OK
+  /api/monetization/analytics/growth:
+    get:
+      tags:
+      - monetization
+      summary: /analytics/growth
+      responses:
+        '200':
+          description: OK
+  /api/monetization/partner/signup:
+    post:
+      tags:
+      - monetization
+      summary: /partner/signup
+      responses:
+        '200':
+          description: OK
+  /api/monetization/partner/{partner_id}:
+    get:
+      tags:
+      - monetization
+      summary: /partner/{partner_id}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/white-label/create:
+    post:
+      tags:
+      - monetization
+      summary: /white-label/create
+      responses:
+        '200':
+          description: OK
+  /api/monetization/enterprise/stats:
+    get:
+      tags:
+      - monetization
+      summary: /enterprise/stats
+      responses:
+        '200':
+          description: OK
+  /api/monetization/webhook/stripe:
+    post:
+      tags:
+      - monetization
+      summary: /webhook/stripe
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/submit:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/submit
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/submissions/pending:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/submissions/pending
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/submissions/creator/{creator_id}:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/submissions/creator/{creator_id}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/submissions/{submission_id}:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/submissions/{submission_id}
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/submissions/{submission_id}/approve:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/submissions/{submission_id}/approve
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/submissions/{submission_id}/reject:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/submissions/{submission_id}/reject
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/sales:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/sales
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/creators/{creator_id}/balance:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/creators/{creator_id}/balance
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/creators/{creator_id}/transactions:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/creators/{creator_id}/transactions
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/creators/{creator_id}/payouts:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/creators/{creator_id}/payouts
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/creators/stripe-account:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/creators/stripe-account
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/payouts/process:
+    post:
+      tags:
+      - monetization
+      summary: /marketplace/payouts/process
+      responses:
+        '200':
+          description: OK
+  /api/monetization/marketplace/platform/revenue:
+    get:
+      tags:
+      - monetization
+      summary: /marketplace/platform/revenue
+      responses:
+        '200':
+          description: OK
+  /api/monetization/affiliate/{affiliate_id}/commissions:
+    get:
+      tags:
+      - monetization
+      summary: /affiliate/{affiliate_id}/commissions
+      responses:
+        '200':
+          description: OK
+  /api/monetization/affiliate/{affiliate_id}/withdraw:
+    post:
+      tags:
+      - monetization
+      summary: /affiliate/{affiliate_id}/withdraw
+      responses:
+        '200':
+          description: OK
+  /api/monetization/affiliate/{affiliate_id}/payment-method:
+    patch:
+      tags:
+      - monetization
+      summary: /affiliate/{affiliate_id}/payment-method
+      responses:
+        '200':
+          description: OK
+  /api/news-feed/feed:
+    get:
+      tags:
+      - news-feed
+      summary: /feed
+      responses:
+        '200':
+          description: OK
+  /api/news-feed/nuclear-score:
+    get:
+      tags:
+      - news-feed
+      summary: /nuclear-score
+      responses:
+        '200':
+          description: OK
+  /api/news-feed/calendar:
+    get:
+      tags:
+      - news-feed
+      summary: /calendar
+      responses:
+        '200':
+          description: OK
+  /api/nocode/templates:
+    get:
+      tags:
+      - nocode
+      summary: /templates
+      responses:
+        '200':
+          description: OK
+  /api/nocode/deploy:
+    post:
+      tags:
+      - nocode
+      summary: /deploy
+      responses:
+        '200':
+          description: OK
+  /api/nocode/validate:
+    post:
+      tags:
+      - nocode
+      summary: /validate
+      responses:
+        '200':
+          description: OK
+  /api/nocode/node-types:
+    get:
+      tags:
+      - nocode
+      summary: /node-types
+      responses:
+        '200':
+          description: OK
+  /api/notifications:
+    get:
+      tags:
+      - notifications
+      summary: ''
+      responses:
+        '200':
+          description: OK
+  /api/notifications/:
+    get:
+      tags:
+      - notifications
+      summary: /
+      responses:
+        '200':
+          description: OK
+  /api/notifications/unread-count:
+    get:
+      tags:
+      - notifications
+      summary: /unread-count
+      responses:
+        '200':
+          description: OK
+  /api/notifications/{notif_id}/read:
+    patch:
+      tags:
+      - notifications
+      summary: /{notif_id}/read
+      responses:
+        '200':
+          description: OK
+  /api/notifications/mark-all-read:
+    post:
+      tags:
+      - notifications
+      summary: /mark-all-read
+      responses:
+        '200':
+          description: OK
+  /api/notifications/{notif_id}:
+    delete:
+      tags:
+      - notifications
+      summary: /{notif_id}
+      responses:
+        '200':
+          description: OK
+  /api/notifications/preferences:
+    get:
+      tags:
+      - notifications
+      summary: /preferences
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - notifications
+      summary: /preferences
+      responses:
+        '200':
+          description: OK
+  /api/notifications/subscribe:
+    post:
+      tags:
+      - notifications
+      summary: /subscribe
+      responses:
+        '200':
+          description: OK
+  /api/notifications/test:
+    post:
+      tags:
+      - notifications
+      summary: /test
+      responses:
+        '200':
+          description: OK
+  /api/observability/traces:
+    get:
+      tags:
+      - observability
+      summary: /traces
+      responses:
+        '200':
+          description: OK
+  /api/observability/metrics:
+    get:
+      tags:
+      - observability
+      summary: /metrics
+      responses:
+        '200':
+          description: OK
+  /api/observability/alerts:
+    get:
+      tags:
+      - observability
+      summary: /alerts
+      responses:
+        '200':
+          description: OK
+  /api/observability/services:
+    get:
+      tags:
+      - observability
+      summary: /services
+      responses:
+        '200':
+          description: OK
+  /api/observability/latency-histogram:
+    get:
+      tags:
+      - observability
+      summary: /latency-histogram
+      responses:
+        '200':
+          description: OK
+  /api/pages/auth.js:
+    get:
+      tags:
+      - pages
+      summary: /auth.js
+      responses:
+        '200':
+          description: OK
+  /api/pages/login:
+    get:
+      tags:
+      - pages
+      summary: /login
+      responses:
+        '200':
+          description: OK
+  /api/pages/register:
+    get:
+      tags:
+      - pages
+      summary: /register
+      responses:
+        '200':
+          description: OK
+  /api/pages/forgot-password:
+    get:
+      tags:
+      - pages
+      summary: /forgot-password
+      responses:
+        '200':
+          description: OK
+  /api/pages/reset-password:
+    get:
+      tags:
+      - pages
+      summary: /reset-password
+      responses:
+        '200':
+          description: OK
+  /api/pages/security:
+    get:
+      tags:
+      - pages
+      summary: /security
+      responses:
+        '200':
+          description: OK
+  /api/pages/marketplace:
+    get:
+      tags:
+      - pages
+      summary: /marketplace
+      responses:
+        '200':
+          description: OK
+  /api/pages/affiliate:
+    get:
+      tags:
+      - pages
+      summary: /affiliate
+      responses:
+        '200':
+          description: OK
+  /api/pages/about:
+    get:
+      tags:
+      - pages
+      summary: /about
+      responses:
+        '200':
+          description: OK
+  /api/pages/privacy:
+    get:
+      tags:
+      - pages
+      summary: /privacy
+      responses:
+        '200':
+          description: OK
+  /api/pages/terms:
+    get:
+      tags:
+      - pages
+      summary: /terms
+      responses:
+        '200':
+          description: OK
+  /api/pages/docs/FAQ.md:
+    get:
+      tags:
+      - pages
+      summary: /docs/FAQ.md
+      responses:
+        '200':
+          description: OK
+  /api/pages/docs/API.md:
+    get:
+      tags:
+      - pages
+      summary: /docs/API.md
+      responses:
+        '200':
+          description: OK
+  /api/pages/docs/MOBILE_GUIDE.md:
+    get:
+      tags:
+      - pages
+      summary: /docs/MOBILE_GUIDE.md
+      responses:
+        '200':
+          description: OK
+  /api/payments/crypto/address:
+    post:
+      tags:
+      - payments
+      summary: /crypto/address
+      responses:
+        '200':
+          description: OK
+  /api/payments/crypto/status/{payment_id}:
+    get:
+      tags:
+      - payments
+      summary: /crypto/status/{payment_id}
+      responses:
+        '200':
+          description: OK
+  /api/payments/crypto/rates:
+    get:
+      tags:
+      - payments
+      summary: /crypto/rates
+      responses:
+        '200':
+          description: OK
+  /api/payments/webhook:
+    post:
+      tags:
+      - payments
+      summary: /webhook
+      responses:
+        '200':
+          description: OK
+  /api/performance/summary:
+    get:
+      tags:
+      - performance
+      summary: /summary
+      responses:
+        '200':
+          description: OK
+  /api/performance/weekly-reports:
+    get:
+      tags:
+      - performance
+      summary: /weekly-reports
+      responses:
+        '200':
+          description: OK
+  /api/performance/trade-breakdown:
+    get:
+      tags:
+      - performance
+      summary: /trade-breakdown
+      responses:
+        '200':
+          description: OK
+  /api/performance/attribution:
+    get:
+      tags:
+      - performance
+      summary: /attribution
+      responses:
+        '200':
+          description: OK
+  /api/performance/metrics:
+    get:
+      tags:
+      - performance
+      summary: /metrics
+      responses:
+        '200':
+          description: OK
+  /api/performance/export:
+    get:
+      tags:
+      - performance
+      summary: /export
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/auth/sessions:
+    get:
+      tags:
+      - platform
+      summary: /api/auth/sessions
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - platform
+      summary: /api/auth/sessions
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/auth/sessions/{session_id}:
+    delete:
+      tags:
+      - platform
+      summary: /api/auth/sessions/{session_id}
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/users:
+    get:
+      tags:
+      - platform
+      summary: /api/admin/users
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/users/{user_id}/ban:
+    post:
+      tags:
+      - platform
+      summary: /api/admin/users/{user_id}/ban
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/users/{user_id}/unban:
+    post:
+      tags:
+      - platform
+      summary: /api/admin/users/{user_id}/unban
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/users/{user_id}/reset-password:
+    post:
+      tags:
+      - platform
+      summary: /api/admin/users/{user_id}/reset-password
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/users/{user_id}/trades:
+    get:
+      tags:
+      - platform
+      summary: /api/admin/users/{user_id}/trades
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/users/{user_id}/impersonate:
+    post:
+      tags:
+      - platform
+      summary: /api/admin/users/{user_id}/impersonate
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/audit-log:
+    get:
+      tags:
+      - platform
+      summary: /api/admin/audit-log
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/audit-log/export:
+    get:
+      tags:
+      - platform
+      summary: /api/admin/audit-log/export
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/feature-flags:
+    get:
+      tags:
+      - platform
+      summary: /api/admin/feature-flags
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/feature-flags/{flag_name}/enable:
+    post:
+      tags:
+      - platform
+      summary: /api/admin/feature-flags/{flag_name}/enable
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/feature-flags/{flag_name}/disable:
+    post:
+      tags:
+      - platform
+      summary: /api/admin/feature-flags/{flag_name}/disable
+      responses:
+        '200':
+          description: OK
+  /api/platform/api/admin/feature-flags/{flag_name}/override:
+    post:
+      tags:
+      - platform
+      summary: /api/admin/feature-flags/{flag_name}/override
+      responses:
+        '200':
+          description: OK
+  /api/pnl-dashboard/history:
+    get:
+      tags:
+      - pnl-dashboard
+      summary: /history
+      responses:
+        '200':
+          description: OK
+  /api/pnl-dashboard/export:
+    get:
+      tags:
+      - pnl-dashboard
+      summary: /export
+      responses:
+        '200':
+          description: OK
+  /api/pricing/plans:
+    get:
+      tags:
+      - pricing
+      summary: /plans
+      responses:
+        '200':
+          description: OK
+  /api/pricing/compare:
+    get:
+      tags:
+      - pricing
+      summary: /compare
+      responses:
+        '200':
+          description: OK
+  /api/pricing/upgrade-path:
+    get:
+      tags:
+      - pricing
+      summary: /upgrade-path
+      responses:
+        '200':
+          description: OK
+  /api/pricing/faq:
+    get:
+      tags:
+      - pricing
+      summary: /faq
+      responses:
+        '200':
+          description: OK
+  /api/pricing/estimate:
+    post:
+      tags:
+      - pricing
+      summary: /estimate
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/configuration:
+    get:
+      tags:
+      - professional-control-plane
+      summary: /configuration
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/readiness:
+    get:
+      tags:
+      - professional-control-plane
+      summary: /readiness
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/audit:
+    get:
+      tags:
+      - professional-control-plane
+      summary: /audit
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/versions:
+    get:
+      tags:
+      - professional-control-plane
+      summary: /versions
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/configuration/apply:
+    post:
+      tags:
+      - professional-control-plane
+      summary: /configuration/apply
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/readiness/reprobe:
+    post:
+      tags:
+      - professional-control-plane
+      summary: /readiness/reprobe
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/sandbox/test:
+    post:
+      tags:
+      - professional-control-plane
+      summary: /sandbox/test
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/startup/restart:
+    post:
+      tags:
+      - professional-control-plane
+      summary: /startup/restart
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/{domain}:
+    get:
+      tags:
+      - professional-control-plane
+      summary: /{domain}
+      responses:
+        '200':
+          description: OK
+  /api/professional-control-plane/{domain}/health:
+    post:
+      tags:
+      - professional-control-plane
+      summary: /{domain}/health
+      responses:
+        '200':
+          description: OK
+  /api/profiles:
+    get:
+      tags:
+      - profiles
+      summary: ''
+      responses:
+        '200':
+          description: OK
+  /api/profiles/me:
+    get:
+      tags:
+      - profiles
+      summary: /me
+      responses:
+        '200':
+          description: OK
+    put:
+      tags:
+      - profiles
+      summary: /me
+      responses:
+        '200':
+          description: OK
+  /api/profiles/{trader_id}:
+    get:
+      tags:
+      - profiles
+      summary: /{trader_id}
+      responses:
+        '200':
+          description: OK
+  /api/profiles/{trader_id}/signals:
+    get:
+      tags:
+      - profiles
+      summary: /{trader_id}/signals
+      responses:
+        '200':
+          description: OK
+  /api/profiles/{trader_id}/follow:
+    post:
+      tags:
+      - profiles
+      summary: /{trader_id}/follow
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - profiles
+      summary: /{trader_id}/follow
+      responses:
+        '200':
+          description: OK
+  /api/profiles/{trader_id}/followers:
+    get:
+      tags:
+      - profiles
+      summary: /{trader_id}/followers
+      responses:
+        '200':
+          description: OK
+  /api/profiles/{trader_id}/following:
+    get:
+      tags:
+      - profiles
+      summary: /{trader_id}/following
+      responses:
+        '200':
+          description: OK
+  /api/profiles/{trader_id}/strategies:
+    get:
+      tags:
+      - profiles
+      summary: /{trader_id}/strategies
+      responses:
+        '200':
+          description: OK
+  /api/profiles/{trader_id}/stats:
+    get:
+      tags:
+      - profiles
+      summary: /{trader_id}/stats
+      responses:
+        '200':
+          description: OK
+  /api/profiles/me/avatar:
+    post:
+      tags:
+      - profiles
+      summary: /me/avatar
+      responses:
+        '200':
+          description: OK
+  /api/profiles/avatar/{name}:
+    get:
+      tags:
+      - profiles
+      summary: /avatar/{name}
+      responses:
+        '200':
+          description: OK
+  /api/prop-firm/prop-firm/history:
+    get:
+      tags:
+      - prop-firm
+      summary: /prop-firm/history
+      responses:
+        '200':
+          description: OK
+  /api/prop-firm/prop-firm/challenges:
+    get:
+      tags:
+      - prop-firm
+      summary: /prop-firm/challenges
+      responses:
+        '200':
+          description: OK
+  /api/prop-firm/prop-firm/daily-stats:
+    get:
+      tags:
+      - prop-firm
+      summary: /prop-firm/daily-stats
+      responses:
+        '200':
+          description: OK
+  /api/prop-firm/prop-firm/breach-alerts:
+    get:
+      tags:
+      - prop-firm
+      summary: /prop-firm/breach-alerts
+      responses:
+        '200':
+          description: OK
+  /api/prop-firm/prop-firm/accounts:
+    get:
+      tags:
+      - prop-firm
+      summary: /prop-firm/accounts
+      responses:
+        '200':
+          description: OK
+  /api/risk-calculator/live-price/{symbol}:
+    get:
+      tags:
+      - risk-calculator
+      summary: /live-price/{symbol}
+      responses:
+        '200':
+          description: OK
+  /api/risk-calculator/calculator/history:
+    get:
+      tags:
+      - risk-calculator
+      summary: /calculator/history
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - risk-calculator
+      summary: /calculator/history
+      responses:
+        '200':
+          description: OK
+  /api/risk-calculator/calculator/history/{calc_id}:
+    delete:
+      tags:
+      - risk-calculator
+      summary: /calculator/history/{calc_id}
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/generate:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /generate
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/generate/jobs:
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /generate/jobs
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/generate/{job_id}/cancel:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /generate/{job_id}/cancel
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/vision/interpret:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /vision/interpret
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/evals/run:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /evals/run
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/overview:
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /overview
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/models/route:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /models/route
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/models/routes:
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /models/routes
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/supervisor/tasks:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /supervisor/tasks
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /supervisor/tasks
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/supervisor/tasks/{task_id}/cancel:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /supervisor/tasks/{task_id}/cancel
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/models/health:
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /models/health
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/supervisor/tasks/plan:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /supervisor/tasks/plan
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/supervisor/tasks/{task_id}/approve:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /supervisor/tasks/{task_id}/approve
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/supervisor/tasks/delegate:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /supervisor/tasks/delegate
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/research/request:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /research/request
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/supervisor/tasks/execute:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /supervisor/tasks/execute
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/diagnostics/run:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /diagnostics/run
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/diagnostics/runs/{run_id}:
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /diagnostics/runs/{run_id}
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/diagnostics/graph:
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /diagnostics/graph
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/proposals:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /proposals
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /proposals
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/upgrades/propose:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /upgrades/propose
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/approvals:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /approvals
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/proposals/{proposal_id}/checkpoint:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /proposals/{proposal_id}/checkpoint
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/proposals/validate:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /proposals/validate
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/proposals/execute:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /proposals/execute
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/proposals/{proposal_id}/rollback:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /proposals/{proposal_id}/rollback
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/integrations:
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /integrations
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/integrations/action:
+    post:
+      tags:
+      - safe-agent-platform
+      summary: /integrations/action
+      responses:
+        '200':
+          description: OK
+  /api/safe-agent-platform/chat/capabilities:
+    get:
+      tags:
+      - safe-agent-platform
+      summary: /chat/capabilities
+      responses:
+        '200':
+          description: OK
+  /api/schemas/trades:
+    get:
+      tags:
+      - schemas
+      summary: /trades
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/attacks:
+    get:
+      tags:
+      - security-dashboard
+      summary: /attacks
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/alerts:
+    get:
+      tags:
+      - security-dashboard
+      summary: /alerts
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/lockdown:
+    get:
+      tags:
+      - security-dashboard
+      summary: /lockdown
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - security-dashboard
+      summary: /lockdown
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/blocked-ips:
+    get:
+      tags:
+      - security-dashboard
+      summary: /blocked-ips
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/heal/status:
+    get:
+      tags:
+      - security-dashboard
+      summary: /heal/status
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/heal/drift:
+    get:
+      tags:
+      - security-dashboard
+      summary: /heal/drift
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/heal/patches:
+    get:
+      tags:
+      - security-dashboard
+      summary: /heal/patches
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/av/status:
+    get:
+      tags:
+      - security-dashboard
+      summary: /av/status
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/av/threats:
+    get:
+      tags:
+      - security-dashboard
+      summary: /av/threats
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/av/scan:
+    post:
+      tags:
+      - security-dashboard
+      summary: /av/scan
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/status:
+    get:
+      tags:
+      - security-dashboard
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/unblock-ip:
+    post:
+      tags:
+      - security-dashboard
+      summary: /unblock-ip
+      responses:
+        '200':
+          description: OK
+  /api/security-dashboard/block-ip:
+    post:
+      tags:
+      - security-dashboard
+      summary: /block-ip
+      responses:
+        '200':
+          description: OK
+  /api/settings/api/settings/notifications:
+    post:
+      tags:
+      - settings
+      summary: /api/settings/notifications
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - settings
+      summary: /api/settings/notifications
+      responses:
+        '200':
+          description: OK
+  /api/settings/api/notifications/test:
+    post:
+      tags:
+      - settings
+      summary: /api/notifications/test
+      responses:
+        '200':
+          description: OK
+  /api/settings-extended/api/settings/preferences:
+    get:
+      tags:
+      - settings-extended
+      summary: /api/settings/preferences
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - settings-extended
+      summary: /api/settings/preferences
+      responses:
+        '200':
+          description: OK
+  /api/settings-extended/api/settings/appearance:
+    get:
+      tags:
+      - settings-extended
+      summary: /api/settings/appearance
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - settings-extended
+      summary: /api/settings/appearance
+      responses:
+        '200':
+          description: OK
+  /api/settings-extended/api/settings/trading:
+    get:
+      tags:
+      - settings-extended
+      summary: /api/settings/trading
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - settings-extended
+      summary: /api/settings/trading
+      responses:
+        '200':
+          description: OK
+  /api/settings-extended/api/settings/broker:
+    get:
+      tags:
+      - settings-extended
+      summary: /api/settings/broker
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - settings-extended
+      summary: /api/settings/broker
+      responses:
+        '200':
+          description: OK
+  /api/settings-extended/api/auth/change-password:
+    post:
+      tags:
+      - settings-extended
+      summary: /api/auth/change-password
+      responses:
+        '200':
+          description: OK
+  /api/settings-extended/api/auth/account:
+    delete:
+      tags:
+      - settings-extended
+      summary: /api/auth/account
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/settings/integrations:
+    get:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/integrations
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/integrations
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/settings/integrations/test-webhook:
+    post:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/integrations/test-webhook
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/settings/privacy:
+    get:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/privacy
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/privacy
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/settings/privacy/export:
+    get:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/privacy/export
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/settings/accessibility:
+    get:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/accessibility
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/accessibility
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/settings/api-keys:
+    get:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/api-keys
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/api-keys
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/settings/api-keys/{key_id}:
+    delete:
+      tags:
+      - settings-new-endpoints
+      summary: /api/settings/api-keys/{key_id}
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/admin/backup/trigger:
+    post:
+      tags:
+      - settings-new-endpoints
+      summary: /api/admin/backup/trigger
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/admin/kill-switch/global:
+    post:
+      tags:
+      - settings-new-endpoints
+      summary: /api/admin/kill-switch/global
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/admin/settings/test-smtp:
+    post:
+      tags:
+      - settings-new-endpoints
+      summary: /api/admin/settings/test-smtp
+      responses:
+        '200':
+          description: OK
+  /api/settings-new-endpoints/api/admin/settings/performance:
+    get:
+      tags:
+      - settings-new-endpoints
+      summary: /api/admin/settings/performance
+      responses:
+        '200':
+          description: OK
+  /api/signals/summary:
+    get:
+      tags:
+      - signals
+      summary: /summary
+      responses:
+        '200':
+          description: OK
+  /api/signals/latest:
+    get:
+      tags:
+      - signals
+      summary: /latest
+      responses:
+        '200':
+          description: OK
+  /api/signals/active:
+    get:
+      tags:
+      - signals
+      summary: /active
+      responses:
+        '200':
+          description: OK
+  /api/signals/history:
+    get:
+      tags:
+      - signals
+      summary: /history
+      responses:
+        '200':
+          description: OK
+  /api/signals/analytics:
+    get:
+      tags:
+      - signals
+      summary: /analytics
+      responses:
+        '200':
+          description: OK
+  /api/signals/channels:
+    get:
+      tags:
+      - signals
+      summary: /channels
+      responses:
+        '200':
+          description: OK
+  /api/signals/engine:
+    get:
+      tags:
+      - signals
+      summary: /engine
+      responses:
+        '200':
+          description: OK
+  /api/signals/generate:
+    post:
+      tags:
+      - signals
+      summary: /generate
+      responses:
+        '200':
+          description: OK
+  /api/signals/alerts:
+    post:
+      tags:
+      - signals
+      summary: /alerts
+      responses:
+        '200':
+          description: OK
+    get:
+      tags:
+      - signals
+      summary: /alerts
+      responses:
+        '200':
+          description: OK
+  /api/signals/alerts/{alert_id}:
+    delete:
+      tags:
+      - signals
+      summary: /alerts/{alert_id}
+      responses:
+        '200':
+          description: OK
+  /api/signals/distribution/oos-reference:
+    post:
+      tags:
+      - signals
+      summary: /distribution/oos-reference
+      responses:
+        '200':
+          description: OK
+  /api/signals/distribution/validate:
+    post:
+      tags:
+      - signals
+      summary: /distribution/validate
+      responses:
+        '200':
+          description: OK
+  /api/signals/distribution/add-live:
+    post:
+      tags:
+      - signals
+      summary: /distribution/add-live
+      responses:
+        '200':
+          description: OK
+  /api/signals/distribution/status:
+    get:
+      tags:
+      - signals
+      summary: /distribution/status
+      responses:
+        '200':
+          description: OK
+  /api/signals/sentiment:
+    get:
+      tags:
+      - signals
+      summary: /sentiment
+      responses:
+        '200':
+          description: OK
+  /api/signals/news:
+    get:
+      tags:
+      - signals
+      summary: /news
+      responses:
+        '200':
+          description: OK
+  /api/social-feed:
+    get:
+      tags:
+      - social-feed
+      summary: ''
+      responses:
+        '200':
+          description: OK
+  /api/social-feed/{signal_id}/react:
+    post:
+      tags:
+      - social-feed
+      summary: /{signal_id}/react
+      responses:
+        '200':
+          description: OK
+  /api/social-feed/{signal_id}/comment:
+    post:
+      tags:
+      - social-feed
+      summary: /{signal_id}/comment
+      responses:
+        '200':
+          description: OK
+  /api/social-feed/{signal_id}/comments:
+    get:
+      tags:
+      - social-feed
+      summary: /{signal_id}/comments
+      responses:
+        '200':
+          description: OK
+  /api/social-feed/opt-in:
+    post:
+      tags:
+      - social-feed
+      summary: /opt-in
+      responses:
+        '200':
+          description: OK
+  /api/social-feed/opt-out:
+    post:
+      tags:
+      - social-feed
+      summary: /opt-out
+      responses:
+        '200':
+          description: OK
+  /api/social-feed/status/me:
+    get:
+      tags:
+      - social-feed
+      summary: /status/me
+      responses:
+        '200':
+          description: OK
+  /api/social-feed/status:
+    get:
+      tags:
+      - social-feed
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/status/status:
+    get:
+      tags:
+      - status
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/tca/report:
+    get:
+      tags:
+      - tca
+      summary: /report
+      responses:
+        '200':
+          description: OK
+  /api/tca/report/{broker}:
+    get:
+      tags:
+      - tca
+      summary: /report/{broker}
+      responses:
+        '200':
+          description: OK
+  /api/tca/records:
+    get:
+      tags:
+      - tca
+      summary: /records
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - tca
+      summary: /records
+      responses:
+        '200':
+          description: OK
+  /api/tca/alerts:
+    get:
+      tags:
+      - tca
+      summary: /alerts
+      responses:
+        '200':
+          description: OK
+  /api/tca/stats:
+    get:
+      tags:
+      - tca
+      summary: /stats
+      responses:
+        '200':
+          description: OK
+  /api/trading/orders:
+    get:
+      tags:
+      - trading
+      summary: /orders
+      responses:
+        '200':
+          description: OK
+  /api/trading/history:
+    get:
+      tags:
+      - trading
+      summary: /history
+      responses:
+        '200':
+          description: OK
+  /api/trading/balance:
+    get:
+      tags:
+      - trading
+      summary: /balance
+      responses:
+        '200':
+          description: OK
+  /api/trading/positions:
+    get:
+      tags:
+      - trading
+      summary: /positions
+      responses:
+        '200':
+          description: OK
+  /api/trading/account:
+    get:
+      tags:
+      - trading
+      summary: /account
+      responses:
+        '200':
+          description: OK
+  /api/trading/signals:
+    get:
+      tags:
+      - trading
+      summary: /signals
+      responses:
+        '200':
+          description: OK
+  /api/trading/brain-state:
+    get:
+      tags:
+      - trading
+      summary: /brain-state
+      responses:
+        '200':
+          description: OK
+  /api/trading/paper/start:
+    post:
+      tags:
+      - trading
+      summary: /paper/start
+      responses:
+        '200':
+          description: OK
+  /api/trading/paper/stop:
+    post:
+      tags:
+      - trading
+      summary: /paper/stop
+      responses:
+        '200':
+          description: OK
+  /api/trading/emergency-stop:
+    post:
+      tags:
+      - trading
+      summary: /emergency-stop
+      responses:
+        '200':
+          description: OK
+  /api/trading/trades:
+    get:
+      tags:
+      - trading
+      summary: /trades
+      responses:
+        '200':
+          description: OK
+  /api/trading/trades/export:
+    get:
+      tags:
+      - trading
+      summary: /trades/export
+      responses:
+        '200':
+          description: OK
+  /api/trading/risk:
+    get:
+      tags:
+      - trading
+      summary: /risk
+      responses:
+        '200':
+          description: OK
+  /api/trading/ai-analysis:
+    post:
+      tags:
+      - trading
+      summary: /ai-analysis
+      responses:
+        '200':
+          description: OK
+  /api/trading/regime:
+    get:
+      tags:
+      - trading
+      summary: /regime
+      responses:
+        '200':
+          description: OK
+  /api/trading/regime/history:
+    get:
+      tags:
+      - trading
+      summary: /regime/history
+      responses:
+        '200':
+          description: OK
+  /api/trading/levels:
+    get:
+      tags:
+      - trading
+      summary: /levels
+      responses:
+        '200':
+          description: OK
+  /api/trading/trendlines:
+    get:
+      tags:
+      - trading
+      summary: /trendlines
+      responses:
+        '200':
+          description: OK
+  /api/trading/patterns:
+    get:
+      tags:
+      - trading
+      summary: /patterns
+      responses:
+        '200':
+          description: OK
+  /api/trading/equity-curve:
+    get:
+      tags:
+      - trading
+      summary: /equity-curve
+      responses:
+        '200':
+          description: OK
+  /api/trading/microstructure:
+    get:
+      tags:
+      - trading
+      summary: /microstructure
+      responses:
+        '200':
+          description: OK
+  /api/transparency/decisions:
+    get:
+      tags:
+      - transparency
+      summary: /decisions
+      responses:
+        '200':
+          description: OK
+  /api/transparency/explain/{trade_id}:
+    get:
+      tags:
+      - transparency
+      summary: /explain/{trade_id}
+      responses:
+        '200':
+          description: OK
+  /api/transparency/audit-log:
+    get:
+      tags:
+      - transparency
+      summary: /audit-log
+      responses:
+        '200':
+          description: OK
+  /api/transparency/stats:
+    get:
+      tags:
+      - transparency
+      summary: /stats
+      responses:
+        '200':
+          description: OK
+  /api/transparency/statement:
+    get:
+      tags:
+      - transparency
+      summary: /statement
+      responses:
+        '200':
+          description: OK
+  /api/tutorials:
+    get:
+      tags:
+      - tutorials
+      summary: ''
+      responses:
+        '200':
+          description: OK
+  /api/tutorials/{episode}:
+    get:
+      tags:
+      - tutorials
+      summary: /{episode}
+      responses:
+        '200':
+          description: OK
+  /api/two-factor/setup:
+    post:
+      tags:
+      - two-factor
+      summary: /setup
+      responses:
+        '200':
+          description: OK
+  /api/two-factor/verify:
+    post:
+      tags:
+      - two-factor
+      summary: /verify
+      responses:
+        '200':
+          description: OK
+  /api/two-factor/disable:
+    post:
+      tags:
+      - two-factor
+      summary: /disable
+      responses:
+        '200':
+          description: OK
+  /api/two-factor/backup-codes:
+    get:
+      tags:
+      - two-factor
+      summary: /backup-codes
+      responses:
+        '200':
+          description: OK
+  /api/two-factor/backup-codes/regenerate:
+    post:
+      tags:
+      - two-factor
+      summary: /backup-codes/regenerate
+      responses:
+        '200':
+          description: OK
+  /api/two-factor/status:
+    get:
+      tags:
+      - two-factor
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/voice/status:
+    get:
+      tags:
+      - voice
+      summary: /status
+      responses:
+        '200':
+          description: OK
+  /api/voice/tts:
+    post:
+      tags:
+      - voice
+      summary: /tts
+      responses:
+        '200':
+          description: OK
+  /api/voice/stt:
+    post:
+      tags:
+      - voice
+      summary: /stt
+      responses:
+        '200':
+          description: OK
+  /api/watchlist:
+    get:
+      tags:
+      - watchlist
+      summary: ''
+      responses:
+        '200':
+          description: OK
+  /api/watchlist/{symbol}:
+    post:
+      tags:
+      - watchlist
+      summary: /{symbol}
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - watchlist
+      summary: /{symbol}
+      responses:
+        '200':
+          description: OK
+  /api/watchlist/prices:
+    get:
+      tags:
+      - watchlist
+      summary: /prices
+      responses:
+        '200':
+          description: OK
+  /api/watchlist/order:
+    patch:
+      tags:
+      - watchlist
+      summary: /order
+      responses:
+        '200':
+          description: OK
+    put:
+      tags:
+      - watchlist
+      summary: /order
+      responses:
+        '200':
+          description: OK
+  /api/whitelabel-admin/tenants:
+    get:
+      tags:
+      - whitelabel-admin
+      summary: /tenants
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - whitelabel-admin
+      summary: /tenants
+      responses:
+        '200':
+          description: OK
+  /api/whitelabel-admin/tenants/{tenant_id}:
+    get:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}
+      responses:
+        '200':
+          description: OK
+    patch:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}
+      responses:
+        '200':
+          description: OK
+  /api/whitelabel-admin/tenants/{tenant_id}/activate:
+    post:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}/activate
+      responses:
+        '200':
+          description: OK
+  /api/whitelabel-admin/tenants/{tenant_id}/suspend:
+    post:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}/suspend
+      responses:
+        '200':
+          description: OK
+  /api/whitelabel-admin/tenants/{tenant_id}/features/{feature}:
+    post:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}/features/{feature}
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}/features/{feature}
+      responses:
+        '200':
+          description: OK
+  /api/whitelabel-admin/tenants/{tenant_id}/api-key:
+    post:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}/api-key
+      responses:
+        '200':
+          description: OK
+  /api/whitelabel-admin/tenants/{tenant_id}/preview:
+    get:
+      tags:
+      - whitelabel-admin
+      summary: /tenants/{tenant_id}/preview
+      responses:
+        '200':
+          description: OK
+  /api/whitelabel-admin/features:
+    get:
+      tags:
+      - whitelabel-admin
+      summary: /features
+      responses:
+        '200':
+          description: OK
+  /api/ws-live/ws/live/stats:
+    get:
+      tags:
+      - ws-live
+      summary: /ws/live/stats
+      responses:
+        '200':
+          description: OK
+  /api/ws-public/api/public/prices:
+    get:
+      tags:
+      - ws-public
+      summary: /api/public/prices
+      responses:
+        '200':
+          description: OK
+  /api/ws-public/api/public/signals:
+    get:
+      tags:
+      - ws-public
+      summary: /api/public/signals
+      responses:
+        '200':
+          description: OK
+tags:
+- name: accounts
+  description: Endpoints from api/accounts.py
+- name: admin
+  description: Endpoints from api/admin.py
+- name: advanced-orders
+  description: Endpoints from api/advanced_orders.py
+- name: advanced-trading
+  description: Endpoints from api/advanced_trading.py
+- name: ai-core
+  description: Endpoints from api/ai_core.py
+- name: alerts
+  description: Endpoints from api/alerts.py
+- name: analysis
+  description: Endpoints from api/analysis.py
+- name: auth
+  description: Endpoints from api/auth.py
+- name: backtesting
+  description: Endpoints from api/backtesting.py
+- name: billing
+  description: Endpoints from api/billing.py
+- name: brain
+  description: Endpoints from api/brain.py
+- name: broker
+  description: Endpoints from api/broker.py
+- name: calendar
+  description: Endpoints from api/calendar.py
+- name: chaos
+  description: Endpoints from api/chaos.py
+- name: chat
+  description: Endpoints from api/chat.py
+- name: community-chat
+  description: Endpoints from api/community_chat.py
+- name: copy-trading
+  description: Endpoints from api/copy_trading.py
+- name: custom-indicators
+  description: Endpoints from api/custom_indicators.py
+- name: data-layer
+  description: Endpoints from api/data_layer.py
+- name: db-store
+  description: Endpoints from api/db_store.py
+- name: dynamic-strategies
+  description: Endpoints from api/dynamic_strategies.py
+- name: error-details
+  description: Endpoints from api/error_details.py
+- name: explain
+  description: Endpoints from api/explain.py
+- name: gateway
+  description: Endpoints from api/gateway.py
+- name: graphql-schema
+  description: Endpoints from api/graphql_schema.py
+- name: health
+  description: Endpoints from api/health.py
+- name: journal
+  description: Endpoints from api/journal.py
+- name: kyc
+  description: Endpoints from api/kyc.py
+- name: macro
+  description: Endpoints from api/macro.py
+- name: ml
+  description: Endpoints from api/ml.py
+- name: ml-anomaly
+  description: Endpoints from api/ml_anomaly.py
+- name: ml-ops
+  description: Endpoints from api/ml_ops.py
+- name: mobile
+  description: Endpoints from api/mobile.py
+- name: monetization
+  description: Endpoints from api/monetization.py
+- name: news
+  description: Endpoints from api/news.py
+- name: news-feed
+  description: Endpoints from api/news_feed.py
+- name: nocode
+  description: Endpoints from api/nocode.py
+- name: notifications
+  description: Endpoints from api/notifications.py
+- name: nuclear
+  description: Endpoints from api/nuclear.py
+- name: nuclear-strategy
+  description: Endpoints from api/nuclear_strategy.py
+- name: observability
+  description: Endpoints from api/observability.py
+- name: online-learner
+  description: Endpoints from api/online_learner.py
+- name: pages
+  description: Endpoints from api/pages.py
+- name: payments
+  description: Endpoints from api/payments.py
+- name: performance
+  description: Endpoints from api/performance.py
+- name: platform
+  description: Endpoints from api/platform.py
+- name: pnl-dashboard
+  description: Endpoints from api/pnl_dashboard.py
+- name: portfolio
+  description: Endpoints from api/portfolio.py
+- name: portfolio-allocator
+  description: Endpoints from api/portfolio_allocator.py
+- name: pricing
+  description: Endpoints from api/pricing.py
+- name: professional-control-plane
+  description: Endpoints from api/professional_control_plane.py
+- name: profiles
+  description: Endpoints from api/profiles.py
+- name: prop-firm
+  description: Endpoints from api/prop_firm.py
+- name: risk-calculator
+  description: Endpoints from api/risk_calculator.py
+- name: safe-agent-platform
+  description: Endpoints from api/safe_agent_platform.py
+- name: schemas
+  description: Endpoints from api/schemas.py
+- name: security-dashboard
+  description: Endpoints from api/security_dashboard.py
+- name: server
+  description: Endpoints from api/server.py
+- name: settings
+  description: Endpoints from api/settings.py
+- name: settings-extended
+  description: Endpoints from api/settings_extended.py
+- name: settings-new-endpoints
+  description: Endpoints from api/settings_new_endpoints.py
+- name: signals
+  description: Endpoints from api/signals.py
+- name: social-feed
+  description: Endpoints from api/social_feed.py
+- name: status
+  description: Endpoints from api/status.py
+- name: tca
+  description: Endpoints from api/tca.py
+- name: tracing
+  description: Endpoints from api/tracing.py
+- name: trading
+  description: Endpoints from api/trading.py
+- name: transparency
+  description: Endpoints from api/transparency.py
+- name: tutorials
+  description: Endpoints from api/tutorials.py
+- name: two-factor
+  description: Endpoints from api/two_factor.py
+- name: voice
+  description: Endpoints from api/voice.py
+- name: watchlist
+  description: Endpoints from api/watchlist.py
+- name: webhooks
+  description: Endpoints from api/webhooks.py
+- name: whitelabel-admin
+  description: Endpoints from api/whitelabel_admin.py
+- name: ws-live
+  description: Endpoints from api/ws_live.py
+- name: ws-public
+  description: Endpoints from api/ws_public.py
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+- BearerAuth: []

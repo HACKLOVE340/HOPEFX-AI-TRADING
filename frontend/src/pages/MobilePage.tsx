@@ -8,14 +8,14 @@
  *   DELETE /api/mobile/sessions/:id   — revoke mobile session
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
+import { BarChart3, Bell, Settings, ShieldCheck, Smartphone, User } from 'lucide-react';
 
 interface MobileConfig {
   ios_version: string;
@@ -61,28 +61,28 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
   const isIos = platform === 'ios';
   return (
     <div style={{
-      background: '#0d1421', border: '1px solid #1e293b',
+      background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: 14, padding: '28px 24px', textAlign: 'center',
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
     }}>
       <div style={{ fontSize: 52, marginBottom: 12 }}>{isIos ? '🍎' : '🤖'}</div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
+      <div style={{ fontSize: 'var(--fs-title)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>
         {isIos ? 'iOS App' : 'Android App'}
       </div>
-      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 18 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>
         {loading ? '…' : `v${version || 'N/A'}`} · {isIos ? 'iPhone & iPad' : 'Android 8+'}
       </div>
 
       {/* QR code */}
       <div style={{
         width: 128, height: 128, borderRadius: 10, marginBottom: 18,
-        background: qr ? '#fff' : '#1e293b',
+        background: qr ? '#fff' : 'var(--raised)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         overflow: 'hidden', padding: qr ? 4 : 0,
       }}>
         {qr
           ? <img src={qr} alt={`${platform} QR`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-          : <span style={{ fontSize: 11, color: '#475569', textAlign: 'center', padding: 8 }}>QR code<br />available<br />after login</span>
+          : <span style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', padding: 8 }}>QR code<br />available<br />after login</span>
         }
       </div>
 
@@ -95,7 +95,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           width: '100%', background: isIos ? '#1c1c1e' : '#0f3460',
           border: `1px solid ${isIos ? '#3a3a3c' : '#1a5276'}`,
-          borderRadius: 10, color: '#f1f5f9', fontSize: 13, fontWeight: 600,
+          borderRadius: 10, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', fontWeight: 600,
           padding: '11px 0', textDecoration: 'none',
           opacity: url ? 1 : 0.5, cursor: url ? 'pointer' : 'not-allowed',
         }}
@@ -116,26 +116,26 @@ const SessionRow: React.FC<{
 }> = ({ session, revoking, onRevoke }) => (
   <div style={{
     display: 'flex', alignItems: 'center', gap: 14,
-    padding: '12px 0', borderBottom: '1px solid #1e293b',
+    padding: '12px 0', borderBottom: '1px solid var(--border)',
   }}>
     <div style={{
       width: 38, height: 38, borderRadius: 10,
-      background: '#1e293b', border: '1px solid #334155',
+      background: 'var(--raised)', border: '1px solid var(--border-strong)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 18, flexShrink: 0,
     }}>
       {session.device_os?.toLowerCase().includes('ios') ? '📱' : '🤖'}
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)', display: 'flex', alignItems: 'center', gap: 8 }}>
         {session.device_name || 'Unknown Device'}
         {session.is_current && (
-          <span style={{ fontSize: 10, color: '#4ade80', background: '#14532d', border: '1px solid #166534', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, color: 'var(--gain)', background: '#14532d', border: '1px solid #166534', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>
             Current
           </span>
         )}
       </div>
-      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <span>{session.device_os}</span>
         <span>IP: {session.ip_address}</span>
         <span>Last active: {new Date(session.last_active).toLocaleString()}</span>
@@ -148,7 +148,7 @@ const SessionRow: React.FC<{
       style={{
         background: 'transparent',
         border: `1px solid ${session.is_current ? '#1e293b' : '#7f1d1d'}`,
-        borderRadius: 7, color: session.is_current ? '#334155' : '#f87171',
+        borderRadius: 7, color: session.is_current ? 'var(--text-faint)' : 'var(--loss)',
         cursor: session.is_current ? 'not-allowed' : 'pointer',
         fontSize: 12, padding: '5px 12px', flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 5,
@@ -232,8 +232,7 @@ const MobilePage: React.FC = () => {
     : DEFAULT_FEATURES;
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Mobile App"
         subtitle="Trade on the go with the HOPEFX mobile app for iOS and Android."
         breadcrumbs={[
@@ -247,15 +246,15 @@ const MobilePage: React.FC = () => {
             onClick={load}
             disabled={loading}
             style={{
-              background: 'transparent', border: '1px solid #334155',
-              borderRadius: 8, color: '#94a3b8', cursor: 'pointer',
+              background: 'transparent', border: '1px solid var(--border-strong)',
+              borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
               fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
             {loading ? <Spinner size="sm" /> : '↻'} Refresh
           </button>
         }
-      />
+    >
 
       {error && <ErrorBanner message={error} style={{ marginBottom: 20 }} />}
 
@@ -278,18 +277,18 @@ const MobilePage: React.FC = () => {
       </div>
 
       {/* Features */}
-      <div style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>⚡</span> Mobile Features
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
           {features.map(f => (
-            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#94a3b8' }}>
+            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               <span style={{
                 width: 20, height: 20, borderRadius: '50%',
                 background: '#14532d', border: '1px solid #166534',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10, color: '#4ade80', flexShrink: 0, fontWeight: 700,
+                fontSize: 10, color: 'var(--gain)', flexShrink: 0, fontWeight: 700,
               }}>✓</span>
               {f}
             </div>
@@ -298,22 +297,22 @@ const MobilePage: React.FC = () => {
       </div>
 
       {/* Push token registration */}
-      <div style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>🔔</span> Push Notifications
         </h3>
-        <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px', lineHeight: 1.5 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
           Register a device push token to receive trade alerts, signal notifications, and account updates on your mobile device.
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
-          <input
+          <input aria-label="Paste device push token"
             type="text"
             value={pushToken}
             onChange={e => setPushToken(e.target.value)}
             placeholder="Paste device push token…"
             style={{
-              flex: 1, background: '#111827', border: '1px solid #334155',
-              borderRadius: 8, color: '#f1f5f9', fontSize: 13, padding: '9px 14px',
+              flex: 1, background: 'var(--raised)', border: '1px solid var(--border-strong)',
+              borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '9px 14px',
               outline: 'none', fontFamily: 'JetBrains Mono, monospace',
             }}
             onKeyDown={e => { if (e.key === 'Enter') handleRegisterPushToken(); }}
@@ -322,11 +321,11 @@ const MobilePage: React.FC = () => {
             onClick={handleRegisterPushToken}
             disabled={registering || !pushToken.trim()}
             style={{
-              background: pushToken.trim() ? '#1d4ed8' : '#1e293b',
+              background: pushToken.trim() ? '#1d4ed8' : 'var(--raised)',
               border: `1px solid ${pushToken.trim() ? '#3b82f6' : '#334155'}`,
-              borderRadius: 8, color: pushToken.trim() ? '#93c5fd' : '#475569',
+              borderRadius: 8, color: pushToken.trim() ? '#93c5fd' : 'var(--text-faint)',
               cursor: pushToken.trim() ? 'pointer' : 'not-allowed',
-              fontSize: 13, fontWeight: 600, padding: '9px 18px',
+              fontSize: 'var(--fs-body)', fontWeight: 600, padding: '9px 18px',
               display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
             }}
           >
@@ -338,7 +337,7 @@ const MobilePage: React.FC = () => {
             marginTop: 10, fontSize: 12, padding: '8px 12px', borderRadius: 7,
             background: tokenOk ? '#052e16' : '#450a0a',
             border: `1px solid ${tokenOk ? '#166534' : '#7f1d1d'}`,
-            color: tokenOk ? '#4ade80' : '#f87171',
+            color: tokenOk ? 'var(--gain)' : 'var(--loss)',
           }}>
             {tokenMsg}
           </div>
@@ -346,23 +345,23 @@ const MobilePage: React.FC = () => {
       </div>
 
       {/* Active sessions */}
-      <div style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: '20px 24px', marginBottom: 28 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>📲</span> Active Mobile Sessions
           </h3>
           {sessions.length > 0 && (
-            <span style={{ fontSize: 12, color: '#64748b' }}>{sessions.length} device{sessions.length !== 1 ? 's' : ''}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sessions.length} device{sessions.length !== 1 ? 's' : ''}</span>
           )}
         </div>
 
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0', color: '#64748b', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0', color: 'var(--text-muted)', gap: 10 }}>
             <Spinner size="sm" /> Loading sessions…
           </div>
         ) : sessions.length === 0 ? (
           <EmptyState
-            icon="📱"
+            icon={Smartphone}
             title="No active mobile sessions"
             description="Download the app and sign in to see your active mobile sessions here."
           />
@@ -381,13 +380,13 @@ const MobilePage: React.FC = () => {
       </div>
 
       <CrossLinkBar title="Related" links={[
-        { label: 'Security',      href: '/settings?tab=security', icon: '🔐', color: '#f87171' },
-        { label: 'Notifications', href: '/notifications',         icon: '🔔', color: '#f59e0b' },
-        { label: 'Profile',       href: '/profile',               icon: '👤', color: '#60a5fa' },
-        { label: 'Settings',      href: '/settings',              icon: '⚙️', color: '#94a3b8' },
-        { label: 'Dashboard',     href: '/dashboard',             icon: '📊', color: '#4ade80' },
+        { label: 'Security',      href: '/settings?tab=security', icon: ShieldCheck, color: '#f87171' },
+        { label: 'Notifications', href: '/notifications',         icon: Bell, color: '#f59e0b' },
+        { label: 'Profile',       href: '/profile',               icon: User, color: '#60a5fa' },
+        { label: 'Settings',      href: '/settings',              icon: Settings, color: '#94a3b8' },
+        { label: 'Dashboard',     href: '/dashboard',             icon: BarChart3, color: '#4ade80' },
       ]} />
-    </div>
+    </PageShell>
   );
 };
 

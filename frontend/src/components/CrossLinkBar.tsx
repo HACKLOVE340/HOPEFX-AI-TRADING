@@ -5,11 +5,17 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 
 export interface CrossLink {
   label: string;
   href: string;
-  icon?: string;
+  /**
+   * Lucide component preferred. A string is a legacy emoji call site: emoji
+   * render differently on every OS and cannot inherit `currentColor`, so they
+   * ignore the link's own hover and active colour (audit F170/F175).
+   */
+  icon?: LucideIcon | string;
   color?: string;
 }
 
@@ -24,7 +30,7 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
   <div
     className={className}
     style={{
-      borderTop: '1px solid var(--border, #1e293b)',
+      borderTop: '1px solid var(--border, var(--border))',
       paddingTop: 16,
       marginTop: 8,
       ...style,
@@ -32,7 +38,7 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
   >
     {title && (
       <div style={{
-        fontSize: 10, fontWeight: 700, color: '#334155',
+        fontSize: 10, fontWeight: 700, color: 'var(--text-faint)',
         textTransform: 'uppercase', letterSpacing: '0.08em',
         marginBottom: 10,
       }}>
@@ -42,17 +48,31 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {links.map((link) => (
         <Link
-          key={link.href}
+          // Keyed on destination AND label. `href` alone is not unique: a bar
+          // may legitimately offer two routes to one page (Settings, and the
+          // API-keys tab of Settings). Measured, not assumed: on first mount
+          // React renders both, and on a re-render that reorders the list it
+          // DUPLICATES the shared key — a three-link bar becomes four anchors
+          // with a stale pill left behind, in the wrong order. Found at runtime
+          // on /2fa-setup, which listed '/settings' twice.
+          key={`${link.href}|${link.label}`}
           to={link.href}
+          // 44px minimum target (rubric: touch-target-size, CRITICAL). These
+          // pills were ~26px tall and appear at the foot of most pages, so the
+          // fix lifts every page using the bar rather than one.
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                     focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: 5,
-            padding: '5px 12px',
+            minHeight: 44,
+            cursor: 'pointer',
+            padding: '0 14px',
             background: link.color ? `${link.color}12` : 'transparent',
             border: `1px solid ${link.color ? `${link.color}30` : '#1e293b'}`,
-            borderRadius: 6,
-            color: link.color ?? '#475569',
+            borderRadius: 8,
+            color: link.color ?? 'var(--text-faint)',
             fontSize: 12,
             fontWeight: 500,
             textDecoration: 'none',
@@ -69,7 +89,11 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
             el.style.color = link.color ?? '#475569';
           }}
         >
-          {link.icon && <span style={{ fontSize: 13 }}>{link.icon}</span>}
+          {link.icon && (
+            typeof link.icon === 'string'
+              ? <span style={{ fontSize: 'var(--fs-body)'}}>{link.icon}</span>   /* legacy emoji */
+              : React.createElement(link.icon, { size: 14, strokeWidth: 1.75, 'aria-hidden': true })
+          )}
           {link.label}
         </Link>
       ))}

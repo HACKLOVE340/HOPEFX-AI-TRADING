@@ -7,9 +7,11 @@
  *   GET /api/observability/alerts
  * Admin/ops surface — gated at the route level.
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { observabilityApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import TradingDashboard from './TradingDashboard';
 
 interface Metrics {
   cpu_percent?: number; memory_percent?: number; request_rate?: number;
@@ -23,7 +25,7 @@ interface Alert {
 }
 
 const SEV_COLOR: Record<string, string> = {
-  critical: '#f87171', warning: '#fbbf24', info: '#60a5fa',
+  critical: 'var(--loss)', warning: 'var(--warn)', info: 'var(--link)',
 };
 
 function fmtUptime(s?: number): string {
@@ -75,15 +77,15 @@ const Observability: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto', color: '#e2e8f0' }}>
+    <PageShell title="Observability" width="standard">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>📡 Observability</h1>
-        <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+
+        <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
           ↻ Refresh
         </button>
       </div>
 
-      {loading && <div style={{ color: '#64748b', padding: 20 }}>Loading telemetry…</div>}
+      {loading && <div style={{ color: 'var(--text-muted)', padding: 20 }}>Loading telemetry…</div>}
       {!loading && err && (
         <div style={{ padding: '12px 16px', background: '#2a1215', border: '1px solid #7f1d1d', borderRadius: 8, color: '#fca5a5', marginBottom: 16 }}>{err}</div>
       )}
@@ -93,27 +95,27 @@ const Observability: React.FC = () => {
           {/* Metrics strip */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
             {tiles.map((t) => (
-              <div key={t.label} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
+              <div key={t.label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
                 <div style={{ fontSize: 22, fontWeight: 700 }}>{t.value}</div>
               </div>
             ))}
           </div>
 
           {/* Services */}
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8', margin: '0 0 10px' }}>Services</h2>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12, marginBottom: 20 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Services</h2>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12, marginBottom: 20 }}>
             {services.length === 0 ? (
-              <div style={{ color: '#64748b', padding: 8 }}>No service data.</div>
+              <div style={{ color: 'var(--text-muted)', padding: 8 }}>No service data.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {services.map((s) => (
-                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: '#0f172a', borderRadius: 8 }}>
+                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: 'var(--surface)', borderRadius: 8 }}>
                     <span style={{ fontWeight: 600 }}>{s.name}</span>
-                    <span style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: '#94a3b8' }}>
+                    <span style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: 'var(--text-dim)' }}>
                       <span>up {fmtUptime(s.uptime_seconds)}</span>
                       <span>v{s.version ?? '—'}</span>
-                      <span style={{ color: (s.status === 'active' || s.status === 'healthy' || s.status === 'ok') ? '#4ade80' : '#fbbf24', fontWeight: 700, textTransform: 'uppercase', fontSize: 11 }}>{s.status}</span>
+                      <span style={{ color: (s.status === 'active' || s.status === 'healthy' || s.status === 'ok') ? 'var(--gain)' : 'var(--warn)', fontWeight: 700, textTransform: 'uppercase', fontSize: 11 }}>{s.status}</span>
                     </span>
                   </div>
                 ))}
@@ -122,18 +124,18 @@ const Observability: React.FC = () => {
           </div>
 
           {/* Alerts */}
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8', margin: '0 0 10px' }}>Recent Alerts</h2>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Recent Alerts</h2>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12 }}>
             {alerts.length === 0 ? (
-              <div style={{ color: '#64748b', padding: 8 }}>No active alerts. 🎉</div>
+              <div style={{ color: 'var(--text-muted)', padding: 8 }}>No active alerts. 🎉</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {alerts.map((a, i) => (
-                  <div key={a.id ?? i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: '#0f172a', borderRadius: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: SEV_COLOR[(a.severity ?? 'info').toLowerCase()] ?? '#60a5fa' }} />
+                  <div key={a.id ?? i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: 'var(--surface)', borderRadius: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: SEV_COLOR[(a.severity ?? 'info').toLowerCase()] ?? 'var(--link)' }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13 }}>{a.message ?? '(no message)'}</div>
-                      <div style={{ fontSize: 11, color: '#64748b' }}>{a.service ?? ''}{a.timestamp ? ` · ${a.timestamp}` : ''}</div>
+                      <div style={{ fontSize: 'var(--fs-body)'}}>{a.message ?? '(no message)'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.service ?? ''}{a.timestamp ? ` · ${a.timestamp}` : ''}</div>
                     </div>
                   </div>
                 ))}
@@ -142,7 +144,25 @@ const Observability: React.FC = () => {
           </div>
         </>
       )}
-    </div>
+
+      {/*
+       * The engine grid, INSIDE this page's shell.
+       *
+       * `/observability` used to render `<><Observability /><TradingDashboard /></>`
+       * as siblings, so this shell closed — header, body and the "Where to
+       * next" footer — and several hundred pixels of microstructure then
+       * rendered after it. The footer sat in the middle of the page.
+       *
+       * It also made `TradingDashboard` unmigratable: giving it its own
+       * `PageShell` would have put two h1s and two footers on this route, which
+       * is what the shell ratchet was asking for — it counts any component
+       * named in a `<Route element=…>` and cannot see that this one holds two.
+       *
+       * The grid is a SECTION of observability, not a page, so this page
+       * renders it.
+       */}
+      <TradingDashboard />
+    </PageShell>
   );
 };
 

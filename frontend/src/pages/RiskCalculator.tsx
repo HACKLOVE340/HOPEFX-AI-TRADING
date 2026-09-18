@@ -8,9 +8,12 @@
  *   DELETE /api/risk/calculator/history/:id — delete saved calc
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, EmptyState } from '../components';
+import { RelatedPages } from '../components';
+import { BookOpen, Briefcase, Calculator, Shield, Zap } from 'lucide-react';
+import { EmptyState } from '../components';
 import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
 import { useDataFreshness } from '../hooks/useDataFreshness';
@@ -182,8 +185,21 @@ export function explainMissingResult(
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const Label: React.FC<{ text: string }> = ({ text }) => (
-  <div style={s.label}>{text}</div>
+/**
+ * A real <label>, not a styled <div>.
+ *
+ * It rendered a <div>, so none of the seven fields on this page had an
+ * accessible name and clicking the text did not focus the field — on the page
+ * where a mistyped number changes a position size. `for` fixes both; the `id`
+ * lets the control also state the name on itself, as a reference rather than a
+ * copy, so the two can never disagree (WCAG 2.5.3).
+ */
+const Label: React.FC<{ text: string; htmlFor?: string }> = ({ text, htmlFor }) => (
+  // display:block because <label> is inline by default and s.label's vertical
+  // margins would stop applying — the <div> it replaces was block.
+  <label id={htmlFor && `${htmlFor}-label`} htmlFor={htmlFor} style={{ ...s.label, display: 'block' }}>
+    {text}
+  </label>
 );
 
 const Input: React.FC<{
@@ -192,10 +208,14 @@ const Input: React.FC<{
   placeholder?: string;
   prefix?: string;
   suffix?: string;
-}> = ({ value, onChange, placeholder, prefix, suffix }) => (
+  /** Ties this field to its <Label htmlFor={id} />. */
+  id?: string;
+}> = ({ value, onChange, placeholder, prefix, suffix, id }) => (
   <div style={s.inputWrap}>
     {prefix && <span style={s.inputAddon}>{prefix}</span>}
     <input
+      id={id}
+      aria-labelledby={id && `${id}-label`}
       style={s.input}
       type="number"
       value={value}
@@ -211,7 +231,7 @@ const ResultRow: React.FC<{ label: string; value: string; highlight?: boolean }>
 }) => (
   <div style={{ ...s.resultRow, ...(highlight ? s.resultRowHighlight : {}) }}>
     <span style={s.resultLabel}>{label}</span>
-    <span style={{ ...s.resultValue, ...(highlight ? { color: '#f8fafc', fontWeight: 700 } : {}) }}>
+    <span style={{ ...s.resultValue, ...(highlight ? { color: 'var(--text-strong)', fontWeight: 700 } : {}) }}>
       {value}
     </span>
   </div>
@@ -245,6 +265,12 @@ const RiskCalculator: React.FC = () => {
   // F1-01: the price fetch below fell back to store prices invisibly, while
   // that price is the input to position sizing.
   const freshness = useDataFreshness('the live price');
+  // Depend on the marker, never on the whole object. `freshness` is memoised on
+  // [failed, what, ...], so it takes a new identity the moment a load fails —
+  // and an effect that lists it therefore re-runs on its own failure, refetches,
+  // fails again, and loops (the 138-request loop the hook's own comment records).
+  // `markFailed` is useCallback(..., []) and so is stable for the page's life.
+  const { markFailed } = freshness;
   const [history, setHistory]       = useState<SavedCalc[]>([]);
   const [saving, setSaving]         = useState(false);
   const [saveMsg, setSaveMsg]       = useState('');
@@ -279,7 +305,7 @@ const RiskCalculator: React.FC = () => {
         // F1-01: this silently fell back to store prices while the page went on
         // computing a position size from them. The number the trader sizes
         // against must never look current when the fetch failed.
-        freshness.markFailed('the live price');
+        markFailed('the live price');
       }
     };
     fetchPrice();
@@ -290,7 +316,7 @@ const RiskCalculator: React.FC = () => {
       if (priceTimerRef.current) clearInterval(priceTimerRef.current);
       if (ageTimerRef.current)   clearInterval(ageTimerRef.current);
     };
-  }, [state.symbol]);
+  }, [state.symbol, markFailed]);
 
   // Fallback: use store prices if API unavailable.
   //
@@ -301,8 +327,8 @@ const RiskCalculator: React.FC = () => {
   // it falls back to is no longer live.
   useEffect(() => {
     if (livePrice) return;
-    if (!feedLive && prices[state.symbol]) freshness.markFailed('a live price');
-  }, [feedLive, prices, state.symbol, livePrice, freshness]);
+    if (!feedLive && prices[state.symbol]) markFailed('a live price');
+  }, [feedLive, prices, state.symbol, livePrice, markFailed]);
 
   useEffect(() => {
     if (livePrice) return;
@@ -376,10 +402,9 @@ const RiskCalculator: React.FC = () => {
     '#f87171';
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Risk / Reward Calculator"
-        icon="🧮"
+        icon={Calculator}
         subtitle="Calculate position size, pip value, and margin before every trade."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -393,25 +418,25 @@ const RiskCalculator: React.FC = () => {
                 look current when it is not (F1-01). */}
             {livePrice && !freshness.failed && (
               <div style={{ fontSize: 11, color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
-                ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: '#475569' }}>{livePriceAge}s</span>
+                ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: 'var(--text-faint)' }}>{livePriceAge}s</span>
               </div>
             )}
             <button onClick={() => setShowHistory(h => !h)}
-              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               📋 History {history.length > 0 ? `(${history.length})` : ''}
             </button>
-            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               ⚡ Trade
             </Link>
-            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               📓 Journal
             </Link>
-            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               🛡 Prop Firm
             </Link>
           </div>
         }
-      />
+    >
 
       <StaleDataNotice failed={freshness.failed} what={freshness.what} />
       {instruments.source === 'builtin' && !instruments.loading && (
@@ -440,8 +465,10 @@ const RiskCalculator: React.FC = () => {
         <div style={s.card}>
           <div style={s.cardTitle}>Trade Setup</div>
 
-          <Label text="Symbol" />
+          <Label text="Symbol" htmlFor="risk-symbol" />
           <select
+            id="risk-symbol"
+            aria-labelledby="risk-symbol-label"
             style={s.select}
             value={state.symbol}
             onChange={(e) => setState((p) => ({ ...p, symbol: e.target.value }))}
@@ -451,25 +478,25 @@ const RiskCalculator: React.FC = () => {
             ))}
           </select>
 
-          <Label text="Account Balance" />
-          <Input value={state.accountBalance} onChange={set('accountBalance')} prefix="$" placeholder="10000" />
+          <Label text="Account Balance" htmlFor="risk-account-balance" />
+          <Input id="risk-account-balance" value={state.accountBalance} onChange={set('accountBalance')} prefix="$" placeholder="10000" />
 
-          <Label text="Risk Per Trade" />
-          <Input value={state.riskPercent} onChange={set('riskPercent')} suffix="%" placeholder="1" />
+          <Label text="Risk Per Trade" htmlFor="risk-per-trade" />
+          <Input id="risk-per-trade" value={state.riskPercent} onChange={set('riskPercent')} suffix="%" placeholder="1" />
 
-          <Label text="Leverage" />
-          <Input value={state.leverage} onChange={set('leverage')} suffix=":1" placeholder="100" />
+          <Label text="Leverage" htmlFor="risk-leverage" />
+          <Input id="risk-leverage" value={state.leverage} onChange={set('leverage')} suffix=":1" placeholder="100" />
 
           <div style={s.divider} />
 
-          <Label text="Entry Price" />
-          <Input value={state.entryPrice} onChange={set('entryPrice')} placeholder="2350.00" />
+          <Label text="Entry Price" htmlFor="risk-entry-price" />
+          <Input id="risk-entry-price" value={state.entryPrice} onChange={set('entryPrice')} placeholder="2350.00" />
 
-          <Label text="Stop Loss" />
-          <Input value={state.stopLoss} onChange={set('stopLoss')} placeholder="2340.00" />
+          <Label text="Stop Loss" htmlFor="risk-stop-loss" />
+          <Input id="risk-stop-loss" value={state.stopLoss} onChange={set('stopLoss')} placeholder="2340.00" />
 
-          <Label text="Take Profit" />
-          <Input value={state.takeProfit} onChange={set('takeProfit')} placeholder="2380.00" />
+          <Label text="Take Profit" htmlFor="risk-take-profit" />
+          <Input id="risk-take-profit" value={state.takeProfit} onChange={set('takeProfit')} placeholder="2380.00" />
         </div>
 
         {/* ── Results ── */}
@@ -543,7 +570,7 @@ const RiskCalculator: React.FC = () => {
                 style={{
                   display: 'block', width: '100%', padding: '10px 0', borderRadius: 8,
                   background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-                  color: '#60a5fa', fontSize: 14, fontWeight: 700, textDecoration: 'none',
+                  color: 'var(--link)', fontSize: 14, fontWeight: 700, textDecoration: 'none',
                   textAlign: 'center', marginBottom: 10, boxSizing: 'border-box',
                 }}
               >
@@ -551,17 +578,17 @@ const RiskCalculator: React.FC = () => {
               </Link>
               {/* Save calculation */}
               <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-                <input
+                <input aria-label="Label (optional)"
                   value={calcLabel}
                   onChange={e => setCalcLabel(e.target.value)}
                   placeholder="Label (optional)"
-                  style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f8fafc', fontSize: 12, padding: '6px 10px', outline: 'none' }}
+                  style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 12, padding: '6px 10px', outline: 'none' }}
                 />
                 <button onClick={() => void handleSave()} disabled={saving}
                   style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
                   {saving ? '…' : '💾 Save'}
                 </button>
-                {saveMsg && <span style={{ fontSize: 11, color: saveMsg.startsWith('✓') ? '#22c55e' : '#f87171', alignSelf: 'center' }}>{saveMsg}</span>}
+                {saveMsg && <span style={{ fontSize: 11, color: saveMsg.startsWith('✓') ? '#22c55e' : 'var(--loss)', alignSelf: 'center' }}>{saveMsg}</span>}
               </div>
             </>
           )}
@@ -579,14 +606,14 @@ const RiskCalculator: React.FC = () => {
 
       {/* ── Saved history panel ── */}
       {showHistory && (
-        <div style={{ marginTop: 24, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20 }}>
+        <div style={{ marginTop: 24, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div style={s.cardTitle}>Saved Calculations</div>
-            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16 }}>✕</button>
+            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
           {history.length === 0 ? (
             <EmptyState
-              icon="🧮"
+              icon={Calculator}
               title="No saved calculations yet"
               description="Run a calculation above and save it to build your history."
               compact
@@ -594,25 +621,25 @@ const RiskCalculator: React.FC = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {history.map(h => (
-                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 2 }}>
+                    <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
                       {h.label || h.symbol} · 1:{Number.isFinite(h.rr_ratio) ? h.rr_ratio.toFixed(2) : '—'} R:R
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       Entry {h.entry_price} · SL {h.stop_loss} · TP {h.take_profit} · {h.lot_size.toFixed(4)} lots
                     </div>
-                    <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>
                       {new Date(h.saved_at).toLocaleString()}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={() => loadFromHistory(h)}
-                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}>
+                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 11, cursor: 'pointer' }}>
                       Load
                     </button>
                     <button onClick={() => void handleDeleteHistory(h.id)}
-                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: '#f87171', fontSize: 11, cursor: 'pointer' }}>
+                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: 'var(--loss)', fontSize: 11, cursor: 'pointer' }}>
                       ✕
                     </button>
                   </div>
@@ -622,7 +649,7 @@ const RiskCalculator: React.FC = () => {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -653,7 +680,7 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
           bottom: `${pct(Math.min(entry, tp))}%`,
           height: `${Math.abs(pct(tp) - pct(entry))}%`,
           background: isLong ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
-          borderLeft: `3px solid ${isLong ? '#4ade80' : '#f87171'}`,
+          borderLeft: `3px solid ${isLong ? 'var(--gain)' : 'var(--loss)'}`,
         }} />
         {/* SL zone */}
         <div style={{
@@ -661,7 +688,7 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
           bottom: `${pct(Math.min(entry, sl))}%`,
           height: `${Math.abs(pct(sl) - pct(entry))}%`,
           background: isLong ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)',
-          borderLeft: `3px solid ${isLong ? '#f87171' : '#4ade80'}`,
+          borderLeft: `3px solid ${isLong ? 'var(--loss)' : 'var(--gain)'}`,
         }} />
         {/* Price lines */}
         {levels.map((l) => (
@@ -673,13 +700,22 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
       </div>
 
       {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Prop Firm</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
-        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
-        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
+        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Prop Firm</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
+        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
+        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
+        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
       </div>
+      <RelatedPages
+        links={[
+          { to: '/trade', label: 'Trading ticket', hint: 'Place the sized order', icon: Zap },
+          { to: '/portfolio', label: 'Portfolio', hint: 'Current exposure', icon: Briefcase },
+          { to: '/prop-firm', label: 'Prop firm', hint: 'Limits you must respect', icon: Shield },
+          { to: '/journal', label: 'Trade journal', hint: 'How past sizing worked out', icon: BookOpen },
+        ]}
+      />
+
     </div>
   );
 };
@@ -689,39 +725,39 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: '#0f172a',
-    color: '#f8fafc',
+    background: 'var(--surface)',
+    color: 'var(--text-strong)',
     fontFamily: "'Inter', system-ui, sans-serif",
     padding: '24px',
   },
   header: { marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: 700, margin: 0, color: '#f8fafc' },
-  subtitle: { fontSize: 14, color: '#94a3b8', marginTop: 8 },
+  title: { fontSize: 'var(--fs-hero)', fontWeight: 700, margin: 0, color: 'var(--text-strong)' },
+  subtitle: { fontSize: 14, color: 'var(--text-dim)', marginTop: 8 },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
     gap: 24,
   },
   card: {
-    background: '#1e293b',
+    background: 'var(--raised)',
     borderRadius: 12,
     padding: 24,
-    border: '1px solid #334155',
+    border: '1px solid var(--border-strong)',
   },
   cardTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: '#94a3b8',
+    color: 'var(--text-dim)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     marginBottom: 16,
   },
-  label: { fontSize: 13, color: '#94a3b8', marginBottom: 6, marginTop: 12 },
+  label: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, marginTop: 12 },
   inputWrap: {
     display: 'flex',
     alignItems: 'center',
-    background: '#0f172a',
-    border: '1px solid #334155',
+    background: 'var(--surface)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -730,53 +766,53 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: 'none',
     outline: 'none',
-    color: '#f8fafc',
-    fontSize: 15,
+    color: 'var(--text-strong)',
+    fontSize: 'var(--fs-value)',
     padding: '10px 12px',
   },
   inputAddon: {
     padding: '0 10px',
-    color: '#64748b',
-    fontSize: 13,
-    background: '#1e293b',
-    borderRight: '1px solid #334155',
+    color: 'var(--text-muted)',
+    fontSize: 'var(--fs-body)',
+    background: 'var(--raised)',
+    borderRight: '1px solid var(--border-strong)',
     height: '100%',
     display: 'flex',
     alignItems: 'center',
   },
   select: {
     width: '100%',
-    background: '#0f172a',
-    border: '1px solid #334155',
+    background: 'var(--surface)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 8,
-    color: '#f8fafc',
-    fontSize: 15,
+    color: 'var(--text-strong)',
+    fontSize: 'var(--fs-value)',
     padding: '10px 12px',
     outline: 'none',
   },
-  divider: { height: 1, background: '#334155', margin: '20px 0' },
+  divider: { height: 1, background: 'var(--surface-hover)', margin: '20px 0' },
   rrDisplay: { textAlign: 'center', padding: '16px 0' },
-  rrLabel: { fontSize: 13, color: '#94a3b8', marginBottom: 8 },
+  rrLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 8 },
   rrValue: { fontSize: 48, fontWeight: 800, lineHeight: 1 },
-  rrSub: { fontSize: 13, color: '#64748b', marginTop: 8 },
+  rrSub: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 8 },
   resultRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '8px 0',
-    borderBottom: '1px solid #1e293b',
+    borderBottom: '1px solid var(--border)',
   },
-  resultRowHighlight: { background: '#1e293b', borderRadius: 6, padding: '8px 12px', marginBottom: 4 },
-  resultLabel: { fontSize: 13, color: '#94a3b8' },
-  resultValue: { fontSize: 14, color: '#cbd5e1', fontWeight: 500 },
-  placeholder: { color: '#475569', fontSize: 14, textAlign: 'center', padding: '32px 0' },
+  resultRowHighlight: { background: 'var(--raised)', borderRadius: 6, padding: '8px 12px', marginBottom: 4 },
+  resultLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)' },
+  resultValue: { fontSize: 14, color: 'var(--text-dim)', fontWeight: 500 },
+  placeholder: { color: 'var(--text-faint)', fontSize: 14, textAlign: 'center', padding: '32px 0' },
   vizWrap: { padding: '16px 0' },
   vizBar: {
     position: 'relative',
     height: 240,
-    background: '#0f172a',
+    background: 'var(--surface)',
     borderRadius: 8,
-    border: '1px solid #334155',
+    border: '1px solid var(--border-strong)',
     overflow: 'hidden',
   },
   vizZone: { position: 'absolute', left: 0, right: 0 },
@@ -793,7 +829,7 @@ const s: Record<string, React.CSSProperties> = {
   vizLineLabel: { fontSize: 11, fontWeight: 600 },
   vizLinePrice: { fontSize: 11 },
   tipList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  tip: { fontSize: 13, color: '#94a3b8', lineHeight: 1.5 },
+  tip: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.5 },
 };
 
 export default RiskCalculator;

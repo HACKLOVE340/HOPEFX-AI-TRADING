@@ -318,7 +318,6 @@ class TestConstruction:
         a = LLMAgent(api_key="k")
 
         assert a._backend == "anthropic"
-        assert a._openai_client is None
 
     def test_anthropic_without_a_key_refuses_to_construct(self, monkeypatch):
         monkeypatch.setattr(agent_mod, "_ANTHROPIC_API_KEY", None, raising=False)
@@ -345,14 +344,21 @@ class TestConstruction:
         with pytest.raises(ValueError, match="OpenAI API key required"):
             LLMAgent(backend="openai")
 
-    def test_openai_builds_an_async_client(self, monkeypatch):
+    def test_constructing_an_openai_agent_builds_no_vendor_client(self, monkeypatch):
+        """The agent no longer holds a vendor SDK client — the gateway makes the call.
+
+        This asserted `fake_openai.AsyncOpenAI.assert_called_once_with(api_key=...)`,
+        which is the bypass itself: a client constructed here reaches OpenAI
+        without the chain, the ceiling, the guardrails or the audit record.
+        """
         fake_openai = MagicMock()
         monkeypatch.setitem(__import__("sys").modules, "openai", fake_openai)
 
         a = LLMAgent(api_key="k", backend="openai")
 
         assert a._anthropic_key is None
-        fake_openai.AsyncOpenAI.assert_called_once_with(api_key="k")
+        assert not hasattr(a, "_openai_client")
+        fake_openai.AsyncOpenAI.assert_not_called()
 
     def test_an_explicit_model_overrides_the_default(self):
         assert LLMAgent(api_key="k", backend="anthropic", model="custom-1").model == "custom-1"
@@ -561,299 +567,179 @@ class TestFetchRagContext:
         assert await a._fetch_rag_context() == ""
 
 
-# ── Anthropic transport ───────────────────────────────────────────────────────
+# ── the model call ────────────────────────────────────────────────────────────
+#
+# `_call_anthropic` and `_call_openai` are gone. They posted to
+# api.anthropic.com and called the `openai` SDK inline, each with its own retry
+# loop that retried the SAME vendor with backoff -- the one thing that does not
+# help when that vendor is what is down -- and neither had a spend ceiling, an
+# audit record, or an input guardrail. The agent turns operator text into
+# trading strategies, so it is exactly the caller those controls exist for.
+#
+# What replaced them is `_call_gateway`, and the behaviours the old tests
+# asserted now belong in two places: transport (retry, status mapping,
+# fall-through to a second vendor) is the gateway's, tested in
+# tests/unit/test_ai_gateway*.py; the agent's own contract -- fence stripping,
+# history handling, and turning a failure into ("", reason) rather than an
+# exception -- is tested here.
 
 
-class TestCallAnthropic:
+class _StubResponse:
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.provider = "anthropic"
+        self.model = "claude-opus-5"
+        self.latency_ms = 1.0
+        self.cost_usd = 0.0
+        self.tokens_in = 1
+        self.tokens_out = 1
+
+
+def _patch_gateway(monkeypatch, *, result=None, raises=None):
+    """Stub the gateway at its boundary and capture the request it was given."""
+    import ai.gateway.adapters as adapters_module
+    import ai.gateway.client as client_module
+
+    captured: dict = {}
+
+    class _Client:
+        def __init__(self, providers=None, **_kw) -> None:
+            self.providers = providers
+
+        def call_sync(self, request, *, operator):
+            captured["request"] = request
+            captured["operator"] = operator
+            if raises is not None:
+                raise raises
+            return result
+
+    monkeypatch.setattr(client_module, "GatewayClient", _Client)
+    monkeypatch.setattr(adapters_module, "build_providers", lambda: {"anthropic": object()})
+    return captured
+
+
+class TestCallGateway:
     @pytest.mark.asyncio
     async def test_a_successful_call_returns_stripped_content(self, anthropic_agent, monkeypatch):
-        _patch_httpx(monkeypatch, _anthropic_response("```python\nx = 1\n```"))
+        _patch_gateway(monkeypatch, result=_StubResponse("```python\nx = 1\n```"))
 
-        content, error = await anthropic_agent._call_anthropic(
-            [{"role": "user", "content": "hi"}], update_history=False
-        )
+        content, error = await anthropic_agent._call_gateway([{"role": "user", "content": "hi"}], update_history=False)
 
         assert error is None
         assert content == "x = 1"
 
     @pytest.mark.asyncio
-    async def test_the_system_prompt_is_hoisted_out_of_the_messages(self, anthropic_agent, monkeypatch):
-        """Anthropic takes `system` as a top-level field, not a message role."""
-        posted = _patch_httpx(monkeypatch, _anthropic_response())
+    async def test_the_system_role_is_labelled_not_dropped(self, anthropic_agent, monkeypatch):
+        """The gateway speaks in prompts; a system instruction must stay distinguishable."""
+        captured = _patch_gateway(monkeypatch, result=_StubResponse("ok"))
 
-        await anthropic_agent._call_anthropic(
+        await anthropic_agent._call_gateway(
             [{"role": "system", "content": "SYS"}, {"role": "user", "content": "hi"}],
             update_history=False,
         )
 
-        body = posted[0]["json"]
-        assert body["system"] == "SYS"
-        assert [m["role"] for m in body["messages"]] == ["user"]
+        prompt = captured["request"].prompt
+        assert "[system]" in prompt and "SYS" in prompt
+        assert prompt.rstrip().endswith("hi")
 
     @pytest.mark.asyncio
-    async def test_multiple_system_messages_are_concatenated(self, anthropic_agent, monkeypatch):
-        posted = _patch_httpx(monkeypatch, _anthropic_response())
+    async def test_empty_messages_do_not_reach_a_provider(self, anthropic_agent, monkeypatch):
+        captured = _patch_gateway(monkeypatch, result=_StubResponse("ok"))
 
-        await anthropic_agent._call_anthropic(
-            [
-                {"role": "system", "content": "A"},
-                {"role": "system", "content": "B"},
-                {"role": "user", "content": "hi"},
-            ],
-            update_history=False,
-        )
+        content, error = await anthropic_agent._call_gateway([{"role": "user", "content": "  "}], update_history=False)
 
-        assert posted[0]["json"]["system"] == "A\n\nB"
+        assert content == ""
+        assert error is not None
+        assert "request" not in captured, "an empty prompt was still sent and billed"
 
     @pytest.mark.asyncio
-    async def test_the_api_key_travels_in_the_header(self, anthropic_agent, monkeypatch):
-        posted = _patch_httpx(monkeypatch, _anthropic_response())
+    async def test_history_is_appended_only_when_asked(self, anthropic_agent, monkeypatch):
+        _patch_gateway(monkeypatch, result=_StubResponse("answer"))
 
-        await anthropic_agent._call_anthropic([{"role": "user", "content": "hi"}], update_history=False)
+        before = len(anthropic_agent._history)
+        await anthropic_agent._call_gateway([{"role": "user", "content": "hi"}], update_history=False)
+        assert len(anthropic_agent._history) == before
 
-        assert posted[0]["headers"]["x-api-key"] == "placeholder-key"
-        assert posted[0]["headers"]["anthropic-version"] == "2023-06-01"
-
-    @pytest.mark.asyncio
-    async def test_update_history_appends_the_assistant_turn(self, anthropic_agent, monkeypatch):
-        _patch_httpx(monkeypatch, _anthropic_response("answer"))
-
-        await anthropic_agent._call_anthropic([{"role": "user", "content": "hi"}], update_history=True)
-
+        await anthropic_agent._call_gateway([{"role": "user", "content": "hi"}], update_history=True)
         assert anthropic_agent._history[-1] == {"role": "assistant", "content": "answer"}
 
     @pytest.mark.asyncio
-    async def test_not_updating_history_leaves_it_empty(self, anthropic_agent, monkeypatch):
-        _patch_httpx(monkeypatch, _anthropic_response("answer"))
+    async def test_generation_is_billed_to_the_agent_not_a_person(self, anthropic_agent, monkeypatch):
+        """A strategy-search loop must not exhaust an operator's ceiling."""
+        captured = _patch_gateway(monkeypatch, result=_StubResponse("ok"))
 
-        await anthropic_agent._call_anthropic([{"role": "user", "content": "hi"}], update_history=False)
+        await anthropic_agent._call_gateway([{"role": "user", "content": "hi"}], update_history=False)
 
-        assert len(anthropic_agent._history) == 0
+        assert captured["operator"] == "strategy-agent"
 
     @pytest.mark.asyncio
-    async def test_a_401_fails_immediately_without_sleeping(self, anthropic_agent, monkeypatch, no_sleep):
-        """A bad key is not transient. Retrying it burns 3s per call for nothing."""
-        _patch_httpx(monkeypatch, _http_status_error(401))
+    async def test_an_unconfigured_deployment_reports_it_rather_than_raising(self, anthropic_agent, monkeypatch):
+        import ai.gateway.adapters as adapters_module
 
-        content, error = await anthropic_agent._call_anthropic(
-            [{"role": "user", "content": "hi"}], update_history=False
-        )
+        monkeypatch.setattr(adapters_module, "build_providers", lambda: {})
+
+        content, error = await anthropic_agent._call_gateway([{"role": "user", "content": "hi"}], update_history=False)
 
         assert content == ""
-        assert error == "Invalid Anthropic API key"
-        assert no_sleep == []
+        assert "No LLM vendor is configured" in (error or "")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("status", [429, 503, 529])
-    async def test_transient_statuses_retry_with_exponential_backoff(
-        self, anthropic_agent, monkeypatch, no_sleep, status
-    ):
-        _patch_httpx(monkeypatch, *[_http_status_error(status)] * agent_mod._LLM_MAX_RETRIES)
+    async def test_a_budget_refusal_is_returned_as_an_error_not_raised(self, anthropic_agent, monkeypatch):
+        """Callers above this expect (content, error); an exception would abort the loop."""
+        from ai.gateway.client import BudgetExceeded
 
-        _content, error = await anthropic_agent._call_anthropic(
-            [{"role": "user", "content": "hi"}], update_history=False
-        )
+        _patch_gateway(monkeypatch, raises=BudgetExceeded("operator budget exhausted"))
 
-        assert "after" in error and "retries" in error
-        assert no_sleep == [agent_mod._LLM_RETRY_BASE_DELAY * (2**i) for i in range(agent_mod._LLM_MAX_RETRIES)]
-
-    @pytest.mark.asyncio
-    async def test_a_retry_that_then_succeeds_returns_the_content(self, anthropic_agent, monkeypatch, no_sleep):
-        _patch_httpx(monkeypatch, _http_status_error(429), _anthropic_response("recovered"))
-
-        content, error = await anthropic_agent._call_anthropic(
-            [{"role": "user", "content": "hi"}], update_history=False
-        )
-
-        assert error is None
-        assert content == "recovered"
-        assert len(no_sleep) == 1
-
-    @pytest.mark.asyncio
-    async def test_a_non_transient_status_is_reported_verbatim(self, anthropic_agent, monkeypatch, no_sleep):
-        _patch_httpx(monkeypatch, _http_status_error(400, "bad request body"))
-
-        _content, error = await anthropic_agent._call_anthropic(
-            [{"role": "user", "content": "hi"}], update_history=False
-        )
-
-        assert "400" in error
-        assert "bad request body" in error
-        assert no_sleep == []
-
-    @pytest.mark.asyncio
-    async def test_a_connection_error_retries_then_gives_up(self, anthropic_agent, monkeypatch, no_sleep):
-        import httpx
-
-        _patch_httpx(monkeypatch, *[httpx.ConnectError("refused")] * agent_mod._LLM_MAX_RETRIES)
-
-        _content, error = await anthropic_agent._call_anthropic(
-            [{"role": "user", "content": "hi"}], update_history=False
-        )
-
-        assert "connection error" in error
-        assert len(no_sleep) == agent_mod._LLM_MAX_RETRIES
-
-    @pytest.mark.asyncio
-    async def test_a_malformed_payload_is_an_error_not_a_traceback(self, anthropic_agent, monkeypatch):
-        broken = MagicMock()
-        broken.raise_for_status = MagicMock()
-        broken.json = MagicMock(return_value={"unexpected": True})
-        _patch_httpx(monkeypatch, broken)
-
-        content, error = await anthropic_agent._call_anthropic(
-            [{"role": "user", "content": "hi"}], update_history=False
-        )
+        content, error = await anthropic_agent._call_gateway([{"role": "user", "content": "hi"}], update_history=False)
 
         assert content == ""
-        assert "LLM call failed" in error
-
-
-# ── OpenAI transport ──────────────────────────────────────────────────────────
-
-
-def _openai_agent(monkeypatch, model="gpt-4o"):
-    import sys
-
-    fake = MagicMock()
-    fake.AuthenticationError = type("AuthenticationError", (Exception,), {})
-    fake.RateLimitError = type("RateLimitError", (Exception,), {})
-    fake.InternalServerError = type("InternalServerError", (Exception,), {})
-    fake.APIConnectionError = type("APIConnectionError", (Exception,), {})
-    monkeypatch.setitem(sys.modules, "openai", fake)
-
-    a = LLMAgent(api_key="k", backend="openai", model=model, enable_rag=False)
-    a._openai_client = MagicMock()
-    a._openai_client.chat.completions.create = AsyncMock()
-    return a, fake
-
-
-def _openai_reply(text="ok"):
-    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text))])
-
-
-class TestCallOpenAI:
-    @pytest.mark.asyncio
-    async def test_a_successful_call_returns_stripped_content(self, monkeypatch):
-        a, _ = _openai_agent(monkeypatch)
-        a._openai_client.chat.completions.create.return_value = _openai_reply("```\ny = 2\n```")
-
-        content, error = await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
-
-        assert error is None
-        assert content == "y = 2"
+        assert "budget" in (error or "").lower()
 
     @pytest.mark.asyncio
-    async def test_a_chat_model_gets_max_tokens_and_a_temperature(self, monkeypatch):
-        a, _ = _openai_agent(monkeypatch, model="gpt-4o")
-        a._openai_client.chat.completions.create.return_value = _openai_reply()
+    async def test_a_guardrail_rejection_is_returned_as_an_error(self, anthropic_agent, monkeypatch):
+        from ai.guardrails.output import GuardrailViolation
 
-        await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
+        _patch_gateway(monkeypatch, raises=GuardrailViolation("unsafe instruction pattern"))
 
-        kwargs = a._openai_client.chat.completions.create.call_args.kwargs
-        assert "max_tokens" in kwargs
-        assert kwargs["temperature"] == 0.3
-
-    @pytest.mark.asyncio
-    async def test_a_reasoning_model_gets_max_completion_tokens_and_no_temperature(self, monkeypatch):
-        """o-series models reject both `max_tokens` and `temperature`."""
-        a, _ = _openai_agent(monkeypatch, model="o4-mini")
-        a._openai_client.chat.completions.create.return_value = _openai_reply()
-
-        await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
-
-        kwargs = a._openai_client.chat.completions.create.call_args.kwargs
-        assert "max_completion_tokens" in kwargs
-        assert "max_tokens" not in kwargs
-        assert "temperature" not in kwargs
-
-    @pytest.mark.asyncio
-    async def test_an_auth_error_fails_immediately(self, monkeypatch, no_sleep):
-        a, fake = _openai_agent(monkeypatch)
-        a._openai_client.chat.completions.create.side_effect = fake.AuthenticationError("nope")
-
-        content, error = await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
+        content, error = await anthropic_agent._call_gateway([{"role": "user", "content": "hi"}], update_history=False)
 
         assert content == ""
-        assert error == "Invalid OpenAI API key"
-        assert no_sleep == []
+        assert "Guardrail" in (error or "")
 
     @pytest.mark.asyncio
-    async def test_a_rate_limit_retries_then_gives_up(self, monkeypatch, no_sleep):
-        a, fake = _openai_agent(monkeypatch)
-        a._openai_client.chat.completions.create.side_effect = fake.RateLimitError("slow down")
+    async def test_every_leg_failing_is_reported_not_raised(self, anthropic_agent, monkeypatch):
+        from ai.gateway.client import NoProviderAvailable
 
-        _content, error = await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
+        _patch_gateway(monkeypatch, raises=NoProviderAvailable("no model served role 'reasoning'"))
 
-        assert "rate limit" in error
-        assert len(no_sleep) == agent_mod._LLM_MAX_RETRIES
+        content, error = await anthropic_agent._call_gateway([{"role": "user", "content": "hi"}], update_history=False)
 
-    @pytest.mark.asyncio
-    async def test_a_server_error_retries(self, monkeypatch, no_sleep):
-        a, fake = _openai_agent(monkeypatch)
-        a._openai_client.chat.completions.create.side_effect = fake.InternalServerError("500")
-
-        _content, error = await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
-
-        assert "server error" in error
-        assert len(no_sleep) == agent_mod._LLM_MAX_RETRIES
-
-    @pytest.mark.asyncio
-    async def test_a_connection_error_retries(self, monkeypatch, no_sleep):
-        a, fake = _openai_agent(monkeypatch)
-        a._openai_client.chat.completions.create.side_effect = fake.APIConnectionError("down")
-
-        _content, error = await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
-
-        assert "connection error" in error
-
-    @pytest.mark.asyncio
-    async def test_an_unexpected_error_is_reported_without_retrying(self, monkeypatch, no_sleep):
-        a, _ = _openai_agent(monkeypatch)
-        a._openai_client.chat.completions.create.side_effect = ValueError("weird")
-
-        _content, error = await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
-
-        assert "LLM call failed" in error
-        assert no_sleep == []
-
-    @pytest.mark.asyncio
-    async def test_a_recovery_after_one_retry_succeeds(self, monkeypatch, no_sleep):
-        a, fake = _openai_agent(monkeypatch)
-        a._openai_client.chat.completions.create.side_effect = [
-            fake.RateLimitError("slow"),
-            _openai_reply("recovered"),
-        ]
-
-        content, error = await a._call_openai([{"role": "user", "content": "hi"}], update_history=False)
-
-        assert error is None
-        assert content == "recovered"
-
-
-# ── backend dispatch ──────────────────────────────────────────────────────────
+        assert content == ""
+        assert "No LLM vendor answered" in (error or "")
 
 
 class TestBackendDispatch:
     @pytest.mark.asyncio
-    async def test_call_llm_routes_to_anthropic_with_history(self, anthropic_agent):
-        with patch.object(anthropic_agent, "_call_anthropic", new=AsyncMock(return_value=("x", None))) as spy:
+    async def test_call_llm_uses_the_history_and_updates_it(self, anthropic_agent):
+        with patch.object(anthropic_agent, "_call_gateway", new=AsyncMock(return_value=("x", None))) as spy:
             await anthropic_agent._call_llm()
 
         assert spy.call_args.kwargs["update_history"] is True
 
     @pytest.mark.asyncio
     async def test_call_llm_with_messages_does_not_touch_history(self, anthropic_agent):
-        with patch.object(anthropic_agent, "_call_anthropic", new=AsyncMock(return_value=("x", None))) as spy:
+        with patch.object(anthropic_agent, "_call_gateway", new=AsyncMock(return_value=("x", None))) as spy:
             await anthropic_agent._call_llm_with_messages([{"role": "user", "content": "hi"}])
 
         assert spy.call_args.kwargs["update_history"] is False
 
     @pytest.mark.asyncio
-    async def test_an_openai_agent_routes_to_openai(self, monkeypatch):
-        a, _ = _openai_agent(monkeypatch)
+    async def test_an_openai_agent_takes_the_same_path(self, monkeypatch):
+        """One door. The chain decides the vendor, not the agent's constructor."""
+        monkeypatch.setitem(__import__("sys").modules, "openai", MagicMock())
+        a = LLMAgent(api_key="k", backend="openai")
 
-        with patch.object(a, "_call_openai", new=AsyncMock(return_value=("x", None))) as spy:
+        with patch.object(a, "_call_gateway", new=AsyncMock(return_value=("x", None))) as spy:
             await a._call_llm()
 
         assert spy.called

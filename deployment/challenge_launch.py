@@ -24,6 +24,8 @@ CHALLENGE_MIN_DAYS       — Min trading days (default 4)
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 import logging
 import os
@@ -330,7 +332,7 @@ class ChallengeLauncher:
                 await interaction.response.send_message("No paper trading session found.", ephemeral=True)
                 return
             try:
-                s = json.loads(launcher.status_file.read_text())
+                s = json.loads(await asyncio.to_thread(launcher.status_file.read_text))
             except Exception:
                 await interaction.response.send_message("Status file unreadable.", ephemeral=True)
                 return

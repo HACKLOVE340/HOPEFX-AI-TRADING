@@ -44,6 +44,7 @@ from brokers.base import (
     OrderStatus,
     OrderType,
     Position,
+    closing_side,
 )
 
 logger = logging.getLogger(__name__)
@@ -669,7 +670,7 @@ class IBKRConnector(BrokerConnector):
                 logger.warning("IBKRConnector.close_position: no position for %s.", symbol)
                 return False
             for pos in positions:
-                close_side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
+                close_side = closing_side(pos)
                 self.place_order(
                     symbol=symbol,
                     side=close_side,

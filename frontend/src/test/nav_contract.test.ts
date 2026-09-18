@@ -44,7 +44,7 @@ function internalLinkTargets(): Array<{ file: string; to: string }> {
         out.push({ file: entry.name, to: m[1]! });
       }
       // Template literals: capture the leading static segment, e.g. `/profile/${id}`.
-      for (const m of src.matchAll(/(?:to=\{|navigate\()\s*`(\/[a-z0-9\-]+)\/\$\{/gi)) {
+      for (const m of src.matchAll(/(?:to=\{|navigate\()\s*`(\/[a-z0-9-]+)\/\$\{/gi)) {
         out.push({ file: entry.name, to: `${m[1]!}/:param` });
       }
     }

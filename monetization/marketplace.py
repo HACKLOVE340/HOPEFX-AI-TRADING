@@ -28,6 +28,37 @@ except ImportError:
     stripe = None  # type: ignore[assignment]
 
 
+from decimal import ROUND_HALF_UP as _ROUND_HALF_UP
+from decimal import Decimal as _Decimal
+
+PLATFORM_FEE_PCT = 0.20
+"""The platform's cut. Named once so the two marketplaces cannot drift apart."""
+
+
+def split_revenue(price: float) -> tuple[float, float]:
+    """Split *price* into (platform_fee, creator_payout) so the two sum to it.
+
+    This was ``round(price * 0.20, 2)`` and ``round(price * 0.80, 2)`` — two
+    independent roundings of the same total, which on a sub-cent price did not
+    add back up to it. Measured at half a cent per purchase, and in the
+    opposite direction from the identical split in ``social/marketplace.py``
+    for the same price: 12.575 paid the creator 10.06 there and 10.06 here but
+    totalled 12.570 there and 12.580 here.
+
+    Quantise once, derive the other side by subtraction, so the split conserves
+    by construction. Cent-priced listings are unaffected.
+
+    ``social.marketplace.StrategyMarketplace.split_revenue`` applies the same
+    rule against its own ``PLATFORM_FEE_PCT``; a test pins that the two agree,
+    because a creator's payout must not depend on which code path sold the
+    strategy.
+    """
+    cents = _Decimal("0.01")
+    total = _Decimal(str(price)).quantize(cents, rounding=_ROUND_HALF_UP)
+    fee = (total * _Decimal(str(PLATFORM_FEE_PCT))).quantize(cents, rounding=_ROUND_HALF_UP)
+    return float(fee), float(total - fee)
+
+
 class SubscriptionTier(Enum):
     FREE = "free"
     STARTER = "starter"
@@ -875,7 +906,9 @@ class StrategyReview:
 
 # ── Full StrategyMarketplace implementation expected by tests ─────────────────
 import uuid as _uuid
-from decimal import Decimal as _Decimal
+
+# `_Decimal` is imported at module top for split_revenue(); the re-import that
+# used to sit here was a duplicate once that arrived.
 
 
 @dataclass
@@ -1026,8 +1059,7 @@ class StrategyMarketplace:
             amount=s.price,
             status="completed",
             license_key=str(_uuid.uuid4()),
-            platform_fee=round(price * 0.20, 2),
-            creator_payout=round(price * 0.80, 2),
+            **dict(zip(("platform_fee", "creator_payout"), split_revenue(price), strict=True)),
         )
         self._purchases[pid] = p
         self._licenses.setdefault(buyer_id, set()).add(strategy_id)

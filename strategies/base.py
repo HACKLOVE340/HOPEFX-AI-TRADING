@@ -20,6 +20,32 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def first_non_empty(*candidates: Any) -> Any:
+    """First candidate that actually holds data, or ``None``.
+
+    Three strategies wrote this as ``data.get("prices") or data.get("close")``
+    — ``rsi_strategy``, ``macd_strategy`` and ``bollinger_bands``, all three
+    followed on the very next line by
+    ``pd.Series(prices) if not isinstance(prices, pd.Series) else prices``.
+
+    ``or`` calls ``__bool__``, which pandas raises on for a Series:
+
+        ValueError: The truth value of a Series is ambiguous.
+
+    So in all three, the branch written to accept a Series could never be
+    reached — passing one raised from the ``or`` first. ``len()`` is the right
+    test and ``bool()`` is not: pandas defines ``__len__`` and raises on
+    ``__bool__``.
+
+    The falsy-fallback semantics of the original are preserved exactly: an
+    empty list under ``prices`` still falls through to ``close``. See F277.
+    """
+    for candidate in candidates:
+        if candidate is not None and len(candidate):
+            return candidate
+    return None
+
+
 class SignalType(Enum):
     """Trading signal types"""
 

@@ -268,10 +268,21 @@ jobs:
           if [ "$CODE" != "200" ]; then
             echo "FAIL: expected 200, got $CODE"; FAIL=1
           else
+            # api/health.py returns ReadinessResponse: ready, timestamp,
+            # failed_critical, components. There is no `status` key. This block
+            # asserted `d.get('status') in ('ready','ok','healthy')`, which is
+            # `None in (...)` against the real payload and can only fail.
+            #
+            # It had never run. The assertion is reachable only when the probe
+            # returns 200, and readiness returned 503 on every deployment until
+            # F270 removed the pool listeners that kept `db_pool` down. The first
+            # run in which readiness worked was the first run in which this
+            # assertion executed, and it was wrong.
             echo "$BODY" | python3 -c "
           import sys,json
           d=json.load(sys.stdin)
-          assert d.get('status') in ('ready','ok','healthy'), f'bad status: {d}'
+          assert d.get('ready') is True, f'not ready: {d}'
+          assert d.get('failed_critical') == [], f'critical components down: {d[\"failed_critical\"]}'
           print('PASS: readiness probe')
           " || FAIL=1
           fi
@@ -387,8 +398,28 @@ jobs:
           # ── 8. Logout ───────────────────────────────────────────────────────
           echo "--- Test 8: POST /api/auth/logout ---"
           if [ -n "$ACCESS_TOKEN" ]; then
+            # Logout is a state-changing POST, so core/middleware.py's CSRF
+            # guard requires the double-submit pair: the `hopefx_csrf` cookie
+            # issued by GET /api/auth/csrf-token, and the same value echoed in
+            # the X-CSRF-Token header. /login and /register are exempt (pre-auth,
+            # no cookie yet), /logout is not — so this test asked for a 200 and
+            # got 403 "CSRF token missing", which is the guard working.
+            CSRF=$(curl -s -c /tmp/smoke_cookies \
+              -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+              "${BASE}/api/auth/csrf-token" \
+              | python3 -c 'import sys,json; print(json.load(sys.stdin).get("csrf_token",""))' 2>/dev/null || echo "")
+            if [ -z "$CSRF" ]; then
+              echo "FAIL: could not obtain a CSRF token from /api/auth/csrf-token"; FAIL=1
+            fi
+            # `logout(body: LogoutRequest, ...)` takes the body as a required
+            # parameter. Both of its fields are optional, so `{}` satisfies it
+            # and the token to blacklist is read from the Authorization header —
+            # but sending no body at all is a 422 "Field required", which is
+            # what this test got once the CSRF 403 was out of the way.
             CODE=$(curl_retry "${BASE}/api/auth/logout" \
-              -X POST -H "Authorization: Bearer ${ACCESS_TOKEN}")
+              -X POST -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+              -b /tmp/smoke_cookies -H "X-CSRF-Token: ${CSRF}" \
+              -H "Content-Type: application/json" -d '{}')
             BODY=$(cat /tmp/smoke_body)
             echo "HTTP $CODE  body: ${BODY:0:200}"
             if [ "$CODE" != "200" ]; then

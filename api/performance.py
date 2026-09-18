@@ -16,6 +16,8 @@ GET /api/performance/public         — public summary stats (no auth required)
 
 from __future__ import annotations
 
+import asyncio
+
 import logging
 from datetime import datetime
 import math
@@ -387,7 +389,7 @@ async def get_latest_weekly_report(
             status_code=404,
             detail="No weekly reports generated yet. POST /api/performance/weekly-report/generate to create one.",
         )
-    data = _json.loads(reports[0].read_text())
+    data = _json.loads(await asyncio.to_thread(reports[0].read_text))
     return JSONResponse(content=data)
 
 

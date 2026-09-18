@@ -4,7 +4,18 @@
 """
 ml/verify_model.py
 ==================
-Model integrity verifier — run at startup and in CI.
+Model integrity verifier — run in CI and before deployment.
+
+Callers: `scripts/ci/gate_d_model_accuracy.py` (CI Gate D), `ci.yml`,
+`retrain.yml`, `quarterly_retrain.yml`, and `scripts/retrain.sh`, which refuses
+to deploy when this exits non-zero.
+
+NOT run at process startup, which this line used to claim. `core/main_loop.py`
+calls `_verify_model_registry()`, a narrower check that verifies the active
+model's SHA-256 via ModelRegistry and nothing else — so the Sharpe floor, the
+trade-count credibility floor, the state check and the meta reconciliation
+below are enforced before deployment only. A model promoted out of band would
+serve without meeting them.
 
 Checks:
   1. current.pkl symlink exists and resolves to a real file

@@ -477,7 +477,7 @@ class StripeProductionClient:
 
         except Exception as exc:
             error_code = getattr(getattr(exc, "error", None), "code", "stripe_error")
-            logger.exception("Stripe PaymentIntent failed: %s")
+            logger.exception("Stripe PaymentIntent failed")
             return PaymentResult(
                 success=False,
                 payment_intent_id=None,

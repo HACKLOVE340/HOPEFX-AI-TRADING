@@ -34,7 +34,7 @@ export class PanelErrorBoundary extends Component<Props, State> {
     if (!this.state.hasError) return this.props.children;
 
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 p-4 bg-[#0d1421] border border-[#ff3b5c]/20 rounded-lg">
+      <div className="flex flex-col items-center justify-center h-full gap-3 p-4 bg-[var(--surface)] border border-[#ff3b5c]/20 rounded-lg">
         <div className="flex items-center gap-2">
           <span className="text-[#ff3b5c] text-sm">⚠</span>
           <span className="text-[11px] font-semibold text-[#ff3b5c] uppercase tracking-wider">
@@ -46,7 +46,7 @@ export class PanelErrorBoundary extends Component<Props, State> {
         </p>
         <button
           onClick={this.reset}
-          className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider rounded border border-[#1e2d3d] text-slate-400 hover:text-slate-200 hover:border-[#2d4a6b] transition-colors"
+          className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider rounded border border-[var(--border)] text-slate-400 hover:text-slate-200 hover:border-[#2d4a6b] transition-colors"
         >
           Retry
         </button>

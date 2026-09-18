@@ -18,9 +18,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, superadminApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { CircleDot, Search, Shield, Stethoscope, Tag, Zap } from 'lucide-react';
 
 // ── Maintenance / Broadcast types ─────────────────────────────────────────────
 
@@ -108,25 +109,25 @@ const KpiCard: React.FC<{
   label: string; value: string; sub?: string; accent?: string;
 }> = ({ label, value, sub, accent }) => (
   <div style={{
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10,
     padding: '18px 20px', borderTop: accent ? `3px solid ${accent}` : undefined,
   }}>
-    <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
       {label}
     </div>
-    <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc', lineHeight: 1 }}>{value}</div>
-    {sub && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{sub}</div>}
+    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-strong)', lineHeight: 1 }}>{value}</div>
+    {sub && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{sub}</div>}
   </div>
 );
 
 const QuickAction: React.FC<{
-  icon: string; label: string; desc: string; path: string; onClick: (p: string) => void;
+  icon: React.ReactNode; label: string; desc: string; path: string; onClick: (p: string) => void;
 }> = ({ icon, label, desc, path, onClick }) => (
   <button
     onClick={() => onClick(path)}
     style={{
-      background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-      padding: '14px 16px', cursor: 'pointer', textAlign: 'left', color: '#f1f5f9',
+      background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
+      padding: '14px 16px', cursor: 'pointer', textAlign: 'left', color: 'var(--text-strong)',
       transition: 'border-color 0.15s, background 0.15s',
     }}
     onMouseEnter={e => {
@@ -139,8 +140,8 @@ const QuickAction: React.FC<{
     }}
   >
     <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
-    <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', marginBottom: 2 }}>{label}</div>
-    <div style={{ fontSize: 11, color: '#64748b' }}>{desc}</div>
+    <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 2 }}>{label}</div>
+    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</div>
   </button>
 );
 
@@ -197,8 +198,8 @@ const MaintenanceBroadcastPanel: React.FC = () => {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '8px 12px', background: '#0f172a',
-    border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9',
+    width: '100%', padding: '8px 12px', background: 'var(--surface)',
+    border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)',
     fontSize: 13, boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit',
   };
 
@@ -209,11 +210,11 @@ const MaintenanceBroadcastPanel: React.FC = () => {
   return (
     <div style={{ margin: '0 24px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
       {/* Maintenance mode */}
-      <div style={{ background: '#1e293b', border: `1px solid ${maint.maintenance_mode ? '#f59e0b' : '#334155'}`, borderRadius: 10, padding: 20 }}>
+      <div style={{ background: 'var(--raised)', border: `1px solid ${maint.maintenance_mode ? '#f59e0b' : '#334155'}`, borderRadius: 10, padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>🔧 Maintenance Mode</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>🔧 Maintenance Mode</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
               {maint.maintenance_mode ? '⚠️ ACTIVE — users see downtime page' : 'Platform is live'}
             </div>
           </div>
@@ -227,8 +228,8 @@ const MaintenanceBroadcastPanel: React.FC = () => {
           </div>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Message shown to users</label>
-          <input
+          <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message shown to users</label>
+          <input aria-label="We're performing scheduled maintenance. Back shortly"
             style={inputStyle}
             value={maint.maintenance_message}
             onChange={e => setMaint(m => ({ ...m, maintenance_message: e.target.value }))}
@@ -240,7 +241,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
           disabled={saving}
           style={{
             width: '100%', padding: '9px 16px', borderRadius: 7, cursor: 'pointer',
-            fontSize: 13, fontWeight: 700, border: 'none', fontFamily: 'inherit',
+            fontSize: 'var(--fs-body)', fontWeight: 700, border: 'none', fontFamily: 'inherit',
             background: maint.maintenance_mode ? '#16a34a' : '#b45309',
             color: '#fff', opacity: saving ? 0.7 : 1,
           }}
@@ -250,15 +251,15 @@ const MaintenanceBroadcastPanel: React.FC = () => {
       </div>
 
       {/* Broadcast */}
-      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', marginBottom: 14 }}>📡 Broadcast Message</div>
+      <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 20 }}>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 14 }}>📡 Broadcast Message</div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Title</label>
-          <input style={inputStyle} value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
+          <label id="adminpanel-title-label" htmlFor="adminpanel-title" style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Title</label>
+          <input id="adminpanel-title" aria-labelledby="adminpanel-title-label" style={inputStyle} value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
         </div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Message</label>
-          <textarea
+          <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message</label>
+          <textarea aria-label="Message to send to all active users"
             style={{ ...inputStyle, resize: 'vertical' as const }}
             rows={3}
             value={broadcast.body}
@@ -272,7 +273,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
               flex: 1, padding: '5px 0', borderRadius: 5, cursor: 'pointer', fontSize: 10, fontWeight: 700,
               border: `1px solid ${broadcast.type === t ? BROADCAST_COLORS[t] : '#334155'}`,
               background: broadcast.type === t ? `${BROADCAST_COLORS[t]}20` : 'transparent',
-              color: broadcast.type === t ? BROADCAST_COLORS[t] : '#475569',
+              color: broadcast.type === t ? BROADCAST_COLORS[t] : 'var(--text-faint)',
               fontFamily: 'inherit', textTransform: 'uppercase',
             }}>{t}</button>
           ))}
@@ -282,7 +283,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
           disabled={saving || !broadcast.title || !broadcast.body}
           style={{
             width: '100%', padding: '9px 16px', borderRadius: 7, cursor: 'pointer',
-            fontSize: 13, fontWeight: 700, border: 'none', fontFamily: 'inherit',
+            fontSize: 'var(--fs-body)', fontWeight: 700, border: 'none', fontFamily: 'inherit',
             background: '#1d4ed8', color: '#fff',
             opacity: (saving || !broadcast.title || !broadcast.body) ? 0.5 : 1,
           }}
@@ -294,9 +295,9 @@ const MaintenanceBroadcastPanel: React.FC = () => {
       {statusMsg && (
         <div style={{
           gridColumn: '1 / -1',
-          padding: '10px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+          padding: '10px 14px', borderRadius: 7, fontSize: 'var(--fs-body)', fontWeight: 600,
           background: statusMsg.includes('failed') || statusMsg.includes('Failed') ? '#450a0a' : '#052e16',
-          color: statusMsg.includes('failed') || statusMsg.includes('Failed') ? '#f87171' : '#4ade80',
+          color: statusMsg.includes('failed') || statusMsg.includes('Failed') ? 'var(--loss)' : 'var(--gain)',
         }}>
           {statusMsg}
         </div>
@@ -353,37 +354,36 @@ const AdminPanel: React.FC = () => {
 
   const sectionStyle: React.CSSProperties = {
     margin: '0 24px 24px',
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 10,
     overflow: 'hidden',
   };
   const sectionHeader: React.CSSProperties = {
     padding: '14px 20px',
-    borderBottom: '1px solid #334155',
-    fontSize: 13, fontWeight: 700, color: '#94a3b8',
+    borderBottom: '1px solid var(--border-strong)',
+    fontSize: 13, fontWeight: 700, color: 'var(--text-dim)',
     textTransform: 'uppercase', letterSpacing: '0.06em',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
   };
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 12,
-    padding: '12px 20px', borderBottom: '1px solid #0f172a', fontSize: 13,
+    padding: '12px 20px', borderBottom: '1px solid var(--hairline)', fontSize: 13,
   };
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="🔧 Admin Panel"
         subtitle="Platform operations, user management, and system health"
         actions={
           <button
             onClick={load}
-            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: '#60a5fa', fontSize: 12, cursor: 'pointer', padding: '6px 14px', fontWeight: 600 }}
+            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: 'var(--link)', fontSize: 12, cursor: 'pointer', padding: '6px 14px', fontWeight: 600 }}
           >
             ↻ Refresh
           </button>
         }
-      />
+    >
 
       {error && <div style={{ padding: '0 24px 16px' }}><ErrorBanner message={error} /></div>}
 
@@ -406,7 +406,7 @@ const AdminPanel: React.FC = () => {
             <div style={sectionStyle}>
               <div style={sectionHeader}>
                 <span>⚠️ Active Alerts</span>
-                <span style={{ fontSize: 11, color: '#f87171' }}>{activeAlerts.length} unresolved</span>
+                <span style={{ fontSize: 11, color: 'var(--loss)' }}>{activeAlerts.length} unresolved</span>
               </div>
               {activeAlerts.map(alert => (
                 <div key={alert.id} style={{ ...rowStyle, borderLeft: `3px solid ${severityColor(alert.severity)}`, background: `${severityColor(alert.severity)}08` }}>
@@ -414,10 +414,10 @@ const AdminPanel: React.FC = () => {
                     {alert.severity}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: 13 }}>{alert.title}</div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{alert.message}</div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{alert.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{alert.message}</div>
                   </div>
-                  <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(alert.created_at)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(alert.created_at)}</span>
                 </div>
               ))}
             </div>
@@ -432,23 +432,23 @@ const AdminPanel: React.FC = () => {
               </button>
             </div>
             {auditEvents.length === 0 ? (
-              <div style={{ padding: '24px 20px', color: '#475569', fontSize: 13 }}>No recent audit events.</div>
+              <div style={{ padding: '24px 20px', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No recent audit events.</div>
             ) : auditEvents.map(ev => (
               <div key={ev.event_id} style={rowStyle}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: eventColor(ev.event_type), flexShrink: 0 }} />
                 <span style={{ fontSize: 11, fontWeight: 600, color: eventColor(ev.event_type), minWidth: 160, flexShrink: 0 }}>{ev.event_type}</span>
-                <span style={{ flex: 1, color: '#94a3b8', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</span>
-                <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{ev.ip_address}</span>
-                <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(ev.created_at)}</span>
+                <span style={{ flex: 1, color: 'var(--text-dim)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{ev.ip_address}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(ev.created_at)}</span>
               </div>
             ))}
           </div>
 
           {/* Maintenance Mode + Broadcast */}
           <div style={{ margin: '0 24px', marginBottom: 8 }}>
-            <div style={{ ...sectionHeader, background: '#1e293b', border: '1px solid #334155', borderRadius: '10px 10px 0 0', padding: '14px 20px' }}>
+            <div style={{ ...sectionHeader, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: '10px 10px 0 0', padding: '14px 20px' }}>
               <span>⚙️ Platform Controls</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>Maintenance mode & user broadcasts</span>
+              <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Maintenance mode & user broadcasts</span>
             </div>
           </div>
           <MaintenanceBroadcastPanel />
@@ -457,17 +457,17 @@ const AdminPanel: React.FC = () => {
           <div style={sectionStyle}>
             <div style={sectionHeader}>Quick Actions</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, padding: '16px 20px' }}>
-              <QuickAction icon="🔍" label="Audit Log"      desc="Browse all platform events"       path="/audit"      onClick={go} />
-              <QuickAction icon="🛡️" label="Security Ops"   desc="Threats, IPs, sessions"           path="/security"   onClick={go} />
-              <QuickAction icon="🩺" label="Auto-Heal"      desc="Self-healing & circuit breakers"  path="/auto-heal"  onClick={go} />
-              <QuickAction icon="🏷️" label="Whitelabel"     desc="Branding & tenant config"         path="/whitelabel" onClick={go} />
-              <QuickAction icon="🟢" label="System Status"  desc="Health & uptime"                  path="/status"     onClick={go} />
-              <QuickAction icon="⚡" label="Super Admin"    desc="Master control panel"             path="/superadmin" onClick={go} />
+              <QuickAction icon={<Search size={18} aria-hidden />} label="Audit Log"      desc="Browse all platform events"       path="/audit"      onClick={go} />
+              <QuickAction icon={<Shield size={18} aria-hidden />} label="Security Ops"   desc="Threats, IPs, sessions"           path="/security"   onClick={go} />
+              <QuickAction icon={<Stethoscope size={18} aria-hidden />} label="Auto-Heal"      desc="Self-healing & circuit breakers"  path="/auto-heal"  onClick={go} />
+              <QuickAction icon={<Tag size={18} aria-hidden />} label="Whitelabel"     desc="Branding & tenant config"         path="/whitelabel" onClick={go} />
+              <QuickAction icon={<CircleDot size={18} aria-hidden />} label="System Status"  desc="Health & uptime"                  path="/status"     onClick={go} />
+              <QuickAction icon={<Zap size={18} aria-hidden />} label="Super Admin"    desc="Master control panel"             path="/superadmin" onClick={go} />
             </div>
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

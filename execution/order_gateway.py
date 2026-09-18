@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -46,6 +47,12 @@ class Order:
         price: float,
         commission_rate: float,
     ) -> None:
+        if not math.isfinite(quantity) or quantity == 0:
+            raise ValueError("Order quantity must be finite and non-zero")
+        if not math.isfinite(price) or price < 0:
+            raise ValueError("Order price must be finite and non-negative")
+        if not math.isfinite(commission_rate) or commission_rate < 0:
+            raise ValueError("Commission rate must be finite and non-negative")
         self.order_id = order_id
         self.quantity = quantity
         self.price = price
@@ -61,6 +68,8 @@ class Order:
 
     def fill(self, filled_quantity: float) -> None:
         # Use abs(quantity) so sell orders (negative quantity) work correctly.
+        if not math.isfinite(filled_quantity) or filled_quantity <= 0:
+            raise ValueError("Filled quantity must be finite and positive")
         max_qty = abs(self.quantity)
         if filled_quantity > max_qty + 1e-9:
             raise ValueError(f"Filled quantity {filled_quantity} cannot exceed order quantity {max_qty}.")
@@ -148,17 +157,21 @@ class OrderGateway:
         }
 
         try:
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
+            asyncio.get_running_loop()
+        except RuntimeError:  # healer: ignore - no running loop is the SUCCESS case here.
+            # get_running_loop() raises RuntimeError precisely when there is no
+            # loop, which is the state this synchronous entry point requires.
+            # Nothing is being swallowed: the error IS the answer, and the
+            # failure case is the `else` below, which raises.
+            pass
+        else:
+            raise RuntimeError(
+                "OrderGateway.send_order() cannot run inside an active event loop; "
+                "await send_order_async() from async callers"
+            )
 
-            if loop is not None and loop.is_running():
-                # Running inside an async context — use thread-safe future.
-                future = asyncio.run_coroutine_threadsafe(self.executor.execute_signal(signal), loop)
-                result: ExecutionResult = future.result(timeout=30)
-            else:
-                result = asyncio.run(self.executor.execute_signal(signal))
+        try:
+            result = asyncio.run(self.executor.execute_signal(signal))
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "OrderGateway.send_order: TradeExecutor raised for order %s: %s",

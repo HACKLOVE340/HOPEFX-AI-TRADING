@@ -117,7 +117,55 @@ jobs:
           tar -xzf trivy.tgz trivy
           sudo install -m 0755 trivy /usr/local/bin/trivy
           trivy version
-          trivy fs . --severity CRITICAL,HIGH --exit-code 1 --format table
+          # --ignorefile is required: Trivy does NOT auto-load
+          # .trivyignore.yaml (only the plain .trivyignore), so without this
+          # flag every acceptance in that file is silently ignored and the
+          # scan fails on findings that have a written, expiring exemption.
+          #
+          # Deliberately NOT --ignore-unfixed. That flag drops every CVE with
+          # no upstream fix, permanently and with no record. security-scan.yml
+          # used to pass it, which is how all six of the chromadb/ecdsa/nltk
+          # findings disappeared from that job while this one reported two
+          # criticals on the same commit; it has been removed there too, and
+          # both jobs now read the same .trivyignore.yaml. An unfixed CVE has to
+          # be argued for in that file and re-argued when the entry expires.
+          trivy fs . \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            --ignorefile .trivyignore.yaml \
+            --format table
+      - name: Scan the PINNED dependency set with Trivy
+        # `trivy fs .` above reads requirements.txt, which holds RANGES
+        # (chromadb>=0.4.0). Trivy cannot resolve a range, so it reported
+        # "requirements.txt  pip  0" for as long as this job has run — and that
+        # zero means "no version I could resolve", not "no vulnerabilities"
+        # (audit F271).
+        #
+        # requirements.lock holds the real pins, but "requirements.lock" is not
+        # a filename Trivy recognises as a pip manifest, so it was never read.
+        # Copying it under a recognised name is the whole fix.
+        #
+        # Measured on 2026-09-06: the pinned set reports 11 findings against the
+        # 6 that uv.lock shows, and 5 of the extra ones HAD upstream fixes —
+        # cryptography (Bleichenbacher oracle) and four nltk CVEs including a
+        # critical JVM argument injection. Those are now floored in
+        # requirements.txt and pinned in requirements.lock. A scan that reads
+        # ranges cannot see a fixable CVE at all.
+        run: |
+          set -euo pipefail
+          mkdir -p .trivy-pinned
+          # Strip comments and pip-compile's "# via" provenance lines; keep the
+          # `name==version` pins, which is what Trivy needs.
+          grep -vE '^\s*#|^\s*$' requirements.lock \
+            | sed 's/\s*#.*//' \
+            | grep -E '^[A-Za-z0-9]' > .trivy-pinned/requirements.txt
+          echo "Scanning $(wc -l < .trivy-pinned/requirements.txt) pinned packages"
+          trivy fs .trivy-pinned \
+            --scanners vuln \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            --ignorefile .trivyignore.yaml \
+            --format table
 
   typecheck:
     runs-on: ubuntu-latest
@@ -379,11 +427,44 @@ jobs:
             --timeout=120 \
             -q
 
-      # Invariant coverage report — pure introspection (no app boot). Fails the
-      # build if a critical component lacks invariant or alert coverage. Cheap
-      # meta-gate that catches "we added a component but forgot to protect it".
+      # Coverage SCOPE report — printed immediately after the coverage figure,
+      # because that figure is a fraction of what `.coveragerc` points at, not
+      # of the application. `[run] source` names a subset of packages and `omit`
+      # removes modules from inside them, so "70% baseline" and the per-package
+      # gates describe a minority of the codebase, not all of it (F221/F105).
+      #
+      # As of the F221 commit that added this step, `source` covers 38.6% of
+      # application statements. Still outside it: api/, data_layer/, security/,
+      # data/, utils/, scripts/, analysis/, research/. Still omitted from inside
+      # packages that ARE in scope: risk/manager.py, execution/engine.py and the
+      # decision engine. Do not restate those two lists anywhere else — read the
+      # step's own output, which is generated from `.coveragerc` and cannot go
+      # stale the way this comment can.
+      #
+      # This does not gate the percentage: widening `source` to the whole
+      # application would drop it below the floor overnight and teach nobody
+      # anything. It gates the honesty — the scope is printed beside the number.
+      - name: Coverage scope report
+        if: always()
+        run: python scripts/coverage_scope_report.py --fail-under-share 25
+
+      # Invariant coverage report — pure introspection (no app boot). The
+      # registry inventory is measured; the critical-component matrix is a
+      # DECLARATION in invariants/registry.py, not a probe (F176). This step
+      # fails the build when a component declared critical does not declare
+      # invariant or alert coverage — "we added a component but forgot to
+      # declare its protection". It does not verify that the protection exists;
+      # the runtime invariant check below is what exercises real behaviour.
       - name: Invariant coverage report
         run: python scripts/invariant_coverage.py
+
+      # Custom-skill claim verification — the four hopefx-* skills in
+      # .claude/skills cite constants, defaults, counts and file paths. A skill
+      # that cites a stale constant is worse than no skill, because it is
+      # believed: an agent acts on it without re-deriving it. This step fails
+      # the build when a cited claim stops being true of the codebase.
+      - name: Custom-skill claim verification
+        run: python scripts/verify_skill_claims.py
 
       # Runtime invariant check — boots the app, probes endpoints, asserts output
       # invariants and scans the event log so "looks right, behaves wrong" fails

@@ -16,6 +16,8 @@ import { mlApi, mlExtendedApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
+import { Link } from 'react-router-dom';
+import { BarChart3, Bot, ChevronRight, Dna } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // ── Types (mirror backend Pydantic models) ────────────────────────────────────
@@ -79,25 +81,63 @@ interface MLHealthResponse {
 
 // ── Metric tile ───────────────────────────────────────────────────────────────
 
+// NOTE: this shadows components/ui/MetricTile and keeps its own bordered-card
+// look and `color`-as-className API. It gains the same drill-down contract:
+// pass `to` and the tile links to the page that explains the number; omit it
+// and the tile stays an inert div rather than an empty tab stop. See F187.
 function MetricTile({
   label,
   value,
   color,
   sub,
+  to,
+  toHint,
 }: {
   label: string;
   value: string;
   color?: string;
   sub?: string;
+  to?: string;
+  toHint?: string;
 }) {
-  return (
-    <div className="flex flex-col gap-0.5 px-3 py-2 bg-[#0d1421] rounded border border-[#1e2d3d]">
-      <span className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
+  const body = (
+    <>
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
+        {to && (
+          <ChevronRight
+            size={11}
+            strokeWidth={2.5}
+            aria-hidden
+            className="ml-auto shrink-0 text-slate-700 transition-colors duration-150 group-hover:text-slate-300 group-focus-visible:text-slate-300"
+          />
+        )}
+      </div>
       <span className={cn('text-[15px] font-bold tabular-nums', color ?? 'text-slate-200')}>
         {value}
       </span>
       {sub && <span className="text-[10px] text-slate-600">{sub}</span>}
-    </div>
+    </>
+  );
+
+  const base = 'flex flex-col gap-0.5 px-3 py-2 bg-[var(--surface)] rounded border border-[var(--border)]';
+
+  if (!to) return <div className={base}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className={cn(
+        base,
+        'group cursor-pointer min-h-[44px] justify-center',
+        'transition-colors duration-150 hover:bg-[var(--surface-hover)] hover:border-[var(--border-strong)]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950',
+      )}
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -118,7 +158,7 @@ function FeatureBar({ name, importance, max }: { name: string; importance: numbe
       >
         {name}
       </span>
-      <div className="flex-1 h-1.5 bg-[#1e2d3d] rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, background: color }}
@@ -139,10 +179,10 @@ function HealthBadge({ status, loaded }: { status: string; loaded: boolean }) {
     <span className={cn(
       'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold',
       ok
-        ? 'bg-[#00e676]/10 text-[#00e676]'
-        : 'bg-[#ff1744]/10 text-[#ff1744]',
+        ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+        : 'bg-[var(--bear)]/10 text-[var(--bear)]',
     )}>
-      <span className={cn('w-1.5 h-1.5 rounded-full', ok ? 'bg-[#00e676]' : 'bg-[#ff1744]')} />
+      <span className={cn('w-1.5 h-1.5 rounded-full', ok ? 'bg-[var(--bull)]' : 'bg-[var(--bear)]')} />
       {ok ? 'Live' : loaded ? status : 'No model'}
     </span>
   );
@@ -160,13 +200,13 @@ function TabBar({
   modelCount?: number;
   featureCount?: number;
 }) {
-  const tabs: { id: Tab; icon: string; label: string; badge?: number; color: string }[] = [
-    { id: 'metrics',  icon: '📊', label: 'Metrics',  color: '#60a5fa' },
-    { id: 'features', icon: '🧬', label: 'Features', badge: featureCount, color: '#a78bfa' },
-    { id: 'models',   icon: '🤖', label: 'Models',   badge: modelCount,   color: '#34d399' },
+  const tabs: { id: Tab; icon: React.ReactNode; label: string; badge?: number; color: string }[] = [
+    { id: 'metrics',  icon: <BarChart3 size={16} aria-hidden />, label: 'Metrics',  color: '#60a5fa' },
+    { id: 'features', icon: <Dna size={16} aria-hidden />, label: 'Features', badge: featureCount, color: '#a78bfa' },
+    { id: 'models',   icon: <Bot size={16} aria-hidden />, label: 'Models',   badge: modelCount,   color: '#34d399' },
   ];
   return (
-    <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #1e2d3d', marginBottom: 2 }}>
+    <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
       {tabs.map(({ id, icon, label, badge, color }) => {
         const isActive = active === id;
         return (
@@ -180,7 +220,7 @@ function TabBar({
               background: isActive ? `${color}12` : 'transparent',
               border: 'none',
               borderBottom: isActive ? `2px solid ${color}` : '2px solid transparent',
-              color: isActive ? color : '#475569',
+              color: isActive ? color : 'var(--text-faint)',
               fontSize: 10, fontWeight: 700, cursor: 'pointer',
               transition: 'all 0.15s ease',
               letterSpacing: 0.5,
@@ -193,8 +233,8 @@ function TabBar({
             {badge !== undefined && badge > 0 && (
               <span style={{
                 fontSize: 9, fontWeight: 800,
-                background: isActive ? `${color}25` : '#1e2d3d',
-                color: isActive ? color : '#64748b',
+                background: isActive ? `${color}25` : 'var(--border)',
+                color: isActive ? color : 'var(--text-muted)',
                 padding: '0px 4px', borderRadius: 8, lineHeight: '14px',
                 minWidth: 16, textAlign: 'center',
               }}>
@@ -285,7 +325,7 @@ function MLModelPanelInner() {
           <>
             {accuracyQ.isLoading && <PanelSkeleton rows={4} />}
             {accuracyQ.isError && (
-              <div className="text-[11px] text-[#ff1744] px-1">
+              <div className="text-[11px] text-[var(--bear)] px-1">
                 Failed to load accuracy metrics
               </div>
             )}
@@ -294,35 +334,47 @@ function MLModelPanelInner() {
                 <div className="grid grid-cols-2 gap-2">
                   <MetricTile
                     label="Accuracy"
+                    to="/intelligence"
+                    toHint="model intelligence"
                     value={`${(acc.accuracy * 100).toFixed(1)}%`}
-                    color={acc.accuracy >= t.accuracy_good ? 'text-[#00e676]' : acc.accuracy >= t.accuracy_warn ? 'text-[#ffb800]' : 'text-[#ff1744]'}
+                    color={acc.accuracy >= t.accuracy_good ? 'text-[var(--bull)]' : acc.accuracy >= t.accuracy_warn ? 'text-[#ffb800]' : 'text-[var(--bear)]'}
                   />
                   <MetricTile
                     label="Win Rate"
+                    to="/journal"
+                    toHint="the trades behind it"
                     value={`${(acc.win_rate * 100).toFixed(1)}%`}
-                    color={acc.win_rate >= t.win_rate_good ? 'text-[#00e676]' : 'text-[#ffb800]'}
+                    color={acc.win_rate >= t.win_rate_good ? 'text-[var(--bull)]' : 'text-[#ffb800]'}
                   />
                   <MetricTile
                     label="Sharpe"
+                    to="/performance"
+                    toHint="risk-adjusted performance"
                     value={acc.sharpe.toFixed(2)}
-                    color={acc.sharpe >= t.sharpe_good ? 'text-[#00e676]' : acc.sharpe >= t.sharpe_warn ? 'text-[#ffb800]' : 'text-[#ff1744]'}
+                    color={acc.sharpe >= t.sharpe_good ? 'text-[var(--bull)]' : acc.sharpe >= t.sharpe_warn ? 'text-[#ffb800]' : 'text-[var(--bear)]'}
                   />
                   <MetricTile
                     label="F1 Score"
+                    to="/intelligence"
+                    toHint="model intelligence"
                     value={acc.f1.toFixed(3)}
-                    color={acc.f1 >= t.f1_good ? 'text-[#00e676]' : 'text-[#ffb800]'}
+                    color={acc.f1 >= t.f1_good ? 'text-[var(--bull)]' : 'text-[#ffb800]'}
                   />
                   <MetricTile
                     label="Precision"
+                    to="/intelligence"
+                    toHint="model intelligence"
                     value={`${(acc.precision * 100).toFixed(1)}%`}
                   />
                   <MetricTile
                     label="Recall"
+                    to="/intelligence"
+                    toHint="model intelligence"
                     value={`${(acc.recall * 100).toFixed(1)}%`}
                   />
                 </div>
 
-                <div className="flex flex-col gap-1 px-2.5 py-2 bg-[#0d1421] rounded border border-[#1e2d3d] text-[10px]">
+                <div className="flex flex-col gap-1 px-2.5 py-2 bg-[var(--surface)] rounded border border-[var(--border)] text-[10px]">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Model ID</span>
                     <span className="text-slate-300 font-mono truncate max-w-[160px]">{acc.model_id}</span>
@@ -346,7 +398,7 @@ function MLModelPanelInner() {
                 </div>
 
                 {acc.note && (
-                  <div className="px-2.5 py-2 rounded bg-[#78350f]/20 border border-[#92400e]/30 text-[10px] text-[#fbbf24]">
+                  <div className="px-2.5 py-2 rounded bg-[#78350f]/20 border border-[#92400e]/30 text-[10px] text-[var(--warn)]">
                     {acc.note}
                   </div>
                 )}
@@ -360,7 +412,7 @@ function MLModelPanelInner() {
           <>
             {featuresQ.isLoading && <PanelSkeleton rows={8} />}
             {featuresQ.isError && (
-              <div className="text-[11px] text-[#ff1744] px-1">
+              <div className="text-[11px] text-[var(--bear)] px-1">
                 {(featuresQ.error as { response?: { status?: number } })?.response?.status === 403
                   ? 'Feature importances require admin role'
                   : 'Failed to load feature importances'}
@@ -369,7 +421,7 @@ function MLModelPanelInner() {
             {featuresQ.data && (
               <>
                 {featuresQ.data.note && (
-                  <div className="px-2.5 py-1.5 rounded bg-[#1e2d3d] text-[10px] text-slate-500">
+                  <div className="px-2.5 py-1.5 rounded bg-[var(--border)] text-[10px] text-slate-500">
                     {featuresQ.data.note}
                   </div>
                 )}
@@ -400,7 +452,7 @@ function MLModelPanelInner() {
           <>
             {modelsQ.isLoading && <PanelSkeleton rows={3} />}
             {modelsQ.isError && (
-              <div className="text-[11px] text-[#ff1744] px-1">Failed to load models</div>
+              <div className="text-[11px] text-[var(--bear)] px-1">Failed to load models</div>
             )}
             {modelsQ.data && modelsQ.data.length === 0 && (
               <div className="text-[11px] text-slate-500 text-center py-6">
@@ -412,11 +464,11 @@ function MLModelPanelInner() {
                 {modelsQ.data.map((m) => (
                   <div
                     key={m.model_id}
-                    className="flex items-center gap-3 px-3 py-2 rounded bg-[#0d1421] border border-[#1e2d3d]"
+                    className="flex items-center gap-3 px-3 py-2 rounded bg-[var(--surface)] border border-[var(--border)]"
                   >
                     <span className={cn(
                       'w-2 h-2 rounded-full shrink-0',
-                      m.available ? 'bg-[#00e676]' : 'bg-[#334155]',
+                      m.available ? 'bg-[var(--bull)]' : 'bg-[#334155]',
                     )} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[11px] font-semibold text-slate-200 truncate">{m.name}</div>

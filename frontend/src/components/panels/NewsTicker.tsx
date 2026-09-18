@@ -4,7 +4,7 @@
  * Shows the latest headlines with sentiment color-coding.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useStore } from '../../store';
 
 interface NewsItem {
@@ -64,10 +64,10 @@ export function NewsTicker() {
         alignItems: 'center',
         gap: 5,
         flexShrink: 0,
-        background: '#0d1421',
+        background: 'var(--surface)',
       }}>
-        <span style={{ fontSize: 8, color: '#ff1744', fontWeight: 900, letterSpacing: 2 }}>● LIVE</span>
-        <span style={{ fontSize: 9, color: '#475569', fontWeight: 700, letterSpacing: 1.5 }}>NEWS</span>
+        <span style={{ fontSize: 8, color: 'var(--bear)', fontWeight: 900, letterSpacing: 2 }}>● LIVE</span>
+        <span style={{ fontSize: 9, color: 'var(--text-faint)', fontWeight: 700, letterSpacing: 1.5 }}>NEWS</span>
       </div>
 
       {!expanded ? (
@@ -94,9 +94,9 @@ export function NewsTicker() {
               return (
                 <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 24px' }}>
                   <span style={{ fontSize: 10, color, fontWeight: 700 }}>{sentimentLabel(item.sentiment)}</span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{text}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{text}</span>
                   {item.source && (
-                    <span style={{ fontSize: 9, color: '#334155' }}>— {item.source}</span>
+                    <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>— {item.source}</span>
                   )}
                   <span style={{ fontSize: 9, color: '#1e293b', marginLeft: 8 }}>◇</span>
                 </span>
@@ -114,21 +114,21 @@ export function NewsTicker() {
             return (
               <div key={i} style={{
                 display: 'flex', alignItems: 'flex-start', gap: 8,
-                padding: '5px 12px', borderBottom: '1px solid #0d1421',
+                padding: '5px 12px', borderBottom: '1px solid var(--surface)',
               }}>
                 <span style={{ fontSize: 11, color, flexShrink: 0, marginTop: 1 }}>{sentimentLabel(item.sentiment)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {item.url ? (
                     <a href={item.url} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: 11, color: '#cbd5e1', textDecoration: 'none', lineHeight: 1.4 }}>
+                      style={{ fontSize: 11, color: 'var(--text-dim)', textDecoration: 'none', lineHeight: 1.4 }}>
                       {text}
                     </a>
                   ) : (
-                    <span style={{ fontSize: 11, color: '#cbd5e1', lineHeight: 1.4 }}>{text}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.4 }}>{text}</span>
                   )}
                   <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-                    {item.source && <span style={{ fontSize: 9, color: '#475569' }}>{item.source}</span>}
-                    {ts && <span style={{ fontSize: 9, color: '#334155' }}>{new Date(ts).toLocaleTimeString()}</span>}
+                    {item.source && <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>{item.source}</span>}
+                    {ts && <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>{new Date(ts).toLocaleTimeString()}</span>}
                   </div>
                 </div>
               </div>
@@ -144,7 +144,7 @@ export function NewsTicker() {
           padding: '0 10px', height: '100%',
           background: 'transparent', border: 'none',
           borderLeft: '1px solid #1a2e4a',
-          color: '#334155', cursor: 'pointer', fontSize: 12,
+          color: 'var(--text-faint)', cursor: 'pointer', fontSize: 12,
           flexShrink: 0,
         }}
         title={expanded ? 'Collapse news' : 'Expand news'}

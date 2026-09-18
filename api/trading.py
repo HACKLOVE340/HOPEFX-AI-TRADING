@@ -379,6 +379,11 @@ class OrderResponse(BaseModel):
     order_id: str
     filled_price: float | None = None
     filled_quantity: float | None = None
+    # True only when a requested stop_loss/take_profit was actually placed with
+    # the broker. Clients that collected a stop from a user MUST check this —
+    # a filled order with stop_loss_placed=False is an UNPROTECTED position.
+    # Null when no bracket was requested. See F151.
+    stop_loss_placed: bool | None = None
 
 
 class ClosePositionResponse(BaseModel):
@@ -699,6 +704,18 @@ async def _route_to_broker(order: "OrderRequest", user_id: str) -> Any:
             quantity=order.quantity,
             **kwargs,
         )
+        # A stop the broker never received must not be reported as accepted.
+        # brokers/base.py cannot attach brackets at market entry for adapters
+        # without bracket support, so it flags the discard here rather than
+        # letting the caller believe the position is protected. See F151.
+        if getattr(result, "brackets_requested", False) and not getattr(result, "brackets_applied", True):
+            logger.error(
+                "Order %s filled but its stop_loss/take_profit was NOT placed with the "
+                "broker — position is UNPROTECTED (symbol=%s user=%s)",
+                getattr(result, "order_id", "?"),
+                order.symbol,
+                user_id,
+            )
         return result
     except HTTPException:
         raise
@@ -909,11 +926,17 @@ async def _record_fill(
     _increment_fill_metrics(order)
     _notify_paper_gate_and_online_learner(order, result)
 
+    # Report the bracket outcome truthfully. None when the caller asked for no
+    # stop; False when they asked and the broker never received it (F151).
+    _brackets_req = getattr(result, "brackets_requested", False)
+    _sl_placed = getattr(result, "brackets_applied", True) if _brackets_req else None
+
     return {
         "status": "success",
         "order_id": order_id,
         "filled_price": fill_price,
         "filled_quantity": filled_qty,
+        "stop_loss_placed": _sl_placed,
     }
 
 
@@ -1018,9 +1041,16 @@ async def place_order(
 
     # ── Idempotency ───────────────────────────────────────────────────────────
     # Claimed before any side effect, so a retry cannot slip past the checks and
-    # reach the broker a second time. UNIQUE(client_order_id) from migration
-    # b2c3d4e5f6a7 guards the engine→broker hop; this guards client→API, which
-    # nothing covered.
+    # reach the broker a second time. This guards client→API, which nothing
+    # covered.
+    #
+    # This block used to add that "UNIQUE(client_order_id) from migration
+    # b2c3d4e5f6a7 guards the engine→broker hop". It does not — see the column
+    # comment in database/models.py: no production writer sets it, so the
+    # constraint never fires. That hop is guarded by the write-ahead intent
+    # journal in execution/trade_executor.py::_journal_intent (S7-02). Naming a
+    # control that does not run is worse than recording the gap, because it
+    # closes the question.
     body = order.model_dump()
     if idempotency_key:
         try:
@@ -2140,13 +2170,31 @@ async def get_account(
     """
     Return a complete AccountMetrics payload for the authenticated user.
 
-    Fields returned (all required by the frontend AccountMetrics type):
+    Fields returned:
       balance, equity, margin_used, margin_free, margin_level,
       daily_pnl, daily_pnl_pct, total_pnl, win_rate, sharpe_ratio,
       sortino_ratio, max_drawdown, open_trades, open_risk_pct,
       cvar_95, kill_switch, unrealized_pnl, currency, account_id
+
+    **win_rate, sharpe_ratio, sortino_ratio and max_drawdown are nullable.**
+    Each is a statistic over closed trades, and AccountMetrics documents every
+    one of them as absent until there are enough of those to compute it — a
+    decision recorded under audit #37. `null` means "not measurable yet", and
+    is not the same claim as 0.
+
+    This docstring previously said every field was "required by the frontend
+    AccountMetrics type". That was the opposite of what the type says, and the
+    code matched the docstring: a new account was sent win_rate 0.0 and
+    sharpe_ratio 0.0, which the Dashboard rendered as a 0.0% win rate in red
+    and a 0.00 Sharpe in red, while the same absence of trades made
+    max_drawdown 0.0 and painted it green. Three statistics, one cause, two
+    failures and a success — none of them measuring anything.
+
+    win_rate and max_drawdown are percentages 0-100 on both paths.
     """
     import math as _math
+
+    from analytics.ratios import downside_deviation as _downside_deviation
     import os as _os
 
     # ── Broker account info ───────────────────────────────────────────────────
@@ -2154,11 +2202,21 @@ async def get_account(
         # Paper mode: seed balance from env, enrich with real DB trade stats
         starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
 
-        # Pull real trade stats from DB even in paper mode
-        _win_rate = 0.0
-        _sharpe = 0.0
-        _sortino = 0.0
-        _max_dd = 0.0
+        # Pull real trade stats from DB even in paper mode.
+        #
+        # These four start as None, not 0.0. Every one of them is a statistic
+        # over closed trades, and AccountMetrics documents each as absent until
+        # there are enough of those to compute it. Sending 0.0 instead makes a
+        # claim the server cannot support, and the Dashboard's own `has()`
+        # helper exists to render an em-dash for exactly this case — its
+        # comment reads "a fabricated zero Sharpe reads as a real, terrible
+        # Sharpe". It was doing that correctly against a payload that never
+        # gave it the chance.
+        _win_rate: float | None = None
+        _sharpe: float | None = None
+        _sortino: float | None = None
+        _max_dd: float | None = None
+        _dd_peak = 0.0
         _total_pnl = 0.0
         _open_trades = 0
         _open_risk_pct = 0.0
@@ -2198,7 +2256,7 @@ async def get_account(
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
                     # win_rate as percentage 0-100 (consistent with live-broker path)
-                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else None
 
                     # Equity curve for drawdown + Sharpe
                     eq_vals: list[float] = []
@@ -2211,9 +2269,9 @@ async def get_account(
                     for v in eq_vals:
                         peak = max(peak, v)
                         dd = (peak - v) / peak if peak > 0 else 0.0
-                        _max_dd = max(_max_dd, dd)
+                        _dd_peak = max(_dd_peak, dd)
                     # max_drawdown as percentage 0-100 (consistent with live-broker path)
-                    _max_dd = round(_max_dd * 100, 2)
+                    _max_dd = round(_dd_peak * 100, 2) if pnls else None
 
                     if len(pnls) >= 10:
                         rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
@@ -2221,12 +2279,15 @@ async def get_account(
                             mean_r = sum(rets) / len(rets)
                             var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
                             std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
-                            _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
-                            neg_rets = [r for r in rets if r < 0]
-                            if neg_rets:
-                                down_var = sum(r**2 for r in neg_rets) / len(neg_rets)
-                                down_std = _math.sqrt(down_var)
-                                _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                            _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else None
+                            # Downside deviation divides the summed shortfall by
+                            # ALL periods, not just the losing ones — dividing by
+                            # len(neg_rets) is a different statistic and read
+                            # ~30% high on the negatively skewed shape strategies
+                            # produce (F120). Shared with every other Sortino in
+                            # the repository via analytics.ratios.
+                            down_std = _downside_deviation(rets)
+                            _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else None
                             sorted_rets = sorted(rets)
                             cutoff = max(1, int(len(sorted_rets) * 0.05))
                             _cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
@@ -2347,10 +2408,13 @@ async def get_account(
     daily_pnl_pct = round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4)
 
     # ── Trade statistics from DB ──────────────────────────────────────────────
-    win_rate = 0.0
-    sharpe_ratio = 0.0
-    sortino_ratio = 0.0
-    max_drawdown = 0.0
+    # None until there are closed trades to compute them from — see the paper
+    # branch above for why these four are not 0.0.
+    win_rate: float | None = None
+    sharpe_ratio: float | None = None
+    sortino_ratio: float | None = None
+    max_drawdown: float | None = None
+    _dd_peak_live = 0.0
     total_pnl = 0.0
     open_trades = 0
     open_risk_pct = 0.0
@@ -2383,7 +2447,7 @@ async def get_account(
                 pnls = [float(t.realized_pnl or 0.0) for t in closed]
                 total_pnl = round(sum(pnls), 2)
                 wins = [p for p in pnls if p > 0]
-                win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+                win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else None
 
                 # Equity curve for drawdown + Sharpe
                 starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
@@ -2398,8 +2462,8 @@ async def get_account(
                 for v in eq_vals:
                     peak = max(peak, v)
                     dd = (peak - v) / peak if peak > 0 else 0.0
-                    max_drawdown = max(max_drawdown, dd)
-                max_drawdown = round(max_drawdown * 100, 2)  # as %
+                    _dd_peak_live = max(_dd_peak_live, dd)
+                max_drawdown = round(_dd_peak_live * 100, 2) if pnls else None  # as %
 
                 # Sharpe (annualised, daily returns)
                 if len(pnls) >= 10:
@@ -2408,14 +2472,15 @@ async def get_account(
                         mean_r = sum(rets) / len(rets)
                         var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
                         std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
-                        sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
+                        sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else None
 
-                        # Sortino (downside deviation only)
-                        neg_rets = [r for r in rets if r < 0]
-                        if neg_rets:
-                            down_var = sum(r**2 for r in neg_rets) / len(neg_rets)
-                            down_std = _math.sqrt(down_var)
-                            sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                        # Sortino: RMS shortfall below zero over ALL periods.
+                        # Dividing by len(neg_rets) instead is a different
+                        # statistic and read ~30% high on negatively skewed
+                        # returns (F120); shared now via analytics.ratios so the
+                        # dashboard and the backtester cannot disagree.
+                        down_std = _downside_deviation(rets)
+                        sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else None
 
                         # CVaR 95% (average of worst 5% returns)
                         sorted_rets = sorted(rets)
@@ -2629,6 +2694,57 @@ async def get_prices(
     # All paths exhausted — return empty dict (not 503) so the frontend
     # REST poll doesn't hang and can show the no_live_feed banner instead.
     return {}
+
+
+# Timeframes `_load_gold_history_csv` can actually serve. Kept beside it so the
+# two cannot drift: a list that promised a timeframe the loader refuses would
+# send the operator to a second failure.
+_CSV_FALLBACK_TIMEFRAMES: tuple[str, ...] = ("1d", "1w")
+
+
+def _servable_fallback_timeframes(symbol: str) -> tuple[str, ...]:
+    """Timeframes this deployment can serve for *symbol* with no live feed.
+
+    Only the bundled gold history qualifies — it is the one source that needs
+    neither the price engine nor the network. Everything else depends on a feed
+    that is either up or is not, and claiming otherwise would be a promise the
+    next request breaks.
+    """
+    return _CSV_FALLBACK_TIMEFRAMES if symbol.upper() == "XAUUSD" else ()
+
+
+def _ohlcv_unavailable_detail(symbol: str, timeframe: str) -> dict:
+    """The 503 body, naming what WOULD work.
+
+    The refusal itself was already honest: it declines to fabricate bars and
+    names the feed to configure. What it did not say is that another timeframe
+    is sitting right there.
+
+    That matters most on `/ai-chart-dashboard`, which renders six panels at 1h.
+    Measured 2026-09-15, five of those six symbols have a working yfinance
+    ticker and one does not — XAUUSD, the instrument this platform trades,
+    whose ticker is deliberately empty because Yahoo delisted the contract. So
+    the gold panel is the one that fails, it is first in the grid, and an
+    operator reading "no data" concludes the instrument is broken rather than
+    the timeframe.
+    """
+    available = _servable_fallback_timeframes(symbol)
+    message = (
+        f"No real OHLCV data available for {symbol} {timeframe}. "
+        "The price engine and all fallback feeds are currently unavailable. "
+        "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
+    )
+    if available:
+        message += " Bundled history can still serve " + ", ".join(available) + " for this symbol without any feed."
+    return {
+        "error": "ohlcv_unavailable",
+        "message": message,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        # Machine-readable so a chart can offer the switch rather than making
+        # the operator parse a sentence.
+        "available_timeframes": list(available),
+    }
 
 
 def _load_gold_history_csv(timeframe: str, limit: int) -> list[dict]:
@@ -2904,16 +3020,7 @@ async def get_ohlcv(
     )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "ohlcv_unavailable",
-            "message": (
-                f"No real OHLCV data available for {symbol} {timeframe}. "
-                "The price engine and all fallback feeds are currently unavailable. "
-                "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
-            ),
-            "symbol": symbol,
-            "timeframe": timeframe,
-        },
+        detail=_ohlcv_unavailable_detail(symbol, timeframe),
     )
 
 
@@ -3716,6 +3823,30 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
 # ── Regime status endpoint ────────────────────────────────────────────────────
 
 
+def _ema(values: list[float], alpha: float) -> float:
+    """Exponential moving average over *values*, oldest first.
+
+    Seeded on the oldest value and folded forward, so the newest bar carries the
+    full ``alpha`` and each earlier one decays by ``1 - alpha``.
+
+    This was written as ``ema = closes[-1]`` followed by
+    ``for c in reversed(window)``, which walks newest -> oldest. In that
+    recurrence the value folded in LAST carries the full coefficient, so the
+    weighting was inverted end to end and the oldest bar in a 20-bar window
+    weighed 7.4x the newest (0.10000 against 0.01351). The regime badge's
+    classification still came out right — the EMA still sat below price in an
+    uptrend — but it lagged far more than a 20-period EMA should, and the
+    confidence figure shown to the trader was derived from a spread that was not
+    the spread between a 20- and a 50-period EMA (F125).
+    """
+    if not values:
+        return 0.0
+    ema = values[0]
+    for value in values[1:]:
+        ema = ema * (1 - alpha) + value * alpha
+    return ema
+
+
 @router.get("/regime", response_model=None, summary="Current market regime and active strategy")
 async def get_regime_status(
     symbol: str = "XAUUSD",
@@ -3786,12 +3917,8 @@ async def get_regime_status(
 
     if len(closes) >= 20:
         # EMA 20 and EMA 50
-        ema20 = closes[-1]
-        for c in reversed(closes[-20:]):
-            ema20 = ema20 * 0.9 + c * 0.1
-        ema50 = closes[-1]
-        for c in reversed(closes[-min(50, len(closes)) :]):
-            ema50 = ema50 * 0.96 + c * 0.04
+        ema20 = _ema(closes[-20:], 0.1)
+        ema50 = _ema(closes[-min(50, len(closes)) :], 0.04)
 
         ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
         price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0

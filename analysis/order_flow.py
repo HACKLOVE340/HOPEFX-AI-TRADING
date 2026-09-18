@@ -848,6 +848,26 @@ class OrderFlowAnalyzer:
     # STATISTICS
     # ================================================================
 
+    def has_data(self, symbol: str) -> bool:
+        """Whether any trade has ever been recorded for *symbol*.
+
+        The distinction this whole module was missing. A cumulative delta of
+        zero, an empty level set and an empty footprint are all what a genuinely
+        balanced, quiet market looks like — and all what a symbol nobody is
+        feeding looks like. Callers must be able to tell (F147).
+        """
+        return bool(self._trades.get(symbol))
+
+    def is_ingesting(self) -> bool:
+        """Whether anything has ever fed this analyzer, for any symbol.
+
+        Lets an operator tell a quiet tape from a dead subscription. Nothing
+        currently subscribes it to a tick source, so in the shipped
+        configuration this is False — which is the honest answer and was
+        previously indistinguishable from `total_trades: 0`.
+        """
+        return any(self._trades.values())
+
     def get_stats(self) -> dict:
         """Get analyzer statistics."""
         return {
@@ -855,6 +875,9 @@ class OrderFlowAnalyzer:
             "total_trades": sum(len(t) for t in self._trades.values()),
             "trades_by_symbol": {s: len(t) for s, t in self._trades.items()},
             "cumulative_delta": dict(self._cumulative_delta),
+            # `total_trades: 0` is literally true both when the tape is quiet
+            # and when nothing is subscribed. Stated, not left to be inferred.
+            "ingesting": self.is_ingesting(),
         }
 
 
@@ -893,20 +916,41 @@ def create_order_flow_router(analyzer: OrderFlowAnalyzer):
             raise HTTPException(status_code=404, detail=f"No data for {symbol}")
         return analysis.to_dict()
 
+    def _require_data(symbol: str) -> None:
+        """Refuse a symbol nothing has been recorded for.
+
+        `/analysis` and `/profile` already did this; these three did not, and
+        returned an empty footprint, an empty level set and a cumulative delta
+        of zero — each identical to what a real, balanced, quiet market
+        produces. Nothing subscribes this analyzer to a tick source today, so
+        that was the answer every caller got (F147).
+        """
+        if not analyzer.has_data(symbol):
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No order-flow data recorded for {symbol}. This is not a flat "
+                    "tape: no trade has been ingested for this symbol."
+                ),
+            )
+
     @router.get("/{symbol}/footprint")
     async def get_footprint(symbol: str, timeframe: str = "5m", bars: int = 20):
         """Get footprint chart data."""
+        _require_data(symbol)
         footprints = analyzer.get_footprint(symbol, timeframe, bars)
         return [fp.to_dict() for fp in footprints]
 
     @router.get("/{symbol}/levels")
     async def get_key_levels(symbol: str):
         """Get key support/resistance levels."""
+        _require_data(symbol)
         return analyzer.get_key_levels(symbol)
 
     @router.get("/{symbol}/delta")
     async def get_delta(symbol: str):
         """Get cumulative delta."""
+        _require_data(symbol)
         return {
             "symbol": symbol,
             "cumulative_delta": analyzer._cumulative_delta.get(symbol, 0),

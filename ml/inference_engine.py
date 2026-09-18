@@ -33,7 +33,10 @@ Usage
 from __future__ import annotations
 
 import contextlib
+import functools
+import hashlib
 import json
+import math
 import logging
 import os
 import time
@@ -116,6 +119,27 @@ _STALE_MODEL_BLOCK: bool = os.getenv("STALE_MODEL_BLOCK", "true").lower() == "tr
 # Default: 4.0 (warn only).  Set DRIFT_BLOCK=true to block on drift.
 _DRIFT_Z_THRESHOLD = float(os.getenv("DRIFT_Z_THRESHOLD", "4.0"))
 _DRIFT_BLOCK = os.getenv("DRIFT_BLOCK", "false").lower() == "true"
+
+# ── Model quality gate ────────────────────────────────────────────────────────
+# `ml/model_quality_gate.py` is consulted on every predict(). It was built
+# fail-closed, tested, and called by nothing — while predict() made the same
+# three judgements inline, as strings in the evidence blob, against a bare
+# 0.3 literal. These are that literal and its siblings, named once so the
+# boundary has a single definition rather than one per read site.
+#
+# The floor below is the value predict() already used to call data quality
+# "valid" rather than "degraded"; the drift ceiling is _DRIFT_Z_THRESHOLD, the
+# constant the drift guard already enforces. Neither is a new number.
+_MIN_DATA_QUALITY = float(os.getenv("MIN_DATA_QUALITY", "0.3"))
+# 1.0 requires a fitted isotonic calibrator; 0.0 tolerates a raw probability,
+# which is the current deployment's actual state — isotonic_calibrator.pkl is
+# absent, so every prediction today is served uncalibrated. Defaulting to 0.0
+# keeps that tolerated and *recorded* rather than silently unnoticed.
+_MIN_CALIBRATION = float(os.getenv("MIN_CALIBRATION", "0.0"))
+# Advisory by default, exactly like _DRIFT_BLOCK. Wiring a gate in must not
+# silently change when this system declines to trade; that is the owner's
+# decision, and it is tracked with the DRIFT_BLOCK default.
+_MODEL_QUALITY_BLOCK = os.getenv("MODEL_QUALITY_BLOCK", "false").lower() == "true"
 # Rolling window of recent feature vectors for drift detection
 _DRIFT_WINDOW = int(os.getenv("DRIFT_WINDOW", "50"))
 # Fraction of the live feature vector that must be present in the training
@@ -245,6 +269,120 @@ def _init_prometheus():
 _PROM = _init_prometheus()
 
 
+# ── Model provenance: how old is this model, really? ──────────────────────────
+#
+# This was `model_path.stat().st_mtime`. Reproduced on a disposable file before
+# the fix:
+#
+#     90-day-old artifact           -> stale=True   age=90.0
+#     same bytes, timestamp touched -> stale=False  age=0.0
+#
+# No retraining occurred. Every ordinary operational act writes that timestamp —
+# `git checkout`, `docker build`, `cp -r`, `rsync` without `-t`, restoring a
+# backup — so the gate that exists to stop the platform trading on an
+# out-of-date model was cleared by the act of deploying the out-of-date model.
+# It failed in the unsafe direction and said nothing.
+#
+# Age is now read from a timestamp bound to the artifact's SHA-256 in
+# `registry.json`, which makes it a property of the BYTES: nothing that copies
+# or rewrites the file can change it, and the only thing that can is training a
+# new model and registering it.
+
+# A future date beyond this is a broken clock or a forged record, not a model
+# trained tomorrow. Without the check the subtraction yields a negative age and
+# the model is fresh forever — the same unsafe direction as the mtime.
+_PROVENANCE_FUTURE_TOLERANCE_S = 300.0
+
+
+@functools.lru_cache(maxsize=32)
+def _model_sha256(path_str: str, size: int, mtime_ns: int) -> str:
+    """The artifact's digest, cached.
+
+    `size` and `mtime_ns` are cache-invalidation inputs ONLY — never an answer.
+    A touch changes mtime, so the digest is recomputed, and the recomputation
+    returns the same digest and therefore the same age. That is the point.
+    """
+    h = hashlib.sha256()
+    with open(path_str, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _parse_provenance_time(raw: object) -> float | None:
+    """An ISO-8601 instant as epoch seconds, or None if it is not one."""
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except (ValueError, TypeError):
+        return None
+    if parsed.tzinfo is None:
+        # A naive stamp is ambiguous; read it as UTC rather than as local time,
+        # which would shift a model's age by the deployment's offset.
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _model_training_time(model_path: Path) -> tuple[float | None, str]:
+    """When the model in `model_path` was trained, and why if that is unknown.
+
+    Returns `(epoch_seconds, "")` when a registry entry's `sha256` matches the
+    artifact's actual digest and carries a usable timestamp; otherwise
+    `(None, reason)`. Every caller treats a reason as STALE — see the fail-closed
+    note in `_check_model_staleness`.
+
+    `trained_at` is preferred and `registered_at` is the fallback: today's
+    registry records only the latter, and it is still sha-bound and still immune
+    to a touch, so the gate is not disabled for want of a better field.
+
+    Where several versions carry the same digest, the EARLIEST timestamp wins.
+    Re-registering unchanged bytes under a new version is the touch defect in
+    another form, and the earliest date is also the conservative one — it can
+    only make a model look older.
+    """
+    registry_path = _saved("registry.json")
+    if not registry_path.exists():
+        return None, f"no provenance registry at {registry_path}"
+
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        versions = registry["versions"]
+        if not isinstance(versions, dict):
+            raise TypeError("versions is not an object")
+    except Exception as exc:
+        return None, f"provenance registry is unreadable ({exc})"
+
+    try:
+        stat = model_path.stat()
+        digest = _model_sha256(str(model_path), stat.st_size, stat.st_mtime_ns)
+    except OSError as exc:
+        return None, f"the model artifact could not be read ({exc})"
+
+    stamps: list[float] = []
+    matched = False
+    for entry in versions.values():
+        if not isinstance(entry, dict) or entry.get("sha256") != digest:
+            continue
+        matched = True
+        for field_name in ("trained_at", "registered_at"):
+            when = _parse_provenance_time(entry.get(field_name))
+            if when is not None:
+                stamps.append(when)
+                break
+
+    if not matched:
+        return None, f"no registry entry matches this artifact's sha256 {digest[:12]}…"
+    if not stamps:
+        return None, "the matching registry entry records no usable trained_at/registered_at"
+
+    earliest = min(stamps)
+    if earliest > time.time() + _PROVENANCE_FUTURE_TOLERANCE_S:
+        return None, "the recorded training time is in the future"
+    return earliest, ""
+
+
 class InferenceEngine:
     """
     Full-stack live inference engine.
@@ -296,6 +434,12 @@ class InferenceEngine:
         # Cached result of the last staleness check (re-evaluated each call).
         self._model_stale: bool = False
         self._model_age_days: float | None = None
+        #: The sha256-bound timestamp the last staleness check read, and — when
+        #: there was none — why. Declared here rather than relied on via getattr,
+        #: so `health()` on an engine that has never run the check reports
+        #: "not measured yet" instead of raising or inventing a value.
+        self._model_provenance_at: str | None = None
+        self._model_provenance_reason: str = "the freshness check has not run yet"
 
         # ── Live accuracy monitoring (rolling 50-prediction window) ────────
         # Tracks (predicted_direction, actual_outcome) pairs; compared against
@@ -313,7 +457,11 @@ class InferenceEngine:
         # Format: {feature_name: {"mean": float, "std": float}}
         self._train_stats: dict[str, dict] | None = None
         self._drift_detected: bool = False
-        self._drift_z_max: float = 0.0  # max z-score across features (last check)
+        self._drift_z_max: float = 0.0  # max z-score across MEASURED features (last check)
+        # Absent (zero-filled) vs genuinely drifted, kept apart so a dead feed is
+        # never reported as a distribution change. See _check_feature_drift.
+        self._drift_absent_count: int = 0
+        self._drift_drifted_count: int = 0
 
     # ── Lazy loaders ──────────────────────────────────────────────────────────
 
@@ -412,6 +560,49 @@ class InferenceEngine:
         except Exception as exc:
             logger.debug("Calibrator load failed: %s", exc)
             return None
+
+    #: Where training writes the measured calibration of the deployed model.
+    CALIBRATION_REPORT_FILE = "calibration_report.json"
+
+    def _recorded_calibration_score(self) -> float | None:
+        """The calibration score training measured, or ``None`` if it did not.
+
+        `ml/calibration_metrics.py` computes 1 - ECE on held-out predictions and
+        training writes it to ``saved_models/calibration_report.json``. This
+        reads it back.
+
+        ``None`` means nobody measured — which is NOT a pass. This used to be
+        ``1.0 if self._calibrator is not None else 0.0``, i.e. whether a pickle
+        had loaded: a badly-fitted calibrator scored a perfect 1.0 and cleared
+        any threshold, and a well-calibrated raw model scored 0.0 and failed
+        every threshold above zero. `ModelQualityGate.evaluate` already fails
+        closed on a missing score, so absence stays absent.
+
+        A report flagged `single_class` is treated as absent too: Brier is
+        computable on one-class held-out data, but it says nothing about
+        whether a 70% forecast happens 70% of the time.
+        """
+        path = _saved(self.CALIBRATION_REPORT_FILE)
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            # ERROR, not debug: this is a safety-gate input failing to load, and
+            # the caller cannot tell a broken file from an unmeasured model
+            # unless someone says so.
+            logger.error("InferenceEngine: calibration report unreadable at %s: %s", path, exc)
+            return None
+
+        if payload.get("single_class"):
+            logger.warning("InferenceEngine: calibration report is single-class — treating as unmeasured")
+            return None
+
+        score = payload.get("calibration_score")
+        if not isinstance(score, (int, float)) or not math.isfinite(float(score)):
+            logger.error("InferenceEngine: calibration_score missing or non-finite in %s", path)
+            return None
+        return float(score)
 
     # ── Feature building ──────────────────────────────────────────────────────
 
@@ -623,6 +814,12 @@ class InferenceEngine:
             "min_coverage": _DRIFT_MIN_COVERAGE,
             "drift_detected": bool(getattr(self, "_drift_detected", False)),
             "z_max": float(getattr(self, "_drift_z_max", 0.0) or 0.0),
+            # Absent and drifted, side by side, so an operator can tell a dead
+            # feed from a distribution change without reading logs. `z_max` is
+            # over MEASURED features only; a high absent count means the number
+            # beside it describes a shrinking slice of the vector.
+            "absent_features": int(getattr(self, "_drift_absent_count", 0)),
+            "drifted_features": int(getattr(self, "_drift_drifted_count", 0)),
             # Which features are unwatched. "170 of 229 covered" does not tell
             # an operator whether the gap is one stale block or scattered
             # across the vector, and the two have different remedies.
@@ -728,9 +925,13 @@ class InferenceEngine:
 
     def _check_model_staleness(self) -> bool:
         """
-        Return True when the active model file is older than MODEL_MAX_AGE_DAYS.
+        Return True when the active model was TRAINED more than
+        MODEL_MAX_AGE_DAYS ago.
 
-        Uses the mtime of advanced_oos.pkl (or the active model path if set).
+        Age comes from `_model_training_time()`, which reads a timestamp bound to
+        the artifact's sha256 in registry.json. It used to come from the file's
+        mtime, which meant copying or touching the artifact reset its age without
+        retraining anything — see the note above that function.
         When MODEL_MAX_AGE_DAYS=0 the check is disabled and always returns False.
 
         When STALE_MODEL_BLOCK=true (default) the caller raises RuntimeError
@@ -742,6 +943,8 @@ class InferenceEngine:
         if _MODEL_MAX_AGE_DAYS <= 0:
             self._model_stale = False
             self._model_age_days = None
+            self._model_provenance_at = None
+            self._model_provenance_reason = "the freshness check is disabled (MODEL_MAX_AGE_DAYS=0)"
             return False
 
         model_path = self._active_model_path or (_saved("advanced_oos.pkl"))
@@ -749,26 +952,60 @@ class InferenceEngine:
             # No model file — not stale (just unavailable; handled elsewhere)
             self._model_stale = False
             self._model_age_days = None
+            self._model_provenance_at = None
+            self._model_provenance_reason = "no model artifact on disk"
             return False
 
         try:
-            age_seconds = time.time() - model_path.stat().st_mtime
-            age_days = age_seconds / 86_400.0
+            trained_at, reason = _model_training_time(model_path)
+            # Kept so `health()` can say WHERE the age came from. `health` also
+            # reports `last_trained_at` from advanced_oos_meta.json, and the two
+            # disagree by 86 days on the committed artifact (meta 2026-06-26,
+            # earliest registry version carrying this sha256 2026-04-01). That
+            # disagreement is real and predates this gate — the mtime it used to
+            # read, 0.69 days, agreed with neither, which is why nobody saw it.
+            # Reconciling them is an ML-side decision; what this owes an operator
+            # is that the number it BLOCKS on is attributable rather than a third
+            # unexplained figure on the same screen.
+            self._model_provenance_at = (
+                datetime.fromtimestamp(trained_at, timezone.utc).isoformat() if trained_at is not None else None
+            )
+            self._model_provenance_reason = reason
+            if trained_at is None:
+                # Fail CLOSED. "I cannot tell you how old this model is" and
+                # "this model is current" are different answers, and only one of
+                # them is safe to trade on. Logged at ERROR, not DEBUG: a gate
+                # refusing for a reason nobody reads is the shape this
+                # repository calls a dead control.
+                logger.error(
+                    "STALE MODEL (provenance): %s — %s. Treating as stale; "
+                    "register the artifact in registry.json with its sha256 and a "
+                    "trained_at, or set MODEL_MAX_AGE_DAYS=0 to disable the check deliberately.",
+                    model_path.name,
+                    reason,
+                )
+                self._model_age_days = None
+                self._model_stale = True
+                return True
+
+            age_days = (time.time() - trained_at) / 86_400.0
             self._model_age_days = round(age_days, 2)
             self._model_stale = age_days > _MODEL_MAX_AGE_DAYS
             if self._model_stale:
                 logger.warning(
-                    "STALE MODEL: %s is %.1f days old (max=%s days). Retrain or set MODEL_MAX_AGE_DAYS=0 to suppress.",
+                    "STALE MODEL: %s was trained %.1f days ago (max=%s days). Retrain or set MODEL_MAX_AGE_DAYS=0 to suppress.",
                     model_path.name,
                     age_days,
                     _MODEL_MAX_AGE_DAYS,
                 )
             return self._model_stale
         except Exception as exc:
-            # Fail CLOSED: if model age cannot be determined, treat the model as
-            # stale so the STALE_MODEL_BLOCK gate (when enabled) blocks rather
-            # than trading on a model of unknown freshness.
-            logger.warning("Staleness check failed; treating model as STALE: %s", exc)
+            # Fail CLOSED here too: an unexpected failure in the freshness check
+            # is not evidence of freshness.
+            logger.error("Staleness check failed; treating model as STALE: %s", exc, exc_info=True)
+            self._model_age_days = None
+            self._model_provenance_at = None
+            self._model_provenance_reason = f"the freshness check itself failed ({exc})"
             self._model_stale = True
             return True
 
@@ -834,6 +1071,78 @@ class InferenceEngine:
             )
             self._drift_scope_warned = True
         return fallback
+
+    def _model_quality_gate(self):
+        """The gate, configured from the constants this file already enforced.
+
+        Built per call rather than cached: the thresholds are module-level and
+        a test that monkeypatches one must not be defeated by an instance that
+        captured the old value at construction time.
+        """
+        from ml.model_quality_gate import ModelQualityGate
+
+        return ModelQualityGate(
+            minimum_calibration=_MIN_CALIBRATION,
+            maximum_drift=_DRIFT_Z_THRESHOLD,
+            minimum_data_quality=_MIN_DATA_QUALITY,
+        )
+
+    def _evaluate_model_quality(self, *, drift_z: float | None, data_quality: float | None):
+        """Score this prediction's calibration, drift and data quality.
+
+        Returns the snapshot, or ``None`` if the gate could not be evaluated at
+        all — which is NOT the same as a pass, and `_enforce_model_quality`
+        treats it accordingly.
+
+        `drift_z` is passed through as ``None`` when drift was never measured.
+        Substituting 0.0 there would report "no drift" for a guard that did not
+        run, which is Rule 2's unmeasured-is-absent-never-zero, and the gate
+        already fails closed on a missing score.
+
+        Calibration is now the number training measured — 1 - ECE on held-out
+        predictions, via `ml/calibration_metrics.py`, read from
+        ``saved_models/calibration_report.json``.
+
+        It used to be a *presence* signal: 1.0 if an isotonic calibrator object
+        had loaded, 0.0 otherwise. That measured whether a file existed, so a
+        badly-fitted calibrator passed any threshold and a well-calibrated raw
+        model failed every threshold above zero.
+
+        When no report exists, the score is ``None`` — unmeasured, not passed.
+        The gate fails closed on a missing score, which is the behaviour this
+        depends on rather than working around.
+        """
+        try:
+            calibration_score = self._recorded_calibration_score()
+            return self._model_quality_gate().evaluate(
+                calibration_score=calibration_score,
+                drift_score=drift_z,
+                data_quality_score=data_quality,
+            )
+        except Exception:
+            # Logged at ERROR, not debug: this is a safety control failing to
+            # evaluate, and a handler that whispers is how the last one stayed
+            # invisible. The caller decides what an unevaluable gate means.
+            logger.error("InferenceEngine: model quality gate could not be evaluated", exc_info=True)
+            return None
+
+    def _enforce_model_quality(self, snapshot) -> None:
+        """Refuse the prediction when the gate says so and blocking is enabled.
+
+        Raises ``RuntimeError`` specifically: `HOPEFXDecisionEngine._phase2_ml`
+        treats that type as a hard ML filter and declines the trade, where any
+        other exception falls back to the brain's non-ML confidence. A quality
+        refusal must not degrade into "trade on less information".
+        """
+        if not _MODEL_QUALITY_BLOCK:
+            return
+        if snapshot is None:
+            raise RuntimeError(
+                "model quality gate could not be evaluated and MODEL_QUALITY_BLOCK=true — "
+                "an unmeasured gate is not a passed gate"
+            )
+        if not snapshot.passed:
+            raise RuntimeError("model quality gate failed: " + ", ".join(snapshot.reason_codes))
 
     def _check_feature_drift(self, X_row: pd.DataFrame | None) -> bool:
         """
@@ -949,19 +1258,60 @@ class InferenceEngine:
 
             max_z = 0.0
             drifted_features: list[str] = []
+            absent_features: list[str] = []
 
             for i, feat_name in enumerate(col_names):
                 if feat_name not in train_stats:
                     continue
                 train_mean = float(train_stats[feat_name].get("mean", 0.0))
                 train_std = float(train_stats[feat_name].get("std", 1.0))
+
+                # A feature the pipeline could not supply is zero-filled before
+                # the guard sees it. Scored as drift, `|0 - train_mean| / std` is
+                # large whenever the training mean is far from zero — so a DEAD
+                # FEED reads as feature drift, and with DRIFT_BLOCK=true it halts
+                # the desk and the log blames the model.
+                #
+                # Measured on the shipped stats (scripts/drift_guard_report.py):
+                # 103 of 176 features zero-filled, and 12 of the 14 that exceed
+                # z=4.0 are zero-filled rather than drifted.
+                #
+                # Same rule the report uses: live exactly zero while the training
+                # mean is not. The second half matters — a binary feature whose
+                # training mean IS ~0 is legitimately zero and must stay in scope,
+                # or this becomes a hole in the guard instead of a fix to it.
+                if live_means[i] == 0.0 and train_mean != 0.0:
+                    absent_features.append(feat_name)
+                    continue
+
                 z = abs(live_means[i] - train_mean) / max(train_std, 1e-9)
                 max_z = max(max_z, z)
                 if z > _DRIFT_Z_THRESHOLD:
                     drifted_features.append(f"{feat_name}(z={z:.1f})")
 
+            # z_max over MEASURED features only. It feeds _evaluate_model_quality,
+            # so letting absence inflate it draws a second wrong conclusion — a
+            # degraded model score — from the same missing data.
             self._drift_z_max = round(max_z, 3)
+            self._drift_absent_count = len(absent_features)
+            self._drift_drifted_count = len(drifted_features)
             self._drift_detected = len(drifted_features) > 0
+
+            if absent_features:
+                # ERROR, not DEBUG: absence no longer blocks, so this log is the
+                # only thing that says the feed is degraded. Whether absence
+                # SHOULD halt inference is a separate gate with its own blast
+                # radius and is the owner's call — tracked as DRIFT-ABSENCE.
+                logger.error(
+                    "FEATURES ABSENT: %d of %d compared features arrived zero-filled "
+                    "(e.g. %s). These are NOT scored as drift — a feed outage is not a "
+                    "distribution change. Inference continues on the remaining %d. "
+                    "Check the feature pipeline before reading the drift number below.",
+                    len(absent_features),
+                    len(absent_features) + len(drifted_features) + self._drift_covered,
+                    ", ".join(absent_features[:5]),
+                    max(self._drift_covered - len(absent_features), 0),
+                )
 
             if self._drift_detected:
                 logger.warning(
@@ -1022,6 +1372,32 @@ class InferenceEngine:
         self._predict_count += 1
         sym_label = symbol or "unknown"
 
+        def _abstain(result: dict, reason: str, detail: str = "") -> dict:
+            """Record an abstention once, where every consumer can see it.
+
+            Each of these paths used to do three separate things: increment the
+            Prometheus counter with a `reason` label, log at DEBUG (off in
+            production), and return a result carrying no reason at all. So the
+            cause was recorded in a metric label and nowhere the caller could
+            read it — HOPEFXDecisionEngine, core/signal_engine.py and the
+            dashboards all saw a flat neutral with no explanation, and the only
+            way to find out why was to read it back out of the metrics registry.
+
+            A neutral signal is the system declining to trade. An operator who
+            cannot tell a short data window from a drifting model from a stale
+            artifact cannot act on it.
+            """
+            result["reason"] = reason
+            result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            _PROM.fallback_total.labels(symbol=sym_label, reason=reason).inc()
+            logger.info(
+                "InferenceEngine: abstaining for %s — %s%s",
+                sym_label,
+                reason,
+                f" ({detail})" if detail else "",
+            )
+            return result
+
         last_close = float(ohlcv["close"].iloc[-1]) if "close" in ohlcv.columns else 0.0
         base_result = {
             "direction": "neutral",
@@ -1038,9 +1414,7 @@ class InferenceEngine:
         }
 
         if len(ohlcv) < _MIN_BARS:
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
-            _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_bars").inc()
-            return base_result
+            return _abstain(base_result, "insufficient_bars", f"{len(ohlcv)} < {_MIN_BARS}")
 
         # Step 0: Timeframe alignment — resample intraday bars to daily when
         # the model was trained on daily data (INFERENCE_TIMEFRAME=daily, default).
@@ -1058,10 +1432,12 @@ class InferenceEngine:
                         len(ohlcv),
                         sym_label,
                     )
-                    base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
                     base_result["direction"] = "neutral"
-                    _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_daily_bars").inc()
-                    return base_result
+                    return _abstain(
+                        base_result,
+                        "insufficient_daily_bars",
+                        f"{len(ohlcv)} intraday bars resampled to too few daily",
+                    )
                 logger.debug(
                     "InferenceEngine: resampled %d intraday → %d daily bars for %s",
                     len(ohlcv),
@@ -1084,10 +1460,8 @@ class InferenceEngine:
         # Step 3: Build features
         X = self._build_features(ohlcv, macro_df, mtf_df, symbol)
         if X is None:
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             self._fallback_count += 1
-            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_build_failed").inc()
-            return base_result
+            return _abstain(base_result, "feature_build_failed")
 
         # Step 3-validation: Block NaN/Inf/label-leakage in feature matrix
         # before it reaches the model. A NaN in features causes silent
@@ -1102,12 +1476,10 @@ class InferenceEngine:
                 sym_label,
                 _val_exc,
             )
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             base_result["fallback"] = True
             base_result["validation_error"] = str(_val_exc)
             self._fallback_count += 1
-            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_validation_failed").inc()
-            return base_result
+            return _abstain(base_result, "feature_validation_failed", str(_val_exc)[:120])
 
         # Step 3a: Stale model detection
         # Check whether the model file is older than MODEL_MAX_AGE_DAYS.
@@ -1122,7 +1494,15 @@ class InferenceEngine:
             base_result["stale_model"] = True
             base_result["model_age_days"] = self._model_age_days
             self._fallback_count += 1
+            base_result["reason"] = "stale_model"
             _PROM.fallback_total.labels(symbol=sym_label, reason="stale_model").inc()
+            logger.warning(
+                "InferenceEngine: model for %s is %.1f days old (max %.0f) — %s",
+                sym_label,
+                self._model_age_days,
+                _MODEL_MAX_AGE_DAYS,
+                "blocking" if _STALE_MODEL_BLOCK else "abstaining",
+            )
             if _STALE_MODEL_BLOCK:
                 raise RuntimeError(
                     f"STALE MODEL BLOCKED: {sym_label} model is {self._model_age_days:.1f} days old "
@@ -1215,13 +1595,11 @@ class InferenceEngine:
             )
         )
         if drift and _DRIFT_BLOCK:
-            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             base_result["model_version"] = "drift_blocked"
             base_result["feature_drift"] = True
             base_result["drift_z_max"] = self._drift_z_max
             self._fallback_count += 1
-            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_drift").inc()
-            return base_result
+            return _abstain(base_result, "feature_drift", f"z_max={self._drift_z_max}")
 
         # Step 5: Online learner blend
         # SklearnOnlineLearner.predict_proba() accepts the raw OHLCV DataFrame
@@ -1293,7 +1671,12 @@ class InferenceEngine:
         )
 
         # Data quality from orchestrator (for downstream gating)
-        data_quality = 1.0
+        #
+        # `data_quality` stays None when the orchestrator has no tick to speak
+        # for. It used to default to 1.0 — a perfect score for a measurement
+        # that never happened, handed straight to the gauge and, once this gate
+        # was wired, to the gate. Rule 2: unmeasured is absent, never best case.
+        data_quality: float | None = None
         try:
             from data_layer.orchestrator import orchestrator
 
@@ -1303,15 +1686,58 @@ class InferenceEngine:
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
 
+        # ── Model quality gate ────────────────────────────────────────────────
+        # Consulted here rather than at registry promotion: the gate's own
+        # docstring scopes it to "before a candidate reaches paper or live
+        # execution", and this is that point. Advisory unless
+        # MODEL_QUALITY_BLOCK=true, in which case it raises RuntimeError, which
+        # HOPEFXDecisionEngine._phase2_ml treats as a hard ML filter.
+        quality = self._evaluate_model_quality(
+            drift_z=getattr(self, "_drift_z_max", None),
+            data_quality=data_quality,
+        )
+        self._enforce_model_quality(quality)
+
         # ── Prometheus instrumentation ────────────────────────────────────────
         _PROM.predict_total.labels(symbol=sym_label, direction=direction).inc()
         _PROM.predict_latency.labels(symbol=sym_label).observe(latency_ms / 1000.0)
         _PROM.confidence_gauge.labels(symbol=sym_label).set(float(confidence))
-        _PROM.data_quality_gauge.labels(symbol=sym_label).set(data_quality)
+        # Only reported when actually measured. A gauge that reads 1.0 because
+        # nothing was measured is the dashboard telling you the feed is perfect
+        # while it is silent.
+        if data_quality is not None:
+            _PROM.data_quality_gauge.labels(symbol=sym_label).set(data_quality)
         if model_version and model_version != "fallback":
             _PROM.model_version_info.labels(model_id=model_version).set(1)
+        served_reason = ""
         if model_version == "fallback":
+            served_reason = "model_fallback"
             _PROM.fallback_total.labels(symbol=sym_label, reason="model_fallback").inc()
+            logger.info("InferenceEngine: abstaining for %s — model_fallback", sym_label)
+
+        decision_id = f"{sym_label}:{self._predict_count}:{time.time_ns()}"
+        feature_schema_hash = hashlib.sha256(json.dumps(list(X.columns), separators=(",", ":")).encode()).hexdigest()
+        evidence_payload = {
+            "decision_id": decision_id,
+            "model_version": model_version,
+            "model_checksum": hashlib.sha256(model_version.encode()).hexdigest(),
+            "feature_schema_hash": feature_schema_hash,
+            "data_snapshot_at": datetime.now(UTC).isoformat(),
+            "regime": "unknown",
+            # These three used to be judged inline here, against a bare 0.3.
+            # They are now the model quality gate's verdict, so the evidence
+            # blob and the gate cannot disagree about the same prediction.
+            # `unmeasured` is a third state the string form could not express:
+            # it previously read "valid" for a data quality nobody measured.
+            "calibration_state": "isotonic" if self._calibrator is not None else "raw",
+            "drift_state": ("clear" if quality.drift_ok else "detected") if quality else "unmeasured",
+            "data_quality_state": ("valid" if quality.data_quality_ok else "degraded") if quality else "unmeasured",
+            "model_quality_passed": bool(quality.passed) if quality else None,
+            "model_quality_reasons": list(quality.reason_codes) if quality else [],
+        }
+        evidence_hash = hashlib.sha256(
+            json.dumps(evidence_payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
 
         return {
             "direction": direction,
@@ -1322,14 +1748,23 @@ class InferenceEngine:
             "last_close": last_close,
             "latency_ms": round(latency_ms, 2),
             "fallback": model_version == "fallback",
+            # Empty on a served prediction; the abstention cause otherwise. It
+            # used to exist only as a Prometheus label, so a caller saw a flat
+            # neutral and could not tell a short window from a drifting model.
+            "reason": served_reason,
             "macro_active": macro_active,
             "mtf_active": mtf_active,
             "online_active": online_active,
             "dl_nudge": round(dl_nudge, 4),
             "sentiment_score": self._last_sentiment_score,
             "macro_impact": self._last_macro_impact,
-            "data_quality": round(data_quality, 4),
+            # None when the orchestrator had no tick — reported as unmeasured
+            # rather than as a perfect 1.0 nobody measured.
+            "data_quality": round(data_quality, 4) if data_quality is not None else None,
             "is_safe": self.is_safe_to_trade(),
+            "decision_id": decision_id,
+            "evidence_hash": evidence_hash,
+            "evidence": evidence_payload,
         }
 
     def _get_data_layer_nudge(self) -> float:
@@ -1685,6 +2120,12 @@ class InferenceEngine:
             # ── Stale model ────────────────────────────────────────────────
             "stale_model": self._model_stale,
             "model_age_days": self._model_age_days,
+            # Where `model_age_days` came from — the sha256-bound timestamp this
+            # gate read. Reported next to the age so the two are arithmetic on
+            # each other rather than two unattributed numbers, and so an operator
+            # can see why it differs from `last_trained_at` (the meta file's).
+            "model_provenance_at": self._model_provenance_at,
+            "model_provenance_reason": self._model_provenance_reason,
             "model_max_age_days": _MODEL_MAX_AGE_DAYS if _MODEL_MAX_AGE_DAYS > 0 else None,
             "stale_model_block": _STALE_MODEL_BLOCK,
             # ── Feature drift ──────────────────────────────────────────────

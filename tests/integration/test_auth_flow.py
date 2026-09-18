@@ -31,9 +31,21 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 os.environ.setdefault("CSRF_PROTECTION", "false")
 os.environ.setdefault("STARTUP_GATE", "false")
-# Force email verification so register() returns a token we can use in tests.
-# Without this the service auto-verifies accounts and returns token=None.
-os.environ["REQUIRE_EMAIL_VERIFICATION"] = "true"
+# This module needs email verification ON so register() returns a token the
+# tests can use — but it used to set it HERE, at module level, which runs during
+# COLLECTION. `auth.service` reads the variable once, at ITS import, into
+# `_REQUIRE_EMAIL_VERIFICATION`; collection happens before any test runs, so this
+# line turned the flag on for every test in the session, in every file, whether
+# or not this module's own tests were selected.
+#
+# It broke `tests/unit/test_login_does_not_enumerate_users.py::
+# test_a_correct_password_still_authenticates` — a positive control that
+# registers an unverified user and expects login to succeed. That test passed
+# alone and failed in the full suite, which is the signature of leaked global
+# state rather than of a defect in the thing under test.
+#
+# The flag is now set in the fixture below, which already evicts and re-imports
+# `auth.*`, and restored afterwards. Same effect here, no effect elsewhere.
 
 # ── Dependency guards ─────────────────────────────────────────────────────────
 
@@ -116,6 +128,11 @@ def client(session_factory):
     for key in _auth_keys:
         del sys.modules[key]
 
+    # Email verification on, for the duration of this fixture only. It is set
+    # before the re-import because `auth.service` reads it at import time.
+    _prev_verify = os.environ.get("REQUIRE_EMAIL_VERIFICATION")
+    os.environ["REQUIRE_EMAIL_VERIFICATION"] = "true"
+
     # Fresh imports — these are the canonical module objects for this test.
     import auth.service as _svc_mod
     import auth.router as _router_mod
@@ -133,6 +150,16 @@ def client(session_factory):
     # (S6-05): set_auth_service writes a module global.
     yield TestClient(app, raise_server_exceptions=False)
     _router_mod.reset_auth_service()
+
+    # Put the environment back, and evict the auth modules that were imported
+    # while it was set — otherwise the next file to `import auth.service` gets
+    # the copy this fixture poisoned, and the restore above achieves nothing.
+    if _prev_verify is None:
+        os.environ.pop("REQUIRE_EMAIL_VERIFICATION", None)
+    else:
+        os.environ["REQUIRE_EMAIL_VERIFICATION"] = _prev_verify
+    for key in [k for k in list(sys.modules) if k == "auth" or k.startswith("auth.")]:
+        del sys.modules[key]
 
 
 @pytest.fixture(autouse=True)

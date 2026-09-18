@@ -16,7 +16,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
+import { RelatedPages } from '../components';
+import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, ClipboardList, CreditCard, Receipt, Send, ShieldCheck, Star, Wallet as WalletIcon } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -66,11 +68,11 @@ const TYPE_ICON: Record<string, string> = {
   deposit: '↓', withdrawal: '↑', subscription: '🔄', copy_fee: '📊', refund: '↩',
 };
 const TYPE_COLOR: Record<string, string> = {
-  deposit: '#4ade80', withdrawal: '#f87171', subscription: '#94a3b8',
-  copy_fee: '#fbbf24', refund: '#60a5fa',
+  deposit: 'var(--gain)', withdrawal: 'var(--loss)', subscription: 'var(--text-dim)',
+  copy_fee: 'var(--warn)', refund: 'var(--link)',
 };
 const STATUS_COLOR: Record<string, string> = {
-  completed: '#4ade80', pending: '#fbbf24', failed: '#f87171',
+  completed: 'var(--gain)', pending: 'var(--warn)', failed: 'var(--loss)',
 };
 
 type WalletTab = 'overview' | 'transactions' | 'subscriptions' | 'payment-methods';
@@ -105,10 +107,10 @@ const AmountForm: React.FC<{
       <h3 className="text-slate-100 text-base font-semibold mb-4 mt-0">
         {mode === 'deposit' ? 'Deposit Funds' : 'Withdraw Funds'}
       </h3>
-      <label className="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">
+      <label id="wallet-amount-usd-label" htmlFor="wallet-amount-usd" className="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">
         Amount (USD)
       </label>
-      <input
+      <input id="wallet-amount-usd" aria-labelledby="wallet-amount-usd-label"
         type="number"
         min="1"
         value={amount}
@@ -284,18 +286,17 @@ const Wallet: React.FC = () => {
   const hasDepositRows    = transactions.some(t => t.type === 'deposit');
   const hasWithdrawalRows = transactions.some(t => t.type === 'withdrawal');
 
-  const TABS: { id: WalletTab; label: string; icon: string }[] = [
-    { id: 'overview',         label: 'Overview',         icon: '📊' },
-    { id: 'transactions',     label: 'Transactions',     icon: '📋' },
-    { id: 'subscriptions',    label: 'Subscription',     icon: '⭐' },
-    { id: 'payment-methods',  label: 'Payment Methods',  icon: '💳' },
+  const TABS: { id: WalletTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview',         label: 'Overview',         icon: <BarChart3 size={16} aria-hidden /> },
+    { id: 'transactions',     label: 'Transactions',     icon: <ClipboardList size={16} aria-hidden /> },
+    { id: 'subscriptions',    label: 'Subscription',     icon: <Star size={16} aria-hidden /> },
+    { id: 'payment-methods',  label: 'Payment Methods',  icon: <CreditCard size={16} aria-hidden /> },
   ];
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Wallet & Payments"
-        icon="💰"
+        icon={WalletIcon}
         subtitle="Manage your balance, transactions, subscriptions, and payment methods"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -314,7 +315,7 @@ const Wallet: React.FC = () => {
             </Link>
           </div>
         }
-      />
+    >
 
       <CrossLinkBar links={[
         { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
@@ -417,17 +418,17 @@ const Wallet: React.FC = () => {
       {tab === 'overview' && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <MetricCard icon="↓" label="Total Deposited"
+            <MetricCard icon={<ArrowDownToLine size={14} strokeWidth={2} aria-hidden />} label="Total Deposited"
               value={hasDepositRows
                 ? `$${totalDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                 : '—'}
               accent="green" />
-            <MetricCard icon="↑" label="Total Withdrawn"
+            <MetricCard icon={<ArrowUpFromLine size={14} strokeWidth={2} aria-hidden />} label="Total Withdrawn"
               value={hasWithdrawalRows
                 ? `$${totalWithdrawn.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                 : '—'}
               accent="red" />
-            <MetricCard icon="💸" label="Total Fees Paid"
+            <MetricCard icon={<Send size={18} aria-hidden />} label="Total Fees Paid"
               value={`$${totalFees.toFixed(2)}`}
               accent="amber" />
           </div>
@@ -449,7 +450,7 @@ const Wallet: React.FC = () => {
           )}
           {!txLoading && txErr && <ErrorBanner message={txErr} onDismiss={() => setTxErr('')} />}
           {!txLoading && !txErr && transactions.length === 0 && (
-            <EmptyState icon="📋" title="No transactions yet"
+            <EmptyState icon={ClipboardList} title="No transactions yet"
               description="Your deposits, withdrawals, and subscription payments will appear here." />
           )}
           {!txLoading && transactions.map(tx => (
@@ -457,7 +458,7 @@ const Wallet: React.FC = () => {
               className="flex items-center gap-3 sm:gap-4 bg-terminal-surface border border-terminal-border rounded-xl px-3 sm:px-4 py-3 mb-2 hover:border-slate-600 transition-colors">
               {/* Icon */}
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
-                style={{ background: `${TYPE_COLOR[tx.type] ?? '#94a3b8'}22`, color: TYPE_COLOR[tx.type] ?? '#94a3b8' }}>
+                style={{ background: `${TYPE_COLOR[tx.type] ?? 'var(--text-dim)'}22`, color: TYPE_COLOR[tx.type] ?? 'var(--text-dim)' }}>
                 {TYPE_ICON[tx.type] ?? '•'}
               </div>
               {/* Info */}
@@ -475,7 +476,7 @@ const Wallet: React.FC = () => {
                   {fmtPnl(tx.amount)}
                 </div>
                 <div className="text-2xs font-semibold capitalize mt-0.5"
-                  style={{ color: STATUS_COLOR[tx.status] ?? '#64748b' }}>
+                  style={{ color: STATUS_COLOR[tx.status] ?? 'var(--text-muted)' }}>
                   {tx.status}
                 </div>
               </div>
@@ -490,7 +491,7 @@ const Wallet: React.FC = () => {
           {subLoading && <div className="flex justify-center py-8"><Spinner size="md" /></div>}
           {!subLoading && subErr && <ErrorBanner message={subErr} onDismiss={() => setSubErr('')} />}
           {!subLoading && !subErr && !subscription && (
-            <EmptyState icon="⭐" title="No active subscription"
+            <EmptyState icon={Star} title="No active subscription"
               description="Subscribe to unlock AI signals, copy trading, and advanced analytics."
               action={
                 <Link to="/pricing"
@@ -577,7 +578,7 @@ const Wallet: React.FC = () => {
           {pmLoading && <div className="flex justify-center py-8"><Spinner size="md" /></div>}
           {!pmLoading && pmErr && <ErrorBanner message={pmErr} onDismiss={() => setPmErr('')} />}
           {!pmLoading && !pmErr && paymentMethods.length === 0 && (
-            <EmptyState icon="💳" title="No payment methods saved"
+            <EmptyState icon={CreditCard} title="No payment methods saved"
               description="Add a card or crypto wallet to enable deposits and withdrawals." />
           )}
           {!pmLoading && !pmErr && paymentMethods.length > 0 && (
@@ -627,7 +628,15 @@ const Wallet: React.FC = () => {
         { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
         { label: '⚙️ Settings', href: '/settings',   color: '#94a3b8' },
       ]} />
-    </div>
+      <RelatedPages
+        links={[
+          { to: '/portfolio', label: 'Portfolio',      hint: 'What the balance is invested in', icon: Briefcase },
+          { to: '/pnl',       label: 'P&L breakdown',  hint: 'How the balance changed',         icon: Receipt },
+          { to: '/upgrade',   label: 'Plan & billing', hint: 'Change your subscription',        icon: CreditCard },
+          { to: '/kyc',       label: 'Verification',   hint: 'Required before withdrawal',      icon: ShieldCheck },
+        ]}
+      />
+    </PageShell>
   );
 };
 

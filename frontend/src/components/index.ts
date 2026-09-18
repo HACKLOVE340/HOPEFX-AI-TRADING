@@ -66,3 +66,7 @@ export { OrderEntryForm, OrderEntryFormGuarded } from './panels/OrderEntryForm';
 export { MLModelPanel, MLModelPanelGuarded } from './panels/MLModelPanel';
 export { OrchestratorHealthGrid, OrchestratorHealthGridGuarded } from './panels/OrchestratorHealthGrid';
 export { NewsTicker } from './panels/NewsTicker';
+export { Section } from './Section';
+export type { SectionProps } from './Section';
+export { RelatedPages } from './RelatedPages';
+export type { RelatedLink } from './RelatedPages';

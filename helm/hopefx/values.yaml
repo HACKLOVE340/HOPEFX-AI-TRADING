@@ -77,6 +77,31 @@ env:
   ML_MODEL_DIR: "/app/data/models"
   # Safety: paper trading by default — override to "false" for live
   OANDA_PRACTICE: "true"
+  # Stated explicitly, not inherited. Every key here was absent, and this is the
+  # chart k8s/argocd-app.yaml actually syncs (spec.source.path: helm/hopefx) —
+  # so the cluster ArgoCD builds ran with each of these at its CODE default:
+  #
+  #   HOPEFX_INVARIANT_MODE unset -> "monitor"   (invariants observe, never refuse)
+  #   DRIFT_BLOCK           unset -> false       (inference continues on drift)
+  #   STALE_MODEL_BLOCK     unset -> true        (the one that defaults safe)
+  #
+  # Meanwhile k8s/ and deployments/k8s/ set all three correctly and twenty-three
+  # tests verified them there. Absence is the dangerous half: there is no line
+  # to diff, so nothing in any review shows the control is off.
+  #
+  # Pinned by tests/unit/test_the_deployed_chart_carries_the_safety_posture.py.
+  #
+  # `monitor` is a legitimate value ONLY alongside HOPEFX_INVARIANT_ENFORCE_KINDS,
+  # the staged-rollout lever documented in docs/INVARIANT_ROLLOUT.md. This chart
+  # defaults to full enforcement; stage it down deliberately, not by omission.
+  HOPEFX_INVARIANT_MODE: "enforce"
+  # CRITICAL: halts ML inference when the live feature distribution drifts from
+  # training (Constitutional Rules 19 & 20). Code default is FALSE.
+  DRIFT_BLOCK: "true"
+  DRIFT_Z_THRESHOLD: "3.0"
+  # CRITICAL: refuses to trade on a model past its staleness window.
+  STALE_MODEL_BLOCK: "true"
+  MODEL_MAX_AGE_DAYS: "30"
   # Connector hub tuning
   ML_MIN_TRADE_PROB: "0.58"
   STRATEGY_MIN_BARS: "100"

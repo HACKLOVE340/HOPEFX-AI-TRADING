@@ -7,9 +7,9 @@
  *           DELETE /api/social/copy/{trader_id}
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
 import { extractApiError, fmtPrice, fmtPnl, fmtPctRaw } from '../lib/utils';
 import { ActionBanner } from '../components/ActionBanner';
@@ -89,17 +89,17 @@ const LeaderCard: React.FC<{
     <div style={s.leaderTop}>
       <div>
         <div style={s.leaderName}>{leader.name}</div>
-        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
           👥 {leader.followers.toLocaleString()} followers
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
         {/* Sign and colour both from the number: a trader down 12% used to be
             shown as a green "+-12%" at the top of their card. */}
-        <div style={{ fontSize: 24, fontWeight: 700, color: leader.return_3m >= 0 ? '#4ade80' : '#f87171' }}>
+        <div style={{ fontSize: 24, fontWeight: 700, color: leader.return_3m >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
           {fmtPctRaw(leader.return_3m, 1)}
         </div>
-        <div style={{ fontSize: 11, color: '#475569' }}>3M Return</div>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>3M Return</div>
       </div>
     </div>
 
@@ -109,7 +109,7 @@ const LeaderCard: React.FC<{
         <div style={s.metricLbl}>Sharpe</div>
       </div>
       <div style={s.metric}>
-        <div style={{ ...s.metricVal, color: '#f87171' }}>-{Math.abs(leader.max_dd)}%</div>
+        <div style={{ ...s.metricVal, color: 'var(--loss)' }}>-{Math.abs(leader.max_dd)}%</div>
         <div style={s.metricLbl}>Max DD</div>
       </div>
       <div style={s.metric}>
@@ -119,10 +119,10 @@ const LeaderCard: React.FC<{
     </div>
 
     <div style={s.leaderFooter}>
-      <span style={{ fontSize: 13, color: '#94a3b8' }}>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
         AUM: <strong>${(leader.aum / 1_000_000).toFixed(2)}M</strong>
       </span>
-      <span style={{ fontSize: 13, color: '#94a3b8' }}>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
         Fee: <strong>{leader.fee != null ? `${leader.fee}%` : 'not published'}</strong>
       </span>
     </div>
@@ -272,15 +272,10 @@ const CopyTrading: React.FC = () => {
       : 'Not published';
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Copy Trading Marketplace</h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
-            Mirror top traders automatically. Allocate capital and start earning.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    <PageShell
+      width="wide" title="Copy Trading Marketplace"
+      subtitle="Mirror top traders automatically. Allocate capital and start earning."
+      actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {(['browse', 'active'] as const).map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
               ...s.tabBtn,
@@ -289,15 +284,16 @@ const CopyTrading: React.FC = () => {
               {t === 'browse' ? '🔍 Browse Traders' : `📋 Active Sessions (${sessions.length})`}
             </button>
           ))}
-          <div style={{ width: 1, height: 24, background: '#334155' }} />
+          <div style={{ width: 1, height: 24, background: 'var(--surface-hover)' }} />
           <button
             onClick={() => navigate('/leaderboard')}
-            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
           >
             🏆 Leaderboard
           </button>
-        </div>
-      </div>
+        </div></>}
+    >
+
 
       {/* ── Active Sessions Tab ── */}
       {activeTab === 'active' && (
@@ -309,12 +305,12 @@ const CopyTrading: React.FC = () => {
               <ActionBanner message={copyMsg} ok={copyOk} onDismiss={() => setCopyMsg('')} />
             </div>
           )}
-          {sessionsLoading && <p style={{ color: '#64748b' }}>Loading sessions…</p>}
+          {sessionsLoading && <p style={{ color: 'var(--text-muted)' }}>Loading sessions…</p>}
           {!sessionsLoading && sessions.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#475569', padding: 48 }}>
+            <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 48 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-              <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 8 }}>No active copy sessions</div>
-              <div style={{ fontSize: 13, marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
+              <div style={{ fontSize: 'var(--fs-value)', color: 'var(--text-dim)', marginBottom: 8 }}>No active copy sessions</div>
+              <div style={{ fontSize: 'var(--fs-body)', marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
               <button
                 onClick={() => setActiveTab('browse')}
                 style={{ background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: '10px 24px' }}
@@ -329,34 +325,34 @@ const CopyTrading: React.FC = () => {
               <div key={sess.trader_id} style={{ ...s.allocationCard, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{sess.trader_name}</div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>{sess.trader_name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                       Started {new Date(sess.started_at).toLocaleDateString()} ·{' '}
-                      <span style={{ color: sess.status === 'active' ? '#4ade80' : '#f59e0b' }}>{sess.status}</span>
+                      <span style={{ color: sess.status === 'active' ? 'var(--gain)' : '#f59e0b' }}>{sess.status}</span>
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: (totalPnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: (totalPnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                       {fmtPnl(totalPnl)}
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Total P&L</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total P&L</div>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, margin: '16px 0' }}>
                   <div style={s.sessMetric}>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Allocation</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>${fmtPrice(sess.allocation_amount)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Allocation</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>${fmtPrice(sess.allocation_amount)}</div>
                   </div>
                   <div style={s.sessMetric}>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Unrealised P&L</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.unrealised_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Unrealised P&L</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.unrealised_pnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                       {sess.unrealised_pnl != null ? `${sess.unrealised_pnl >= 0 ? '+' : ''}$${sess.unrealised_pnl.toFixed(2)}` : '—'}
                     </div>
                   </div>
                   <div style={s.sessMetric}>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Realised P&L</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.realised_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Realised P&L</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.realised_pnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                       {sess.realised_pnl != null ? `${sess.realised_pnl >= 0 ? '+' : ''}$${sess.realised_pnl.toFixed(2)}` : '—'}
                     </div>
                   </div>
@@ -364,7 +360,7 @@ const CopyTrading: React.FC = () => {
 
                 {/* Allocation update */}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-                  <input
+                  <input aria-label="New allocation"
                     type="number"
                     placeholder="New allocation…"
                     value={editAlloc[sess.trader_id] ?? ''}
@@ -374,7 +370,7 @@ const CopyTrading: React.FC = () => {
                   <button
                     onClick={() => handleUpdateAllocation(sess.trader_id)}
                     disabled={updatingId === sess.trader_id}
-                    style={{ ...s.copyBtn, padding: '8px 14px', fontSize: 13, background: '#3b82f6' }}
+                    style={{ ...s.copyBtn, padding: '8px 14px', fontSize: 'var(--fs-body)', background: '#3b82f6' }}
                   >
                     {updatingId === sess.trader_id ? 'Updating…' : 'Update Allocation'}
                   </button>
@@ -383,7 +379,7 @@ const CopyTrading: React.FC = () => {
                 <button
                   onClick={() => handleStopCopy(sess.trader_id)}
                   disabled={stoppingId === sess.trader_id}
-                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
+                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px' }}
                 >
                   {stoppingId === sess.trader_id ? 'Stopping…' : '⏹ Stop Copying'}
                 </button>
@@ -406,11 +402,11 @@ const CopyTrading: React.FC = () => {
       </div>
       {/* Leader cards */}
       {loading ? (
-        <p style={{ color: '#64748b', padding: '40px 0' }}>Loading traders…</p>
+        <p style={{ color: 'var(--text-muted)', padding: '40px 0' }}>Loading traders…</p>
       ) : loadErr ? (
-        <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
+        <p style={{ color: 'var(--loss)', padding: '40px 0' }}>⚠️ {loadErr}</p>
       ) : leaders.length === 0 ? (
-        <p style={{ color: '#64748b', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
+        <p style={{ color: 'var(--text-muted)', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
       ) : (
         <div style={s.grid}>
           {sorted.map((leader) => (
@@ -431,10 +427,11 @@ const CopyTrading: React.FC = () => {
 
           <div style={s.allocationGrid}>
             <div>
-              <label style={s.label}>Allocation Amount</label>
+              <label id="copytrading-allocation-label" style={s.label}>Allocation Amount</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <input
                   type="range"
+                  aria-labelledby="copytrading-allocation-label"
                   min={1000}
                   max={100000}
                   step={1000}
@@ -446,6 +443,7 @@ const CopyTrading: React.FC = () => {
                     not, so any figure could be typed straight past the range. */}
                 <input
                   type="number"
+                  aria-labelledby="copytrading-allocation-label"
                   min={MIN_ALLOCATION}
                   max={MAX_ALLOCATION}
                   step={1000}
@@ -463,7 +461,7 @@ const CopyTrading: React.FC = () => {
               </div>
               <div style={s.summaryRow}>
                 <span style={s.summaryLabel}>Max Drawdown Stop</span>
-                <span style={{ ...s.summaryVal, color: '#f87171' }}>
+                <span style={{ ...s.summaryVal, color: 'var(--loss)' }}>
                   ${Number.isFinite(allocation * Math.abs(selectedLeader.max_dd) / 100) ? (allocation * Math.abs(selectedLeader.max_dd) / 100).toFixed(0) : '—'}
                 </span>
               </div>
@@ -492,7 +490,7 @@ const CopyTrading: React.FC = () => {
           {copyMsg && (
             <div style={{
               marginTop: 12, fontSize: 14,
-              color: copyOk ? '#4ade80' : '#f87171',
+              color: copyOk ? 'var(--gain)' : 'var(--loss)',
             }}>
               {copyMsg}
             </div>
@@ -501,7 +499,7 @@ const CopyTrading: React.FC = () => {
       )}
       </>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -510,31 +508,31 @@ const CopyTrading: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:          { padding: 24, maxWidth: 1100, margin: '0 auto' },
   header:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: 0 },
-  select:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13 },
+  title:         { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: 0 },
+  select:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 'var(--fs-body)'},
   grid:          { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginBottom: 24 },
-  leaderCard:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 16, transition: 'border-color 0.15s' },
+  leaderCard:    { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 16, transition: 'border-color 0.15s' },
   leaderTop:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  leaderName:    { fontSize: 16, fontWeight: 700, color: '#f1f5f9' },
+  leaderName:    { fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' },
   metricsRow:    { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 },
   metric:        { textAlign: 'center' },
-  metricVal:     { fontSize: 18, fontWeight: 700, color: '#f1f5f9' },
-  metricLbl:     { fontSize: 11, color: '#475569', marginTop: 2 },
-  leaderFooter:  { display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid #334155' },
-  allocationCard:{ background: '#1e293b', border: '1px solid #f59e0b55', borderRadius: 12, padding: 24 },
-  cardTitle:     { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 20px' },
+  metricVal:     { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' },
+  metricLbl:     { fontSize: 11, color: 'var(--text-faint)', marginTop: 2 },
+  leaderFooter:  { display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border-strong)' },
+  allocationCard:{ background: 'var(--raised)', border: '1px solid #f59e0b55', borderRadius: 12, padding: 24 },
+  cardTitle:     { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 20px' },
   allocationGrid:{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 },
-  label:         { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 8 },
-  input:         { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
-  summaryBox:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: 16 },
+  label:         { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 8 },
+  input:         { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
+  summaryBox:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 16 },
   summaryRow:    { display: 'flex', justifyContent: 'space-between', marginBottom: 10 },
-  summaryLabel:  { fontSize: 13, color: '#64748b' },
-  summaryVal:    { fontSize: 13, fontWeight: 600, color: '#f1f5f9' },
+  summaryLabel:  { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
+  summaryVal:    { fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' },
   copyBtn:       { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '12px 24px' },
-  cancelBtn:     { background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 14, cursor: 'pointer', padding: '12px 20px' },
-  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
-  tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  sessMetric:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' },
+  cancelBtn:     { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 14, cursor: 'pointer', padding: '12px 20px' },
+  tabBtn:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px' },
+  tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
+  sessMetric:    { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' },
 };
 
 export default CopyTrading;

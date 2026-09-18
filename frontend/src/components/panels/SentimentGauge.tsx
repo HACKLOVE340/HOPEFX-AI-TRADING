@@ -4,7 +4,7 @@
  * Shows: bullish/bearish arc gauge, score, momentum, article feed.
  */
 
-import React, { useMemo } from 'react';
+import React, { } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';
@@ -93,7 +93,7 @@ function ArticleRow({ article }: { article: NewsArticle }) {
     article.sentiment_label === 'bearish' ? 'bear' : 'neutral';
 
   return (
-    <div className="flex flex-col gap-1 py-2.5 border-b border-[#1e2d3d] last:border-0">
+    <div className="flex flex-col gap-1 py-2.5 border-b border-[var(--border)] last:border-0">
       <div className="flex items-start justify-between gap-2">
         <p className="text-[11px] text-slate-300 leading-snug line-clamp-2 flex-1">
           {article.headline}
@@ -144,7 +144,7 @@ export function SentimentGauge() {
             padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
             background: score > 0 ? 'rgba(0,230,118,0.12)' : 'rgba(255,23,68,0.12)',
             border: `1px solid ${score > 0 ? 'rgba(0,230,118,0.35)' : 'rgba(255,23,68,0.35)'}`,
-            color: score > 0 ? '#00e676' : '#ff1744',
+            color: score > 0 ? 'var(--bull)' : 'var(--bear)',
             fontSize: 9, fontWeight: 800, fontFamily: 'inherit',
           }}
           title={`Strong ${score > 0 ? 'bullish' : 'bearish'} sentiment — consider a ${extremeDir} trade`}
@@ -161,7 +161,7 @@ export function SentimentGauge() {
       <div className="flex flex-col h-full overflow-hidden">
 
         {/* Gauge */}
-        <div className="px-4 pt-3 pb-2 border-b border-[#1e2d3d] shrink-0">
+        <div className="px-4 pt-3 pb-2 border-b border-[var(--border)] shrink-0">
           <ArcGauge score={score} />
 
           {/* Score + stats — 2×2 grid so the labels never collide in a narrow panel */}
@@ -180,7 +180,7 @@ export function SentimentGauge() {
               <span
                 className={cn(
                   'font-mono tabular-nums text-xs font-semibold',
-                  momentum >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]',
+                  momentum >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]',
                 )}
               >
                 {momentum >= 0 ? '▲' : '▼'} {Math.abs(momentum).toFixed(3)}
@@ -188,7 +188,7 @@ export function SentimentGauge() {
             </div>
             <div className="flex flex-col items-center">
               <span className="text-[9px] text-slate-600 uppercase tracking-wider">Bull Ratio</span>
-              <span className="font-mono tabular-nums text-xs text-[#00e676]">
+              <span className="font-mono tabular-nums text-xs text-[var(--bull)]">
                 {(bullRatio * 100).toFixed(0)}%
               </span>
             </div>

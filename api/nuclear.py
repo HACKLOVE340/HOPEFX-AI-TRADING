@@ -261,11 +261,15 @@ async def activate_hedge(
 ):
     """Open an inverse hedge position on the given symbol."""
     orchestrator = _get_orchestrator()
-    await orchestrator.activate_hedge_mode(req.symbol)
+    placed = await orchestrator.activate_hedge_mode(req.symbol)
+    # "ok" only when the venue took the order. This used to be unconditional,
+    # so the operator's hedge button reported success for a hedge that was
+    # never placed (F81).
     return {
-        "status": "ok",
+        "status": "ok" if placed else "failed",
         "hedge_active": orchestrator._hedge_active,
         "hedge_positions": len(orchestrator._hedge_positions),
+        "detail": None if placed else "hedge order was not placed — the account is UNHEDGED",
     }
 
 
@@ -279,10 +283,11 @@ async def deactivate_hedge(
 ):
     """Close all open hedge positions and restore normal mode."""
     orchestrator = _get_orchestrator()
-    await orchestrator.deactivate_hedge_mode()
+    closed = await orchestrator.deactivate_hedge_mode()
     return {
-        "status": "ok",
+        "status": "ok" if closed else "failed",
         "hedge_active": orchestrator._hedge_active,
+        "detail": None if closed else "one or more hedges could not be closed — positions may still be open",
     }
 
 
