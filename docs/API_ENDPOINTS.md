@@ -182,7 +182,7 @@ They are excluded from the OpenAPI schema for the same reason.
 | `POST` | `/api/backtesting/{run_id}/share` | JWT | Generate a public share URL for a completed backtest result. | Advanced Trading |
 | `POST` | `/api/billing/affiliate/generate-link` | JWT | Get or create the authenticated user's unique referral link. | Billing |
 | `POST` | `/api/billing/auth/activate-free-tier` | JWT | Called immediately after successful registration. | Billing |
-| `GET` | `/api/billing/balance` | JWT | Return the authenticated user's wallet balance. | Billing |
+| `GET` | `/api/billing/balance` | JWT | Return the balance this platform can show, and say where it came from. | Billing |
 | `POST` | `/api/billing/crypto/order` | JWT | Create a crypto payment order | Billing |
 | `GET` | `/api/billing/crypto/order/{order_id}` | JWT | Get crypto order status | Billing |
 | `POST` | `/api/billing/crypto/order/{order_id}/cancel` | JWT | Cancel a pending crypto order | Billing |
