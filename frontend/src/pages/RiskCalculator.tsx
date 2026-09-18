@@ -468,7 +468,6 @@ const RiskCalculator: React.FC = () => {
           <Label text="Symbol" htmlFor="risk-symbol" />
           <select
             id="risk-symbol"
-            aria-labelledby="risk-symbol-label"
             style={s.select}
             value={state.symbol}
             onChange={(e) => setState((p) => ({ ...p, symbol: e.target.value }))}

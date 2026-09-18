@@ -174,8 +174,8 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
-            Title
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. XAUUSD Weekly Analysis"
+            <span id="research-notebook-title-label">Title</span>
+            <input aria-labelledby="research-notebook-title-label" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. XAUUSD Weekly Analysis"
               style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                 borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </label>
@@ -206,8 +206,8 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
             </label>
           </div>
           <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
-            Description (optional)
-            <textarea value={description} onChange={e => setDesc(e.target.value)} rows={2}
+            <span id="research-notebook-description-label">Description (optional)</span>
+            <textarea aria-labelledby="research-notebook-description-label" value={description} onChange={e => setDesc(e.target.value)} rows={2}
               style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                 borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)', resize: 'vertical', boxSizing: 'border-box' }} />
           </label>

@@ -393,8 +393,9 @@ const TradeJournal: React.FC = () => {
                       per entry: a constant id would appear as many times as there
                       are open rows, and htmlFor would then point at whichever the
                       browser saw first. */}
-                  <label htmlFor={`journal-notes-${entry.trade_id}`} style={s.label}>Notes</label>
+                  <label id={`journal-notes-${entry.trade_id}-label`} htmlFor={`journal-notes-${entry.trade_id}`} style={s.label}>Notes</label>
                   <textarea id={`journal-notes-${entry.trade_id}`}
+                    aria-labelledby={`journal-notes-${entry.trade_id}-label`}
                     value={editForm.notes ?? ''} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                     style={s.textarea} rows={3} />
 
@@ -419,9 +420,10 @@ const TradeJournal: React.FC = () => {
                   </div>
 
                   <label style={s.label}>
-                    <input type="checkbox" checked={!editForm.followed_rules}
+                    <input type="checkbox" aria-labelledby={`journal-rule-deviation-${entry.trade_id}-label`}
+                      checked={!editForm.followed_rules}
                       onChange={(e) => setEditForm({ ...editForm, followed_rules: !e.target.checked })} />
-                    {' '}Rule deviation
+                    {' '}<span id={`journal-rule-deviation-${entry.trade_id}-label`}>Rule deviation</span>
                   </label>
                   {!editForm.followed_rules && (
                     <input aria-label="What rule did you break?" value={editForm.rule_deviation ?? ''} onChange={(e) => setEditForm({ ...editForm, rule_deviation: e.target.value })}

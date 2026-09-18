@@ -332,14 +332,14 @@ const ReplayPage: React.FC = () => {
               </select>
             </label>
             <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
-              Start Date
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+              <span id="replay-start-date-label">Start Date</span>
+              <input type="date" aria-labelledby="replay-start-date-label" value={startDate} onChange={e => setStartDate(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
                   border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
             </label>
             <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
-              End Date
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+              <span id="replay-end-date-label">End Date</span>
+              <input type="date" aria-labelledby="replay-end-date-label" value={endDate} onChange={e => setEndDate(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
                   border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
             </label>

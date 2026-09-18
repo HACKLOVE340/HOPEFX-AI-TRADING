@@ -152,8 +152,9 @@ const LogsSection: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-muted)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
-              Auto-scroll
+              <input type="checkbox" aria-labelledby="logs-auto-scroll-label"
+                checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
+              <span id="logs-auto-scroll-label">Auto-scroll</span>
             </label>
             <ActionBtn label="Export" onClick={exportLogs} icon={<Download size={18} aria-hidden />} size="sm" />
             <ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />

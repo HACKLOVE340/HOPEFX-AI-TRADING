@@ -548,9 +548,10 @@ const SuperAdminDashboard: React.FC = () => {
 
                     <div className="flex items-center gap-1.5 bg-terminal-bg border border-terminal-border rounded-lg px-2.5 py-1.5">
                       <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
+                        <input type="checkbox" aria-labelledby="superadmin-auto-refresh-label"
+                          checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
                           className="w-3 h-3 accent-blue-500" />
-                        <span className="text-slate-500 text-2xs">Auto</span>
+                        <span id="superadmin-auto-refresh-label" className="text-slate-500 text-2xs">Auto</span>
                       </label>
                       {autoRefresh && (
                         <span className="text-slate-600 text-2xs font-mono min-w-[20px]">{countdown}s</span>

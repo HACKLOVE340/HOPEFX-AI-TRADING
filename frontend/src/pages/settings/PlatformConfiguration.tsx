@@ -1434,7 +1434,13 @@ const HealingTab: React.FC<{
       <Card>
         <SectionHeader icon={<Shield size={18} aria-hidden />} title="Protected Paths" desc="Files matching these paths are never auto-patched — comma-separated prefixes" />
         <Field label="Protected Paths" description="e.g. live_trading.py,risk_manager.py,ml/models/,config/secrets/">
+          {/* `Field` wraps its children in a <label>, which names this textarea
+              at runtime — but the wrapping text lives in settings/ui.tsx and
+              `Field`'s `label` prop is a plain string, so there is no element
+              here to point `aria-labelledby` at. The name is spelled out to
+              match the label two lines above it, verbatim (WCAG 2.5.3). */}
           <textarea
+            aria-label="Protected Paths"
             value={healer.protected_paths}
             onChange={(e) => setHealer({ protected_paths: e.target.value })}
             rows={4}
@@ -1918,7 +1924,9 @@ const ChainLegRow: React.FC<{
           and an operator who cannot type one of those is worse off than one
           who had no listing at all. */}
       <datalist id={modelListId}>
-        {modelOptions.map((m) => <option key={m} value={m} />)}
+        {/* A datalist suggestion is announced by its value; naming it with the
+            same binding that supplies that value cannot drift from it. */}
+        {modelOptions.map((m) => <option key={m} value={m} aria-label={m} />)}
       </datalist>
     </div>
     <div style={{ display: 'flex', gap: 6 }}>

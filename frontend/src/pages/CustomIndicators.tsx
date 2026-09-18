@@ -231,9 +231,10 @@ const CustomIndicators: React.FC = () => {
               Syntax: <span style={{ color:'var(--link)' }}>FUNC</span> · <span style={{ color:'var(--gain)' }}>data</span> · <span style={{ color:'#f59e0b' }}>number</span> · <span style={{ color:'var(--ai-model)' }}>operator</span>
             </div>
             <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize: 'var(--fs-label)', color:'var(--text-muted)' }}>
-              <input type="checkbox" checked={autoPreview} onChange={e => setAutoPreview(e.target.checked)}
+              <input type="checkbox" aria-labelledby="customindicators-auto-preview-label"
+                checked={autoPreview} onChange={e => setAutoPreview(e.target.checked)}
                 style={{ accentColor:'#3b82f6' }} />
-              Auto-preview
+              <span id="customindicators-auto-preview-label">Auto-preview</span>
             </label>
           </div>
 

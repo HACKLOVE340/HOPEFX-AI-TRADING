@@ -524,10 +524,10 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         )}
         <div className="flex-1" />
         <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer select-none">
-          <input type="checkbox" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} className="accent-[#3b82f6]" /> Vol
+          <input type="checkbox" aria-labelledby="trading-show-volume-label" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} className="accent-[#3b82f6]" /> <span id="trading-show-volume-label">Vol</span>
         </label>
         <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer select-none">
-          <input type="checkbox" checked={showMA} onChange={(e) => setShowMA(e.target.checked)} className="accent-[#3b82f6]" /> MA20
+          <input type="checkbox" aria-labelledby="trading-show-ma20-label" checked={showMA} onChange={(e) => setShowMA(e.target.checked)} className="accent-[#3b82f6]" /> <span id="trading-show-ma20-label">MA20</span>
         </label>
       </div>
       <div className="relative">

@@ -182,8 +182,16 @@ export function DataTable<T>({
                 // aria-busy on the table says that instead.
                 <tr key={i} aria-hidden="true">
                   {columns.map((col) => (
+                    // The row above is already aria-hidden, so this cell is
+                    // already out of the accessibility tree — but that is an
+                    // ANCESTOR fact, and a static rule reads one element's own
+                    // props. Restating it here is true rather than decorative:
+                    // a shimmer placeholder has no name because it has no
+                    // content, and inventing one would announce a cell that is
+                    // not there.
                     <td
                       key={col.key}
+                      aria-hidden="true"
                       className={`px-3 sm:px-4 py-2.5 ${col.hideOnMobile ? 'hidden sm:table-cell' : ''}`}
                     >
                       <div className="h-3.5 rounded bg-terminal-raised animate-pulse w-4/5" />

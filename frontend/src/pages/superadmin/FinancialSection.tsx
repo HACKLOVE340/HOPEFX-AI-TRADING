@@ -693,8 +693,11 @@ const RefundPolicyPanel: React.FC = () => {
         </legend>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {options.map(opt => {
+          {options.map((opt, optIndex) => {
             const active = selected === opt.value;
+            // The policy values come from the API, so they are not safe to
+            // splice into an id; the index is.
+            const labelId = `refund-policy-${optIndex}-label`;
             const isSaved = saved === opt.value;
             return (
               <label
@@ -712,6 +715,7 @@ const RefundPolicyPanel: React.FC = () => {
               >
                 <input
                   type="radio"
+                  aria-labelledby={labelId}
                   name="refund-policy"
                   value={opt.value}
                   checked={active}
@@ -724,7 +728,7 @@ const RefundPolicyPanel: React.FC = () => {
                 />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-strong)' }}>{opt.label}</span>
+                    <span id={labelId} style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-strong)' }}>{opt.label}</span>
                     {opt.recommended === 'true' && (
                       <span style={{
                         fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',

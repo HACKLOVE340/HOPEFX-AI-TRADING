@@ -144,8 +144,9 @@ const StrategyBuilder: React.FC = () => {
             </label>
             {Object.entries(params).map(([key, val]) => (
               <label key={key}>
-                <span style={labelStyle}>{key.replace(/_/g, ' ')}</span>
+                <span id={`strategy-param-${key}-label`} style={labelStyle}>{key.replace(/_/g, ' ')}</span>
                 <input
+                  aria-labelledby={`strategy-param-${key}-label`}
                   value={String(val)}
                   type={typeof val === 'number' ? 'number' : 'text'}
                   step="any"
