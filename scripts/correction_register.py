@@ -2811,6 +2811,37 @@ S_DOC = "doc-freshness-review"
 # ── Frontend correctness, found by driving the app rather than reading it ───
 
 
+def _p_balance_source_split() -> tuple[str, str]:
+    """Does /billing/balance read the ledger it promises, or the broker?
+
+    Read through this module's own `_read`, so the starvation harness can empty
+    it — a probe that reports FIXED against a tree it could not see is the F176
+    shape this register exists to refuse.
+    """
+    src = _read("api/billing.py")
+    if not src:
+        return UNVERIFIED, "api/billing.py could not be read here"
+
+    marker = "async def get_balance"
+    if marker not in src:
+        return UNVERIFIED, "get_balance is not in api/billing.py on this tree"
+
+    body = src[src.index(marker) : src.index(marker) + 2000]
+    promises_wallet = "wallet balance" in body
+    reads_broker = "app_state, \"broker\"" in body or 'getattr(app_state, "broker"' in body
+    reads_ledger = "wallet_manager" in body or "WalletTransaction" in body
+
+    if reads_ledger:
+        return FIXED, "get_balance reads the wallet ledger it names"
+    if promises_wallet and reads_broker:
+        return (
+            OPEN,
+            "get_balance promises 'wallet balance' and reads the broker account; the "
+            "ledger the withdrawal path debits is a different number",
+        )
+    return UNVERIFIED, "get_balance neither names a wallet balance nor reads the broker recognisably"
+
+
 def _p_suite_does_not_rewrite_models() -> tuple[str, str]:
     """Does the suite still overwrite a checksum-verified model artifact?
 
@@ -3174,6 +3205,35 @@ def _p_field_has_no_label() -> tuple[str, str]:
 
 
 FINDINGS: list[Finding] = [
+    Finding(
+        "BALANCE-SOURCE-SPLIT",
+        "The balance a user is shown and the balance a withdrawal checks are different numbers",
+        "P1",
+        "Money",
+        "This session, 2026-09-18 — surfaced while planning the withdrawal debit (ADR 0021)",
+        "`api/billing.py::get_balance` says in its own docstring \"Return the authenticated "
+        "user's wallet balance\" and then reads the BROKER account, falling back to the "
+        "subscription manager. It never reads `wallet_transactions`. Meanwhile ADR 0021 makes "
+        "the fiat wallet the ledger a withdrawal debits, and `_apply_movement` refuses when "
+        "`before < amount`. So the number the UI shows and the number the refusal is computed "
+        "from come from two different sources, and the ledger carries no history — nothing "
+        "wrote it before deposits began crediting it. This is why "
+        "`WITHDRAWAL_DEBITS_LEDGER` ships default-FALSE: with it on today, a user the UI says "
+        "has funds is refused 402, which is an outage that looks like a money bug, and the "
+        "pressure to fix it falls on the balance check, which is a real gate. The fix is "
+        "reconciliation, not a wider tolerance and not a removed check: decide what is "
+        "authoritative, and make `get_balance` read that, or seed the ledger from it. "
+        "Deleting the docstring's promise instead would leave two numbers and no statement "
+        "that they disagree.",
+        "Assert that the value `/billing/balance` returns and the value a withdrawal is "
+        "checked against come from the same source. It fails today at the point where one "
+        "reads the broker and the other reads the ledger. Until then, "
+        "`test_withdrawal_debits_the_wallet_ledger.py::test_the_flag_defaults_to_off_and_"
+        "nothing_is_debited` pins the safe default.",
+        "python scripts/correction_register.py --id BALANCE-SOURCE-SPLIT",
+        _p_balance_source_split,
+        [S_MONEY, S_VBC],
+    ),
     Finding(
         "SUITE-REWRITES-MODEL",
         "Running the test suite overwrote a model artifact production verifies fail-closed",

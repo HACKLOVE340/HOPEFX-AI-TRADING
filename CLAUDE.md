@@ -477,6 +477,32 @@ they are the ones most often skipped under time pressure:
   are keyed on (authenticated `sub`, client session label); `ChatRequest`
   carries no user field, because an identity in the body is an identity the
   caller chooses. `--id CHAT-SHARED-HISTORY`.
+- **The fiat wallet is now the ledger, and the debit side is OFF by default.**
+  ADR 0021. A confirmed Stripe payment (`payment_intent.succeeded`) credits the
+  wallet through `api/billing.py::_credit_confirmed_deposit`; a withdrawal
+  debits it through `api/payments.py::_debit_wallet_for_withdrawal`, gated on
+  `WITHDRAWAL_DEBITS_LEDGER`, **default false**.
+
+  That default is load-bearing, not cautious. `api/billing.py::get_balance`
+  promises "the authenticated user's wallet balance" and reads the **broker
+  account**, falling back to the subscription manager — never the ledger. The
+  ledger also carries no history before deposits started crediting it. With the
+  flag on today, a user the UI says has funds is refused `402`: an outage that
+  looks like a money bug, and the pressure to fix it falls on the balance check,
+  which is a real gate. Turn it on after reconciliation —
+  `python scripts/correction_register.py --id BALANCE-SOURCE-SPLIT`.
+
+  Two things not to "tidy": the AML gate is consulted **twice** on the
+  withdrawal path (`_screen_withdrawal_for_aml`, then again inside
+  `debit_wallet`) — defence in depth, because the second cannot be bypassed by a
+  caller that forgets the first. And the ledger's eight refusals map to eight
+  different status codes on purpose: collapsing them hides a
+  balance-did-not-reconcile **corruption** event behind a `402`.
+
+  Idempotency on the credit side is enforced by the database
+  (`uq_wallet_txn_user_reference`), not by the Python check beside it — measured
+  by disabling the check and confirming a replayed webhook still writes one row.
+  Stripe delivers at least once; a double credit creates capital.
 - `test-results.xml` is a CI-generated artifact — never commit it.
 </content>
 </invoke>
