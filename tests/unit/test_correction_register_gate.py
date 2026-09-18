@@ -222,10 +222,32 @@ def test_the_verdict_does_not_depend_on_pythonpath():
         f"  without: {bare.stdout}\n  with:    {rooted.stdout}"
     )
     assert bare.returncode == rooted.returncode
-    assert "UNVERIFIED 0" in bare.stdout, (
-        "the model probes must measure rather than degrade — UNVERIFIED here "
-        "would mean the import is still failing, in both environments this time"
-    )
+
+    # Two runs that agree only because BOTH went blind would satisfy the
+    # assertion above, so the agreement needs a witness: with `ml/` on the tree
+    # the model probes must have measured, not degraded.
+    #
+    # Conditioned on the tree actually carrying the provenance lookup, rather
+    # than asserted outright. This test's subject is that the verdict does not
+    # depend on PYTHONPATH; "the repository can measure a model's age" is a
+    # different claim, and it is false on any tree cut for review where this
+    # gate lands before the ML package (docs/audit/LANDING_PLAN.md). Asserting
+    # it here made this file fail for the composition of the tree rather than
+    # for the defect it watches.
+    #
+    # The witness is `_model_training_time`, not `ml/inference_engine.py`: the
+    # module exists on `main` WITHOUT that function, so a file check reads as
+    # "the capability is here" when it is not, and the probe then degrades to
+    # UNVERIFIED for an honest reason. Read from source rather than imported,
+    # so this stays a question about the tree and not about sys.path — which is
+    # the very thing under test.
+    _ie = ROOT / "ml" / "inference_engine.py"
+    if _ie.exists() and "_model_training_time" in _ie.read_text(encoding="utf-8"):
+        assert "UNVERIFIED 0" in bare.stdout, (
+            "the model probes must measure rather than degrade — `ml/` is on "
+            "this tree, so UNVERIFIED means the import is failing again, in "
+            "both environments this time"
+        )
 
 
 def test_the_suite_leaves_the_committed_register_untouched():

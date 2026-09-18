@@ -1686,3 +1686,10 @@ path = "docs/superpowers/plans/2026-09-15-repository-remediation.md"
 tier = "T4"
 owner = "engineering"
 state = "draft"
+
+[[document]]
+path = "docs/audit/SLICE1_MANIFEST.md"
+tier = "T3"
+subject = "slice1_manifest"
+owner = "hacklove340"
+state = "active"
