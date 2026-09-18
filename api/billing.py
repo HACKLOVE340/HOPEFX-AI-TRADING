@@ -355,12 +355,7 @@ def _already_credited(wallet_manager, user_id: str, reference: str) -> bool:
     from database.models import WalletTransaction
 
     with factory() as session:
-        return (
-            session.query(WalletTransaction)
-            .filter_by(user_id=user_id, reference=reference)
-            .first()
-            is not None
-        )
+        return session.query(WalletTransaction).filter_by(user_id=user_id, reference=reference).first() is not None
 
 
 def _credit_confirmed_deposit(data: dict) -> dict:

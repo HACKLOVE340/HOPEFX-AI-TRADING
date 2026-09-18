@@ -140,8 +140,7 @@ def test_a_source_that_failed_is_reported_not_swallowed(no_sources, caplog):
         _balance()
 
     assert caplog.records, (
-        "every balance source failed and nothing was logged above DEBUG — in production "
-        "this is a silent zero"
+        "every balance source failed and nothing was logged above DEBUG — in production this is a silent zero"
     )
 
 
@@ -179,8 +178,7 @@ def test_the_ledger_balance_is_reported_alongside(sync_db_engine, db_tables, mon
     result = _balance()
 
     assert result.get("ledger_balance") == 40.0, (
-        "the wallet ledger — the number a withdrawal is actually refused against — is "
-        f"not in the response: {result!r}"
+        f"the wallet ledger — the number a withdrawal is actually refused against — is not in the response: {result!r}"
     )
     assert result["balance"] == 1234.56
     assert result.get("sources_agree") is False, (

@@ -80,8 +80,7 @@ def test_the_reference_is_still_carried(monkeypatch):
     metadata = calls.get("metadata") or {}
     assert metadata.get("reference"), "the deposit reference was dropped from the metadata"
     assert metadata["reference"] == result["reference"], (
-        "the metadata reference and the one returned to the caller disagree, so the "
-        "webhook could not match them up"
+        "the metadata reference and the one returned to the caller disagree, so the webhook could not match them up"
     )
 
 
@@ -111,8 +110,7 @@ def test_the_route_hands_the_authenticated_user_through(monkeypatch):
 
     impl_params = set(inspect.signature(payments._fiat_deposit_impl).parameters)
     assert "user" in impl_params, (
-        "_fiat_deposit_impl still takes only the request, so the authenticated "
-        "identity cannot reach the PaymentIntent"
+        "_fiat_deposit_impl still takes only the request, so the authenticated identity cannot reach the PaymentIntent"
     )
 
     route_src = inspect.getsource(payments.fiat_deposit)

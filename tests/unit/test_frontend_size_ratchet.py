@@ -158,3 +158,138 @@ def test_the_committed_baseline_still_describes_the_tree():
     baseline = json.loads((REPO / mod.BASELINE_REL).read_text(encoding="utf-8"))
     assert baseline["_total"] == sum(baseline["files"].values())
     assert mod.check(REPO) == 0
+
+
+# ── the display band ─────────────────────────────────────────────────────────
+#
+# Everything at or above 28px is beyond the type scale: `--fs-hero` is 26px at
+# `ultra`, which is the tier `densityPref.ts` gives a person by default and the
+# tier `frontend_size_codemod.py` is anchored to. So no token can reach these
+# sites, and the obvious next move is to extend the scale with a `--fs-display`
+# tier and convert them.
+#
+# That move is wrong for most of them, and only a measurement says so: the
+# majority are sizing an EMOJI, where `fontSize` is the only lever a glyph has.
+# Every one of those disappears when `frontend_emoji_ratchet` does its job and
+# the emoji becomes an SVG sized by `width`/`height`. Minting design-system API
+# for debt that is scheduled for deletion is how a token outlives its reason.
+#
+# So the band is classified rather than counted, and these tests hold the
+# classifier — not the ratio, which is supposed to move.
+
+
+def test_the_band_starts_above_the_scale(tmp_path):
+    mod = _load()
+    assert mod.DISPLAY_FLOOR == 28
+    root = _tree(tmp_path, {"a.tsx": "<p style={{ fontSize: 26 }}>x</p>\n<p style={{ fontSize: 28 }}>y</p>\n"})
+    band = mod.display_band(root)
+    assert [s.px for s in band] == [28]
+
+
+def test_an_emoji_is_classified_as_a_glyph(tmp_path):
+    mod = _load()
+    root = _tree(tmp_path, {"a.tsx": "<div style={{ fontSize: 32 }}>\U0001f4cb</div>\n"})
+    assert [s.kind for s in mod.display_band(root)] == ["glyph"]
+
+
+def test_a_heading_is_classified_as_type(tmp_path):
+    mod = _load()
+    root = _tree(tmp_path, {"a.tsx": "  title: { fontSize: 36, fontWeight: 800 },\n"})
+    assert [s.kind for s in mod.display_band(root)] == ["type"]
+
+
+def test_the_glyph_test_reaches_outside_the_emoji_block():
+    """Half the glyphs in this tree are not in the emoji block at all.
+
+    `⏳` is Miscellaneous Technical, `☢` and `✅` are Miscellaneous
+    Symbols, `⭐` is Miscellaneous Symbols and Arrows. A classifier that
+    only knew U+1F000-U+1FAFF would call four of the biggest sites `type` and
+    argue for a token none of them needs.
+    """
+    mod = _load()
+    for glyph in ("⏳", "☢️", "⚠️", "✅", "⭐", "\U0001f6e1️"):
+        assert mod._classify(f"<div style={{{{ fontSize: 48 }}}}>{glyph}</div>") == "glyph", glyph
+
+
+def test_an_arrow_or_a_sign_is_not_a_glyph():
+    """The wide sweep that catches `⭐` also catches `→` and `×`, which are text.
+
+    Widening the range until every emoji matched would classify a heading that
+    contains an arrow as a glyph, and the whole point of the split is that the
+    `type` side is the side that might deserve a token.
+    """
+    mod = _load()
+    for ch in ("→", "×", "±", "—", "…"):
+        assert mod._classify(f"  title: {{ fontSize: 36 }},  // {ch}") == "type", ch
+
+
+def test_a_size_inside_a_chart_option_is_still_counted(tmp_path):
+    """The band is a measurement, not a codemod — it counts what it cannot fix.
+
+    `frontend_size_codemod.py` refuses a canvas file because `var()` is resolved
+    by the cascade and a canvas is not the cascade. That is a reason not to
+    REWRITE the site; it is not a reason to pretend the density control reaches
+    it.
+    """
+    mod = _load()
+    root = _tree(tmp_path, {"a.tsx": "createChart(el, { layout: { fontSize: 32 } });\n"})
+    assert len(mod.display_band(root)) == 1
+
+
+def test_the_split_sums_to_the_band(tmp_path):
+    mod = _load()
+    root = _tree(
+        tmp_path,
+        {
+            "a.tsx": "<div style={{ fontSize: 32 }}>\U0001f4cb</div>\n",
+            "b.tsx": "  title: { fontSize: 36 },\n  metric: { fontSize: 48 },\n",
+        },
+    )
+    split = mod.display_split(root)
+    assert split == {"glyph": 1, "type": 2}
+    assert sum(split.values()) == len(mod.display_band(root))
+
+
+def test_the_live_tree_has_a_display_band_at_all():
+    """The sanity floor, same as the one above: a classifier that matched
+    nothing would report a clean split and agree with every conclusion."""
+    mod = _load()
+    band = mod.display_band(REPO)
+    assert len(band) >= 20
+    assert {s.kind for s in band} == {"glyph", "type"}
+
+
+# ── prose is not debt ────────────────────────────────────────────────────────
+
+
+def test_a_size_in_a_comment_is_not_counted(tmp_path):
+    """F255/F257 in the size dimension: a scanner that reads prose as source.
+
+    A file that explains the literal it removed would keep its baseline line
+    forever, because there is nothing left to convert.
+    """
+    mod = _load()
+    root = _tree(
+        tmp_path,
+        {
+            "a.tsx": "// it used to be fontSize: 32 in p-4\n"
+            " * and the block-comment form: fontSize: 40, gap-3\n"
+            "<p style={{ fontSize: 13 }}>x</p>\n",
+        },
+    )
+    assert mod.count_sizes(root) == {"frontend/src/a.tsx": 1}
+    assert mod.count_split(root)[1] == 1
+
+
+def test_a_trailing_comment_does_not_excuse_the_code_on_its_line(tmp_path):
+    """Only a line that OPENS with a comment is prose. `fontSize: 32, // why`
+    is a literal with an explanation, and the literal is still unreachable."""
+    mod = _load()
+    root = _tree(tmp_path, {"a.tsx": "  title: { fontSize: 32 },  // the page heading\n"})
+    assert mod.count_sizes(root) == {"frontend/src/a.tsx": 1}
+
+
+def test_the_display_band_skips_prose_too(tmp_path):
+    mod = _load()
+    root = _tree(tmp_path, {"a.tsx": "// fontSize: 48 was here\n  title: { fontSize: 36 },\n"})
+    assert [s.px for s in mod.display_band(root)] == [36]

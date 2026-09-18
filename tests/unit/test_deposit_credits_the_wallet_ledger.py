@@ -105,9 +105,7 @@ def test_a_replayed_webhook_credits_only_once(wallet_and_rows):
         f"a replayed payment_intent.succeeded wrote {len(written)} ledger rows — "
         "the same money was credited more than once, which creates capital"
     )
-    assert wm.get_balance("user-dep-1") == balance_after_first, (
-        "the balance moved twice for one payment"
-    )
+    assert wm.get_balance("user-dep-1") == balance_after_first, "the balance moved twice for one payment"
 
 
 def test_two_distinct_payments_both_credit(wallet_and_rows):
@@ -156,8 +154,7 @@ def test_the_ledger_being_unavailable_does_not_silently_drop_the_money(monkeypat
 
     assert result.get("credited") is False
     assert result.get("retryable") is True, (
-        "a missing ledger is a server-side problem, so the delivery must be retryable "
-        "rather than acknowledged as done"
+        "a missing ledger is a server-side problem, so the delivery must be retryable rather than acknowledged as done"
     )
 
 
@@ -185,9 +182,12 @@ def _drive_the_webhook(monkeypatch, event: dict):
         lambda: _FakeClient(),
         raising=False,
     )
-    monkeypatch.setattr(billing, "_get_subscription_manager", lambda: SimpleNamespace(
-        handle_stripe_webhook=lambda *_a, **_k: None
-    ), raising=False)
+    monkeypatch.setattr(
+        billing,
+        "_get_subscription_manager",
+        lambda: SimpleNamespace(handle_stripe_webhook=lambda *_a, **_k: None),
+        raising=False,
+    )
 
     class _Request:
         headers = {"stripe-signature": "sig"}
@@ -206,8 +206,7 @@ def test_the_webhook_route_actually_credits(wallet_and_rows, monkeypatch):
     _wm, rows = wallet_and_rows
     _drive_the_webhook(
         monkeypatch,
-        {"id": "evt_1", "type": "payment_intent.succeeded",
-         "data": {"object": _event("pi_via_route", cents=4200)}},
+        {"id": "evt_1", "type": "payment_intent.succeeded", "data": {"object": _event("pi_via_route", cents=4200)}},
     )
 
     written = rows()
@@ -220,8 +219,11 @@ def test_an_unrelated_event_is_not_treated_as_a_deposit(wallet_and_rows, monkeyp
     _wm, rows = wallet_and_rows
     _drive_the_webhook(
         monkeypatch,
-        {"id": "evt_2", "type": "customer.subscription.updated",
-         "data": {"object": _event("pi_not_a_deposit", cents=9999)}},
+        {
+            "id": "evt_2",
+            "type": "customer.subscription.updated",
+            "data": {"object": _event("pi_not_a_deposit", cents=9999)},
+        },
     )
 
     assert rows() == [], "a subscription event credited the wallet"
@@ -242,8 +244,11 @@ def test_a_credit_that_cannot_be_recorded_asks_stripe_to_redeliver(monkeypatch):
     with pytest.raises(HTTPException) as excinfo:
         _drive_the_webhook(
             monkeypatch,
-            {"id": "evt_3", "type": "payment_intent.succeeded",
-             "data": {"object": _event("pi_no_ledger_route", cents=1000)}},
+            {
+                "id": "evt_3",
+                "type": "payment_intent.succeeded",
+                "data": {"object": _event("pi_no_ledger_route", cents=1000)},
+            },
         )
 
     assert excinfo.value.status_code == 503, (

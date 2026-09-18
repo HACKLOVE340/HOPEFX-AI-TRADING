@@ -2854,7 +2854,7 @@ def _p_balance_source_split() -> tuple[str, str]:
         return UNVERIFIED, "get_balance is not in api/billing.py on this tree"
 
     body = src[src.index(marker) : src.index(marker) + 6000]
-    reads_broker = 'getattr(app_state, "broker"' in body or "app_state, \"broker\"" in body
+    reads_broker = 'getattr(app_state, "broker"' in body or 'app_state, "broker"' in body
     reports_split = "ledger_balance" in body and "sources_agree" in body
     # The shown number comes from the ledger only if `balance` is assigned from it.
     derives_from_ledger = "balance = " in body and "wallet_manager.get_balance" in body.split("ledger_balance")[0]
@@ -3248,8 +3248,8 @@ FINDINGS: list[Finding] = [
         "Money",
         "This session, 2026-09-18 — surfaced by a test asserting a real zero is not a failed lookup",
         "`api/billing.py::get_balance` read the broker account as "
-        "`float(getattr(account, \"balance\", 0) or account.get(\"balance\", 0))`. The `or` "
-        "conflates \"the attribute is missing\" with \"the attribute is ZERO\", because 0.0 is "
+        '`float(getattr(account, "balance", 0) or account.get("balance", 0))`. The `or` '
+        'conflates "the attribute is missing" with "the attribute is ZERO", because 0.0 is '
         "falsy. A broker reporting a genuine zero therefore fell through to the mapping "
         "branch, and an object-style account has no `.get`, so it raised AttributeError — "
         "into an `except Exception` that logged at DEBUG, which is off in production. The "
@@ -3272,7 +3272,7 @@ FINDINGS: list[Finding] = [
         "P1",
         "Money",
         "This session, 2026-09-18 — surfaced while planning the withdrawal debit (ADR 0021)",
-        "`api/billing.py::get_balance` says in its own docstring \"Return the authenticated "
+        '`api/billing.py::get_balance` says in its own docstring "Return the authenticated '
         "user's wallet balance\" and then reads the BROKER account, falling back to the "
         "subscription manager. It never reads `wallet_transactions`. Meanwhile ADR 0021 makes "
         "the fiat wallet the ledger a withdrawal debits, and `_apply_movement` refuses when "
@@ -3509,7 +3509,16 @@ FINDINGS: list[Finding] = [
         "codemod and a ratchet, which is the precedent for closing this one. NOT fixed by making "
         "density a user preference: that made the control settable, which is a different thing "
         "from making it effective, and shipping the control without recording this would have "
-        "been shipping a second dead control on top of the first.",
+        "been shipping a second dead control on top of the first. "
+        "Measured 2026-09-18, the 44 sizes at or above 28px are BEYOND the scale — `--fs-hero` "
+        "is 26px at `ultra` — and the obvious next move, a `--fs-display` tier that lets the "
+        "codemod convert them, is wrong for most of them: 28 of the 44 are sizing an EMOJI, "
+        "where `fontSize` is the only lever a glyph has, and every one of those disappears when "
+        "`frontend_emoji_ratchet.py` does its job and the emoji becomes an SVG sized by "
+        "`width`/`height`. Only the 16 that size type are an argument for extending the scale, "
+        "and extending it is the owner's call because it is new design-system API. "
+        "`python scripts/frontend_size_ratchet.py --check` prints the split on every run, so it "
+        "is measured rather than remembered from this sentence.",
         "frontend/src/test/density_is_not_a_dead_control.test.ts proves the three tiers are "
         "specified, monotonic and separated by a real margin rather than a rounding one — parsed "
         "from index.css, because the tiers live inside `@layer base`, which jsdom's CSSOM drops "

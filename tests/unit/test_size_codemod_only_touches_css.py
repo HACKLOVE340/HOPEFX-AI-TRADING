@@ -201,15 +201,15 @@ def test_no_literal_maps_to_two_different_tokens_across_anchors():
 def test_the_ultra_anchor_rewrites_a_size_that_is_exact_at_ultra():
     from frontend_size_codemod import EXACT_ULTRA
 
-    out, counts = rewrite('<div style={{ fontSize: 12 }} />', False, table=EXACT_ULTRA)
+    out, counts = rewrite("<div style={{ fontSize: 12 }} />", False, table=EXACT_ULTRA)
     assert "fontSize: 'var(--fs-body)'" in out
     assert counts == {"--fs-body": 1}
 
 
 def test_the_default_anchor_still_leaves_twelve_alone():
     """The control. If the default changed, 763 already-converted sites moved."""
-    out, counts = rewrite('<div style={{ fontSize: 12 }} />', False)
-    assert out == '<div style={{ fontSize: 12 }} />'
+    out, counts = rewrite("<div style={{ fontSize: 12 }} />", False)
+    assert out == "<div style={{ fontSize: 12 }} />"
     assert counts == {}
 
 
@@ -221,6 +221,6 @@ def test_the_ultra_anchor_does_not_touch_a_size_beyond_the_scale():
     """
     from frontend_size_codemod import EXACT_ULTRA
 
-    out, counts = rewrite('<div style={{ fontSize: 56 }} />', False, table=EXACT_ULTRA)
-    assert out == '<div style={{ fontSize: 56 }} />'
+    out, counts = rewrite("<div style={{ fontSize: 56 }} />", False, table=EXACT_ULTRA)
+    assert out == "<div style={{ fontSize: 56 }} />"
     assert counts == {}

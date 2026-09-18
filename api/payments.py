@@ -820,9 +820,7 @@ def _debit_wallet_for_withdrawal(user: TokenPayload, amount: float, reference: s
     )
     if not ok:
         status = _status_for_ledger_refusal(message)
-        logger.warning(
-            "Withdrawal refused by the ledger for user=%s: %s (HTTP %d)", user.sub, message, status
-        )
+        logger.warning("Withdrawal refused by the ledger for user=%s: %s (HTTP %d)", user.sub, message, status)
         raise HTTPException(status_code=status, detail=f"Withdrawal refused: {message}")
 
 

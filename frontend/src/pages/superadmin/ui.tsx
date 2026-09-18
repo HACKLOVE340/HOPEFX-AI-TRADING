@@ -419,7 +419,9 @@ export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> =
   message,
 }) => (
   <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-faint)' }}>
-    <div style={{ fontSize: 32, marginBottom: 10 }}>{icon}</div>
+    {/* No fontSize: the icon is an SVG sized by its own `size` prop, so a font
+        size here reaches nothing — it was what sized the emoji this replaced. */}
+    <div style={{ marginBottom: 10 }}>{icon}</div>
     <div style={{ fontSize: 'var(--fs-body)'}}>{message}</div>
   </div>
 );

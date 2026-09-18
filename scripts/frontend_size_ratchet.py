@@ -69,6 +69,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 # An inline pixel font size. Deliberately the same shape the register's probe
 # used, and deliberately NOT the codemod's pattern: the codemod requires a
@@ -91,6 +92,31 @@ SCANNED_SUFFIXES = (".tsx",)
 BASELINE_REL = Path("docs") / "FRONTEND_SIZE_DEBT.json"
 
 
+# A line whose first non-space character opens or continues a comment is prose,
+# and prose is not debt. This repository has been bitten twice by a scanner that
+# could not tell the two apart: `security/code_analyzer.py`'s `nan_leak` rule
+# scanned docstrings as source (F255), and `scripts/verify_skill_claims.py` then
+# called four correct files broken because each carried a comment quoting the
+# defect it fixed (F257). A ratchet is the worst place for it — a file gets a
+# line in the baseline for explaining itself, and the explanation can never be
+# retired because there is nothing to convert.
+#
+# Measured when this was added: one such line existed, and it is the shape
+# exactly —
+#
+#     // The dismiss control was a 14px icon in p-1 — about 22px square, half the
+#
+# in `frontend/src/test/presence_anywhere_overlay.test.tsx`, which held a place
+# in the baseline for a sentence about a size it had already fixed. The file
+# leaves the record entirely and the total falls by one.
+_COMMENT_RE = re.compile(r"^\s*(?://|/?\*)")
+
+
+def _code(text: str) -> str:
+    """`text` with whole-line comments removed."""
+    return "\n".join(line for line in text.splitlines() if not _COMMENT_RE.match(line))
+
+
 def _frontend_src(root: Path) -> Path:
     return root / "frontend" / "src"
 
@@ -108,7 +134,8 @@ def count_sizes(root: Path) -> dict[str, int]:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        n = len(_SIZE_RE.findall(text)) + len(_SPACE_RE.findall(text))
+        code = _code(text)
+        n = len(_SIZE_RE.findall(code)) + len(_SPACE_RE.findall(code))
         if n:
             counts[path.relative_to(root).as_posix()] = n
     return counts
@@ -129,10 +156,98 @@ def count_split(root: Path) -> tuple[int, int, int]:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        tokens += len(_TOKEN_RE.findall(text))
-        sizes += len(_SIZE_RE.findall(text))
-        space += len(_SPACE_RE.findall(text))
+        code = _code(text)
+        tokens += len(_TOKEN_RE.findall(code))
+        sizes += len(_SIZE_RE.findall(code))
+        space += len(_SPACE_RE.findall(code))
     return (tokens, sizes, space)
+
+
+# ── the display band ─────────────────────────────────────────────────────────
+#
+# `--fs-hero` is 26px at `ultra` — the tier `frontend/src/lib/densityPref.ts`
+# gives a person by default, and the tier `frontend_size_codemod.py` is anchored
+# to. So a literal of 28px or more is beyond the top of the type scale: no token
+# can reach it, and none is being added by a substitution.
+#
+# The obvious next move is to extend the scale with a `--fs-display` tier and
+# convert the band. Measured on 2026-09-18 that is wrong for most of it: the
+# majority of these sites size an EMOJI, where `fontSize` is the only lever a
+# glyph has. Each one disappears when `frontend_emoji_ratchet.py` does its job
+# and the emoji becomes an SVG sized by `width`/`height` — at which point a
+# `--fs-display` token minted to reach it has no callers and no reason.
+#
+# So the band is CLASSIFIED, not just counted, and the classification is
+# measured on every run rather than remembered from this comment.
+DISPLAY_FLOOR = 28
+
+_DISPLAY_RE = re.compile(r"fontSize:\s*(\d+)")
+
+# Glyph blocks, deliberately narrower than "anything above U+2000". Four of the
+# largest sites in this tree are OUTSIDE the emoji block proper — U+23F3 is
+# Miscellaneous Technical, U+2622/U+2705 are Miscellaneous Symbols, U+2B50 is
+# Miscellaneous Symbols and Arrows — so a classifier that knew only
+# U+1F000-U+1FAFF would call them `type`. Widening further to Arrows and
+# Mathematical Operators would go the other way and call a heading containing
+# `->` a glyph, so the ranges stop short of those.
+_GLYPH_RE = re.compile(
+    "["
+    "\u2300-\u23ff"  # Miscellaneous Technical  (hourglass, alarm clock)
+    "\u2600-\u27bf"  # Miscellaneous Symbols + Dingbats
+    "\u2b00-\u2bff"  # Miscellaneous Symbols and Arrows (star)
+    "\ufe0f"  # variation selector-16 (emoji presentation)
+    "\U0001f000-\U0001faff"
+    "]"
+)
+
+
+class DisplaySite(NamedTuple):
+    """One size beyond the top of the type scale, and what it is sizing."""
+
+    path: str
+    line: int
+    px: int
+    kind: str  # "glyph" | "type"
+
+
+def _classify(window: str) -> str:
+    """`glyph` when the thing being sized is a character, `type` otherwise."""
+    return "glyph" if _GLYPH_RE.search(window) else "type"
+
+
+def display_band(root: Path) -> list[DisplaySite]:
+    """Every inline font size at or above `DISPLAY_FLOOR`, classified.
+
+    The window is the matching line plus one either side, because the glyph is
+    as often the JSX child on the next line as it is on the same one.
+    """
+    src = _frontend_src(root)
+    out: list[DisplaySite] = []
+    if not src.is_dir():
+        return out
+    for path in sorted(src.rglob("*.tsx")):
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (UnicodeDecodeError, OSError):
+            continue
+        for i, line in enumerate(lines):
+            if _COMMENT_RE.match(line):
+                continue
+            for m in _DISPLAY_RE.finditer(line):
+                px = int(m.group(1))
+                if px < DISPLAY_FLOOR:
+                    continue
+                window = "\n".join(lines[max(0, i - 1) : i + 2])
+                out.append(DisplaySite(path.relative_to(root).as_posix(), i + 1, px, _classify(window)))
+    return out
+
+
+def display_split(root: Path) -> dict[str, int]:
+    """{"glyph": n, "type": m} over the display band."""
+    split = {"glyph": 0, "type": 0}
+    for site in display_band(root):
+        split[site.kind] += 1
+    return split
 
 
 def load_baseline(root: Path) -> dict[str, int]:
@@ -221,6 +336,18 @@ def check(root: Path) -> int:
             f"frontend_size_ratchet: {improved} size(s) retired since the baseline — run --adopt to bank the progress"
         )
 
+    split = display_split(root)
+    band = split["glyph"] + split["type"]
+    if band:
+        print(
+            f"frontend_size_ratchet: {band} of those are beyond the type scale "
+            f"(>= {DISPLAY_FLOOR}px, above --fs-hero at ultra) — "
+            f"{split['glyph']} sizing a glyph, {split['type']} sizing type. "
+            f"The glyph side belongs to frontend_emoji_ratchet.py: its sizes vanish "
+            f"when the emoji becomes an SVG. Only the type side is an argument for "
+            f"extending the scale."
+        )
+
     if failures:
         print(f"\nfrontend_size_ratchet: {len(failures)} file(s) moved the wrong way:", file=sys.stderr)
         for f in failures:
@@ -250,7 +377,20 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parents[1]
 
     if args.report:
-        print(json.dumps(count_sizes(root), indent=1, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "files": count_sizes(root),
+                    "display_band": {
+                        "floor_px": DISPLAY_FLOOR,
+                        "split": display_split(root),
+                        "sites": [s._asdict() for s in display_band(root)],
+                    },
+                },
+                indent=1,
+                sort_keys=True,
+            )
+        )
         return 0
     if args.adopt:
         return adopt(root)

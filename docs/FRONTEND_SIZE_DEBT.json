@@ -1,7 +1,7 @@
 {
  "_comment": "Inline `fontSize: <n>` and numeric Tailwind spacing utilities per file in frontend/src \u2014 the sizes the density control cannot reach, because a literal pixel is not in the cascade. This number may only FALL. A file that reaches zero must have its line DELETED rather than left at 0: an entry describing nothing is how a ratchet stops being one. See scripts/frontend_size_ratchet.py and, for how to retire a size safely, scripts/frontend_size_codemod.py --check.",
- "_reachable": "33 token-reading utilities against 740 inline fontSize and 1091 numeric spacing utilities. The first number is the one that should rise; it is recorded here as context and is NOT ratcheted.",
- "_total": 1831,
+ "_reachable": "31 token-reading utilities against 739 inline fontSize and 1090 numeric spacing utilities. The first number is the one that should rise; it is recorded here as context and is NOT ratcheted.",
+ "_total": 1829,
  "files": {
   "frontend/src/App.tsx": 5,
   "frontend/src/components/AdminGuard.tsx": 3,
@@ -169,7 +169,6 @@
   "frontend/src/pages/superadmin/TradingEngineSection.tsx": 3,
   "frontend/src/pages/superadmin/UsersSection.tsx": 4,
   "frontend/src/pages/superadmin/WhiteLabelSection.tsx": 8,
-  "frontend/src/pages/superadmin/ui.tsx": 5,
-  "frontend/src/test/presence_anywhere_overlay.test.tsx": 1
+  "frontend/src/pages/superadmin/ui.tsx": 4
  }
 }

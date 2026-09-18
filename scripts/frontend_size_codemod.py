@@ -164,9 +164,7 @@ def _substitute(segment: str, counts: dict[str, int], table: dict[str, str] | No
     return _FONT_SIZE.sub(repl, segment)
 
 
-def rewrite(
-    text: str, allow_declarations: bool, table: dict[str, str] | None = None
-) -> tuple[str, dict[str, int]]:
+def rewrite(text: str, allow_declarations: bool, table: dict[str, str] | None = None) -> tuple[str, dict[str, int]]:
     """Rewrite literal sizes to tokens. `table` picks the anchor; default `:root`."""
     counts: dict[str, int] = {}
 
@@ -313,9 +311,7 @@ def main() -> int:
 
     moved = sum(total.values())
     verb = "replaced" if args.apply else "would replace"
-    print(
-        f"frontend_size_codemod[{args.anchor}]: {verb} {moved} literal size(s) across {touched} file(s)"
-    )
+    print(f"frontend_size_codemod[{args.anchor}]: {verb} {moved} literal size(s) across {touched} file(s)")
     for token, n in sorted(total.items(), key=lambda kv: -kv[1]):
         print(f"  {n:>5}  var({token})")
 
