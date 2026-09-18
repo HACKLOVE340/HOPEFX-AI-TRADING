@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 655 commits and 1,557 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 656 commits and 1,558 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | **I am picking up the frontend / AI-presence work — what is done and what is next?** | **`docs/audit/FRONTEND_HANDOVER.md`** — what was built and why it is shaped that way, what is left in the order to do it, what is deliberately NOT worth doing, and the six traps this thread actually fell into. Start there before the plan. |
 | What was the frontend plan, and which parts are done? | `docs/audit/plans/2026-09-15-frontend-ultra.md` — Tasks 1–2 landed, 3–11 open. The handover above supersedes it where they differ, because it was measured later. |
@@ -411,6 +411,17 @@ they are the ones most often skipped under time pressure:
   `APP_ENV=production`** (§A8 has the evidence and what settled each side).
   `python scripts/correction_register.py --id A8` re-measures it; do not take
   this sentence's word for it.
+  **And running the suite used to break it.**
+  `tests/unit/test_coverage_boost_ml_misc.py::test_oos_eval_returns_dict` called
+  `oos_eval` without redirecting `MODEL_DIR`, so every run rewrote the committed
+  `xgb_macro_oos.pkl`. It was invisible on Python **3.11**, where the retrained
+  bytes are byte-identical to the committed ones — the tree stayed clean and the
+  provenance ratchet passed having never been exercised. On **3.12**, which is
+  what the Dockerfile runs, the bytes differ and the artifact stops verifying: a
+  green suite produced a model production refuses to load. `tests/conftest.py`
+  now refuses any write to the 11 manifest artifacts, so the next such writer
+  fails loudly. `--id SUITE-REWRITES-MODEL`. **Run the suite on 3.12 as well as
+  3.11 before trusting it** — this defect is invisible on 3.11 by construction.
   Still true and still open: `_try_load` returns `None` for both "absent" and
   "integrity refused", so a caller cannot tell them apart; 7 artefacts on disk
   are in no manifest; and 12 of 14 ML modules reach no integrity check at all,

@@ -170,7 +170,20 @@ class TestTrainWithMacro:
         X, y = build_features(df, macro_df=macro)
         assert len(X) > 0
 
-    def test_oos_eval_returns_dict(self):
+    def test_oos_eval_returns_dict(self, tmp_path, monkeypatch):
+        """`oos_eval` DUMPS the model it trains — redirect MODEL_DIR or it
+        overwrites the committed `ml/saved_models/xgb_macro_oos.pkl`.
+
+        It did, on every run of this suite. It was invisible because on
+        Python 3.11 the retrained bytes are identical to the committed ones, so
+        the working tree stayed clean and the provenance ratchet passed. On
+        3.12 — the interpreter the Dockerfile runs — the bytes differ, the
+        recorded sha256 stops matching, and `ml/__init__.py::_verify_checksum`
+        is fail-closed in production: the platform refuses to load the model.
+        """
+        import ml.train_with_macro as twm
+
+        monkeypatch.setattr(twm, "MODEL_DIR", tmp_path)
         from ml.train_with_macro import oos_eval, build_features
 
         df = _ohlcv(n=200)

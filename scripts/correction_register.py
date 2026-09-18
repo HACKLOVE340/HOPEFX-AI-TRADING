@@ -2811,6 +2811,34 @@ S_DOC = "doc-freshness-review"
 # ── Frontend correctness, found by driving the app rather than reading it ───
 
 
+def _p_suite_does_not_rewrite_models() -> tuple[str, str]:
+    """Does the suite still overwrite a checksum-verified model artifact?
+
+    Read through this module's own `_read`, so the starvation harness in
+    `test_no_probe_reports_fixed_when_it_scanned_nothing` can empty it. The
+    first version of this probe called `Path.read_text` directly, which the
+    harness cannot reach, and it reported FIXED against a tree that had been
+    emptied — the exact shape (F176) this register exists to refuse. The gate
+    caught it.
+    """
+    conftest = _read("tests/conftest.py")
+    writer = _read("tests/unit/test_coverage_boost_ml_misc.py")
+    if not conftest or not writer:
+        return UNVERIFIED, "tests/conftest.py or the writing test could not be read here"
+
+    guard = "_refuse_to_rewrite_committed_models" in conftest
+    redirected = 'setattr(twm, "MODEL_DIR"' in writer or "setattr(twm, 'MODEL_DIR'" in writer
+
+    if guard and redirected:
+        return FIXED, "the conftest guard is present and the oos_eval writer redirects MODEL_DIR"
+    missing = []
+    if not guard:
+        missing.append("the conftest guard is gone")
+    if not redirected:
+        missing.append("test_oos_eval_returns_dict no longer redirects MODEL_DIR")
+    return OPEN, "; ".join(missing)
+
+
 def _p_meta_registry_agree() -> tuple[str, str]:
     """Do the meta file and the registry agree on when the model was trained?
 
@@ -3146,6 +3174,35 @@ def _p_field_has_no_label() -> tuple[str, str]:
 
 
 FINDINGS: list[Finding] = [
+    Finding(
+        "SUITE-REWRITES-MODEL",
+        "Running the test suite overwrote a model artifact production verifies fail-closed",
+        "P1",
+        "ML",
+        "This session, 2026-09-18 — surfaced by running the suite on Python 3.12 for the first time",
+        "`tests/unit/test_coverage_boost_ml_misc.py::test_oos_eval_returns_dict` called "
+        "`ml.train_with_macro.oos_eval` without redirecting that module's `MODEL_DIR`, and "
+        "`oos_eval` dumps the model it trains (train_with_macro.py:536). Every run of this suite "
+        "therefore rewrote the committed `ml/saved_models/xgb_macro_oos.pkl`, whose sha256 is in "
+        "`model_checksums.json` and is enforced fail-closed by `ml/__init__.py::_verify_checksum` "
+        "in production. Nothing caught it because on the 3.11 interpreter the retrained bytes are "
+        "IDENTICAL to the committed ones — the tree stayed clean and the provenance ratchet passed, "
+        "having never been exercised. On the 3.12 interpreter that ships the image, the bytes differ "
+        "and the artifact stops verifying: a green suite produced a model production refuses to load. "
+        "Neither a grep nor an AST sweep found the writer; a probe that wrapped `joblib.dump` and "
+        "recorded the stack did. Fix: redirect MODEL_DIR in that test, and guard the whole suite "
+        "in conftest so the next one fails loudly instead of silently. The guard refuses writes to "
+        "the 11 manifest artifacts only — writing a NEW file into the model directory stays "
+        "allowed, because `test_ml_online_learner.py` must do that to exercise the "
+        "permitted-directory check in `SklearnOnlineLearner.load`.",
+        "The guard IS the regression test, and it is the only formulation that fails "
+        "deterministically on both interpreters: an assertion on the artifact's bytes passes on "
+        "the older interpreter even while the write happens. Proven red by stashing only the test fix and running "
+        "the unfixed test against the guard on 3.11 — it raised the guard's AssertionError.",
+        "python scripts/correction_register.py --id SUITE-REWRITES-MODEL",
+        _p_suite_does_not_rewrite_models,
+        [S_TDD, S_VBC],
+    ),
     Finding(
         "MODEL-PROVENANCE-DISAGREES",
         "Two records disagree by nearly three months about when the same bytes were trained",

@@ -578,3 +578,101 @@ def app():
             f"app fixture: FastAPI app could not be imported — {exc}\n"
             "Install the full requirements-ci.txt to run auth-coverage tests."
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A test must never rewrite a checksum-verified model artifact
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# `tests/unit/test_coverage_boost_ml_misc.py::test_oos_eval_returns_dict` called
+# `ml.train_with_macro.oos_eval` without redirecting its module-level
+# `MODEL_DIR`, and `oos_eval` dumps the model it trains. Every run of this suite
+# therefore overwrote the committed `ml/saved_models/xgb_macro_oos.pkl`.
+#
+# Nothing caught it for the same reason nothing ever catches this shape: on
+# Python 3.11 the retrained bytes are IDENTICAL to the committed ones, so the
+# working tree stayed clean and `test_model_provenance_ratchet.py` passed. The
+# ratchet was never exercised. On 3.12 — the interpreter the Dockerfile runs —
+# the bytes differ, the recorded sha256 stops matching, and
+# `ml/__init__.py::_verify_checksum` is fail-closed in production: the platform
+# refuses to load that model. A green suite was producing an unloadable model.
+#
+# The guarded set is exactly the manifest, because that is exactly the set whose
+# sha256 production enforces. Writing a NEW file into the model directory stays
+# allowed — `test_ml_online_learner.py` must do that to exercise the
+# permitted-directory check in `SklearnOnlineLearner.load`, and it removes it.
+#
+# SCOPE, stated rather than implied: this wraps `joblib.dump` and
+# `pathlib.Path.open`, which is what the two writers in this suite use. It does
+# NOT wrap the `open` builtin, `np.save`, `shutil.copy` or `torch.save`. It is a
+# guard against the defect that happened, not a proof that no write can occur.
+
+
+def _hopefx_guarded_model_artifacts() -> frozenset:
+    """Absolute paths of the artifacts whose sha256 production enforces."""
+    import json
+    import pathlib
+
+    manifest = pathlib.Path(__file__).resolve().parent.parent / "ml" / "saved_models" / "model_checksums.json"
+    try:
+        names = json.loads(manifest.read_text(encoding="utf-8"))
+    except Exception:
+        return frozenset()
+    base = manifest.parent
+    return frozenset((base / name).resolve() for name in names)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _refuse_to_rewrite_committed_models():
+    import pathlib as _pathlib
+
+    guarded = _hopefx_guarded_model_artifacts()
+    if not guarded:
+        yield
+        return
+
+    def _refuse(target) -> None:
+        # One writer is deliberate and has earned an exemption:
+        # `tests/unit/test_ml_training_pipeline.py::_preserve_saved_models`
+        # snapshots EVERY file in the directory and writes the originals back,
+        # because `ml/train_advanced.py`'s MODEL_DIR is hardcoded and making it
+        # honour ML_MODEL_DIR would send a production retrain somewhere
+        # `ml/advanced_predictor.py` does not read from. The exemption is an
+        # explicit, greppable env var rather than a path allowlist, so it covers
+        # only the window the fixture holds it open for.
+        if os.environ.get("HOPEFX_TEST_ALLOW_MODEL_REWRITE") == "1":
+            return
+        try:
+            resolved = _pathlib.Path(target).resolve()
+        except Exception:
+            return
+        if resolved in guarded:
+            raise AssertionError(
+                f"a test tried to overwrite the checksum-verified model artifact {resolved}.\n"
+                "Its sha256 is recorded in ml/saved_models/model_checksums.json and "
+                "ml/__init__.py::_verify_checksum is fail-closed in production, so rewriting "
+                "it makes the platform refuse to load the model.\n"
+                "Redirect the writer instead — e.g. monkeypatch.setattr(twm, 'MODEL_DIR', tmp_path)."
+            )
+
+    import joblib
+
+    _orig_dump = joblib.dump
+    _orig_open = _pathlib.Path.open
+
+    def _guarded_dump(value, filename, *args, **kwargs):
+        _refuse(filename)
+        return _orig_dump(value, filename, *args, **kwargs)
+
+    def _guarded_open(self, mode="r", *args, **kwargs):
+        if any(flag in mode for flag in ("w", "a", "x", "+")):
+            _refuse(self)
+        return _orig_open(self, mode, *args, **kwargs)
+
+    joblib.dump = _guarded_dump
+    _pathlib.Path.open = _guarded_open
+    try:
+        yield
+    finally:
+        joblib.dump = _orig_dump
+        _pathlib.Path.open = _orig_open

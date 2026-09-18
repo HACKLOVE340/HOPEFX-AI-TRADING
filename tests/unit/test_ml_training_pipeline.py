@@ -300,15 +300,34 @@ def _preserve_saved_models():
     Files the run creates are removed; files it changes are written back.
     """
     saved = {p: p.read_bytes() for p in MODELS.iterdir() if p.is_file()}
+    # tests/conftest.py refuses writes to the checksum-verified artifacts, because
+    # a test rewriting one makes production refuse to load it (SUITE-REWRITES-MODEL).
+    # This fixture is the one writer that may: it restores every byte below. The
+    # flag is held open only for the duration of the yield.
+    import os as _os
+
+    _prior = _os.environ.get("HOPEFX_TEST_ALLOW_MODEL_REWRITE")
+    _os.environ["HOPEFX_TEST_ALLOW_MODEL_REWRITE"] = "1"
     try:
         yield
     finally:
-        for path, original in saved.items():
-            if not path.exists() or path.read_bytes() != original:
-                path.write_bytes(original)
-        for path in MODELS.iterdir():
-            if path.is_file() and path not in saved:
-                path.unlink()
+        # Restore FIRST, release the flag AFTER. `Path.write_bytes` goes through
+        # `Path.open`, which the conftest guard wraps, so clearing the flag before
+        # the restore would make the guard refuse the very writes that undo the
+        # damage — and the fixture would leave the tree dirty in the name of
+        # keeping it clean.
+        try:
+            for path, original in saved.items():
+                if not path.exists() or path.read_bytes() != original:
+                    path.write_bytes(original)
+            for path in MODELS.iterdir():
+                if path.is_file() and path not in saved:
+                    path.unlink()
+        finally:
+            if _prior is None:
+                _os.environ.pop("HOPEFX_TEST_ALLOW_MODEL_REWRITE", None)
+            else:
+                _os.environ["HOPEFX_TEST_ALLOW_MODEL_REWRITE"] = _prior
 
 
 def test_the_snapshot_covers_every_artefact_train_advanced_writes(_preserve_saved_models):
