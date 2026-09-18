@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageShell } from '../components/system/PageShell';
 import { RelatedPages } from '../components';
-import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, Check, ClipboardList, CreditCard, Receipt, Send, ShieldCheck, Star, Wallet as WalletIcon, Zap } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, Check, ClipboardList, CreditCard, Handshake, IdCard, Receipt, Send, Settings, ShieldCheck, Star, Wallet as WalletIcon, Zap } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -318,11 +318,11 @@ const Wallet: React.FC = () => {
     >
 
       <CrossLinkBar links={[
-        { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
-        { label: '🪪 KYC',       href: '/kyc',        color: '#60a5fa' },
-        { label: '⚙️ Settings', href: '/settings',   color: '#a78bfa' },
-        { label: '📋 Pricing',   href: '/pricing',    color: '#fbbf24' },
-        { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
+        { label: 'Affiliate', icon: Handshake, href: '/affiliate', color: '#4ade80' },
+        { label: 'KYC', icon: IdCard,       href: '/kyc',        color: '#60a5fa' },
+        { label: 'Settings', icon: Settings, href: '/settings',   color: '#a78bfa' },
+        { label: 'Pricing', icon: ClipboardList,   href: '/pricing',    color: '#fbbf24' },
+        { label: 'Portfolio', icon: Briefcase, href: '/portfolio',  color: '#34d399' },
       ]} className="mb-5" />
 
       {balanceErr && <ErrorBanner message={balanceErr} onDismiss={() => setBalanceErr('')} />}
@@ -622,11 +622,11 @@ const Wallet: React.FC = () => {
       )}
 
       <CrossLinkBar title="Related" className="mt-8" links={[
-        { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
-        { label: '🪪 KYC',       href: '/kyc',        color: '#60a5fa' },
-        { label: '⭐ Upgrade',   href: '/pricing',    color: '#fbbf24' },
-        { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
-        { label: '⚙️ Settings', href: '/settings',   color: '#94a3b8' },
+        { label: 'Affiliate', icon: Handshake, href: '/affiliate', color: '#4ade80' },
+        { label: 'KYC', icon: IdCard,       href: '/kyc',        color: '#60a5fa' },
+        { label: 'Upgrade', icon: Star,   href: '/pricing',    color: '#fbbf24' },
+        { label: 'Portfolio', icon: Briefcase, href: '/portfolio',  color: '#34d399' },
+        { label: 'Settings', icon: Settings, href: '/settings',   color: '#94a3b8' },
       ]} />
       <RelatedPages
         links={[

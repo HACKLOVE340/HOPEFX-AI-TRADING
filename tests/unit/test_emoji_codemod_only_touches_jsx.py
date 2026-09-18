@@ -167,3 +167,53 @@ def test_it_adds_nothing_when_every_name_is_already_imported():
 
     src = "import { Zap } from 'lucide-react';\n"
     assert _ensure_import(src, {"Zap"}) == src
+
+
+def test_it_sees_a_name_that_is_already_imported_under_an_alias():
+    """`Map as MapIcon` already provides `MapIcon`.
+
+    Reading only the left-hand name re-imported it, and `tsc` answered
+    "Duplicate identifier 'MapIcon'" twice on one line.
+    """
+    from frontend_emoji_codemod import _ensure_import
+
+    src = "import { Map as MapIcon, Zap } from 'lucide-react';\n"
+    assert _ensure_import(src, {"MapIcon"}) == src
+    assert _ensure_import(src, {"Map"}) == src
+
+
+#: Names lucide-react exports that would shadow a JS global or a component this
+#: tree already imports. Mapping a glyph to one of these compiles until the file
+#: happens to use the thing it shadowed, and then fails somewhere unrelated.
+_SHADOWING = {
+    "Map",  # the JS Map constructor — PlatformConfiguration has `new Map<string, string>()`
+    "Set",
+    "Link",  # react-router-dom's Link, imported by 40+ pages here
+    "Image",
+    "Text",
+    "Table",
+    "Menu",
+    "Option",
+    "Frame",
+    "History",
+    "Navigator",
+    "Screen",
+    "Range",
+    "Selection",
+}
+
+
+def test_no_glyph_maps_to_a_name_that_shadows_something():
+    """Found the hard way, twice in one run.
+
+    `🗺 -> Map` put `import { Map }` above a `new Map<string, string>()` 1,100
+    lines below, and the error surfaced as "'Map' cannot be used as a JSX
+    component" in a different file. `🔗 -> Link` would have collided with
+    react-router's `Link` in any page that navigates. lucide-react exports
+    `MapIcon` and `Link2` for the same two icons, so the fix costs nothing.
+    """
+    clashes = sorted({icon for icon in ICONS.values()} & _SHADOWING)
+    assert clashes == [], (
+        f"{clashes} shadow a global or a common import — pick lucide's alternative name "
+        "(MapIcon for Map, Link2 for Link)"
+    )

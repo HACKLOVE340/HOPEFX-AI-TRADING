@@ -6,16 +6,16 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Globe, Newspaper, Radiation, Sparkles, Zap } from 'lucide-react';
+import { BarChart3, Globe, Microscope, Newspaper, Radiation, Sparkles, Zap } from 'lucide-react';
 import { NuclearDashboard } from '../features/chart-bot';
 import { PageShell } from '../components/system/PageShell';
 
 const CROSS_LINKS = [
-  { label: '🌍 Geopolitical', to: '/geopolitical', color: '#f59e0b' },
-  { label: '📊 Correlation',  to: '/correlation',  color: '#60a5fa' },
-  { label: '🔬 Research',     to: '/research',     color: '#a78bfa' },
-  { label: '☢ Nuclear Risk',  to: '/geopolitical', color: '#ef4444' },
-  { label: '⚡ Trade XAU',    to: '/trade',        color: '#4ade80' },
+  { label: 'Geopolitical', icon: Globe, to: '/geopolitical', color: '#f59e0b' },
+  { label: 'Correlation', icon: BarChart3,  to: '/correlation',  color: '#60a5fa' },
+  { label: 'Research', icon: Microscope,     to: '/research',     color: '#a78bfa' },
+  { label: 'Nuclear Risk', icon: Radiation,  to: '/geopolitical', color: '#ef4444' },
+  { label: 'Trade XAU', icon: Zap,    to: '/trade',        color: '#4ade80' },
 ];
 
 /*

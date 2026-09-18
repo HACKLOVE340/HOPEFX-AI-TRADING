@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { AlertTriangle, BarChart3, Bot, Link, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, Bot, Link2, Zap } from 'lucide-react';
 interface CorrelationData {
   symbols: string[];
   matrix: Record<string, Record<string, number>>;
@@ -113,7 +113,7 @@ const CorrelationDashboard: React.FC = () => {
         </div>
       ) : (!corr && !cot) ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 36 }}><Link size="1em" aria-hidden /></div>
+          <div style={{ fontSize: 36 }}><Link2 size="1em" aria-hidden /></div>
           <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>Correlation data unavailable</div>
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Ensure the data layer is running, then retry.</div>
           <button onClick={load}

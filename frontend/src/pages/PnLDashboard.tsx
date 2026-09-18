@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom';
 import { CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, AlertTriangle, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Briefcase, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, NotebookPen, RefreshCw, Shield, TrendingDown, TrendingUp, Zap } from 'lucide-react';
 import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { pnlApi } from '../hooks/useApi';
@@ -915,12 +915,12 @@ const PnLDashboard: React.FC = () => {
         )}
 
         <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
-          { label: '📊 Performance',    href: '/performance',     color: '#4ade80' },
-          { label: '💼 Portfolio',       href: '/portfolio',       color: '#60a5fa' },
-          { label: '📊 TCA',            href: '/tca',             color: '#a78bfa' },
-          { label: '📓 Trade Journal',  href: '/journal',         color: '#fbbf24' },
-          { label: '⚡ Trade',          href: '/trade',           color: '#34d399' },
-          { label: '🛡️ Prop Tracker',  href: '/prop-firm',       color: '#f97316' },
+          { label: 'Performance', icon: BarChart3,    href: '/performance',     color: '#4ade80' },
+          { label: 'Portfolio', icon: Briefcase,       href: '/portfolio',       color: '#60a5fa' },
+          { label: 'TCA', icon: BarChart3,            href: '/tca',             color: '#a78bfa' },
+          { label: 'Trade Journal', icon: NotebookPen,  href: '/journal',         color: '#fbbf24' },
+          { label: 'Trade', icon: Zap,          href: '/trade',           color: '#34d399' },
+          { label: 'Prop Tracker', icon: Shield,  href: '/prop-firm',       color: '#f97316' },
         ]}/>
       </div>
     </PageShell>

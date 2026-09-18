@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { asArray, extractApiError } from '../../lib/utils';
 import { Card, SectionHeader, Button } from '../settings/ui';
 import { ActionBanner } from '../../components/ActionBanner';
-import { AlertTriangle, BarChart3, Camera, CheckCircle2, FlaskConical, Globe2, Hospital, Map, Microscope, RefreshCw, Search, TrendingUp, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Camera, CheckCircle2, ClipboardList, FlaskConical, Globe, Globe2, Hospital, MapIcon, Microscope, Plug, RefreshCw, Scroll, Search, Settings, TrendingUp, Wrench, XCircle } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Component {
@@ -229,9 +229,9 @@ const HealthEnginePanel: React.FC = () => {
   const overallColor = report ? statusColor(report.overall) : '#64748b';
 
   const HTABS = [
-    { id: 'report',  label: '📊 Live Report' },
-    { id: 'history', label: '📜 History' },
-    { id: 'probes',  label: '⚙️ Probes' },
+    { id: 'report',  label: 'Live Report', icon: BarChart3 },
+    { id: 'history', label: 'History', icon: Scroll },
+    { id: 'probes',  label: 'Probes', icon: Settings },
   ] as const;
 
   return (
@@ -279,7 +279,7 @@ const HealthEnginePanel: React.FC = () => {
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#1e3a5f' : 'var(--raised)',
             color: tab === t.id ? 'var(--link)' : 'var(--text-dim)',
-          }}>{t.label}</button>
+          }}><t.icon size="1em" aria-hidden /> {t.label}</button>
         ))}
       </div>
 
@@ -470,11 +470,11 @@ const DiagnosticsPanel: React.FC = () => {
   const scoreColor = score === null ? '#94a3b8' : score >= 90 ? '#22c55e' : score >= 70 ? '#f59e0b' : '#ef4444';
 
   const DTABS = [
-    { id: 'summary',     label: '📊 Summary' },
-    { id: 'report',      label: '📋 Report' },
-    { id: 'results',     label: '🔎 Results' },
-    { id: 'checks',      label: '🔍 Run Check' },
-    { id: 'remediation', label: '🔧 Remediation Log' },
+    { id: 'summary',     label: 'Summary', icon: BarChart3 },
+    { id: 'report',      label: 'Report', icon: ClipboardList },
+    { id: 'results',     label: 'Results', icon: Search },
+    { id: 'checks',      label: 'Run Check', icon: Search },
+    { id: 'remediation', label: 'Remediation Log', icon: Wrench },
   ] as const;
 
   return (
@@ -498,7 +498,7 @@ const DiagnosticsPanel: React.FC = () => {
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#1e3a5f' : 'var(--raised)',
             color: tab === t.id ? 'var(--link)' : 'var(--text-dim)',
-          }}>{t.label}</button>
+          }}><t.icon size="1em" aria-hidden /> {t.label}</button>
         ))}
       </div>
 
@@ -695,7 +695,7 @@ const RoutesPanel: React.FC = () => {
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <SectionHeader icon={<Map size={18} aria-hidden />} title="API Route Inventory" />
+        <SectionHeader icon={<MapIcon size={18} aria-hidden />} title="API Route Inventory" />
         <Button onClick={load} disabled={loading} variant="secondary" size="sm">{loading ? '…' : '↻'}</Button>
       </div>
       <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />
@@ -1034,16 +1034,16 @@ const SystemReliabilitySection: React.FC = () => {
   };
 
   const TABS = [
-    { id: 'components',    label: '🔌 Components' },
-    { id: 'health-engine', label: '🏥 Health Engine' },
-    { id: 'history',       label: '📈 Status History' },
-    { id: 'traces',        label: '🔍 Traces' },
-    { id: 'selftest',      label: '🧪 Self-Test' },
-    { id: 'diagnostics',   label: '🔬 Diagnostics' },
-    { id: 'routes',        label: '🗺️ Routes' },
-    { id: 'validate',      label: '✅ Validate' },
-    { id: 'env',           label: '🌍 Env Audit' },
-    { id: 'metrics',       label: '📊 Metrics' },
+    { id: 'components',    label: 'Components', icon: Plug },
+    { id: 'health-engine', label: 'Health Engine', icon: Activity },
+    { id: 'history',       label: 'Status History', icon: TrendingUp },
+    { id: 'traces',        label: 'Traces', icon: Search },
+    { id: 'selftest',      label: 'Self-Test', icon: FlaskConical },
+    { id: 'diagnostics',   label: 'Diagnostics', icon: Microscope },
+    { id: 'routes',        label: 'Routes', icon: MapIcon },
+    { id: 'validate',      label: 'Validate', icon: CheckCircle2 },
+    { id: 'env',           label: 'Env Audit', icon: Globe },
+    { id: 'metrics',       label: 'Metrics', icon: BarChart3 },
   ] as const;
 
   const overall = status?.overall ?? 'unknown';
@@ -1116,7 +1116,7 @@ const SystemReliabilitySection: React.FC = () => {
             fontSize: 'var(--fs-body)', fontWeight: activeTab === t.id ? 700 : 500,
             background: activeTab === t.id ? '#1e3a5f' : 'var(--raised)',
             color: activeTab === t.id ? 'var(--link)' : 'var(--text-dim)',
-          }}>{t.label}</button>
+          }}><t.icon size="1em" aria-hidden /> {t.label}</button>
         ))}
       </div>
 

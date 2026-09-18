@@ -28,7 +28,7 @@ import { PageHeader } from '../components/PageHeader';
 import QRCode from '../components/QRCode';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { extractApiError } from '../lib/utils';
-import { AlertTriangle, ArrowDownToLine, Camera, CheckCircle2, ShieldCheck, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowDownToLine, BarChart3, Camera, CheckCircle2, Key, Settings, ShieldCheck, User, Wrench } from 'lucide-react';
 // ── CSRF retry helper ─────────────────────────────────────────────────────────
 
 async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -516,10 +516,10 @@ const TwoFactorSetup: React.FC = () => {
       )}
 
       <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-        { label: '⚙️ Settings',  href: '/settings',  color: '#60a5fa' },
-        { label: '👤 Profile',   href: '/profile',   color: '#a78bfa' },
-        { label: '🔑 API Keys',  href: '/settings?tab=api-keys', color: '#fbbf24' },
-        { label: '📊 Dashboard', href: '/dashboard', color: '#34d399' },
+        { label: 'Settings', icon: Settings,  href: '/settings',  color: '#60a5fa' },
+        { label: 'Profile', icon: User,   href: '/profile',   color: '#a78bfa' },
+        { label: 'API Keys', icon: Key,  href: '/settings?tab=api-keys', color: '#fbbf24' },
+        { label: 'Dashboard', icon: BarChart3, href: '/dashboard', color: '#34d399' },
       ]}/>
     </PageShell>
   );

@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { EmptyState, CrossLinkBar } from '../components';
-import { ArrowDownToLine, BarChart3, BookOpen, Bot, Brain, Briefcase, CalendarDays, ChevronRight, LineChart, ListOrdered, RefreshCw, Shield, Timer, Trophy, Zap } from 'lucide-react';
+import { ArrowDownToLine, Banknote, BarChart3, BookOpen, Bot, Brain, Briefcase, CalendarDays, ChevronRight, LineChart, ListOrdered, NotebookPen, RefreshCw, Shield, Timer, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError, positionSide } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -659,12 +659,12 @@ const Performance: React.FC = () => {
       </div>
 
       <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-        { label: '💰 P&L Dashboard',  href: '/pnl',           color: '#60a5fa' },
-        { label: '💼 Portfolio',       href: '/portfolio',     color: '#a78bfa' },
-        { label: '📓 Trade Journal',   href: '/journal',       color: '#fbbf24' },
-        { label: '📊 TCA',             href: '/tca',           color: '#34d399' },
-        { label: '🤖 AI Strategy',     href: '/ai-strategy',   color: '#f97316' },
-        { label: '📈 Walk-Forward',    href: '/walk-forward',  color: '#4ade80' },
+        { label: 'P&L Dashboard', icon: Banknote,  href: '/pnl',           color: '#60a5fa' },
+        { label: 'Portfolio', icon: Briefcase,       href: '/portfolio',     color: '#a78bfa' },
+        { label: 'Trade Journal', icon: NotebookPen,   href: '/journal',       color: '#fbbf24' },
+        { label: 'TCA', icon: BarChart3,             href: '/tca',           color: '#34d399' },
+        { label: 'AI Strategy', icon: Bot,     href: '/ai-strategy',   color: '#f97316' },
+        { label: 'Walk-Forward', icon: TrendingUp,    href: '/walk-forward',  color: '#4ade80' },
       ]}/>
 
     </PageShell>

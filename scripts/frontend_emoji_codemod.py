@@ -116,7 +116,10 @@ ICONS: dict[str, str] = {
     "★": "Star",
     "☆": "Star",
     "\U0001f50c": "Plug",
-    "\U0001f5fa": "Map",
+    # `MapIcon`, not `Map`: `import { Map }` shadows the JS Map constructor, and
+    # `PlatformConfiguration.tsx` has a `new Map<string, string>()` 1,100 lines below
+    # its imports. lucide-react exports both names for the same icon.
+    "\U0001f5fa": "MapIcon",
     "\U0001f5d1": "Trash2",
     "\U0001f465": "Users",
     "\U0001f464": "User",
@@ -136,7 +139,9 @@ ICONS: dict[str, str] = {
     "\U0001f508": "Volume1",
     "\U0001f680": "Rocket",
     "\U0001f4d0": "Ruler",
-    "\U0001f517": "Link",
+    # `Link2`, not `Link`: react-router-dom exports a `Link` component that pages
+    # in this tree import, and two `Link`s in one file is a duplicate identifier.
+    "\U0001f517": "Link2",
     "\U0001f4e7": "Mail",
     "⚔": "Swords",
     "\U0001f525": "Flame",
@@ -166,6 +171,7 @@ ICONS: dict[str, str] = {
     "\U0001f4bb": "Laptop",
     "⚑": "Flag",
     "\U0001f6a9": "Flag",
+    "\U0001f6a6": "Gauge",  # traffic light -> rate limiting
     "\U0001f4e4": "Upload",
     "✍": "PenLine",
     "\U0001f4be": "Save",
@@ -286,7 +292,15 @@ def _ensure_import(text: str, names: set[str]) -> str:
     if matches:
         have: set[str] = set()
         for m in matches:
-            have |= {n.strip() for n in m.group(1).split(",") if n.strip()}
+            for raw in m.group(1).split(","):
+                name = raw.strip()
+                if not name:
+                    continue
+                # `Map as MapIcon` already provides MapIcon. Reading only the
+                # left-hand name re-imported it and `tsc` said
+                # "Duplicate identifier 'MapIcon'" — twice, on one line.
+                have.add(name.split(" as ")[-1].strip())
+                have.add(name.split(" as ")[0].strip())
         missing = names - have
         if not missing:
             return text

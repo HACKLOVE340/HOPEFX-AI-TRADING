@@ -33,7 +33,7 @@ import { PLAN_COLORS } from '../lib/subscription';
 import { extractApiError } from '../lib/utils';
 import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
-import { AlertTriangle, Camera, Check, CheckCircle2, Hourglass } from 'lucide-react';
+import { AlertTriangle, BarChart3, Camera, Check, CheckCircle2, CreditCard, Gem, Hourglass, Settings } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CryptoOption = 'BTC' | 'ETH' | 'USDT';
@@ -490,10 +490,10 @@ const CryptoCheckout: React.FC = () => {
         </div>
 
         <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-          { label: '💳 Wallet',       href: '/wallet',   color: '#60a5fa' },
-          { label: '💎 Pricing',      href: '/pricing',  color: '#a78bfa' },
-          { label: '⚙️ Settings',    href: '/settings', color: '#34d399' },
-          { label: '📊 Dashboard',   href: '/dashboard',color: '#fbbf24' },
+          { label: 'Wallet', icon: CreditCard,       href: '/wallet',   color: '#60a5fa' },
+          { label: 'Pricing', icon: Gem,      href: '/pricing',  color: '#a78bfa' },
+          { label: 'Settings', icon: Settings,    href: '/settings', color: '#34d399' },
+          { label: 'Dashboard', icon: BarChart3,   href: '/dashboard',color: '#fbbf24' },
         ]}/>
       </PageShell>
     );

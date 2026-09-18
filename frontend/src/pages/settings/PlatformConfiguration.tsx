@@ -10,7 +10,7 @@ import {
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { AlertTriangle, ArrowLeftRight, BarChart3, Bot, Brain, Bug, CandlestickChart, ClipboardList, Construction, Container, Database, FileText, Flag, FlaskConical, Gamepad2, Globe, Globe2, Hammer, Hash, HeartPulse, IdCard, Inbox, KeyRound, Landmark, Lightbulb, Link2, Lock, Mail, Map as MapIcon, Megaphone, Microscope, Monitor, OctagonAlert, Package, Plug, Puzzle, Radio, RefreshCw, Repeat, Ruler, Scale, Scroll, Search, Settings, Shield, Shuffle, Siren, Stethoscope, Target, Timer, TrafficCone, TrendingDown, TrendingUp, Trophy, Users, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, BarChart3, Bell, Bot, Brain, Bug, CandlestickChart, ClipboardList, Construction, Container, Database, FileText, Flag, FlaskConical, Gamepad2, Gauge, Globe, Globe2, Hammer, Hash, HeartPulse, IdCard, Inbox, KeyRound, Landmark, Lightbulb, Link2, Lock, Mail, Map as MapIcon, Megaphone, Microscope, Monitor, OctagonAlert, Package, Plug, Puzzle, Radio, RadioTower, RefreshCw, Repeat, Ruler, Scale, Scroll, Search, Settings, Shield, Shuffle, Siren, Stethoscope, Target, Timer, TrafficCone, TrendingDown, TrendingUp, Trophy, Users, Wrench, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PlatformConfig {
@@ -800,41 +800,41 @@ const Tog: React.FC<{
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'platform',       label: '🌐 Platform',        },
-  { id: 'database',       label: '🗄️ Database & Cache', },
-  { id: 'security',       label: '🔒 Security',         },
-  { id: 'ml',             label: '🧠 ML / AI',          },
-  { id: 'lstm',           label: '🔁 LSTM',             },
-  { id: 'brain',          label: '💡 AI Brain',         },
-  { id: 'allocator',      label: '📊 Allocator',        },
-  { id: 'anomaly',        label: '🚨 Anomaly',          },
-  { id: 'macro',          label: '🌍 Macro',            },
-  { id: 'online',         label: '📡 Online Learner',   },
-  { id: 'sharpe',         label: '📈 Sharpe CB',        },
-  { id: 'regime',         label: '🗺️ Regime',           },
-  { id: 'signal_engine',  label: '⚡ Signal Engine',    },
-  { id: 'tca',            label: '💹 TCA',              },
-  { id: 'backtest',       label: '🔄 Backtest',         },
-  { id: 'feature_flags',  label: '🚩 Feature Flags',    },
-  { id: 'llm',            label: '🤖 LLM / AI',         },
-  { id: 'drawdown',       label: '📉 Drawdown',         },
-  { id: 'prop_firm',      label: '🏆 Prop Firm',        },
-  { id: 'position_sizing',label: '📐 Position Sizing',  },
-  { id: 'decision',       label: '🎯 Decision Engine',  },
-  { id: 'risk',           label: '⚖️ Risk Engine',      },
-  { id: 'execution',      label: '⚡ Execution',        },
-  { id: 'brokers',        label: '🏦 Brokers',          },
-  { id: 'paper',          label: '📄 Paper Trading',    },
-  { id: 'ratelimit',      label: '🚦 Rate Limiting',    },
-  { id: 'notify',         label: '🔔 Notifications',    },
-  { id: 'smtp',           label: '📧 SMTP / Email',     },
-  { id: 'monitoring',     label: '📊 Monitoring',       },
-  { id: 'celery',         label: '⚙️ Task Queue',       },
-  { id: 'compliance',     label: '⚖️ Compliance',       },
-  { id: 'killswitch',     label: '🛑 Kill Switch',      },
-  { id: 'healing',        label: '🩺 Auto-Healing',     },
-  { id: 'infrastructure', label: '🏗️ Infrastructure',   },
-  { id: 'diagnostics',    label: '🔬 Diagnostics',      },
+  { id: 'platform',       label: 'Platform', icon: Globe,        },
+  { id: 'database',       label: 'Database & Cache', icon: Database, },
+  { id: 'security',       label: 'Security', icon: Lock,         },
+  { id: 'ml',             label: 'ML / AI', icon: Brain,          },
+  { id: 'lstm',           label: 'LSTM', icon: Repeat,             },
+  { id: 'brain',          label: 'AI Brain', icon: Lightbulb,         },
+  { id: 'allocator',      label: 'Allocator', icon: BarChart3,        },
+  { id: 'anomaly',        label: 'Anomaly', icon: Siren,          },
+  { id: 'macro',          label: 'Macro', icon: Globe,            },
+  { id: 'online',         label: 'Online Learner', icon: RadioTower,   },
+  { id: 'sharpe',         label: 'Sharpe CB', icon: TrendingUp,        },
+  { id: 'regime',         label: 'Regime', icon: MapIcon,           },
+  { id: 'signal_engine',  label: 'Signal Engine', icon: Zap,    },
+  { id: 'tca',            label: 'TCA', icon: TrendingUp,              },
+  { id: 'backtest',       label: 'Backtest', icon: RefreshCw,         },
+  { id: 'feature_flags',  label: 'Feature Flags', icon: Flag,    },
+  { id: 'llm',            label: 'LLM / AI', icon: Bot,         },
+  { id: 'drawdown',       label: 'Drawdown', icon: TrendingDown,         },
+  { id: 'prop_firm',      label: 'Prop Firm', icon: Trophy,        },
+  { id: 'position_sizing',label: 'Position Sizing', icon: Ruler,  },
+  { id: 'decision',       label: 'Decision Engine', icon: Target,  },
+  { id: 'risk',           label: 'Risk Engine', icon: Scale,      },
+  { id: 'execution',      label: 'Execution', icon: Zap,        },
+  { id: 'brokers',        label: 'Brokers', icon: Landmark,          },
+  { id: 'paper',          label: 'Paper Trading', icon: FileText,    },
+  { id: 'ratelimit',      label: 'Rate Limiting', icon: Gauge,    },
+  { id: 'notify',         label: 'Notifications', icon: Bell,    },
+  { id: 'smtp',           label: 'SMTP / Email', icon: Mail,     },
+  { id: 'monitoring',     label: 'Monitoring', icon: BarChart3,       },
+  { id: 'celery',         label: 'Task Queue', icon: Settings,       },
+  { id: 'compliance',     label: 'Compliance', icon: Scale,       },
+  { id: 'killswitch',     label: 'Kill Switch', icon: OctagonAlert,      },
+  { id: 'healing',        label: 'Auto-Healing', icon: Stethoscope,     },
+  { id: 'infrastructure', label: 'Infrastructure', icon: Construction,   },
+  { id: 'diagnostics',    label: 'Diagnostics', icon: Microscope,      },
 ];
 
 const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ active, onChange }) => (
@@ -853,7 +853,7 @@ const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ a
           color: active === t.id ? 'var(--link)' : 'var(--text-dim)',
           transition: 'all 0.15s',
         }}
-      >{t.label}</button>
+      ><t.icon size="1em" aria-hidden /> {t.label}</button>
     ))}
   </div>
 );
