@@ -137,6 +137,11 @@ const config: Config = {
         title: ['var(--fs-title)', { lineHeight: 'var(--lh-snug)' }],
         head:  ['var(--fs-head)',  { lineHeight: 'var(--lh-tight)' }],
         hero:  ['var(--fs-hero)',  { lineHeight: 'var(--lh-tight)' }],
+        // Display — above hero. For a page title or the one figure the screen
+        // is for, never for sizing an emoji: see index.css.
+        'display-sm': ['var(--fs-display-sm)', { lineHeight: 'var(--lh-tight)' }],
+        display:      ['var(--fs-display)',    { lineHeight: 'var(--lh-tight)' }],
+        'display-lg': ['var(--fs-display-lg)', { lineHeight: 'var(--lh-tight)' }],
       },
       borderRadius: {
         sm2:  'var(--r-sm)',

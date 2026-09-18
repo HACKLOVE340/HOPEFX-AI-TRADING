@@ -554,7 +554,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '20px 24px',
     marginBottom: 28,
   },
-  uptimeValue: { fontSize: 36, fontWeight: 800, color: 'var(--gain)' },
+  uptimeValue: { fontSize: 'var(--fs-display)', fontWeight: 800, color: 'var(--gain)' },
   uptimeLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 },
   historyLabels: {
     display: 'flex',

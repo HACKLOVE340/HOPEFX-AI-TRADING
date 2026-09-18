@@ -325,10 +325,8 @@ const CustomIndicators: React.FC = () => {
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight:'100vh', background:'#0f172a', color:'#f8fafc', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
-  header: { marginBottom:24, display:'flex', justifyContent:'space-between', alignItems:'flex-start' },
-  title: { fontSize:28, fontWeight:700, margin:0 },
-  subtitle: { fontSize:14, color:'#94a3b8', marginTop:4 },
+  // `page`, `header`, `title` and `subtitle` were deleted on 2026-09-18 —
+  // unread since this page moved to PageShell, which draws its own header.
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20, marginBottom:20 },
   card: { background:'#1e293b', borderRadius:12, padding:24, border:'1px solid #334155', marginBottom:20 },
   cardTitle: { fontSize:13, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },

@@ -508,7 +508,7 @@ const CryptoCheckout: React.FC = () => {
 
         <div style={st.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-            <span style={{ color: meta.color, fontSize: 32 }}>{meta.icon}</span>
+            <span style={{ color: meta.color, fontSize: 'var(--fs-display-sm)' }}>{meta.icon}</span>
             <div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Send exactly</div>
               <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)' }}>

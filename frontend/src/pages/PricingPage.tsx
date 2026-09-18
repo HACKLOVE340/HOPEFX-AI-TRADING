@@ -146,7 +146,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
         </div>
       )}
       <div style={{ marginBottom: 4 }}>
-        <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--text-strong)' }}>
+        <span style={{ fontSize: 'var(--fs-display)', fontWeight: 800, color: 'var(--text-strong)' }}>
           {fmtPrice(plan, annual)}
         </span>
         {!isFree && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginLeft: 4 }}>/mo</span>}
@@ -420,7 +420,7 @@ const PricingPage: React.FC = () => {
 
       {/* Hero */}
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
-        <h1 style={{ margin: '0 0 12px', fontSize: 36, fontWeight: 800, color: 'var(--text-strong)' }}>
+        <h1 style={{ margin: '0 0 12px', fontSize: 'var(--fs-display)', fontWeight: 800, color: 'var(--text-strong)' }}>
           Simple, transparent pricing
         </h1>
         <p style={{ margin: '0 0 28px', fontSize: 16, color: 'var(--text-dim)',

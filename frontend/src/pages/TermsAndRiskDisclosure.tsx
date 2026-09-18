@@ -371,7 +371,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   titleBlock: { marginBottom: 40 },
   title: {
-    fontSize: 32,
+    fontSize: 'var(--fs-display-sm)',
     fontWeight: 800,
     color: 'var(--text-strong)',
     margin: '0 0 8px',

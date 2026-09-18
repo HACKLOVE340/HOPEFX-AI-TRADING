@@ -224,3 +224,28 @@ def test_the_ultra_anchor_does_not_touch_a_size_beyond_the_scale():
     out, counts = rewrite("<div style={{ fontSize: 56 }} />", False, table=EXACT_ULTRA)
     assert out == "<div style={{ fontSize: 56 }} />"
     assert counts == {}
+
+
+def test_the_codemod_tables_never_reach_the_display_tier():
+    """`--fs-display-*` exists, and the codemod must not be able to apply it.
+
+    The display steps were added on 2026-09-18 for the eleven sites that size
+    TYPE above the old top of the scale. 31 other literals in the same band size
+    an EMOJI, and `fontSize` is the only lever a glyph has. A bulk substitution
+    cannot tell the two apart — it sees `fontSize: 32` either way — so putting
+    32, 36 or 48 in a table would convert `<div style={{ fontSize: 32 }}>📋</div>`
+    to a typographic token, freezing the emoji into the design system at the
+    moment `frontend_emoji_ratchet.py` is trying to retire it.
+
+    Those eleven were therefore converted by hand, each one read. This is the
+    guard that keeps the next `--apply` from undoing that judgement.
+    """
+    from frontend_size_codemod import EXACT_ULTRA
+
+    display = {"32", "36", "48", "34", "38", "52", "40", "44", "58"}
+    for table, name in ((EXACT, "EXACT"), (EXACT_ULTRA, "EXACT_ULTRA")):
+        clash = display & set(table)
+        assert clash == set(), (
+            f"{name} maps {sorted(clash)} — sizes in the display band, where the same "
+            "number is an emoji as often as it is type. Convert those by hand."
+        )

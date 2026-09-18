@@ -793,7 +793,7 @@ const s: Record<string, React.CSSProperties> = {
   divider: { height: 1, background: 'var(--surface-hover)', margin: '20px 0' },
   rrDisplay: { textAlign: 'center', padding: '16px 0' },
   rrLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 8 },
-  rrValue: { fontSize: 48, fontWeight: 800, lineHeight: 1 },
+  rrValue: { fontSize: 'var(--fs-display-lg)', fontWeight: 800, lineHeight: 1 },
   rrSub: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 8 },
   resultRow: {
     display: 'flex',

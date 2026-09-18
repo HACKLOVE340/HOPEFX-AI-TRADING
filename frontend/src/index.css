@@ -151,8 +151,10 @@
     --degraded:      #f5b84b;
     --failed:        #f36d78;
 
-    /* Type scale. Seven steps, each with a job. A page picks a role, never a
-       number — which is the only way 72 of them stay in agreement. */
+    /* Type scale. Ten steps, each with a job. A page picks a role, never a
+       number — which is the only way 72 of them stay in agreement. It was
+       seven until 2026-09-18; the three display steps below are the other
+       three. */
     --fs-micro:  10.5px;  /* units, timestamps, legends                     */
     --fs-label:  11.5px;  /* column headers, eyebrow labels                 */
     --fs-body:     13px;  /* default body and table cells                   */
@@ -160,6 +162,18 @@
     --fs-title:    17px;  /* card and section titles                        */
     --fs-head:     21px;  /* page heading                                   */
     --fs-hero:     28px;  /* the one number the screen is about             */
+
+    /* Display. Three more steps, added 2026-09-18 for the eleven sites that
+       were written above the top of the scale — page titles, a price, an R:R
+       figure. They are NOT for sizing an emoji: 31 of the 44 literals in this
+       band were doing that, `fontSize` is the only lever a glyph has, and each
+       one disappears when the emoji becomes an SVG. See
+       `python scripts/frontend_size_ratchet.py --check`, which prints the
+       split, and keep these out of the codemod's substitution tables —
+       a bulk rewrite cannot tell a glyph from type. */
+    --fs-display-sm: 34px;  /* a title or figure that outranks a card hero  */
+    --fs-display:    38px;  /* the page's dominant figure                   */
+    --fs-display-lg: 52px;  /* a single figure the whole screen is for      */
 
     --lh-tight:   1.15;
     --lh-snug:    1.35;
@@ -396,6 +410,9 @@
     --fs-title:   17px;
     --fs-head:    21px;
     --fs-hero:    28px;
+    --fs-display-sm: 34px;
+    --fs-display:    38px;
+    --fs-display-lg: 52px;
     --pad-card:   14px;
     --pad-row:     9px;
     --gap-grid:   10px;
@@ -410,6 +427,9 @@
     --fs-title:   15px;
     --fs-head:    19px;
     --fs-hero:    26px;
+    --fs-display-sm: 32px;
+    --fs-display:    36px;
+    --fs-display-lg: 48px;
     --pad-card:   10px;
     --pad-row:     5px;
     --gap-grid:    7px;
@@ -427,6 +447,9 @@
     --fs-title:   19px;
     --fs-head:    24px;
     --fs-hero:    32px;
+    --fs-display-sm: 40px;
+    --fs-display:    44px;
+    --fs-display-lg: 58px;
     --pad-card:   20px;
     --pad-row:    12px;
     --gap-grid:   16px;

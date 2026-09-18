@@ -339,7 +339,7 @@ const s: Record<string,React.CSSProperties> = {
   header:{display:'flex',gap:20,alignItems:'flex-start',marginBottom:28,background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:12,padding:'24px'},
   avatarWrap:{position:'relative',flexShrink:0},
   avatar:{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-strong)'},
-  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid var(--border-strong)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:700,color:'var(--link)'},
+  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid var(--border-strong)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'var(--fs-display-sm)',fontWeight:700,color:'var(--link)'},
   avatarEditBtn:{position:'absolute',bottom:0,right:0,background:'var(--surface-hover)',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'},
   headerInfo:{flex:1},
   name:{fontSize:22,fontWeight:700,color:'var(--text-strong)',margin:'0 0 4px'},

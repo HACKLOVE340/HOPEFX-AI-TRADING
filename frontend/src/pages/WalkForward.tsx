@@ -410,20 +410,11 @@ const MCCard: React.FC<{ label: string; value: string; color: string }> = ({ lab
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    background: '#0f172a',
-    color: '#f8fafc',
-    fontFamily: "'Inter', system-ui, sans-serif",
-    padding: '24px',
-  },
+  // `page`, `header`, `title` and `subtitle` were deleted on 2026-09-18: this
+  // page renders inside PageShell, which draws the header from a `title` PROP,
+  // and nothing had read them since that migration. They were counted as size
+  // and colour debt with nothing to convert.
   loading: { color: '#94a3b8', padding: 48, textAlign: 'center' },
-  header: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: 24, flexWrap: 'wrap', gap: 16,
-  },
-  title:    { fontSize: 28, fontWeight: 700, margin: 0 },
-  subtitle: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
   searchRow: { display: 'flex', gap: 8 },
   searchInput: {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
@@ -443,7 +434,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #334155',
   },
   metricLabel: { fontSize: 12, color: '#94a3b8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' },
-  metricValue: { fontSize: 28, fontWeight: 800 },
+  metricValue: { fontSize: 'var(--fs-hero)', fontWeight: 800 },
   card: {
     background: '#1e293b', borderRadius: 12, padding: 24,
     border: '1px solid #334155', marginBottom: 24,

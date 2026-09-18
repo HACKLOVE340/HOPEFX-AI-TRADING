@@ -112,8 +112,14 @@ describe('design tokens — index.css', () => {
     expect(undeclared, `var() references nothing declares: ${undeclared.join(', ')}`).toEqual([]);
   });
 
-  it('carries a seven-step type scale, so a page cannot invent a size', () => {
-    const steps = ['--fs-micro', '--fs-label', '--fs-body', '--fs-value', '--fs-title', '--fs-head', '--fs-hero'];
+  it('carries a ten-step type scale, so a page cannot invent a size', () => {
+    // Seven until 2026-09-18, when three display steps were added for the
+    // eleven sites written above the old top. `the_type_scale_reaches_display_sizes`
+    // holds their values and their reason; this holds the set.
+    const steps = [
+      '--fs-micro', '--fs-label', '--fs-body', '--fs-value', '--fs-title',
+      '--fs-head', '--fs-hero', '--fs-display-sm', '--fs-display', '--fs-display-lg',
+    ];
     const missing = steps.filter((s) => !base.has(s));
     expect(missing, `type scale incomplete: ${missing.join(', ')}`).toEqual([]);
 

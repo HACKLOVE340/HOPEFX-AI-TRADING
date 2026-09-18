@@ -236,7 +236,7 @@ const CorrelationDashboard: React.FC = () => {
             <div style={s.card}>
               <div style={s.cardTitle}>CFTC COT — Gold Speculator Sentiment</div>
               <div style={{ textAlign:'center', padding:'16px 0' }}>
-                <div style={{ fontSize:36, fontWeight:800, color: cot.sentiment==='BULLISH' ? 'var(--gain)' : 'var(--loss)' }}>
+                <div style={{ fontSize:'var(--fs-display)', fontWeight:800, color: cot.sentiment==='BULLISH' ? 'var(--gain)' : 'var(--loss)' }}>
                   {cot.sentiment}
                 </div>
                 <div style={{ fontSize:14, color:'var(--text-muted)', marginTop:4 }}>{cot.sentiment_strength}</div>

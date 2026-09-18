@@ -210,9 +210,55 @@ class DisplaySite(NamedTuple):
     kind: str  # "glyph" | "type"
 
 
+# A style object entry — `alertIcon: {` — whose `fontSize` sits on a later line.
+_STYLE_KEY_RE = re.compile(r"^\s*([A-Za-z_$][\w$]*)\s*:\s*\{")
+
+# A SCREAMING_SNAKE table named in a JSX child: `{STATUS_ICON[status]}`. Only
+# this shape, because a lowercase identifier such as `meta` or `icon` appears
+# all over a file and would make the second pass agree with everything.
+_CHILD_TABLE_RE = re.compile(r"\{\s*([A-Z][A-Z0-9_]*)\b")
+
+_STYLE_KEY_LOOKBACK = 6
+
+
 def _classify(window: str) -> str:
     """`glyph` when the thing being sized is a character, `type` otherwise."""
     return "glyph" if _GLYPH_RE.search(window) else "type"
+
+
+def _names_this_site_is_reachable_by(lines: list[str], i: int) -> list[str]:
+    """The style key holding this size, and any glyph table named in its child.
+
+    A one-line window sees the glyph only when the glyph is beside the size.
+    Three sites in this tree put it elsewhere — a style object used 160 lines
+    away, and a `Record<string, string>` of emoji at the top of the file — and
+    all three were counted as `type`, which is the expensive direction to be
+    wrong in: `type` is the side that argues for a new token.
+    """
+    names: list[str] = []
+    for back in range(_STYLE_KEY_LOOKBACK):
+        j = i - back
+        if j < 0:
+            break
+        m = _STYLE_KEY_RE.match(lines[j])
+        if m:
+            names.append(m.group(1))
+            break
+    names.extend(_CHILD_TABLE_RE.findall("\n".join(lines[i : i + 2])))
+    return names
+
+
+def _reclassify_by_name(lines: list[str], i: int) -> str:
+    """Second pass: does anything that USES this site render a glyph?"""
+    for name in _names_this_site_is_reachable_by(lines, i):
+        # `s.alertIcon`, `styles.alertIcon`, `st['alertIcon']`, `const STATUS_ICON`
+        use = re.compile(r"""(?:[.\['"]|\bconst\s+)""" + re.escape(name) + r"\b")
+        for j, line in enumerate(lines):
+            if j == i or not use.search(line):
+                continue
+            if _GLYPH_RE.search("\n".join(lines[max(0, j - 1) : j + 3])):
+                return "glyph"
+    return "type"
 
 
 def display_band(root: Path) -> list[DisplaySite]:
@@ -238,7 +284,10 @@ def display_band(root: Path) -> list[DisplaySite]:
                 if px < DISPLAY_FLOOR:
                     continue
                 window = "\n".join(lines[max(0, i - 1) : i + 2])
-                out.append(DisplaySite(path.relative_to(root).as_posix(), i + 1, px, _classify(window)))
+                kind = _classify(window)
+                if kind == "type":
+                    kind = _reclassify_by_name(lines, i)
+                out.append(DisplaySite(path.relative_to(root).as_posix(), i + 1, px, kind))
     return out
 
 
@@ -339,14 +388,26 @@ def check(root: Path) -> int:
     split = display_split(root)
     band = split["glyph"] + split["type"]
     if band:
-        print(
+        head = (
             f"frontend_size_ratchet: {band} of those are beyond the type scale "
             f"(>= {DISPLAY_FLOOR}px, above --fs-hero at ultra) — "
-            f"{split['glyph']} sizing a glyph, {split['type']} sizing type. "
-            f"The glyph side belongs to frontend_emoji_ratchet.py: its sizes vanish "
-            f"when the emoji becomes an SVG. Only the type side is an argument for "
-            f"extending the scale."
+            f"{split['glyph']} sizing a glyph, {split['type']} sizing type."
         )
+        if split["type"]:
+            tail = (
+                " The glyph side belongs to frontend_emoji_ratchet.py: its sizes vanish when "
+                "the emoji becomes an SVG. Only the type side is an argument for extending the "
+                "scale, and --fs-display-sm / --fs-display / --fs-display-lg already exist — "
+                "assign one by ROLE, by hand. The codemod's tables deliberately exclude these "
+                "sizes, because a bulk rewrite cannot tell a glyph from type."
+            )
+        else:
+            tail = (
+                " Every typographic site in the band reaches a token; what is left is the emoji, "
+                "and those sizes disappear with the emoji rather than being converted. "
+                "python scripts/frontend_emoji_ratchet.py --check"
+            )
+        print(head + tail)
 
     if failures:
         print(f"\nfrontend_size_ratchet: {len(failures)} file(s) moved the wrong way:", file=sys.stderr)
