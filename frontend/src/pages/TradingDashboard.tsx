@@ -45,9 +45,7 @@ import { PanelSkeleton, ChartSkeleton } from '../components/ui/Skeleton';
 // ── Eagerly loaded (above-the-fold, tiny) ─────────────────────────────────────
 import { LivePriceTicker }  from '../components/panels/LivePriceTicker';
 import { AccountBar }       from '../components/terminal/AccountBar';
-import { BarChart3, Bot, Eye, NotebookPen, Radio, Shield, TrendingUp, Zap } from 'lucide-react';
-
-
+import { BarChart3, Bot, Brain, Eye, Globe, NotebookPen, Radio, RadioTower, Repeat, Shield, TrendingUp, Zap } from 'lucide-react';
 // ── Quick-action bar ──────────────────────────────────────────────────────────
 const QuickActionBar: React.FC = () => {
   const navigate = useNavigate();
@@ -56,16 +54,16 @@ const QuickActionBar: React.FC = () => {
   const pnlColor = unrealisedPnl >= 0 ? '#22c55e' : '#ef4444';
 
   const actions = [
-    { label: '⚡ Trade',           path: '/trade',           color: '#3b82f6' },
-    { label: '📊 Portfolio',       path: '/portfolio',       color: '#8b5cf6' },
-    { label: '📈 Analytics',       path: '/performance',     color: '#06b6d4' },
-    { label: '🧠 AI Strategy',     path: '/ai-strategy',     color: '#f59e0b' },
-    { label: '🌍 Geopolitical',    path: '/geopolitical',    color: '#f97316' },
-    { label: '📓 Journal',         path: '/journal',         color: '#10b981' },
-    { label: '🛡 Risk Calc',       path: '/risk-calculator', color: '#ec4899' },
-    { label: '📡 Signals',         path: '/signals',         color: '#a78bfa' },
-    { label: '🔁 Copy Trading',    path: '/copy-trading',    color: '#34d399' },
-    { label: '👁 Watchlist',       path: '/watchlist',       color: '#38bdf8' },
+    { label: 'Trade', icon: Zap,           path: '/trade',           color: '#3b82f6' },
+    { label: 'Portfolio', icon: BarChart3,       path: '/portfolio',       color: '#8b5cf6' },
+    { label: 'Analytics', icon: TrendingUp,       path: '/performance',     color: '#06b6d4' },
+    { label: 'AI Strategy', icon: Brain,     path: '/ai-strategy',     color: '#f59e0b' },
+    { label: 'Geopolitical', icon: Globe,    path: '/geopolitical',    color: '#f97316' },
+    { label: 'Journal', icon: NotebookPen,         path: '/journal',         color: '#10b981' },
+    { label: 'Risk Calc', icon: Shield,       path: '/risk-calculator', color: '#ec4899' },
+    { label: 'Signals', icon: RadioTower,         path: '/signals',         color: '#a78bfa' },
+    { label: 'Copy Trading', icon: Repeat,    path: '/copy-trading',    color: '#34d399' },
+    { label: 'Watchlist', icon: Eye,       path: '/watchlist',       color: '#38bdf8' },
   ];
 
   return (
@@ -112,7 +110,7 @@ const QuickActionBar: React.FC = () => {
       <div style={{ width: 1, height: 20, background: 'var(--raised)', flexShrink: 0 }} />
 
       {/* Quick nav buttons */}
-      {actions.map(({ label, path, color }) => (
+      {actions.map(({ label, path, color, icon: Icon }) => (
         <button
           key={path}
           onClick={() => navigate(path)}
@@ -140,7 +138,7 @@ const QuickActionBar: React.FC = () => {
             (e.currentTarget as HTMLButtonElement).style.borderColor = `${color}30`;
           }}
         >
-          {label}
+          <Icon size="1em" aria-hidden /> {label}
         </button>
       ))}
     </div>

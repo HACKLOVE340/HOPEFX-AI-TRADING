@@ -14,7 +14,7 @@ import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageShell } from '../components/system/PageShell';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
-import { AlertTriangle, Bandage, BarChart3, Bug, Folder, Microscope, Shield, Siren, XCircle, Zap } from 'lucide-react';
+import { AlertTriangle, Bandage, BarChart3, Bug, CheckCircle2, Folder, Microscope, Ruler, Search, Shield, Siren, XCircle, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface HealStatus {
@@ -157,7 +157,7 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 4, background: patch.success ? '#14532d' : '#450a0a', color: patch.success ? 'var(--gain)' : 'var(--loss)' }}>
-            {patch.success ? '✅ Applied' : '❌ Failed'}
+            {patch.success ? <><CheckCircle2 size="1em" aria-hidden /> Applied</> : <><XCircle size="1em" aria-hidden /> Failed</>}
           </span>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
@@ -205,7 +205,7 @@ const PatchTable: React.FC<{ patches: PatchRecord[]; loading: boolean }> = ({ pa
         <div style={tableWrapStyle}>
           {patches.slice(0, 20).map((p, i) => (
             <div key={i} style={{ ...tableRowStyle, cursor: 'pointer' }} onClick={() => setDiffPatch(p)}>
-              <span style={successBadgeStyle(p.success)}>{p.success ? '✅ applied' : '❌ failed'}</span>
+              <span style={successBadgeStyle(p.success)}>{p.success ? <><CheckCircle2 size="1em" aria-hidden /> applied</> : <><XCircle size="1em" aria-hidden /> failed</>}</span>
               <span style={monoStyle}>{p.file}</span>
               <span style={{ ...timeStyle, marginLeft: 'auto' }}>{new Date(p.applied_at).toLocaleTimeString()}</span>
               <span style={{ fontSize: 'var(--fs-label)', color: '#3b82f6', marginLeft: 8 }}>View diff →</span>
@@ -371,7 +371,7 @@ const AutoHealDashboard: React.FC = () => {
       <div style={actionBarStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button style={actionBtnStyle} onClick={handleScan} disabled={scanning}>
-            {scanning ? '🔍 Scanning…' : '🔍 Integrity Scan'}
+            <Search size="1em" aria-hidden /> {scanning ? 'Scanning…' : 'Integrity Scan'}
           </button>
           {scanning && (
             <div style={{ position: 'relative', width: '100%', background: 'var(--raised)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
@@ -380,11 +380,11 @@ const AutoHealDashboard: React.FC = () => {
           )}
         </div>
         <button style={actionBtnStyle} onClick={handleRebuild} disabled={rebuilding}>
-          {rebuilding ? 'Rebuilding…' : '📐 Rebuild Baseline'}
+          {rebuilding ? 'Rebuilding…' : <><Ruler size="1em" aria-hidden /> Rebuild Baseline</>}
         </button>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button style={{ ...actionBtnStyle, background: '#7c3aed' }} onClick={handleAvScan} disabled={avScanning}>
-            {avScanning ? '🛡️ AV Scan…' : '🛡️ AV Full Scan'}
+            <Shield size="1em" aria-hidden /> {avScanning ? 'AV Scan…' : 'AV Full Scan'}
           </button>
           {avScanning && (
             <div style={{ position: 'relative', width: '100%', background: 'var(--raised)', borderRadius: 4, height: 4, overflow: 'hidden' }}>

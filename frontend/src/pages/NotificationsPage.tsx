@@ -9,7 +9,7 @@
  *   WS   /ws/notifications           — real-time push
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, Settings, Zap } from 'lucide-react';
+import { Bell, Bot, Check, CreditCard, Lock, Settings, Siren, TrendingUp, Users, Volume1, Volume2, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
@@ -19,6 +19,7 @@ import { openAuthenticatedWebSocket } from '../lib/ws';
 import { ActionBanner } from '../components/ActionBanner';
 import { useVoice } from '../hooks/useVoice';
 import { useVoiceAlerts } from '../lib/voicePrefs';
+import type { LucideIcon } from 'lucide-react';
 
 interface Notification {
   id: string;
@@ -30,14 +31,16 @@ interface Notification {
   link?: string;
 }
 
-const TYPE_ICON: Record<string, string> = {
-  trade:    '📈',
-  alert:    '🚨',
-  system:   '⚙️',
-  social:   '👥',
-  billing:  '💳',
-  security: '🔒',
-  ai:       '🤖',
+// Components, not characters: a glyph could not take the row's colour and was
+// announced literally beside a label that already names the type.
+const TYPE_ICON: Record<string, LucideIcon> = {
+  trade:    TrendingUp,
+  alert:    Siren,
+  system:   Settings,
+  social:   Users,
+  billing:  CreditCard,
+  security: Lock,
+  ai:       Bot,
 };
 
 const PAGE_SIZE = 20;
@@ -171,7 +174,7 @@ const NotificationsPage: React.FC = () => {
                 border: `1px solid ${voiceAlerts ? 'rgba(96,165,250,0.5)' : 'rgba(100,116,139,0.35)'}`,
                 borderRadius: 7, color: voiceAlerts ? 'var(--link)' : 'var(--text-dim)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer',
               }}>
-              {voiceAlerts ? '🔊 Spoken alerts on' : '🔈 Spoken alerts off'}
+              {voiceAlerts ? <><Volume2 size="1em" aria-hidden /> Spoken alerts on</> : <><Volume1 size="1em" aria-hidden /> Spoken alerts off</>}
             </button>
           )}
           <button onClick={() => navigate('/settings')}
@@ -192,7 +195,7 @@ const NotificationsPage: React.FC = () => {
             background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8,
             color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 14px',
           }}>
-            {markingAll ? '…' : '✓ Mark all read'}
+            {markingAll ? '…' : <><Check size="1em" aria-hidden /> Mark all read</>}
           </button>
         </div>
       )}
@@ -224,7 +227,7 @@ const NotificationsPage: React.FC = () => {
           }}
         >
           <div style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>
-            {TYPE_ICON[n.type] ?? '🔔'}
+            {(() => { const Icon = TYPE_ICON[n.type] ?? Bell; return <Icon size="1em" aria-hidden />; })()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>

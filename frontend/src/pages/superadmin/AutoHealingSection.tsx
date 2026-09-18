@@ -11,7 +11,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { AlertTriangle, Bandage, BarChart3, Brain, ClipboardList, Clock, FlaskConical, Folder, Globe, Hammer, Landmark, Lock, Microscope, Play, RefreshCw, Save, Search, Settings, Shield, ShieldCheck, Wrench, XCircle, Zap } from 'lucide-react';
+import { AlertTriangle, Bandage, BarChart3, Brain, Check, ClipboardList, Clock, FlaskConical, Folder, Globe, Hammer, Landmark, Lock, Microscope, Play, RefreshCw, Save, Search, Settings, Shield, ShieldCheck, Wrench, X, XCircle, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface HealerLiveStatus {
@@ -628,7 +628,7 @@ const SafetyGatesPanel: React.FC<{
                   color: required ? 'var(--loss)' : 'var(--text-muted)',
                   border: `1px solid ${required ? '#dc2626' : '#334155'}`,
                 }}
-              >{cat.icon} {cat.label.split(' ')[0]} {required ? '🔒' : ''}</button>
+              >{cat.icon} {cat.label.split(' ')[0]} {required ? <Lock size="1em" aria-hidden /> : null}</button>
             );
           })}
         </div>
@@ -783,7 +783,7 @@ const PatchHistoryPanel: React.FC<{
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: p.success ? 'var(--gain)' : 'var(--loss)' }}>
-                      {p.success ? '✓ APPLIED' : '✗ REJECTED'}
+                      {p.success ? <><Check size="1em" aria-hidden /> APPLIED</> : <><X size="1em" aria-hidden /> REJECTED</>}
                     </span>
                     <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{fmtDate(p.applied_at)}</span>
                   </div>
@@ -917,7 +917,7 @@ const TestRunPanel: React.FC<{
               fontSize: 'var(--fs-body)', fontWeight: 700,
               color: lastResult.success ? 'var(--gain)' : 'var(--loss)',
             }}>
-              {lastResult.success ? '✓ PASSED' : '✗ FAILED'}
+              {lastResult.success ? <><Check size="1em" aria-hidden /> PASSED</> : <><X size="1em" aria-hidden /> FAILED</>}
             </span>
             {lastResult.passed != null && (
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--gain)' }}>{lastResult.passed} passed</span>
@@ -1181,7 +1181,7 @@ const AutoHealingSection: React.FC = () => {
     try {
       const res = await superadminApi.autoHealRunTests();
       setLastTestResult(res.data);
-      showMsg(res.data.success ? `Tests passed: ${res.data.passed ?? 0} ✓` : `Tests failed: ${res.data.failed ?? 0} ✗`, res.data.success ? 'ok' : 'err');
+      showMsg(res.data.success ? `Tests passed: ${res.data.passed ?? 0}` : `Tests failed: ${res.data.failed ?? 0} ✗`, res.data.success ? 'ok' : 'err');
       setTimeout(loadStatus, 2000);
     } catch (e: unknown) {
       showMsg(errDetail(e, 'Test run failed'), 'err');
@@ -1247,7 +1247,7 @@ const AutoHealingSection: React.FC = () => {
 
       {confirmNuclear && pendingCfg && (
         <ConfirmDialog
-          title="⚠️ Nuclear Aggressiveness Mode"
+          title="Nuclear Aggressiveness Mode"
           message="Nuclear mode disables all approval gates and allows the healer to patch any file without confirmation. This can cause irreversible changes to production code. Are you absolutely sure?"
           confirmLabel="Enable Nuclear Mode"
           variant="danger"
@@ -1258,7 +1258,7 @@ const AutoHealingSection: React.FC = () => {
 
       {confirmEnable && pendingCfg && (
         <ConfirmDialog
-          title="⚠️ Enable autonomous self-healing"
+          title="Enable autonomous self-healing"
           message={
             'This lets the healer patch production code, quarantine components and roll back changes ' +
             'on the live trading platform without a human in the loop. Only categories listed under ' +

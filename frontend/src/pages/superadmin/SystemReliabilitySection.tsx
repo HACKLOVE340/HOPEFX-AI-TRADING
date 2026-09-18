@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { asArray, extractApiError } from '../../lib/utils';
 import { Card, SectionHeader, Button } from '../settings/ui';
 import { ActionBanner } from '../../components/ActionBanner';
-import { Activity, AlertTriangle, BarChart3, Camera, CheckCircle2, ClipboardList, FlaskConical, Globe, Globe2, Hospital, MapIcon, Microscope, Plug, RefreshCw, Scroll, Search, Settings, TrendingUp, Wrench, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Camera, Check, CheckCircle2, ClipboardList, FlaskConical, Globe, Globe2, Hospital, MapIcon, Microscope, Plug, RefreshCw, Scroll, Search, Settings, TrendingUp, Wrench, X, XCircle, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Component {
@@ -65,10 +65,10 @@ function statusBg(s: string): string {
   return '#450a0a';
 }
 
-function statusIcon(s: string): string {
-  if (s === 'ok') return '✅';
-  if (s === 'warning') return '⚠️';
-  return '❌';
+function StatusIcon({ status }: { status: string }) {
+  if (status === 'ok') return <CheckCircle2 size="1em" aria-hidden />;
+  if (status === 'warning') return <AlertTriangle size="1em" aria-hidden />;
+  return <XCircle size="1em" aria-hidden />;
 }
 
 // ── Component card ────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ const ComponentCard: React.FC<{
   }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: 'var(--text-strong)' }}>
-        {statusIcon(comp.status)} {comp.label}
+        <StatusIcon status={comp.status} /> {comp.label}
       </span>
       <span style={{
         fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px', borderRadius: 6,
@@ -483,7 +483,7 @@ const DiagnosticsPanel: React.FC = () => {
         <SectionHeader icon={<Microscope size={18} aria-hidden />} title="Platform Diagnostics Engine" />
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button onClick={runFull} disabled={running} size="sm">{running ? 'Running…' : '▶ Run All Checks'}</Button>
-          <Button onClick={remediate} disabled={remediating} variant="secondary" size="sm">{remediating ? 'Remediating…' : '🔧 Auto-Remediate'}</Button>
+          <Button onClick={remediate} disabled={remediating} variant="secondary" size="sm">{remediating ? 'Remediating…' : <><Wrench size="1em" aria-hidden /> Auto-Remediate</>}</Button>
           <Button onClick={load} variant="secondary" size="sm">↻</Button>
         </div>
       </div>
@@ -794,7 +794,7 @@ const ValidatePanel: React.FC = () => {
               style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </div>
           <div style={{ alignSelf: 'flex-end' }}>
-            <Button onClick={validate} disabled={loading || !key.trim()} size="sm">{loading ? '…' : '🔍 Validate'}</Button>
+            <Button onClick={validate} disabled={loading || !key.trim()} size="sm">{loading ? '…' : <><Search size="1em" aria-hidden /> Validate</>}</Button>
           </div>
         </div>
         {result && (
@@ -802,7 +802,7 @@ const ValidatePanel: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: 'var(--text-strong)' }}>Key: <code style={{ color: 'var(--link)' }}>{String(result.key)}</code></span>
               <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: result.consistent ? '#22c55e' : '#ef4444' }}>
-                {result.consistent ? '✅ Consistent' : '❌ Inconsistent'}
+                {result.consistent ? <><CheckCircle2 size="1em" aria-hidden /> Consistent</> : <><XCircle size="1em" aria-hidden /> Inconsistent</>}
               </span>
             </div>
             {Object.entries(result.layers as Record<string, Record<string, unknown>> ?? {}).map(([layer, info]) => (
@@ -814,7 +814,7 @@ const ValidatePanel: React.FC = () => {
                   ) : (
                     <>
                       <span style={{ fontSize: 'var(--fs-label)', color: info.found ? '#22c55e' : 'var(--text-muted)' }}>{info.found ? 'Found' : 'Not found'}</span>
-                      {info.found && <span style={{ fontSize: 'var(--fs-label)', color: layerColor(info) }}>{info.match ? '✓ Match' : '✗ Mismatch'}</span>}
+                      {info.found && <span style={{ fontSize: 'var(--fs-label)', color: layerColor(info) }}>{info.match ? <><Check size="1em" aria-hidden /> Match</> : <><X size="1em" aria-hidden /> Mismatch</>}</span>}
                     </>
                   )}
                 </div>
@@ -841,19 +841,19 @@ const ValidatePanel: React.FC = () => {
               style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </div>
           <div style={{ alignSelf: 'flex-end' }}>
-            <Button onClick={validateToggle} disabled={toggleLoading || !toggleKey.trim()} size="sm">{toggleLoading ? '…' : '✅ Verify'}</Button>
+            <Button onClick={validateToggle} disabled={toggleLoading || !toggleKey.trim()} size="sm">{toggleLoading ? '…' : <><CheckCircle2 size="1em" aria-hidden /> Verify</>}</Button>
           </div>
         </div>
         {toggleResult && (
           <div style={{ background: 'var(--surface)', border: `1px solid ${toggleResult.consistent ? '#16a34a' : '#dc2626'}44`, borderRadius: 8, padding: '14px 16px' }}>
             <div style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: toggleResult.consistent ? '#22c55e' : '#ef4444', marginBottom: 8 }}>
-              {toggleResult.consistent ? '✅ Value persisted correctly across all layers' : '❌ Inconsistency detected — value may not have saved'}
+              {toggleResult.consistent ? <><CheckCircle2 size="1em" aria-hidden /> Value persisted correctly across all layers</> : <><XCircle size="1em" aria-hidden /> Inconsistency detected — value may not have saved</>}
             </div>
             {Object.entries(toggleResult.layers as Record<string, Record<string, unknown>> ?? {}).map(([layer, info]) => (
               <div key={layer} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 10px', borderRadius: 6, background: 'var(--raised)', marginBottom: 4 }}>
                 <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{layer}</span>
                 <span style={{ fontSize: 'var(--fs-label)', color: info.match ? '#22c55e' : info.error ? '#ef4444' : '#f59e0b' }}>
-                  {info.error ? `Error: ${String(info.error)}` : info.match ? `✓ ${JSON.stringify(info.value)}` : `✗ got ${JSON.stringify(info.value)}`}
+                  {info.error ? `Error: ${String(info.error)}` : info.match ? <><Check size="1em" aria-hidden /> {JSON.stringify(info.value)}</> : <><X size="1em" aria-hidden /> got {JSON.stringify(info.value)}</>}
                 </span>
               </div>
             ))}
@@ -1066,7 +1066,7 @@ const SystemReliabilitySection: React.FC = () => {
               background: statusBg(overall), color: statusColor(overall),
               border: `1px solid ${statusColor(overall)}44`,
             }}>
-              {statusIcon(overall)} {overall.toUpperCase()}
+              <StatusIcon status={overall} /> {overall.toUpperCase()}
             </div>
             <Button onClick={fetchStatus} disabled={loading} variant="secondary">
               {loading ? 'Refreshing…' : '↻ Refresh'}
@@ -1152,7 +1152,7 @@ const SystemReliabilitySection: React.FC = () => {
             <SectionHeader icon={<Search size={18} aria-hidden />} title="Recent OTel Spans" />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button onClick={handleTraceTest} disabled={traceTestRunning} variant="secondary">
-                {traceTestRunning ? 'Emitting…' : '⚡ Emit Test Trace'}
+                {traceTestRunning ? 'Emitting…' : <><Zap size="1em" aria-hidden /> Emit Test Trace</>}
               </Button>
               <Button onClick={fetchTraces} disabled={tracesLoading} variant="secondary">
                 {tracesLoading ? '…' : '↻'}
@@ -1223,7 +1223,7 @@ const SystemReliabilitySection: React.FC = () => {
                   }}>
                     <div>
                       <span style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: 'var(--text-strong)' }}>
-                        {r.passed ? '✅' : '❌'} {r.test}
+                        {r.passed ? <CheckCircle2 size="1em" aria-hidden /> : <XCircle size="1em" aria-hidden />} {r.test}
                       </span>
                       <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 2 }}>{r.detail}</div>
                     </div>
@@ -1250,7 +1250,7 @@ const SystemReliabilitySection: React.FC = () => {
           <SectionHeader icon={<TrendingUp size={18} aria-hidden />} title="Status History" desc="Last 100 reliability snapshots — auto-recorded on every status poll" />
           <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
             <Button onClick={fetchHistory} disabled={historyLoading} size="sm">
-              {historyLoading ? '…' : '🔄 Refresh'}
+              {historyLoading ? '…' : <><RefreshCw size="1em" aria-hidden /> Refresh</>}
             </Button>
             <Button
               onClick={async () => {
@@ -1287,7 +1287,7 @@ const SystemReliabilitySection: React.FC = () => {
                   return (
                     <div
                       key={i}
-                      title={`${snap.checked_at as string} — ${overall} (${snap.ok_count as number}✅ ${snap.warning_count as number}⚠️ ${snap.error_count as number}❌)`}
+                      title={`${snap.checked_at as string} — ${overall} (${snap.ok_count as number} ok / ${snap.warning_count as number} warn / ${snap.error_count as number} err)`}
                       style={{ width: 10, height: 28, background: color, borderRadius: 2, opacity: 0.85, cursor: 'default' }}
                     />
                   );
@@ -1345,7 +1345,7 @@ const SystemReliabilitySection: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* `effect` and `severity` are new. An unset variable with a working
                   default is not a fault, but every one of them rendered as a red
-                  "✗ MISSING" — SECRET_KEY and DB_MAX_OVERFLOW did so on a healthy
+                  "MISSING" — SECRET_KEY and DB_MAX_OVERFLOW did so on a healthy
                   deployment, which reads as two broken settings. The label now
                   reflects what actually happens when the variable is absent. */}
               {Object.entries((envAudit.groups ?? {}) as Record<string, Record<string, { set: boolean; required: boolean; severity?: string; effect?: string }>>).map(([group, vars]) => (
@@ -1372,7 +1372,7 @@ const SystemReliabilitySection: React.FC = () => {
                             <span style={{ fontSize: 'var(--fs-micro)', padding: '2px 6px', borderRadius: 4, background: '#1e3a5f', color: 'var(--link)' }}>REQUIRED</span>
                           )}
                           <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: info.set ? '#22c55e' : (info.required ? '#ef4444' : 'var(--text-muted)') }}>
-                            {info.set ? '✓ SET' : (info.required ? '✗ MISSING' : '— not set')}
+                            {info.set ? <><Check size="1em" aria-hidden /> SET</> : (info.required ? <><X size="1em" aria-hidden /> MISSING</> : '— not set')}
                           </span>
                         </div>
                       </div>
