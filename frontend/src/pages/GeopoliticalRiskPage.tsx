@@ -13,7 +13,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { Ban, BarChart3, Calendar, CalendarDays, Circle, CloudLightning, Flame, Fuel, Globe2, Hand, LineChart, Link2, Microscope, Mountain, Newspaper, Plug, Radiation, Radio, Server, Shield, Swords, Zap } from 'lucide-react';
+import { Ban, BarChart3, Calendar, CalendarDays, Circle, CloudLightning, Flag, Flame, Fuel, Globe, Globe2, Hand, Landmark, LineChart, Link2, MapIcon, Medal, Microscope, Mountain, Newspaper, Plug, Radiation, Radio, Server, Shield, Ship, Swords, Waves, Zap } from 'lucide-react';
 import { CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
@@ -26,23 +26,23 @@ import type { LucideIcon } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CRISIS_ICONS: Record<string, string> = {
-  ukraine_russia:   '⚔',
-  israel_gaza:      '🔥',
-  red_sea_houthi:   '🚢',
-  taiwan_strait:    '🌏',
-  sudan_africa:     '🌍',
-  korea_peninsula:  '☢',
+const CRISIS_ICONS: Record<string, LucideIcon> = {
+  ukraine_russia:   Swords,
+  israel_gaza:      Flame,
+  red_sea_houthi:   Ship,
+  taiwan_strait:    Globe,
+  sudan_africa:     Globe,
+  korea_peninsula:  Radiation,
 };
 
-const REGION_ICONS: Record<string, string> = {
-  global:                    '🌐',
-  americas:                  '🌎',
-  europe:                    '🏛',
-  middle_east_north_africa:  '🛢',
-  asia_pacific:              '🌏',
-  africa:                    '🌍',
-  oceania:                   '🪸',
+const REGION_ICONS: Record<string, LucideIcon> = {
+  global:                    Globe,
+  americas:                  Globe,
+  europe:                    Landmark,
+  middle_east_north_africa:  Fuel,
+  asia_pacific:              Globe,
+  africa:                    Globe,
+  oceania:                   Waves,
 };
 
 // Components, not characters. A glyph here could not take the layer's colour,
@@ -187,7 +187,7 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
             style={{ ...s.groupBtn, ...(tabGroup === g ? s.groupBtnActive : {}) }}
             onClick={() => setTabGroup(g)}
           >
-            {g === 'crisis' ? '🔥 Crisis Zones' : g === 'regions' ? '🌐 All Regions' : '🥇 Gold Intel'}
+            {g === 'crisis' ? <><Flame size="1em" aria-hidden /> Crisis Zones</> : g === 'regions' ? <><Globe size="1em" aria-hidden /> All Regions</> : <><Medal size="1em" aria-hidden /> Gold Intel</>}
           </button>
         ))}
       </div>
@@ -200,7 +200,7 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
             style={{ ...s.tab, ...(activeCrisis === key ? s.tabActive : {}) }}
             onClick={() => setActiveCrisis(key)}
           >
-            {CRISIS_ICONS[key] ?? '⚑'} {data.crisis_labels[key] ?? key.replace(/_/g, ' ')}
+            {(() => { const I = CRISIS_ICONS[key] ?? Flag; return <I size="1em" aria-hidden />; })()} {data.crisis_labels[key] ?? key.replace(/_/g, ' ')}
           </button>
         ))}
         {tabGroup === 'regions' && regionKeys.map((key) => (
@@ -209,7 +209,7 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
             style={{ ...s.tab, ...(activeRegion === key ? s.tabActive : {}) }}
             onClick={() => setActiveRegion(key)}
           >
-            {REGION_ICONS[key] ?? '🗺'} {data.region_labels[key] ?? key.replace(/_/g, ' ')}
+            {(() => { const I = REGION_ICONS[key] ?? MapIcon; return <I size="1em" aria-hidden />; })()} {data.region_labels[key] ?? key.replace(/_/g, ' ')}
           </button>
         ))}
         {tabGroup === 'gold' && goldKeys.map((key) => (
@@ -218,7 +218,7 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
             style={{ ...s.tab, ...(activeGold === key ? s.tabActive : {}) }}
             onClick={() => setActiveGold(key)}
           >
-            {REGION_ICONS[key] ?? '🗺'} {GOLD_LABELS[key] ?? key.replace(/_/g, ' ')}
+            {(() => { const I = REGION_ICONS[key] ?? MapIcon; return <I size="1em" aria-hidden />; })()} {GOLD_LABELS[key] ?? key.replace(/_/g, ' ')}
           </button>
         ))}
       </div>

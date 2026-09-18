@@ -8,7 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState, CrossLinkBar } from '../components';
 import { RelatedPages } from '../components';
-import { AlertTriangle, BadgeCheck, BookOpen, LineChart, Medal, Radar, RadioTower, Repeat, Trophy, Users, Zap } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, BarChart3, BookOpen, Handshake, LineChart, Medal, MessageSquare, Radar, RadioTower, Repeat, ShoppingCart, Trophy, Users, Zap } from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { extractApiError, fmtPctRaw, fmtRatio } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
@@ -178,8 +178,8 @@ const Leaderboard: React.FC = () => {
             </div>
           }
           links={[
-            { label: '📡 Signals',    href: '/signals' },
-            { label: '🛒 Marketplace',href: '/marketplace' },
+            { label: 'Signals', icon: <RadioTower size={16} aria-hidden />, href: '/signals' },
+            { label: 'Marketplace', icon: <ShoppingCart size={16} aria-hidden />, href: '/marketplace' },
           ]}
         />
       ) : (
@@ -317,12 +317,12 @@ const Leaderboard: React.FC = () => {
       )}
 
       <CrossLinkBar title="Related" className="mt-6" links={[
-        { label: '🔁 Copy Trading', href: '/copy-trading', color: '#34d399' },
-        { label: '📡 Signal Feed',  href: '/signals',      color: '#a78bfa' },
-        { label: '🛒 Marketplace',  href: '/marketplace',  color: '#60a5fa' },
-        { label: '🤝 Affiliate',    href: '/affiliate',    color: '#4ade80' },
-        { label: '💬 Chat',         href: '/chat',         color: '#fbbf24' },
-        { label: '📊 Performance',  href: '/performance',  color: '#f97316' },
+        { label: 'Copy Trading', icon: Repeat, href: '/copy-trading', color: '#34d399' },
+        { label: 'Signal Feed', icon: RadioTower,  href: '/signals',      color: '#a78bfa' },
+        { label: 'Marketplace', icon: ShoppingCart,  href: '/marketplace',  color: '#60a5fa' },
+        { label: 'Affiliate', icon: Handshake,    href: '/affiliate',    color: '#4ade80' },
+        { label: 'Chat', icon: MessageSquare,         href: '/chat',         color: '#fbbf24' },
+        { label: 'Performance', icon: BarChart3,  href: '/performance',  color: '#f97316' },
       ]}/>
       <RelatedPages
         links={[
