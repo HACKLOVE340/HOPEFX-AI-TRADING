@@ -362,10 +362,16 @@ class TestFiatReferenceUniqueness:
     @pytest.mark.asyncio
     async def test_two_deposits_produce_different_references(self):
         """Two concurrent deposit requests must produce different references."""
+        from types import SimpleNamespace
+
         from api.payments import FiatDepositRequest, _fiat_deposit_impl
 
-        r1 = await _fiat_deposit_impl(FiatDepositRequest(amount=100.0, method="bank_transfer"))
-        r2 = await _fiat_deposit_impl(FiatDepositRequest(amount=100.0, method="bank_transfer"))
+        # `user` is required since WALLET-DEAD. The SAME user here, deliberately:
+        # two deposits by one person must still get distinct references, which is
+        # what this test is about.
+        user = SimpleNamespace(sub="user-reference-uniqueness")
+        r1 = await _fiat_deposit_impl(FiatDepositRequest(amount=100.0, method="bank_transfer"), user)
+        r2 = await _fiat_deposit_impl(FiatDepositRequest(amount=100.0, method="bank_transfer"), user)
 
         ref1 = r1.get("reference") or r1.get("instructions", {}).get("reference")
         ref2 = r2.get("reference") or r2.get("instructions", {}).get("reference")

@@ -597,10 +597,19 @@ async def fiat_deposit(
     """
 
     # Re-import here to avoid circular at module load time
-    return await _fiat_deposit_impl(req)
+    return await _fiat_deposit_impl(req, user)
 
 
-async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
+async def _fiat_deposit_impl(req: FiatDepositRequest, user: TokenPayload) -> dict:
+    """Create the deposit intent, naming the user the money will belong to.
+
+    `user` is REQUIRED, not defaulted. An optional identity is one a caller can
+    omit in a hurry, and the resulting PaymentIntent is indistinguishable from a
+    correct one until the money arrives and cannot be credited to anybody.
+
+    It comes from the verified token, never from the request body — an identity
+    in the body is an identity the caller chooses (CHAT-SHARED-HISTORY).
+    """
     provider = os.getenv("FIAT_PROVIDER", "manual")
     # UUID-based reference prevents collision when two deposits are initiated
     # in the same second (e.g. double-tap, network retry).
@@ -626,7 +635,12 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
                 amount=to_cents(Decimal(str(req.amount))),
                 currency="usd",
                 payment_method_types=["card"],
-                metadata={"reference": reference},
+                # user_id is what makes the money attributable. Stripe returns
+                # the CUSTOMER id and this reference on payment_intent.succeeded,
+                # and neither resolves to a user_id here — so without this the
+                # webhook knows a payment succeeded and cannot tell whose wallet
+                # to credit. See WALLET-DEAD.
+                metadata={"reference": reference, "user_id": user.sub},
             )
             return {
                 "status": "pending",
