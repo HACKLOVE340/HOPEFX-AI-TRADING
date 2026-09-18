@@ -1,6 +1,6 @@
 # Landing the audit branch
 
-`claude/add-new-skills-lys862` is **654 commits and 1,556 files ahead of `main`**
+`claude/add-new-skills-lys862` is **655 commits and 1,557 files ahead of `main`**
 (measured 2026-09-14; this read 551 and 1,227 when the plan was written, and 565 and
 1,246 on 2026-09-13). Both figures are now measured by
 `scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —
@@ -100,7 +100,7 @@ everything that follows.
 | # | Slice | Paths | Why here |
 |---|---|---|---|
 | 1 | **Measurement & gates** | `scripts/`, `.pre-commit-config.yaml`, `docs/GATE_EVIDENCE.toml`, `docs/REGISTRY.toml`, `docs/COVERAGE_UNMEASURABLE.txt`, `docs/FRESHNESS_BASELINE.toml`, `docs/audit/CORRECTION_REGISTER.md`, matching tests | Lands the ratchets first. Everything after it is then guarded by checks already on `main`. |
-| 2 | **Money** | `payments/`, `monetization/` + tests | F31/F32, F135, F136, F203, F204, F205, F206, F207, F208, F222. Highest value, smallest blast radius. |
+| 2 | **Money** | `payments/`, `monetization/`, `social/marketplace.py`, `invariants/enforcement.py`, `invariants/ai.py`, `database/models.py`, `api/payments.py`, `api/billing.py`, `api/superadmin/financial.py`, `docs/API_ENDPOINTS.md` + tests | F31/F32, F135, F136, F203, F204, F205, F206, F207, F208, F222. **Cut and proven green — `SLICE2_MANIFEST.md`.** The scope above is measured, not planned: `payments/` + `monetization/` alone cannot import. |
 | 3 | **Order path** | `execution/`, `risk/`, `brokers/`, `invariants/`, `core/risk/` + tests | F61/F107, F81, F84, F142, FIX-STORE, ROUTER-TO. Needs the closest reading. |
 | 4 | **Auth & security** | `auth/`, `security/`, `api/security/`, `database/`, `alembic/` + tests | F99, F130, F144, F184. |
 | 5 | **ML & backtesting** | `ml/`, `backtesting/`, `strategies/`, `analysis/`, `news/`, `data/` + tests | F80, F119, F120, F123, F125, F145, F147, ML-LEAK, OF-VOTER. |
@@ -111,6 +111,20 @@ everything that follows.
 
 Tests travel with the slice they cover. `tests/` holds 358 changed files; split
 them by the module each one names, not as a block.
+
+**The nine slices do not partition the tree.** `social/` is named in no row
+above, and `social/marketplace.py` holds `StrategyMarketplace.split_revenue` —
+a revenue split, i.e. money. It was found only because 41 slice-2 tests failed
+on it. A path in no slice is a path that lands in no PR, so before cutting
+slice 3, run the partition against the tree and close every gap:
+
+```bash
+comm -23 <(git ls-tree -d --name-only ea24b4f | sort) <(printf '%s\n' <the paths named above> | sort)
+```
+
+`social/` is now assigned to slice 2 for `marketplace.py`; its other seven files
+(copy trading, leaderboards, profiles, performance) are unchanged from `main`
+and need no slice.
 
 ### The recipe, proven
 
@@ -249,6 +263,33 @@ python scripts/correction_register.py --write   # regenerate §3, keeping the pr
 Each later slice then flips its own findings and regenerates again. That is the
 register working as designed — it describes the tree it is on — and it makes
 every PR state, mechanically, what it just fixed.
+
+### Slice 2 is cut and green — measured 2026-09-18
+
+`pytest -m "not slow and not e2e"` on `origin/main` + slice 2: **19,164 passed,
+39 skipped, 0 failed** (12m40s, exit 0). 46 files. Full detail, including the
+reproduction commands, in `SLICE2_MANIFEST.md`.
+
+Three things it established that apply to every slice after it:
+
+1. **A money control travels with the money, not with its directory.** Money
+   crosses `payments/`, `monetization/`, `social/`, `invariants/`, `database/`
+   and `api/`. The cent-truncation fix (`int(10.999 * 100)` charges 1099) lives
+   in `api/payments.py`, which the plan puts in slice 7. A path-based cut
+   separates a money defect from its fix.
+2. **A generated document travels with the code that generates it.**
+   `docs/API_ENDPOINTS.md` is rendered from the registered routers, so adding
+   two refund-policy routes broke a test nowhere near `payments/`. Regenerate
+   it *in the slice* — the branch head's copy reflects all nine slices.
+3. **A test file travels to the latest slice it depends on.** Four files were
+   cut and withdrawn to slices 6 and 7. None was weakened or deleted to reach
+   green, including the two that fail *because*
+   `monetization/marketplace_submission.py` correctly refuses to approve
+   uncontained strategy code when the sandbox is absent.
+
+The isolation run alone would have missed one of these. Only the **full fast
+suite** catches a slice that breaks something already on `main`; run it for
+every slice, not the slice's own tests.
 
 ## 5. What none of this substitutes for
 

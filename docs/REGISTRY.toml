@@ -1693,3 +1693,10 @@ tier = "T3"
 subject = "slice1_manifest"
 owner = "hacklove340"
 state = "active"
+
+[[document]]
+path = "docs/audit/SLICE2_MANIFEST.md"
+tier = "T3"
+subject = "slice2_manifest"
+owner = "hacklove340"
+state = "active"
