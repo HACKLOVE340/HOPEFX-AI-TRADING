@@ -318,6 +318,135 @@ def _tier_features(tier: str) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Confirmed deposits credit the fiat wallet ledger — ADR 0021
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _already_credited(wallet_manager, user_id: str, reference: str) -> bool:
+    """Has this external payment already moved money for this user?
+
+    Queried against the SAME session factory the ledger writes through, so the
+    answer is about the rows that would actually collide.
+
+    This is the normal path, NOT the guarantee, and that split was measured
+    rather than assumed. With this check removed, a replayed event still writes
+    exactly one row: `uq_wallet_txn_user_reference` refuses the second insert,
+    `_persist_transaction` returns False, and `_apply_movement` rolls the
+    balance back. The database is what makes a replay — and the race between two
+    concurrent deliveries, which this check cannot see — safe.
+
+    What the check buys is an honest answer. Without it a routine Stripe retry
+    reports "Ledger write failed; movement refused" and logs an IntegrityError
+    traceback at ERROR, which reads like a broken ledger rather than a duplicate
+    delivery. Operators who learn to ignore that message will ignore it on the
+    day it means something.
+
+    When there is no database at all — the in-memory mode tests and paper
+    trading use — fall back to the process's own history, which is the only
+    record there is. That fallback has no constraint behind it, so it is best
+    effort by construction; in-memory mode moves no real money.
+    """
+    factory = getattr(wallet_manager, "session_factory", None)
+    if factory is None:
+        history = wallet_manager.get_transaction_history(user_id, limit=500)
+        return any(row.get("reference") == reference for row in history)
+
+    from database.models import WalletTransaction
+
+    with factory() as session:
+        return (
+            session.query(WalletTransaction)
+            .filter_by(user_id=user_id, reference=reference)
+            .first()
+            is not None
+        )
+
+
+def _credit_confirmed_deposit(data: dict) -> dict:
+    """Credit the depositor's wallet for a CONFIRMED Stripe payment.
+
+    Called on `payment_intent.succeeded` — the point at which money has actually
+    been received. Creating a PaymentIntent moves nothing, so crediting there
+    would invent funds.
+
+    Returns a result rather than raising, so one failing credit cannot discard
+    the rest of the webhook's work. `retryable` says whether re-delivery could
+    succeed: a missing ledger is a server problem and will pass later, while a
+    payment that names no user will never become attributable by being sent
+    again.
+    """
+    from decimal import Decimal
+
+    from core.app_state import app_state
+
+    pi_id = str(data.get("id") or "")
+    metadata = data.get("metadata") or {}
+    user_id = str(metadata.get("user_id") or "").strip()
+
+    if not user_id:
+        # Fail closed on attribution: never guess whose money this is. The
+        # Stripe customer id is not a user_id here, and mapping it by email or
+        # by "the only recent deposit of that amount" is how money lands in the
+        # wrong account.
+        logger.error(
+            "Confirmed payment %s carries no user_id in its metadata — NOT credited, "
+            "and it cannot be attributed later from this payload alone. "
+            "Deposits set this in api/payments.py::_fiat_deposit_impl.",
+            pi_id,
+        )
+        return {"credited": False, "retryable": False, "reason": "unattributable: no user_id in metadata"}
+
+    wallet_manager = getattr(app_state, "wallet_manager", None)
+    if wallet_manager is None:
+        logger.critical(
+            "Confirmed payment %s for user %s could NOT be credited: no wallet ledger is wired. "
+            "The money was taken and is unrecorded until this delivery is retried.",
+            pi_id,
+            user_id,
+        )
+        return {"credited": False, "retryable": True, "reason": "wallet ledger unavailable"}
+
+    # The provider's own id is the deduplicating key. `transaction_id` is unique
+    # but generated per call, so it identifies the WRITE, not the PAYMENT.
+    reference = f"stripe:{pi_id}"
+
+    try:
+        if _already_credited(wallet_manager, user_id, reference):
+            logger.info("Payment %s was already credited to user %s — replay ignored", pi_id, user_id)
+            return {"credited": False, "already_applied": True, "reason": "already credited"}
+    except Exception:
+        # A failed lookup must not become a second credit. The constraint would
+        # refuse the duplicate write anyway, but proceeding on an unknown answer
+        # is the wrong default on a money path.
+        logger.exception("Could not determine whether payment %s was already credited", pi_id)
+        return {"credited": False, "retryable": True, "reason": "duplicate check failed"}
+
+    # Stripe amounts are INTEGER CENTS. Divide a Decimal by 100 — never
+    # `Decimal(cents / 100)`, which inherits the float's binary error, and never
+    # `float(cents) / 100`, which `_validate_amount` would then reject or, worse,
+    # accept with a sub-cent residue.
+    try:
+        amount = Decimal(int(data.get("amount") or 0)) / Decimal(100)
+    except (TypeError, ValueError, ArithmeticError):
+        logger.error("Confirmed payment %s has an unusable amount %r", pi_id, data.get("amount"))
+        return {"credited": False, "retryable": False, "reason": "unusable amount"}
+
+    ok, message, _txn = wallet_manager.credit_wallet(
+        user_id=user_id,
+        amount=amount,
+        transaction_type="deposit",
+        method="stripe",
+        reference=reference,
+    )
+    if not ok:
+        logger.error("Crediting confirmed payment %s for user %s was refused: %s", pi_id, user_id, message)
+        return {"credited": False, "retryable": True, "reason": message}
+
+    logger.info("Credited %s to user %s for confirmed payment %s", amount, user_id, pi_id)
+    return {"credited": True, "amount": str(amount), "reference": reference}
+
+
 @router.post("/webhook/stripe", include_in_schema=True)
 async def stripe_webhook(request: Request):
     """
@@ -354,6 +483,31 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature")
 
     result = client.handle_webhook_event(event)
+
+    # A confirmed payment credits the depositor's wallet — ADR 0021.
+    #
+    # Done here rather than inside `handle_webhook_event` so the Stripe client
+    # stays a Stripe client and does not grow knowledge of this platform's
+    # ledger. It runs AFTER signature verification, never on an unverified body.
+    if event.get("type") == "payment_intent.succeeded":
+        credit = _credit_confirmed_deposit(event.get("data", {}).get("object", {}) or {})
+        if credit.get("retryable"):
+            # Tell Stripe to deliver again. The money has been taken and is not
+            # yet recorded, so acknowledging this delivery would lose it
+            # silently — at-least-once delivery is the only thing that recovers
+            # it. The credit path is idempotent, so a redelivery that arrives
+            # after the problem clears cannot double-credit.
+            logger.critical(
+                "Stripe webhook %s: the deposit could not be credited (%s) — returning 503 so it is redelivered",
+                event.get("id", "<no id>"),
+                credit.get("reason"),
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Deposit ledger temporarily unavailable; please redeliver this event",
+            )
+        if isinstance(result, dict):
+            result = {**result, "wallet_credit": credit}
 
     # Also forward to legacy subscription manager for backward compat
     try:
