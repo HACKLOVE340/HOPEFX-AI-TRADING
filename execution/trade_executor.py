@@ -411,8 +411,21 @@ class TradeExecutor:
                     message=f"[UNAUTHORIZED] {_auth.reason}",
                     latency_ms=0,
                 )
-        except Exception as _auth_exc:  # never let the gate crash execution
-            logger.error("TradeExecutor: authorization check raised %s", _auth_exc)
+        except Exception as _auth_exc:
+            # Authorization is a safety boundary, not an observability aid. If
+            # the invariant cannot produce a decision, the order is not proven
+            # safe and must not reach the broker.
+            logger.critical("TradeExecutor: authorization check unavailable; blocking order: %s", _auth_exc)
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.REJECTED,
+                message="[AUTHORIZATION_ERROR] Order blocked — authorization control unavailable",
+                latency_ms=0,
+            )
 
         # ── 5. Journal the intent, then place the order ───────────────────────
         # The window between the broker acking a fill and add_position() below

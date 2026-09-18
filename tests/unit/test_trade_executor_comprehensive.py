@@ -253,6 +253,23 @@ class TestExecuteSignalBuy:
         assert "UNAUTHORIZED" in (result.message or "")
         broker.place_market_order.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_authorization_control_exception_fails_closed(self):
+        """An unavailable authorization invariant must never permit a broker call."""
+        ex = _make_executor()
+        with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
+            MockGate.return_value.check = MagicMock(return_value=None)
+            with patch(
+                "invariants.enforcement.enforce_order_authorization",
+                side_effect=RuntimeError("authorization service unavailable"),
+            ):
+                result = await ex.execute_signal(_signal(action="buy"))
+
+        assert result.success is False
+        assert result.status == OrderStatus.REJECTED
+        assert "authorization" in (result.message or "").lower()
+        ex.broker.place_market_order.assert_not_awaited()
+
 
 # ── execute_signal — close path ────────────────────────────────────────────────
 
