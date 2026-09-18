@@ -26,6 +26,10 @@ spec:
         {{- include "hopefx.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: trading-engine
     spec:
+      # Named explicitly, or pods run as the namespace `default` ServiceAccount
+      # and every get/patch on the kill-switch ConfigMap is refused — which is
+      # exactly how layer 5 was lost in deployments/k8s/ (F139).
+      serviceAccountName: {{ include "hopefx.fullname" . }}
       securityContext:
         runAsNonRoot: true
         runAsUser: {{ .Values.securityContext.runAsUser | default 1000 }}

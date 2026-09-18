@@ -1195,6 +1195,48 @@ def oos_eval_advanced(
             "Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600."
         ),
     }
+    # ── Calibration, measured on the held-out set ────────────────────────────
+    #
+    # `proba` above is the model's predicted probability on X_oos, and `y_oos`
+    # is what actually happened — the only data in this function that can
+    # answer "when it says 70%, does it happen 70% of the time?".
+    #
+    # ml/inference_engine.py used to score calibration as `1.0 if a calibrator
+    # pickle loaded else 0.0` and said in its own docstring that nothing in
+    # training recorded a real number. This is that number. A badly-fitted
+    # calibrator used to clear any MIN_CALIBRATION threshold; now it cannot.
+    #
+    # Written to its own file rather than only into `meta`, because the
+    # inference engine must read it without depending on the shape of the
+    # training metadata, and because a run that could not measure must leave
+    # NO file — an absent report is unmeasured, and ModelQualityGate fails
+    # closed on that. Writing a placeholder would recreate the defect.
+    from ml.calibration_metrics import calibration_report as _calibration_report
+
+    _cal = _calibration_report(np.asarray(proba, dtype=float), np.asarray(y_oos, dtype=float))
+    cal_path = MODEL_DIR / "calibration_report.json"
+    if _cal is None:
+        meta["calibration"] = None
+        logger.warning(
+            "Calibration NOT measured on the OOS set (n=%d, needs >=100 and both classes). "
+            "No calibration_report.json written — the quality gate will treat the model as "
+            "unmeasured rather than passed.",
+            n,
+        )
+        Path(cal_path).unlink(missing_ok=True)
+    else:
+        meta["calibration"] = _cal.as_dict()
+        with Path(cal_path).open("w", encoding="utf-8") as f:
+            json.dump(_cal.as_dict(), f, indent=2, sort_keys=True)
+        logger.info(
+            "Calibration on OOS: ECE=%.4f Brier=%.4f score=%.4f (n=%d) → %s",
+            _cal.ece,
+            _cal.brier,
+            _cal.calibration_score,
+            _cal.n_samples,
+            cal_path,
+        )
+
     meta_path = MODEL_DIR / "advanced_oos_meta.json"
     with Path(meta_path).open("w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)

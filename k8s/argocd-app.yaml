@@ -101,6 +101,30 @@ spec:
       jsonPointers:
         - /spec/replicas
 
+    # The kill switch's Redis-outage fallback (layer 5) engages by a POD
+    # PATCHING this ConfigMap to kill_switch_active: "true". `selfHeal` above
+    # exists to "revert any manual changes made directly to live resources" —
+    # and to ArgoCD a pod's API patch is exactly that, while Git says "false".
+    #
+    # Without this entry the control of last resort is switched back off by the
+    # deployment controller, on the next reconciliation and again every time it
+    # is re-engaged, while every manifest, RBAC rule and test reads correct.
+    #
+    # Ignoring fails safe in both directions: an engaged switch survives a sync,
+    # and the documented reset is a `kubectl patch` (see
+    # helm/hopefx/templates/kill-switch.yaml), not a Git commit — so nothing
+    # legitimate is lost. `RespectIgnoreDifferences=true` in syncOptions is what
+    # makes this apply on sync rather than only in the diff view; removing it
+    # silently restores the defect.
+    #
+    # Pinned by tests/unit/test_kill_switch_layers_survive_deployment.py
+    # ::test_self_heal_cannot_revert_an_engaged_kill_switch.
+    - group: ""
+      kind: ConfigMap
+      name: hopefx-kill-switch
+      jsonPointers:
+        - /data
+
   # ── Revision history ────────────────────────────────────────────────────────
   # Keep last 10 successful syncs for rollback via:
   #   argocd app rollback hopefx <revision>

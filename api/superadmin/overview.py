@@ -3,6 +3,7 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """SuperAdmin overview sub-router."""
 
+import asyncio
 import json as _json
 import logging
 import pathlib
@@ -143,7 +144,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
                 ml_base / "saved_models" / "metrics.json",
             ]:
                 if p.exists():
-                    data = _json.loads(p.read_text())
+                    data = _json.loads(await asyncio.to_thread(p.read_text))
                     acc = float(data.get("accuracy") or data.get("oos_accuracy") or data.get("test_accuracy") or 0.0)
                     if acc > 0.0:
                         overview["ml_model_accuracy"] = round(acc, 4)

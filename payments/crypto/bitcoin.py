@@ -484,11 +484,17 @@ class BitcoinClient:
         Returns:
             (address, derivation_path)
         """
+        # hdwallet v1/v2 API. requirements.txt pins hdwallet>=3.6.1, where
+        # HDWallet takes `cryptocurrency` (not `symbol`) and neither
+        # `from_path` nor `p2wpkh_address` exists -- so this raised TypeError on
+        # every call, and api/billing.py caught it and handed the user the
+        # literal string "hopefx_btc_<uid>" as a deposit address (F267).
+        # Derivation now goes through the one implementation that is checked
+        # against the BIP84 test vector.
+        from payments.crypto.address_generator import AddressGenerator
+
         path = f"m/{_BIP84_PURPOSE}/{_BIP84_COIN}/{_BIP84_ACCOUNT}/{_BIP84_CHANGE}/{index}"
-        wallet = HDWallet(symbol=BTC, semantic="p2wpkh")
-        wallet.from_mnemonic(self._mnemonic)
-        wallet.from_path(path)
-        address: str = wallet.p2wpkh_address()
+        address: str = AddressGenerator._derive("BTC", self._mnemonic, index)
         return address, path
 
     # ── Public API ────────────────────────────────────────────────────────────

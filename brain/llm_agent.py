@@ -52,8 +52,6 @@ try:
 except ImportError:
     _resource_mod = None  # type: ignore[assignment]
     _RESOURCE_AVAILABLE = False
-import subprocess  # nosec B404 — used only for sandboxed LLM code execution with fixed args
-import sys
 import tempfile
 import textwrap
 import traceback
@@ -488,11 +486,25 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
         os.close(fd)
         raise
 
-    # Inline runner script: executed inside the subprocess.
-    # Imports the strategy, instantiates it, and writes a JSON result to stdout.
+    # Smoke-test through the SHARED sandbox (ai/sandbox), not a second one.
+    #
+    # This used to spawn its own subprocess with rlimits and a stripped
+    # environment — careful work, and it had no socket block. Generated code
+    # could open a connection while being smoke-tested, with PYTHONPATH
+    # forwarded so it could import repo modules and read files first. rlimits
+    # stop it burning CPU, forking or exhausting memory; they do not stop it
+    # talking.
+    #
+    # ai/sandbox blocks sockets when net=False, and it had zero production
+    # callers. Two sandbox implementations is a hazard by itself: a fix to one
+    # does not reach the other, and the weaker one was the one running
+    # model-produced code.
+    #
+    # prefilter=False because the source already passed _ast_sandbox_check
+    # above; what this needs from the sandbox is the containment.
     runner_script = textwrap.dedent(
         f"""
-        import importlib.util, json, sys, traceback
+        import importlib.util, json
 
         result = {{"ok": False, "error": None, "class_found": False}}
         try:
@@ -507,79 +519,55 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
                 result["ok"] = True
                 result["class_found"] = True
         except Exception as exc:
-            result["error"] = f"{{type(exc).__name__}}: {{exc}}\\n{{traceback.format_exc()}}"
+            result["error"] = f"{{type(exc).__name__}}: {{exc}}"
         print(json.dumps(result))
         """
     )
 
-    runner_fd, runner_path = tempfile.mkstemp(suffix="_runner.py", dir=tempfile.gettempdir())
     try:
-        with os.fdopen(runner_fd, "w", encoding="utf-8") as f:
-            f.write(runner_script)
-    except Exception:
-        os.close(runner_fd)
-        raise
+        try:
+            from ai.sandbox import runner as _sandbox
+        except Exception as exc:
+            # No containment means no smoke test. "We could not contain this"
+            # must never become "compiled".
+            return None, f"Sandbox unavailable ({exc}); refusing to compile generated code"
 
-    def _apply_resource_limits() -> None:
-        """Called in the child process before exec — sets hard resource limits.
-        No-op on Windows where the resource module is unavailable."""
-        if not _RESOURCE_AVAILABLE or _resource_mod is None:
-            return
-        # CPU time: 30 seconds (soft) / 35 seconds (hard)
-        _resource_mod.setrlimit(_resource_mod.RLIMIT_CPU, (30, 35))
-        # Virtual address space: 512 MiB
-        _resource_mod.setrlimit(_resource_mod.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
-        # Open file descriptors: 64
-        _resource_mod.setrlimit(_resource_mod.RLIMIT_NOFILE, (64, 64))
-        # Max child processes: 0 (no fork/spawn from sandbox)
-        _resource_mod.setrlimit(_resource_mod.RLIMIT_NPROC, (0, 0))
+        try:
+            outcome = _sandbox.run(runner_script, timeout_s=30.0, net=False, prefilter=False)
+        except Exception as exc:
+            return None, f"Sandbox failed to run ({exc})"
 
-    # Stripped environment: no secrets, no broker credentials, no API keys.
-    # Only PATH and PYTHONPATH are forwarded so imports resolve correctly.
-    sandbox_env = {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
-        "HOME": tempfile.gettempdir(),
-    }
+        if not outcome.ok:
+            codes = ", ".join(outcome.reason_codes or ()) or "refused"
+            detail = (outcome.stderr or "").strip()[-500:]
+            return None, f"Sandbox refused the generated strategy ({codes}): {detail}"
 
-    try:
-        proc = subprocess.run(  # nosec B603
-            [sys.executable, runner_path],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=sandbox_env,
-            preexec_fn=_apply_resource_limits,
-            check=False,  # nosec B603
-        )
-        stdout = proc.stdout.strip()
+        stdout = (outcome.stdout or "").strip()
         if not stdout:
-            stderr_snippet = proc.stderr[-500:] if proc.stderr else "(no stderr)"
-            return None, f"Sandbox subprocess produced no output. stderr: {stderr_snippet}"
+            return None, "Sandbox produced no output for the generated strategy"
 
-        result = json.loads(stdout)
-        if result.get("ok"):
-            # Re-import in the parent process — AST check already passed,
-            # and the subprocess confirmed the class instantiates cleanly.
-            spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)  # nosec B302
-            cls = module.GeneratedStrategy
-            instance = cls()  # pylint: disable=not-callable
-            return instance, None
-        return None, result.get("error", "Unknown sandbox error")
+        try:
+            result = json.loads(stdout.splitlines()[-1])
+        except json.JSONDecodeError as exc:
+            return None, f"Sandbox output parse error: {exc}"
 
-    except subprocess.TimeoutExpired:
-        return None, "Sandbox timeout: strategy code exceeded 30-second execution limit"
-    except json.JSONDecodeError as exc:
-        return None, f"Sandbox output parse error: {exc}"
+        if not result.get("ok"):
+            return None, result.get("error", "Unknown sandbox error")
+
+        # Re-import in the parent process. The AST screen passed and the
+        # sandbox confirmed the class instantiates — and this is still an exec
+        # of model-produced Python, which is why the caller gates it.
+        spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)  # nosec B302
+        cls = module.GeneratedStrategy
+        return cls(), None
+
     except (ImportError, AttributeError, RuntimeError) as exc:
         return None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
     finally:
         with contextlib.suppress(OSError):
             Path(tmp_path).unlink()
-        with contextlib.suppress(OSError):
-            Path(runner_path).unlink()
 
 
 # ── quick backtest ────────────────────────────────────────────────────────────
@@ -709,6 +697,13 @@ class LLMAgent:
     ):
         self._backend: str = (backend or _LLM_BACKEND).lower()
 
+        # The key check stays: a missing credential is worth failing on at
+        # construction, where the message can name the variable, rather than on
+        # the first generation attempt. What no longer happens here is building
+        # a vendor SDK client -- the request itself goes through `ai.gateway`,
+        # which owns the chain, the ceiling, the guardrails and the audit
+        # record. `self.model` remains the agent's declared preference and is
+        # reported in its results; the chain decides what actually answers.
         if self._backend == "anthropic":
             key = api_key or _ANTHROPIC_API_KEY or ""
             if not key:
@@ -716,19 +711,19 @@ class LLMAgent:
                     "Anthropic API key required — set ANTHROPIC_API_KEY env var or pass api_key= to LLMAgent()"
                 )
             self._anthropic_key = key
-            self._openai_client = None
             self.model = model or _ANTHROPIC_MODEL
         elif self._backend == "openai":
-            import openai as _openai
-
             key = api_key or _OPENAI_API_KEY or ""
             if not key:
                 raise ValueError("OpenAI API key required — set OPENAI_API_KEY env var or pass api_key= to LLMAgent()")
             self._anthropic_key = None
-            self._openai_client = _openai.AsyncOpenAI(api_key=key)
             self.model = model or _OPENAI_MODEL
         else:
             raise ValueError(f"Unknown LLM backend '{self._backend}' — use 'anthropic' or 'openai'")
+
+        # Machine-initiated generation is billed and audited under its own
+        # identity: a strategy-search loop must not exhaust a person's ceiling.
+        self.operator = "strategy-agent"
 
         self.max_iterations = max_iterations
         self.target_sharpe = target_sharpe
@@ -1006,142 +1001,91 @@ class LLMAgent:
         return content
 
     async def _call_llm_with_messages(self, messages: list[dict[str, str]]) -> tuple[str, str | None]:
-        """Call the configured LLM backend with an explicit message list (used for RAG injection)."""
-        if self._backend == "anthropic":
-            return await self._call_anthropic(messages, update_history=False)
-        return await self._call_openai(messages, update_history=False)
+        """Call the model with an explicit message list (used for RAG injection)."""
+        return await self._call_gateway(messages, update_history=False)
 
     async def _call_llm(self) -> tuple[str, str | None]:
-        """Call the configured LLM backend using the current conversation history."""
-        if self._backend == "anthropic":
-            return await self._call_anthropic(self._history, update_history=True)
-        return await self._call_openai(self._history, update_history=True)
+        """Call the model using the current conversation history."""
+        return await self._call_gateway(self._history, update_history=True)
 
-    async def _call_anthropic(
+    @staticmethod
+    def _flatten(messages: list[dict[str, str]]) -> str:
+        """One prompt from a message list.
+
+        The gateway speaks in prompts because that is the one shape every vendor
+        agrees on; each adapter re-wraps it in its own message envelope. Roles
+        are preserved as labels rather than dropped, so a system instruction
+        stays distinguishable from what the user asked.
+        """
+        parts: list[str] = []
+        for message in messages:
+            role = (message.get("role") or "user").strip()
+            content = (message.get("content") or "").strip()
+            if not content:
+                continue
+            parts.append(content if role == "user" else f"[{role}]\n{content}")
+        return "\n\n".join(parts)
+
+    async def _call_gateway(
         self,
         messages: list[dict[str, str]],
         *,
         update_history: bool,
     ) -> tuple[str, str | None]:
-        """Call Anthropic Messages API with exponential backoff retry."""
-        import asyncio
+        """Call the model through `ai.gateway`, preserving this agent's contract.
 
-        import httpx
+        This replaced `_call_anthropic` and `_call_openai`, which posted to
+        api.anthropic.com and called the `openai` SDK inline, each with its own
+        retry loop. Those loops retried the SAME vendor with backoff -- the one
+        thing that does not help when that vendor is what is down -- and neither
+        had a spend ceiling, an audit record, or an input guardrail. The agent
+        generates trading strategies from operator text, so it is precisely the
+        caller those controls exist for.
 
-        # Anthropic requires the system prompt to be a top-level field, not a message.
-        system_content: str = ""
-        user_messages: list[dict[str, str]] = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_content = (system_content + "\n\n" + msg["content"]).strip()
-            else:
-                user_messages.append({"role": msg["role"], "content": msg["content"]})
-
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": _LLM_MAX_TOKENS,
-            "temperature": 0.3,
-            "messages": user_messages,
-        }
-        if system_content:
-            payload["system"] = system_content
-
-        headers = {
-            "x-api-key": self._anthropic_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-
-        last_error: str = ""
-        for attempt in range(1, _LLM_MAX_RETRIES + 1):
-            try:
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    resp = await client.post(
-                        "https://api.anthropic.com/v1/messages",
-                        headers=headers,
-                        json=payload,
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    content = self._strip_fences(data["content"][0]["text"].strip())
-                    if update_history:
-                        self._history.append({"role": "assistant", "content": content})
-                    return content, None
-            except httpx.HTTPStatusError as exc:
-                status = exc.response.status_code
-                if status == 401:
-                    return "", "Invalid Anthropic API key"
-                # Retry on transient overload / rate-limit responses
-                if status in (429, 503, 529):
-                    last_error = f"Anthropic transient error {status}"
-                    delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                    logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                    await asyncio.sleep(delay)
-                    continue
-                return "", f"Anthropic API error {status}: {exc.response.text[:200]}"
-            except httpx.ConnectError as exc:
-                last_error = f"Anthropic connection error: {exc}"
-                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-            except (OSError, ValueError, RuntimeError, KeyError) as exc:
-                return "", f"LLM call failed: {exc}"
-
-        return "", f"Anthropic call failed after {_LLM_MAX_RETRIES} retries: {last_error}"
-
-    async def _call_openai(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        update_history: bool,
-    ) -> tuple[str, str | None]:
-        """Call OpenAI Chat Completions API with exponential backoff retry.
-
-        Reasoning models (o-series) require ``max_completion_tokens`` instead of
-        ``max_tokens`` and do not accept a ``temperature`` parameter.
+        The return contract is unchanged: `(content, None)` on success and
+        `("", reason)` on failure, so every caller and the strategy-generation
+        flow above it work exactly as before.
         """
         import asyncio
 
-        import openai as _openai
+        from ai.gateway.adapters import build_providers
+        from ai.gateway.client import (
+            BudgetExceeded,
+            GatewayClient,
+            ModelRequest,
+            NoProviderAvailable,
+            ProviderError,
+        )
+        from ai.guardrails.output import GuardrailViolation
 
-        is_reasoning = self.model in _OPENAI_REASONING_MODELS
-        create_kwargs: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "max_completion_tokens" if is_reasoning else "max_tokens": _LLM_MAX_TOKENS,
-        }
-        if not is_reasoning:
-            create_kwargs["temperature"] = 0.3
+        prompt = self._flatten(messages)
+        if not prompt.strip():
+            return "", "LLM call failed: no prompt content"
 
-        last_error: str = ""
-        for attempt in range(1, _LLM_MAX_RETRIES + 1):
-            try:
-                response = await self._openai_client.chat.completions.create(**create_kwargs)
-                content = self._strip_fences(response.choices[0].message.content.strip())
-                if update_history:
-                    self._history.append({"role": "assistant", "content": content})
-                return content, None
-            except _openai.AuthenticationError:
-                return "", "Invalid OpenAI API key"
-            except _openai.RateLimitError as exc:
-                last_error = f"OpenAI rate limit: {exc}"
-                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-            except _openai.InternalServerError as exc:
-                last_error = f"OpenAI server error: {exc}"
-                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-            except _openai.APIConnectionError as exc:
-                last_error = f"OpenAI connection error: {exc}"
-                delay = _LLM_RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                logger.warning("%s — retry %d/%d in %.1fs", last_error, attempt, _LLM_MAX_RETRIES, delay)
-                await asyncio.sleep(delay)
-            except (OSError, ValueError, RuntimeError) as exc:
-                return "", f"LLM call failed: {exc}"
+        providers = build_providers()
+        if not providers:
+            return "", "No LLM vendor is configured"
 
-        return "", f"OpenAI call failed after {_LLM_MAX_RETRIES} retries: {last_error}"
+        client = GatewayClient(providers)
+        request = ModelRequest(role="reasoning", prompt=prompt, timeout_s=120.0)
+        try:
+            response = await asyncio.to_thread(client.call_sync, request, operator=self.operator)
+        except GuardrailViolation as exc:
+            # An answer, not an outage: never retried on a second vendor.
+            return "", f"Guardrail refused the prompt: {exc}"
+        except BudgetExceeded as exc:
+            return "", f"Model budget exhausted: {exc}"
+        except ProviderError as exc:
+            return "", f"LLM call failed: {exc.reason}"
+        except NoProviderAvailable as exc:
+            return "", f"No LLM vendor answered: {exc}"
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            return "", f"LLM call failed: {exc}"
+
+        content = self._strip_fences(response.text.strip())
+        if update_history:
+            self._history.append({"role": "assistant", "content": content})
+        return content, None
 
 
 # ── convenience factory ───────────────────────────────────────────────────────

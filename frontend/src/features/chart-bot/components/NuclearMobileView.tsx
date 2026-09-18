@@ -4,7 +4,7 @@
  * Optimised for screens < 768px: touch-friendly, minimal chrome.
  */
 
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { useNuclearWS } from '../hooks/useNuclearWS';
 import { useStore } from '../../../store';
@@ -125,7 +125,7 @@ const MobileSignalList = memo(() => {
         <div key={sig.id} style={ms.signalRow}>
           <span style={{
             ...ms.signalDir,
-            color: sig.direction === 'long' ? '#00ff88' : sig.direction === 'short' ? '#ef4444' : '#64748b',
+            color: sig.direction === 'long' ? '#00ff88' : sig.direction === 'short' ? '#ef4444' : 'var(--text-muted)',
           }}>
             {sig.direction.toUpperCase()}
           </span>
@@ -153,7 +153,7 @@ const NuclearMobileView = memo(() => {
       <div style={ms.statusBar}>
         <span style={{
           ...ms.statusDot,
-          background: status === 'connected' ? '#00ff88' : status === 'connecting' ? '#fbbf24' : '#ef4444',
+          background: status === 'connected' ? '#00ff88' : status === 'connecting' ? 'var(--warn)' : '#ef4444',
         }} />
         <span style={ms.statusText}>
           {status === 'connected' ? 'LIVE' : status.toUpperCase()}
@@ -189,7 +189,7 @@ const ms: Record<string, React.CSSProperties> = {
   root: {
     display: 'flex', flexDirection: 'column',
     height: '100%', width: '100%',
-    background: '#020408', color: '#f1f5f9',
+    background: '#020408', color: 'var(--text-strong)',
     fontFamily: 'monospace, system-ui', overflow: 'hidden',
   },
   statusBar: {
@@ -199,7 +199,7 @@ const ms: Record<string, React.CSSProperties> = {
   },
   statusDot: { width: 6, height: 6, borderRadius: '50%' },
   statusText: { fontSize: 10, fontWeight: 700, letterSpacing: 1 },
-  statusNote: { fontSize: 10, color: '#334155', marginLeft: 'auto' },
+  statusNote: { fontSize: 10, color: 'var(--text-faint)', marginLeft: 'auto' },
   protectedBar: {
     padding: '6px 12px', background: 'rgba(255,0,51,0.15)',
     borderBottom: '1px solid #ff0033',
@@ -228,7 +228,7 @@ const ms: Record<string, React.CSSProperties> = {
     padding: '8px 12px', borderBottom: '1px solid #0a1628', flexShrink: 0,
   },
   symbol: { fontSize: 12, fontWeight: 800, color: '#f59e0b' },
-  price:  { fontSize: 22, fontWeight: 900, color: '#f1f5f9', flex: 1 },
+  price:  { fontSize: 22, fontWeight: 900, color: 'var(--text-strong)', flex: 1 },
   change: { fontSize: 12, fontWeight: 700 },
   chartWrap: { height: 280, flexShrink: 0, position: 'relative' },
   accordion: {
@@ -237,31 +237,31 @@ const ms: Record<string, React.CSSProperties> = {
   accordionBtn: {
     width: '100%', display: 'flex', justifyContent: 'space-between',
     alignItems: 'center', padding: '10px 12px',
-    background: 'transparent', border: 'none', color: '#94a3b8',
+    background: 'transparent', border: 'none', color: 'var(--text-dim)',
     cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: 1.5,
   },
   accordionTitle: { letterSpacing: 2 },
-  accordionChevron: { fontSize: 10, color: '#475569' },
+  accordionChevron: { fontSize: 10, color: 'var(--text-faint)' },
   accordionBody: { padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 },
-  explainText: { fontSize: 12, color: '#cbd5e1', lineHeight: 1.7, margin: 0 },
+  explainText: { fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7, margin: 0 },
   analogBox: {
     background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)',
     borderRadius: 6, padding: '8px 10px',
   },
-  analogLabel: { fontSize: 9, color: '#fbbf24', letterSpacing: 2, fontWeight: 700, display: 'block', marginBottom: 4 },
-  analogText: { fontSize: 11, color: '#cbd5e1', lineHeight: 1.6, margin: 0 },
+  analogLabel: { fontSize: 9, color: 'var(--warn)', letterSpacing: 2, fontWeight: 700, display: 'block', marginBottom: 4 },
+  analogText: { fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.6, margin: 0 },
   riskGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 },
   riskCell: { display: 'flex', flexDirection: 'column', gap: 2 },
-  riskLabel: { fontSize: 9, color: '#475569', letterSpacing: 1 },
-  riskValue: { fontSize: 13, fontWeight: 700, color: '#94a3b8', fontFamily: 'monospace' },
+  riskLabel: { fontSize: 9, color: 'var(--text-faint)', letterSpacing: 1 },
+  riskValue: { fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)', fontFamily: 'monospace' },
   signalList: { padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 },
-  sectionTitle: { fontSize: 9, color: '#475569', letterSpacing: 2, fontWeight: 700, marginBottom: 4 },
+  sectionTitle: { fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700, marginBottom: 4 },
   signalRow: {
     display: 'flex', alignItems: 'center', gap: 10,
     padding: '6px 0', borderBottom: '1px solid #0a1628',
   },
   signalDir:   { fontSize: 11, fontWeight: 800, width: 40 },
-  signalModel: { fontSize: 10, color: '#64748b', flex: 1 },
-  signalConf:  { fontSize: 11, fontFamily: 'monospace', color: '#94a3b8' },
-  signalEntry: { fontSize: 11, fontFamily: 'monospace', color: '#f1f5f9' },
+  signalModel: { fontSize: 10, color: 'var(--text-muted)', flex: 1 },
+  signalConf:  { fontSize: 11, fontFamily: 'monospace', color: 'var(--text-dim)' },
+  signalEntry: { fontSize: 11, fontFamily: 'monospace', color: 'var(--text-strong)' },
 };

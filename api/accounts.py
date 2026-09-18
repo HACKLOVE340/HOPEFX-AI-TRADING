@@ -40,6 +40,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 UTC = timezone.utc
@@ -53,6 +54,37 @@ _TRANSFER_LOCKS: dict[str, asyncio.Lock] = {}
 # accounts are unaffected; tunable per-deployment via env.
 MAX_ACCOUNT_BALANCE = float(os.getenv("MAX_ACCOUNT_BALANCE", "1_000_000_000"))  # 1B
 MAX_TRANSFER_AMOUNT = float(os.getenv("MAX_TRANSFER_AMOUNT", "1_000_000_000"))  # 1B
+
+CENT = Decimal("0.01")
+
+
+def _money(value: Any) -> Decimal:
+    """Read a stored balance as an exact decimal.
+
+    Always via ``str``: ``Decimal(0.1)`` inherits the binary error verbatim
+    (0.1000000000000000055511151231257827…), while ``Decimal(str(0.1))`` is
+    exactly ``0.1``. ``hopefx-money-precision`` lists the first form as the
+    mistake this codebase makes most.
+
+    Deliberately does NOT quantise. A stored balance may carry sub-cent dust —
+    ``initial_balance`` is a plain float with no cent constraint — and rounding
+    it here would silently restate someone's balance on a read.
+    """
+    try:
+        return Decimal(str(value if value is not None else 0))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal(0)
+
+
+def _to_cents(amount: float) -> Decimal:
+    """Quantise a requested amount to cents, half away from zero.
+
+    Python's ``round`` is ROUND_HALF_EVEN (banker's rounding), which is correct
+    for statistics and wrong for money: it rounds 0.125 down and 0.135 up, so
+    the direction depends on a digit the payer never sees.
+    """
+    return Decimal(str(amount)).quantize(CENT, rounding=ROUND_HALF_UP)
+
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
@@ -542,17 +574,65 @@ async def transfer_between_sub_accounts(
         if dst is None:
             raise HTTPException(status_code=404, detail="Destination sub-account not found")
 
-        src_bal = float(src.get("balance") or src.get("current_balance") or 0)
-        dst_bal = float(dst.get("balance") or dst.get("current_balance") or 0)
+        # Exact decimals from here to the write. This used to be:
+        #
+        #     new_src_bal = round(src_bal - req.amount, 2)
+        #     new_dst_bal = round(dst_bal + req.amount, 2)
+        #
+        # Two independent roundings of two independent floats, so the two
+        # results were under no obligation to sum to what went in — and did
+        # not: src=10.125 dst=20.125 amt=5.00 took a total of 30.250 to 30.240,
+        # destroying a cent, while 33.335/66.665/1.00 created one. `round` is
+        # also ROUND_HALF_EVEN, which is the wrong tie-break for money.
+        #
+        # A transfer is one movement, so it is now one quantised amount applied
+        # to both sides. Decimal addition and subtraction of the same value are
+        # exactly conservative, so nothing is rounded after the split and there
+        # is no second place for a cent to go missing.
+        src_bal = _money(src.get("balance") if src.get("balance") is not None else src.get("current_balance"))
+        dst_bal = _money(dst.get("balance") if dst.get("balance") is not None else dst.get("current_balance"))
+        amount = _to_cents(req.amount)
 
-        if src_bal < req.amount:
+        if amount <= 0:
+            # Only reachable when a sub-cent request quantises to zero; the
+            # Pydantic gt=0 stops a literal zero. Moving nothing while
+            # reporting a transfer is its own kind of wrong answer.
+            raise HTTPException(
+                status_code=400,
+                detail=f"Amount {req.amount} is below the smallest transferable unit (0.01)",
+            )
+
+        if src_bal < amount:
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient balance: {src_bal:.2f}",
             )
 
-        new_src_bal = round(src_bal - req.amount, 2)
-        new_dst_bal = round(dst_bal + req.amount, 2)
+        new_src = src_bal - amount
+        new_dst = dst_bal + amount
+
+        # No Hidden Capital (invariants/constitution.py). The arithmetic above
+        # cannot lose a cent, so this is here to catch a future edit that can —
+        # a re-introduced round(), a float creeping back in, a quantise added
+        # "for tidiness". It refuses rather than warns: a transfer that does not
+        # reconcile must not be written, and the caller gets a 500 instead of a
+        # silently wrong balance.
+        if (new_src + new_dst) != (src_bal + dst_bal):
+            logger.error(
+                "Transfer refused — capital would not reconcile: %s + %s -> %s + %s (user %s)",
+                src_bal,
+                dst_bal,
+                new_src,
+                new_dst,
+                user.sub,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Transfer refused: balances would not reconcile",
+            )
+
+        new_src_bal = float(new_src)
+        new_dst_bal = float(new_dst)
 
         src["balance"] = new_src_bal
         src["current_balance"] = new_src_bal
@@ -568,10 +648,14 @@ async def transfer_between_sub_accounts(
         # defined even if an exception is raised before this point.
         _result_src_bal = new_src_bal
         _result_dst_bal = new_dst_bal
+        # Report what moved, not what was asked for. A request of 10.005 moves
+        # 10.01; echoing the request back would put a number in the response
+        # that no balance agrees with.
+        _result_amount = float(amount)
 
     logger.info(
         "Transfer %.2f from %s to %s by user %s",
-        req.amount,
+        _result_amount,
         account_id,
         req.to_account_id,
         user.sub,
@@ -580,7 +664,7 @@ async def transfer_between_sub_accounts(
         "ok": True,
         "from_account_id": account_id,
         "to_account_id": req.to_account_id,
-        "amount": req.amount,
+        "amount": _result_amount,
         "from_balance": _result_src_bal,
         "to_balance": _result_dst_bal,
         "note": req.note,

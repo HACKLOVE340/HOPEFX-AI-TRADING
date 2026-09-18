@@ -81,7 +81,7 @@ function PasswordStrengthBar({ password }: { password: string }) {
             key={i}
             style={{
               flex: 1, height: 3, borderRadius: 2,
-              background: i <= strength.score ? strength.color : '#1e293b',
+              background: i <= strength.score ? strength.color : 'var(--raised)',
               transition: 'background 0.2s',
             }}
           />
@@ -101,7 +101,7 @@ function PasswordStrengthBar({ password }: { password: string }) {
 function shimBar(w: number | string, h: number, mb = 0): React.CSSProperties {
   return {
     width: w, height: h, marginBottom: mb, borderRadius: 6,
-    background: 'linear-gradient(90deg,#1e293b 25%,#334155 50%,#1e293b 75%)',
+    background: 'linear-gradient(90deg,var(--raised) 25%,var(--surface-hover) 50%,var(--raised) 75%)',
     backgroundSize: '200% 100%',
     animation: 'shimmer 1.4s infinite',
   };
@@ -299,9 +299,9 @@ const Register: React.FC = () => {
           <form onSubmit={handleSubmit} style={s.form} noValidate>
             {/* Email */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="email">Email</label>
+              <label style={s.label} htmlFor="email" id="email-label">Email</label>
               <input
-                id="email" type="email" value={email}
+                id="email" aria-labelledby="email-label" type="email" value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 onFocus={() => setFocusField('email')}
                 onBlur={() => setFocusField(null)}
@@ -313,9 +313,9 @@ const Register: React.FC = () => {
 
             {/* Username */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="username">Username</label>
+              <label style={s.label} htmlFor="username" id="username-label">Username</label>
               <input
-                id="username" type="text" value={username}
+                id="username" aria-labelledby="username-label" type="text" value={username}
                 onChange={(e) => { setUsername(e.target.value); setError(''); }}
                 onFocus={() => setFocusField('username')}
                 onBlur={() => setFocusField(null)}
@@ -330,10 +330,10 @@ const Register: React.FC = () => {
 
             {/* Password */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="password">Password</label>
+              <label style={s.label} htmlFor="password" id="password-label">Password</label>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="password"
+                  id="password" aria-labelledby="password-label"
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(''); }}
@@ -356,10 +356,10 @@ const Register: React.FC = () => {
 
             {/* Confirm password */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="confirm">Confirm Password</label>
+              <label style={s.label} htmlFor="confirm" id="confirm-label">Confirm Password</label>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="confirm"
+                  id="confirm" aria-labelledby="confirm-label"
                   type={showConf ? 'text' : 'password'}
                   value={confirm}
                   onChange={(e) => { setConfirm(e.target.value); setError(''); }}
@@ -417,7 +417,7 @@ const Register: React.FC = () => {
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                   background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-                  padding: '10px 14px', color: '#fbbf24', fontSize: 13, marginBottom: 16,
+                  padding: '10px 14px', color: 'var(--warn)', fontSize: 'var(--fs-body)', marginBottom: 16,
                 }}
               >
                 <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -448,7 +448,7 @@ const Register: React.FC = () => {
 
         <div style={s.footer}>
           Already have an account?{' '}
-          <Link to="/login" style={{ ...s.link, color: '#60a5fa' }}>Sign in →</Link>
+          <Link to="/login" style={{ ...s.link, color: 'var(--link)' }}>Sign in →</Link>
         </div>
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -480,8 +480,8 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 16px' },
+  logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
+  tagline: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 16px' },
   planBadge: {
     fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
     borderRadius: 20, padding: '4px 14px',
@@ -490,13 +490,13 @@ const s: Record<string, React.CSSProperties> = {
   } as React.CSSProperties,
   form:      { display: 'flex', flexDirection: 'column', gap: 14 },
   field:     { display: 'flex', flexDirection: 'column' },
-  label:     { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
-  fieldHint: { fontSize: 11, color: '#64748b', marginTop: 4 },
+  label:     { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  fieldHint: { fontSize: 11, color: 'var(--text-muted)', marginTop: 4 },
   input: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     padding: '12px 14px',
     fontSize: 16, /* prevents iOS zoom on focus */
-    color: '#f8fafc', outline: 'none',
+    color: 'var(--text-strong)', outline: 'none',
     transition: 'border-color 0.15s,box-shadow 0.15s', width: '100%', boxSizing: 'border-box',
     WebkitAppearance: 'none',
   },
@@ -510,7 +510,7 @@ const s: Record<string, React.CSSProperties> = {
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
-    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', lineHeight: 1.5,
+    borderRadius: 8, padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--loss)', lineHeight: 1.5,
   },
   successBox: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -525,15 +525,15 @@ const s: Record<string, React.CSSProperties> = {
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
     color: '#fff', border: 'none', borderRadius: 8, padding: '14px',
-    fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4,
+    fontSize: 'var(--fs-value)', fontWeight: 700, cursor: 'pointer', marginTop: 4,
     minHeight: 48, width: '100%',
     transition: 'opacity 0.15s',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     touchAction: 'manipulation',
   },
-  terms:  { fontSize: 11, color: '#475569', textAlign: 'center', lineHeight: 1.6, margin: 0 },
-  footer: { textAlign: 'center', marginTop: 20, fontSize: 13, color: '#64748b' },
-  link:   { color: '#64748b', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
+  terms:  { fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', lineHeight: 1.6, margin: 0 },
+  footer: { textAlign: 'center', marginTop: 20, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
+  link:   { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };
 
 export default Register;

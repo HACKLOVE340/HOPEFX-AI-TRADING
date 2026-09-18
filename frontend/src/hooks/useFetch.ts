@@ -215,7 +215,6 @@ export function useFetchDeps<T>(
       mountedRef.current = false;
       abortRef.current?.abort();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run]);
 
   useEffect(() => () => { mountedRef.current = false; }, []);

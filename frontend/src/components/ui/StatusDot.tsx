@@ -15,8 +15,8 @@ interface StatusDotProps {
 }
 
 const COLOR: Record<string, string> = {
-  connected:    'bg-[#00e676]',
-  ok:           'bg-[#00e676]',
+  connected:    'bg-[var(--bull)]',
+  ok:           'bg-[var(--bull)]',
   connecting:   'bg-[#ffb800]',
   degraded:     'bg-[#ffb800]',
   disconnected: 'bg-[#475569]',

@@ -21,9 +21,9 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ style }) => {
       aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       style={{
         background: 'transparent',
-        border: '1px solid var(--border, #334155)',
+        border: '1px solid var(--border, var(--border-strong))',
         borderRadius: 8,
-        color: 'var(--text-muted, #94a3b8)',
+        color: 'var(--text-muted, var(--text-dim))',
         cursor: 'pointer',
         fontSize: 16,
         lineHeight: 1,

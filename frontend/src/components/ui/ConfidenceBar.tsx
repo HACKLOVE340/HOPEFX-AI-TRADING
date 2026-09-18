@@ -31,7 +31,7 @@ export function ConfidenceBar({
       {label && (
         <span className="text-[10px] text-slate-500 shrink-0 w-16 truncate">{label}</span>
       )}
-      <div className={cn('flex-1 bg-[#1e2d3d] rounded-full overflow-hidden', H[height])}>
+      <div className={cn('flex-1 bg-[var(--border)] rounded-full overflow-hidden', H[height])}>
         <div
           className={cn('h-full rounded-full transition-all duration-500')}
           style={{ width: `${pct}%`, backgroundColor: color }}

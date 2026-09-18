@@ -214,10 +214,23 @@ def register_routers(
     from api.analysis import router as analysis_router
     from api.backtesting import _compat_router as backtesting_compat_router
     from api.backtesting import router as backtesting_router
+    from api.ai_core import router as ai_core_router
+    from api.ai_memory import router as ai_memory_router
+    from api.ai_notifications import router as ai_notifications_router
     from api.brain import router as brain_router
+    from api.support import router as support_router
     from api.broker import router as broker_router
     from api.calendar import router as calendar_router
     from api.chat import router as chat_router
+    from api.professional_control_plane import router as control_plane_router
+    from api.safe_agent_platform import router as safe_agent_platform_router
+
+    # Registered here, not only in api/server.py::create_api_app: production runs
+    # `python app.py`, which registers routers through this module. create_api_app
+    # is called only from within api/server.py itself, so a router registered
+    # there alone has no reachable endpoints on the running app -- which is what
+    # security/code_analyzer.py's broken_router rule caught here.
+    from api.superadmin.ai_operations import router as superadmin_ai_operations_router
     from api.explain import router as explain_router
     from api.health import router as health_router
 
@@ -321,6 +334,13 @@ def register_routers(
         status_router,
         brain_router,
         calendar_router,
+        control_plane_router,
+        safe_agent_platform_router,
+        superadmin_ai_operations_router,
+        ai_core_router,
+        ai_notifications_router,
+        ai_memory_router,
+        support_router,
         profiles_router,
         social_feed_router,
         social_leaderboard_router,
@@ -810,7 +830,7 @@ def register_routers(
     if not feature_flags.PUSH_NOTIFICATIONS:
         logger.debug("PUSH_NOTIFICATIONS disabled — set FEATURE_PUSH_NOTIFICATIONS=true to enable")
 
-    # ── Transparency Reports (/api/transparency) ──────────────────────────────
+    # ── Transparency Reports (/api/transparency) ───────────────────────────��──
     if feature_flags.TRANSPARENCY_REPORTS:
         try:
             from transparency.router import router as transparency_router
@@ -962,7 +982,7 @@ def register_routers(
     except Exception as _nocode_err:
         logger.warning("No-Code Builder router not registered: %s", _nocode_err)
 
-    # ── API v1 versioned prefix ────────────────────────────────────────────────
+    # ── API v1 versioned prefix ��───────────────────────────────────────────────
     # Mount a thin /api/v1/* prefix that re-exports the existing /api/* routes.
     # New clients should use /api/v1/; existing /api/* routes remain unchanged
     # for backward compatibility with current frontend and external integrations.

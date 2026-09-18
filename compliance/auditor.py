@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 from enum import Enum
+from typing import Any
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -139,17 +140,76 @@ class ImmutableAuditLog:
         return hashlib.sha256(record_str.encode()).hexdigest()
 
     def _persist_record(self, record: AuditRecord):
-        """Write to append-only log (async when a loop is running, sync otherwise)."""
+        """Write to append-only log (async when a loop is running, sync otherwise).
 
-        Path(self.log_path).mkdir(parents=True, exist_ok=True)
+        Never raises. An audit write that fails must not crash the action it is
+        recording — but it must be impossible to miss, because a compliance
+        chain with a silent hole in it is worse than no chain: it still reports
+        "verified".
+        """
         filename = f"{self.log_path}audit_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
+
+        # `mkdir` used to sit OUTSIDE this try. An unwritable location raised
+        # FileNotFoundError straight into `append()`, so the audit write could
+        # crash the superadmin action it was recording — while an ordinary
+        # write failure two lines later was swallowed. One fault, two opposite
+        # behaviours, neither designed.
+        try:
+            Path(self.log_path).mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            self._report_lost_record(record, exc, stage="mkdir")
+            return
+
         try:
             loop = asyncio.get_running_loop()
-            _t = loop.create_task(self._async_write(filename, record))
-            _t.add_done_callback(lambda _: None)
         except RuntimeError:
             # No running event loop (e.g. called from sync context / tests)
             self._sync_write(filename, record)
+            return
+
+        task = loop.create_task(self._async_write(filename, record))
+        task._hopefx_record = record  # so the callback can name what was lost
+        # NOT `lambda _: None`. That callback threw the task's result away,
+        # exceptions included, and under FastAPI this is the path production
+        # takes. asyncio does eventually emit "Task exception was never
+        # retrieved" when the task is garbage-collected, but that arrives at an
+        # unpredictable time, from the `asyncio` logger, naming no record, no
+        # actor and no action — nothing an operator would attribute to the
+        # compliance chain.
+        task.add_done_callback(self._report_write_task)
+
+    def _report_write_task(self, task: Any) -> None:
+        """Done-callback for the async write. Retrieves the result so a failure
+        is reported here, with the record's identity, rather than surfacing as
+        an anonymous asyncio warning whenever the task is collected."""
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            logger.error("Audit write task was cancelled; a record may not have been persisted")
+            return
+        except Exception:  # pragma: no cover - defensive
+            return
+        if exc is not None:
+            self._report_lost_record(getattr(task, "_hopefx_record", None), exc, stage="async write")
+
+    def _report_lost_record(self, record: AuditRecord | None, exc: BaseException, *, stage: str) -> None:
+        """One place that says a record did not reach the log, and which one.
+
+        The identity is the point. "Audit write failed: OSError" tells an
+        operator nothing they can reconcile against; the sequence number, actor
+        and action tell them exactly what is missing from the chain.
+        """
+        if record is None:
+            logger.error("Audit record NOT PERSISTED (%s): %s — the chain on disk has a gap", stage, exc)
+            return
+        logger.error(
+            "Audit record NOT PERSISTED (%s): seq=%s actor=%s action=%s — the chain on disk has a gap (%s)",
+            stage,
+            record.sequence_number,
+            record.actor,
+            record.action,
+            exc,
+        )
 
     def _sync_write(self, filename: str, record: AuditRecord) -> None:
         """Synchronous fallback write used when no event loop is running."""
@@ -172,7 +232,7 @@ class ImmutableAuditLog:
             with Path(filename).open("a", encoding="utf-8") as fh:
                 fh.write(line)
         except Exception as exc:
-            logger.error("Audit sync write failed: %s", exc)
+            self._report_lost_record(record, exc, stage="sync write")
 
     async def _async_write(self, filename: str, record: AuditRecord):
         if aiofiles is None:
@@ -214,6 +274,70 @@ class ImmutableAuditLog:
 
         logger.info("✅ Audit log integrity verified")
         return True
+
+    def verify_persisted_integrity(self, filename: str | None = None) -> bool | None:
+        """Verify the chain in the LOG FILE — the artefact a regulator receives.
+
+        `verify_integrity()` walks `self.records`, the in-memory list. That list
+        still holds a record whose write failed, so it verifies clean over a
+        chain the file does not contain: a check that reads its own memory
+        cannot disagree with itself (F176). It also attests nothing about the
+        file, which is the only thing anyone outside this process can inspect.
+
+        Returns True (chain intact), False (a record is missing or altered), or
+        **None when there is nothing to verify** — an empty or absent log is not
+        a verified one, and reporting it as True is how an outage becomes a
+        clean bill of health (Rule 2: an unmeasured value is absent, never
+        best-case).
+        """
+        path = Path(filename) if filename else self._current_log_path()
+        if path is None or not path.exists():
+            logger.warning("Audit log not found at %s — nothing verified", path)
+            return None
+
+        rows: list[dict] = []
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                logger.error("Audit log line is not valid JSON (%s) — the chain cannot be verified", exc)
+                return False
+        if not rows:
+            logger.warning("Audit log at %s is empty — nothing verified", path)
+            return None
+
+        prev = "0" * 64
+        for row in sorted(rows, key=lambda r: r.get("seq", 0)):
+            record_str = json.dumps(
+                {
+                    "seq": row.get("seq"),
+                    "prev_hash": prev,
+                    "timestamp": row.get("timestamp"),
+                    "data_hash": hashlib.sha256(json.dumps(row.get("data"), sort_keys=True).encode()).hexdigest(),
+                },
+                sort_keys=True,
+            )
+            expected = hashlib.sha256(record_str.encode()).hexdigest()
+            if row.get("hash") != expected:
+                logger.error(
+                    "PERSISTED AUDIT CHAIN BROKEN at seq=%s — a record is missing or was altered",
+                    row.get("seq"),
+                )
+                return False
+            prev = row["hash"]
+
+        logger.info("Persisted audit chain verified over %d record(s)", len(rows))
+        return True
+
+    def _current_log_path(self) -> Path | None:
+        """The file `_persist_record` is currently appending to."""
+        try:
+            return Path(f"{self.log_path}audit_{datetime.now(UTC).strftime('%Y-%m')}.jsonl")
+        except Exception:  # pragma: no cover - defensive
+            return None
 
     def _recalculate_hash(self, record: AuditRecord, prev_hash: str) -> str:
         """Recalculate expected hash"""

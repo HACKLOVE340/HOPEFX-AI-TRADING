@@ -322,3 +322,123 @@ class TestTransferBalance:
             json={"to_account_id": dst["account_id"], "amount": 0.0},
         )
         assert resp.status_code == 422
+
+
+# ---- Tests: transfers conserve capital ---------------------------------------
+
+
+class TestTransferConservesCapital:
+    """A transfer moves money. It must not create or destroy any.
+
+    `invariants/constitution.py::verify_capital_conservation` names this rule
+    "No Hidden Capital" and treats a breach as CONSTITUTIONAL. The endpoint
+    computed each side independently:
+
+        new_src_bal = round(src_bal - req.amount, 2)
+        new_dst_bal = round(dst_bal + req.amount, 2)
+
+    Two separate roundings of two separate floats, using Python's `round`,
+    which is banker's rounding (ROUND_HALF_EVEN) and not what money uses. The
+    two results are not required to sum to what went in, and measurably do not:
+
+        src=10.125 dst=20.125 amt=5.00  ->  30.250 becomes 30.240  (a cent destroyed)
+        src=33.335 dst=66.665 amt=1.00  -> 100.000 becomes 100.010  (a cent created)
+
+    Sub-cent balances are not hypothetical here: `initial_balance` is a plain
+    float with no cent constraint, and nothing quantises a balance on the way
+    in. `hopefx-money-precision` names both halves of this — `round(x, 2)` for
+    money, and arithmetic on the float side of a Decimal boundary.
+    """
+
+    # (source, destination, amount) — each sums to a total that must survive.
+    DUST_CASES = [
+        (10.125, 20.125, 5.0),
+        (33.335, 66.665, 1.0),
+        (0.145, 0.145, 0.05),
+        (1000.005, 2000.005, 250.0),
+        (7.005, 3.005, 2.5),
+    ]
+
+    @pytest.mark.parametrize(("src_bal", "dst_bal", "amount"), DUST_CASES)
+    def test_total_is_unchanged_by_a_transfer(self, client: TestClient, src_bal: float, dst_bal: float, amount: float):
+        src = _create_account(client, "Src", balance=src_bal)
+        dst = _create_account(client, "Dst", balance=dst_bal)
+
+        resp = client.post(
+            f"/api/accounts/sub-accounts/{src['account_id']}/transfer",
+            json={"to_account_id": dst["account_id"], "amount": amount},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+
+        before = src_bal + dst_bal
+        after = data["from_balance"] + data["to_balance"]
+        assert after == pytest.approx(before, abs=1e-9), (
+            f"transfer of {amount} between {src_bal} and {dst_bal} changed the total "
+            f"by {after - before:+.4f} — money was created or destroyed"
+        )
+
+    @pytest.mark.parametrize(("src_bal", "dst_bal", "amount"), DUST_CASES)
+    def test_the_persisted_balances_also_conserve(
+        self, client: TestClient, src_bal: float, dst_bal: float, amount: float
+    ):
+        """The response and the store must agree, and both must conserve.
+
+        Asserting only on the response would pass a version that returns the
+        right numbers and writes different ones.
+        """
+        src = _create_account(client, "Src", balance=src_bal)
+        dst = _create_account(client, "Dst", balance=dst_bal)
+        client.post(
+            f"/api/accounts/sub-accounts/{src['account_id']}/transfer",
+            json={"to_account_id": dst["account_id"], "amount": amount},
+        )
+
+        stored_src = client.get(f"/api/accounts/sub-accounts/{src['account_id']}").json()
+        stored_dst = client.get(f"/api/accounts/sub-accounts/{dst['account_id']}").json()
+        after = stored_src["balance"] + stored_dst["balance"]
+        assert after == pytest.approx(src_bal + dst_bal, abs=1e-9)
+
+    def test_a_chain_of_transfers_does_not_drift(self, client: TestClient):
+        """Twenty round trips. Any per-transfer leak compounds into a real number."""
+        src = _create_account(client, "Src", balance=10.125)
+        dst = _create_account(client, "Dst", balance=20.125)
+        total_before = 30.25
+
+        for i in range(20):
+            a, b = (src, dst) if i % 2 == 0 else (dst, src)
+            resp = client.post(
+                f"/api/accounts/sub-accounts/{a['account_id']}/transfer",
+                json={"to_account_id": b["account_id"], "amount": 5.0},
+            )
+            assert resp.status_code == 200, resp.text
+
+        stored_src = client.get(f"/api/accounts/sub-accounts/{src['account_id']}").json()
+        stored_dst = client.get(f"/api/accounts/sub-accounts/{dst['account_id']}").json()
+        after = stored_src["balance"] + stored_dst["balance"]
+        assert after == pytest.approx(total_before, abs=1e-9), (
+            f"20 transfers drifted the total by {after - total_before:+.4f}"
+        )
+
+    def test_the_moved_amount_is_what_the_response_reports(self, client: TestClient):
+        """A sub-cent request must not move a different amount than it reports.
+
+        Rounding the request to cents is the right call — a balance is denominated
+        in cents — but the caller has to be told what actually moved, or the
+        response is a second place the books can disagree.
+        """
+        src = _create_account(client, "Src", balance=100.0)
+        dst = _create_account(client, "Dst", balance=0.0)
+
+        resp = client.post(
+            f"/api/accounts/sub-accounts/{src['account_id']}/transfer",
+            json={"to_account_id": dst["account_id"], "amount": 10.005},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+
+        moved = 100.0 - data["from_balance"]
+        assert data["amount"] == pytest.approx(moved, abs=1e-9), (
+            f"response says amount={data['amount']} but {moved} left the source"
+        )
+        assert data["to_balance"] == pytest.approx(moved, abs=1e-9)

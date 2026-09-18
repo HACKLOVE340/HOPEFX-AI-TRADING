@@ -19,7 +19,6 @@ import type { NuclearWsMessage, NuclearChartState, NuclearAlertMessage } from '.
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _envNuclearWsUrl = import.meta.env.VITE_NUCLEAR_WS_URL as string | undefined;
 
 function getNuclearWsUrl(): string {
@@ -119,9 +118,15 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
       default:
         break;
     }
-  }, [setChartState, setNuclearAlert]);
+    // Zustand actions are created once by the store factory, so listing them
+    // costs no extra renders — and omitting one is how a handler ends up
+    // calling a setter from a closure the store has since replaced.
+  }, [setChartState, setNuclearAlert, setStoreStatus]);
 
   // ── Connect ─────────────────────────────────────────────────────────────────
+
+  /** Always the current scheduleReconnect — see the onclose handler below. */
+  const scheduleReconnectRef = useRef<() => void>(() => undefined);
 
   const connect = useCallback(() => {
     if (!mountedRef.current || !enabled) return;
@@ -136,7 +141,7 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
     } catch {
       setStatus('error');
       setStoreStatus('error');
-      scheduleReconnect();
+      scheduleReconnectRef.current();
       return;
     }
 
@@ -177,7 +182,14 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
       clearInterval(heartbeatTimer.current!);
       setStatus('disconnected');
       setStoreStatus('disconnected');
-      scheduleReconnect();
+      // Through a ref, the way `connect` is reached in hooks/useWebSocket.ts
+      // and for the same reason. `connect` is memoised on [enabled,
+      // handleMessage, setStoreStatus], so it captured the FIRST
+      // `scheduleReconnect` and kept it — and that closure reads `status` from
+      // the render it was built in. The guard below ("the engine said
+      // unavailable, stop retrying") was therefore reading a stale status and
+      // reconnecting anyway, forever, against a server that had already said no.
+      scheduleReconnectRef.current();
     };
   }, [enabled, handleMessage, setStoreStatus]);
 
@@ -191,6 +203,14 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
       connect();
     }, reconnectDelay.current);
   }, [connect, status]);
+
+  // Keep the ref current, so the handlers above reach today's scheduleReconnect
+  // — the one whose closure reads today's `status`. Without this effect the ref
+  // would still hold the no-op it was initialised with and nothing would ever
+  // reconnect at all.
+  useEffect(() => {
+    scheduleReconnectRef.current = scheduleReconnect;
+  });
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 

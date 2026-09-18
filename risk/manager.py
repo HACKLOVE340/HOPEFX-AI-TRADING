@@ -227,7 +227,11 @@ class RiskAssessment:
     risk_level: str  # RiskLevel constant
     reason: str  # human-readable approval/rejection reason
     sizing: PositionSizingResult | None = None
-    data_quality: float = 1.0
+    #: The measured data quality, or None when nothing measured it. This
+    #: defaulted to 1.0 — so an assessment built with the feed down reported
+    #: flawless data beside a decision that had nothing to look at. Rule 2: an
+    #: unmeasured value is absent, never best case.
+    data_quality: float | None = None
     sentiment_score: float = 0.0
     impact_score: float = 0.0
     drawdown_pct: float = 0.0
@@ -429,13 +433,20 @@ class _MinimalSignal:
         tick_ts: float | None = None,
         stop_loss_price: float | None = None,
         take_profit_price: float | None = None,
+        data_quality: float | None = None,
     ) -> None:
         self.symbol = symbol
         self.direction = direction
         self.tick_ts = tick_ts
         self.confidence = confidence
         self.probability = probability
-        self.data_quality = 1.0
+        # None = "the caller did not measure this", NOT "perfect". This was a
+        # hardcoded 1.0 that no caller could override, so every
+        # calculate_position_size() call — including the live decision engine's
+        # — asserted flawless data it had never looked at. size_order() now
+        # falls back to the orchestrator and refuses if that cannot measure
+        # either. See RiskManager._measured_data_quality.
+        self.data_quality = data_quality
         self.features: dict = {}
         self.tick_mid = tick_mid
         self.tick_spread = tick_spread
@@ -638,7 +649,7 @@ class RiskManager:
         signal,
         reason: str,
         risk_level: str,
-        data_quality: float = 1.0,
+        data_quality: float | None = None,
         sentiment_score: float = 0.0,
         impact_score: float = 0.0,
     ) -> RiskAssessment:
@@ -665,7 +676,14 @@ class RiskManager:
         Returns RiskAssessment with approved=True/False and full context.
         Consumed by Gatekeeper and execution pipeline.
         """
-        data_quality = self._get_data_quality(signal)
+        # The *measured* value, not the reported one. This read
+        # _get_data_quality(), whose 1.0 fallback made the gate below unable to
+        # fire on an unmeasured feed — the same defect §E12 closed in
+        # size_order(), which that phase missed one method over. The trade was
+        # still refused (assess() calls size_order(), which does refuse), but
+        # the assessment reported reason="zero_size" and data_quality=1.0,
+        # naming neither the cause nor the truth.
+        data_quality = self._measured_data_quality(signal)
         features = self._get_orchestrator_features(signal)
         sentiment_score = float(features.get("news_sentiment_score", 0.0))
         impact_score = float(features.get("macro_impact_score", 0.0))
@@ -686,6 +704,18 @@ class RiskManager:
                 reason=f"daily_dd:{self._state.daily_drawdown * 100:.2f}%",
                 risk_level=RiskLevel.CRITICAL,
                 data_quality=data_quality,
+            )
+
+        if data_quality is None:
+            # `None < _MIN_DATA_QUALITY` is a TypeError, so absence needs its
+            # own branch rather than falling into the numeric comparison.
+            return self._rejected_assessment(
+                signal,
+                reason="data_quality:unmeasured",
+                risk_level=RiskLevel.HIGH,
+                data_quality=None,
+                sentiment_score=sentiment_score,
+                impact_score=impact_score,
             )
 
         if data_quality < _MIN_DATA_QUALITY:
@@ -724,10 +754,20 @@ class RiskManager:
         lineage_id: str,
         reason: str = "",
     ) -> PositionSizingResult:
-        """Return a zero-quantity PositionSizingResult and log the rejection reason."""
+        """Return a zero-quantity PositionSizingResult and log the rejection reason.
+
+        The reason is also carried on the result via ``_halt_reason_override``,
+        so ``result.reason`` names the gate that refused instead of the generic
+        ``"position_size_zero"``. It was previously logged only, which meant a
+        caller — or an operator reading a lineage record rather than the log —
+        could see that sizing refused but not why. ``_zero_sized_with_reason``
+        already did this for the calculate_position_size path; this is the same
+        treatment for the size_order path.
+        """
         if reason:
             logger.warning("RiskManager: zero-size — %s", reason)
-        return PositionSizingResult(
+            self._record_refusal(symbol, direction, lineage_id, reason)
+        result = PositionSizingResult(
             symbol=symbol,
             direction=direction,
             quantity=0.0,
@@ -737,6 +777,45 @@ class RiskManager:
             risk_usd=0.0,
             lineage_id=lineage_id,
         )
+        if reason:
+            result._halt_reason_override = reason
+        return result
+
+    def _record_refusal(self, symbol: str, direction: str, lineage_id: str, reason: str) -> None:
+        """Put this refusal in the decision ledger (Group 3 Ch 7).
+
+        Refusals are first-class entries there, not absences: a ledger of
+        actions taken cannot tell a system that was never asked from one that
+        refused, and on this platform the refusals ARE the evidence that
+        governance worked. Until now the only record of one was a WARNING line.
+
+        **Recording must never change what this path decides.** A ledger write
+        that raised would turn a refusal into a crash — strictly worse than the
+        defect it documents — so it is wrapped. Wrapped LOUDLY: `except
+        Exception: pass` on a governance path is how F248's alert failures went
+        unnoticed for as long as they did. The ledger is a record, not a
+        control; losing an entry must not stop the refusal, and must not be
+        silent either.
+        """
+        try:
+            from ai.ledger import decisions
+
+            decisions.refuse(
+                actor="risk.manager",
+                actor_kind="system",
+                authority_tier="execute",
+                context=f"size a {direction} position in {symbol}",
+                options=("size the position", "refuse"),
+                by=reason,
+                evidence={"symbol": symbol, "direction": direction, "lineage_id": lineage_id},
+            )
+        except Exception as exc:  # pragma: no cover - exercised by an injected failure
+            logger.error(
+                "RiskManager: the refusal %r was NOT recorded in the decision ledger: %s. "
+                "The trade is still refused; the governance record is missing.",
+                reason,
+                exc,
+            )
 
     def _compute_stop_take(
         self,
@@ -869,7 +948,12 @@ class RiskManager:
                 f"max_open_positions:{open_pos}",
             )
 
-        data_quality = self._get_data_quality(signal)
+        # Gate on the *measured* value, not the reported one: an unmeasured
+        # feed must refuse rather than score itself perfect (see
+        # _measured_data_quality). This is the condition the gate exists for.
+        data_quality = self._measured_data_quality(signal)
+        if data_quality is None:
+            return self._zero_sizing(symbol, direction, lineage_id, "data_quality:unmeasured")
         if data_quality < _MIN_DATA_QUALITY:
             return self._zero_sizing(
                 symbol,
@@ -1219,6 +1303,7 @@ class RiskManager:
         stop_loss_price: float | None = None,
         take_profit_price: float | None = None,
         volatility: float = 0.0,
+        data_quality: float | None = None,
         **kwargs,
     ) -> PositionSizingResult:
         """
@@ -1228,6 +1313,10 @@ class RiskManager:
         Accepts both the legacy (account_balance) and extended
         (account_equity, signal_strength, stop_loss_price, take_profit_price,
         volatility) signatures so that all callers are satisfied.
+
+        ``data_quality`` is the caller's own measurement of the market data
+        behind this decision, if it has one. When omitted, sizing uses the
+        orchestrator's tick confidence and refuses if that is unavailable.
 
         Returns a PositionSizingResult with an additional .approved property
         and .recommended_size alias for downstream consumers.
@@ -1259,6 +1348,12 @@ class RiskManager:
             tick_ts=kwargs.pop("tick_ts", None),
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
+            # Callers that have measured their data quality (backtests,
+            # simulations, replays) can assert it here. Callers that have not
+            # leave it None, and size_order() falls back to the orchestrator —
+            # refusing outright if that cannot measure it either, rather than
+            # assuming perfect data as the old hardcoded 1.0 did.
+            data_quality=data_quality,
         )
 
         # Size against the supplied equity via equity_override — NO mutation of
@@ -1507,16 +1602,77 @@ class RiskManager:
 
     # ── Orchestrator data access ──────────────────────────────────────────────
 
-    def _get_data_quality(self, signal) -> float:
-        """Authoritative source: orchestrator tick confidence."""
+    def _measured_data_quality(self, signal) -> float | None:
+        """Data quality as actually measured, or ``None`` when it was not.
+
+        The orchestrator's tick confidence is the only real measurement
+        available here. ``None`` means every one of these happened:
+
+        * no orchestrator was wired onto this RiskManager
+        * ``get_latest_tick()`` raised
+        * ``get_latest_tick()`` returned nothing — Redis down, gold feed down,
+          or the cached tick too stale to be returned at all
+
+        Callers that gate on this must treat ``None`` as a refusal. Rule 2: an
+        unmeasured value is absent, never best case; and for a safety gate,
+        absent has to behave like failure. This used to fall back to
+        ``getattr(signal, "data_quality", 1.0)``, and ``Signal`` has no such
+        field — so a dead feed scored a perfect 1.0 and sailed through the
+        ``< RISK_MIN_DATA_QUALITY`` check that exists for exactly that case.
+        """
         if self._orch is not None:
             try:
                 tick = self._orch.get_latest_tick()
-                if tick is not None:
-                    return tick.confidence
             except Exception as exc:
-                logger.debug("RiskManager: orchestrator tick fetch failed: %s", exc)
-        return getattr(signal, "data_quality", 1.0)
+                # Was debug. A feed this path cannot reach is the exact
+                # condition the gate downstream exists for — it should not take
+                # debug logging to find out it happened.
+                logger.warning("RiskManager: orchestrator tick fetch failed: %s", exc)
+            else:
+                if tick is not None:
+                    # A malformed confidence must not raise out of the sizing
+                    # path: fall through to "unmeasured" and let the gate
+                    # refuse, rather than crashing the decision loop.
+                    try:
+                        return float(tick.confidence)
+                    except (TypeError, ValueError):
+                        logger.warning(
+                            "RiskManager: tick confidence is not numeric: %r",
+                            getattr(tick, "confidence", None),
+                        )
+                else:
+                    # Debug, not warning: this is called once per gate check
+                    # AND once per assess_risk() report, so warning here would
+                    # log the same dead feed several times per decision.
+                    # _zero_sizing already logs the refusal itself at warning.
+                    logger.debug("RiskManager: orchestrator returned no tick for data quality")
+
+        # A caller that *supplies* a value has asserted it — backtests and
+        # simulations know their own data quality. A caller that supplies
+        # nothing has not, and `getattr(..., 1.0)` turned that silence into a
+        # perfect score.
+        supplied = getattr(signal, "data_quality", None)
+        if supplied is not None:
+            try:
+                return float(supplied)
+            except (TypeError, ValueError):
+                logger.warning("RiskManager: signal.data_quality is not numeric: %r", supplied)
+        return None
+
+    def _get_data_quality(self, signal) -> float:
+        """Data quality for *reporting*, with a best-case fallback.
+
+        ``assess_risk()`` records this into ``RiskAssessment.data_quality``,
+        which is typed ``float``, so this keeps its total signature. It is
+        deliberately NOT what ``size_order()`` gates on — see
+        :meth:`_measured_data_quality`. Narrowing the reported record's shape is
+        a separate, wider change than closing the sizing fail-open, and is
+        tracked rather than smuggled in alongside it.
+        """
+        measured = self._measured_data_quality(signal)
+        if measured is not None:
+            return measured
+        return float(getattr(signal, "data_quality", 1.0))
 
     def _get_orchestrator_features(self, signal) -> dict:
         """Authoritative source: orchestrator ML features."""
@@ -1763,12 +1919,17 @@ class RiskManager:
         account_equity: float,
         volatility: float,
         existing_positions: list[Any],
+        data_quality: float | None = None,
     ) -> PositionSizingResult:
         """
         Full position-size calculation with halt, R/R, and sizing checks.
 
         Returns a zero-quantity PositionSizingResult with a descriptive reason
         when any pre-trade gate rejects the signal.
+
+        ``data_quality`` is threaded through to ``calculate_position_size`` —
+        see its docstring. Omitted means "not measured", and sizing then
+        depends on the orchestrator rather than assuming perfect data.
         """
         if self._halt or self._trading_halted:
             return self._make_zero_result(
@@ -1801,6 +1962,7 @@ class RiskManager:
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
             volatility=volatility,
+            data_quality=data_quality,
         )
 
     # ── VaR ───────────────────────────────────────────────────────────────────
@@ -2403,6 +2565,57 @@ class RiskManager:
             if self._dd_tracker is not None:
                 self._dd_tracker.update(equity=self._state.account_equity)
 
+    def _resolve_kill_switch(self):
+        """The global kill switch object, or None when there is none.
+
+        Looks at the app first because `_halt_trading` fires that one, so the
+        two directions agree on which switch they mean; falls back to the module
+        singleton for a process that never built the FastAPI app.
+        """
+        try:
+            import app as _app  # late import to avoid a circular dependency
+
+            switch = getattr(_app, "kill_switch", None)
+            if switch is not None:
+                return switch
+        except Exception as exc:
+            # Expected in a bare process (engine, CLI, tests) where the FastAPI
+            # app was never built. Not a failure: the module singleton below is
+            # the answer. The genuine failure — neither source resolving — logs
+            # at ERROR, and _kill_switch_refusal treats it as engaged.
+            logger.debug("RiskManager: app kill switch unavailable (%s); using the module singleton", exc)
+        try:
+            from kill_switch import kill_switch as switch
+
+            return switch
+        except Exception as exc:
+            logger.error("RiskManager: kill switch unresolvable (%s)", exc)
+            return None
+
+    def _kill_switch_refusal(self) -> str | None:
+        """A reason to refuse, or None when the switch is clear.
+
+        A **read at decision time**, deliberately, rather than a callback that
+        halts the manager when the switch fires. `KillSwitch.register_callback`
+        already exists for that and has zero production registrants — a
+        subscription nobody made is the failure mode this repository keeps
+        producing. A read cannot be forgotten.
+
+        Unreadable counts as engaged. "I cannot tell whether trading is halted"
+        must never resolve to "trade".
+        """
+        switch = self._resolve_kill_switch()
+        if switch is None:
+            return "kill_switch:unresolvable"
+        try:
+            if switch.is_active():
+                reason = getattr(switch, "reason", "") or "active"
+                return f"kill_switch:{reason}"
+        except Exception as exc:
+            logger.error("RiskManager: could not read the kill switch (%s); refusing the trade", exc)
+            return f"kill_switch:unreadable:{exc}"
+        return None
+
     def validate_trade(
         self,
         symbol: str,
@@ -2421,6 +2634,16 @@ class RiskManager:
         size limit, and daily loss limit.
         """
         qty = size if size is not None else quantity
+
+        # The GLOBAL switch first. _halt below is this manager's own halt, and
+        # the two are not the same thing: _halt_trading fires the global switch,
+        # but a switch engaged by an operator, by the Redis latch, by the K8s
+        # configmap or by a broker's cancel-on-disconnect never set _halt. That
+        # direction had no wiring at all, so validate_trade answered "approved"
+        # with the kill switch active — measured, not inferred.
+        kill_switch_reason = self._kill_switch_refusal()
+        if kill_switch_reason:
+            return False, kill_switch_reason
 
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"

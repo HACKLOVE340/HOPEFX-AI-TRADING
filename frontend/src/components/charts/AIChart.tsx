@@ -28,6 +28,8 @@ import { tradingApi } from '../../hooks/useApi';
 import { ohlcvLimitFor } from '../../features/chart-bot/services/chart-api';
 import { cn, fmtPrice, extractApiError } from '../../lib/utils';
 import type { PriceTick } from '../../types';
+import { toUTCSeconds as toUTC } from '../../lib/chartTime';
+import { assessBars } from '../../lib/barQuality';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,10 +66,6 @@ interface AIChartProps {
 
 function apiSym(s: string) { return s.replace('/', '_'); }
 
-function toUTC(ts: number | string): UTCTimestamp {
-  if (typeof ts === 'string') return Math.floor(new Date(ts).getTime() / 1000) as UTCTimestamp;
-  return Math.floor(ts > 1_000_000_000_000 ? ts / 1000 : ts) as UTCTimestamp;
-}
 
 function regimeColor(r?: string): string {
   if (!r) return '#64748b';
@@ -161,6 +159,19 @@ export function AIChart({
   const [loading,        setLoading]        = useState(true);
   const [analyzing,      setAnalyzing]      = useState(false);
   const [chartError,     setChartError]     = useState<string | null>(null);
+  /*
+   * What the bars that DID arrive are worth. `chartError` covers "nothing
+   * came" — the endpoint's 503, which already names the symbol, the timeframe
+   * and the feed to configure. This covers "these are not candles": measured
+   * on the daily series this chart can serve with no live feed, 62 of 500 bars
+   * have no body or no wicks, and it drew them as though the market had been
+   * still. See `lib/barQuality.ts`.
+   *
+   * State rather than a memo here, unlike the chart-bot charts: this component
+   * fetches into a ref inside an effect rather than holding the bars in React,
+   * so there is nothing to derive from.
+   */
+  const [barNotice, setBarNotice] = useState<string | null>(null);
   const [aiError,        setAiError]        = useState<string | null>(null);
   const [candles,        setCandles]        = useState<OHLCVCandle[]>([]);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
@@ -229,7 +240,7 @@ export function AIChart({
 
   const loadOhlcv = useCallback((initial = false) => {
     if (!candleRef.current || !hydrated || !isAuth) return;
-    if (initial) { setLoading(true); setChartError(null); setAiResult(null); }
+    if (initial) { setLoading(true); setChartError(null); setAiResult(null); setBarNotice(null); }
 
     // Load a meaningful history window per timeframe (e.g. ~1500 bars on 1h,
     // 8000 on daily) instead of a fixed 300 bars, which only covered ~12 days
@@ -238,7 +249,7 @@ export function AIChart({
       .then((r) => {
         const raw  = r.data as OHLCVCandle[] | { data?: OHLCVCandle[] };
         const data = Array.isArray(raw) ? raw : (raw.data ?? []);
-        if (!data.length) { if (initial) setChartError('No OHLCV data'); return; }
+        if (!data.length) { if (initial) setChartError('No OHLCV data'); setBarNotice(null); return; }
 
         // Drop bars whose timestamp will not convert. toUTC returns NaN for an
         // unparseable value, and NaN times are what surface as
@@ -256,6 +267,11 @@ export function AIChart({
         // still closes over the previous `candles`.
         const newest = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
         lastBarTimeRef.current = newest ? toUTC(newest.timestamp) : null;
+
+        setBarNotice(assessBars(sorted.map((c) => ({
+          time: toUTC(c.timestamp),
+          open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume,
+        }))).notice);
 
         candleRef.current!.setData(sorted.map((c) => ({
           time: toUTC(c.timestamp),
@@ -278,9 +294,10 @@ export function AIChart({
       .catch((err) => {
         if (!initial) return; // silent on background refresh
         setChartError(extractApiError(err, 'Failed to load chart'));
+        setBarNotice(null);
       })
       .finally(() => { if (initial) setLoading(false); });
-  }, [symbol, timeframe, hydrated, isAuth]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [symbol, timeframe, hydrated, isAuth]);
 
   useEffect(() => {
     loadOhlcv(true);
@@ -404,20 +421,20 @@ export function AIChart({
   }, [candles]);
 
   return (
-    <div className={cn('flex flex-col bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden', className)}>
+    <div className={cn('flex flex-col bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden', className)}>
 
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[#1e2d3d] flex-wrap">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border)] flex-wrap">
 
         {showBranding && (
           <>
-            <span className="text-[11px] font-bold text-[#00d4ff] tracking-widest">HOPEFX</span>
-            <div className="w-px h-3 bg-[#1e2d3d]" />
+            <span className="text-[11px] font-bold text-[var(--accent)] tracking-widest">HOPEFX</span>
+            <div className="w-px h-3 bg-[var(--border)]" />
           </>
         )}
 
         <span className="text-[12px] font-bold text-slate-200">{symbol}</span>
-        <span className="text-[10px] text-slate-600 font-mono bg-[#1e2d3d] px-1.5 py-0.5 rounded">
+        <span className="text-[10px] text-slate-600 font-mono bg-[var(--border)] px-1.5 py-0.5 rounded">
           {timeframe}
         </span>
 
@@ -425,10 +442,10 @@ export function AIChart({
         {stats && (
           <div className="flex items-center gap-3 text-[10px] tabular-nums">
             <span className="text-slate-600">O <span className="text-slate-400">{fmtPrice(stats.last.open)}</span></span>
-            <span className="text-slate-600">H <span className="text-[#00e676]">{fmtPrice(stats.last.high)}</span></span>
-            <span className="text-slate-600">L <span className="text-[#ff1744]">{fmtPrice(stats.last.low)}</span></span>
+            <span className="text-slate-600">H <span className="text-[var(--bull)]">{fmtPrice(stats.last.high)}</span></span>
+            <span className="text-slate-600">L <span className="text-[var(--bear)]">{fmtPrice(stats.last.low)}</span></span>
             <span className="text-slate-600">C <span className="text-slate-200 font-semibold">{fmtPrice(stats.last.close)}</span></span>
-            <span className={cn('font-semibold', stats.chg >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+            <span className={cn('font-semibold', stats.chg >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>
               {stats.chg >= 0 ? '+' : ''}{stats.chg.toFixed(2)}%
             </span>
           </div>
@@ -448,8 +465,8 @@ export function AIChart({
             'flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border transition-colors',
             'disabled:opacity-40 disabled:cursor-not-allowed',
             analyzing
-              ? 'bg-[#1e3a5f]/60 border-[#3b82f6]/40 text-[#60a5fa] animate-pulse'
-              : 'bg-[#1e3a5f]/40 border-[#3b82f6]/30 text-[#60a5fa] hover:bg-[#1e3a5f]/70',
+              ? 'bg-[#1e3a5f]/60 border-[#3b82f6]/40 text-[var(--link)] animate-pulse'
+              : 'bg-[#1e3a5f]/40 border-[#3b82f6]/30 text-[var(--link)] hover:bg-[#1e3a5f]/70',
           )}
         >
           {analyzing ? '⚡ …' : '⚡ AI'}
@@ -458,7 +475,7 @@ export function AIChart({
 
       {/* ── AI error ───────────────────────────────────────────────── */}
       {aiError && (
-        <div className="px-3 py-1.5 text-[10px] text-[#ff1744] bg-[#ff1744]/5 border-b border-[#ff1744]/10">
+        <div className="px-3 py-1.5 text-[10px] text-[var(--bear)] bg-[var(--bear)]/5 border-b border-[var(--bear)]/10">
           {aiError}
         </div>
       )}
@@ -474,26 +491,33 @@ export function AIChart({
         )}
         {chartError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 z-20 bg-[#060d18]">
-            <span className="text-[#ff1744] text-[11px]">⚠ {chartError}</span>
+            <span className="text-[var(--bear)] text-[11px]">⚠ {chartError}</span>
             <span className="text-slate-600 text-[10px]">Connect a data feed or load historical data</span>
           </div>
         )}
         {/* Container always rendered so the chart canvas has a real size on init */}
         <div ref={containerRef} style={{ width: '100%', height }} />
       </div>
+      {/* Beside the chart, not over it: these bars are still worth looking at,
+          and an overlay would hide the thing it describes. */}
+      {barNotice && !chartError && (
+        <div role="status" className="px-2 pb-1 text-[10px] leading-snug text-[var(--warn)]">
+          {barNotice}
+        </div>
+      )}
 
       {/* ── AI analysis text summary ────────────────────────────────── */}
       {aiResult?.reasoning && (
-        <div className="px-3 py-2 border-t border-[#1e2d3d] flex flex-col gap-1">
+        <div className="px-3 py-2 border-t border-[var(--border)] flex flex-col gap-1">
           <div className="flex items-center gap-3 text-[10px] tabular-nums flex-wrap">
             {aiResult.stop_loss && (
               <span className="text-slate-600">
-                SL <span className="text-[#ff1744] font-semibold">{fmtPrice(aiResult.stop_loss)}</span>
+                SL <span className="text-[var(--bear)] font-semibold">{fmtPrice(aiResult.stop_loss)}</span>
               </span>
             )}
             {aiResult.take_profit && (
               <span className="text-slate-600">
-                TP <span className="text-[#00e676] font-semibold">{fmtPrice(aiResult.take_profit)}</span>
+                TP <span className="text-[var(--bull)] font-semibold">{fmtPrice(aiResult.take_profit)}</span>
               </span>
             )}
             {aiResult.entry_zone && (
@@ -515,7 +539,7 @@ export function AIChart({
                 return (
                   <span className="text-slate-600">
                     R:R{' '}
-                    <span className={cn('font-semibold', rr >= 2 ? 'text-[#00e676]' : 'text-[#ffb800]')}>
+                    <span className={cn('font-semibold', rr >= 2 ? 'text-[var(--bull)]' : 'text-[#ffb800]')}>
                       1:{rr.toFixed(1)}
                     </span>
                   </span>

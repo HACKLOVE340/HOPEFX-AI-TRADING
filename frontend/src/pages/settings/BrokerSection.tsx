@@ -5,6 +5,7 @@ import type { BrokerSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Landmark } from 'lucide-react';
 
 const DEFAULT: BrokerSettings = {
   type: 'paper', api_key: '', account_id: '', practice: true, connected: false,
@@ -123,15 +124,15 @@ const BrokerSection: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading broker status…
     </div>
   );
 
   if (loadFailed) return (
     <div>
-      <SectionHeader icon="🏦" title="Broker Connection" description="Connect your live or paper trading account." />
+      <SectionHeader icon={<Landmark size={18} aria-hidden />} title="Broker Connection" description="Connect your live or paper trading account." />
       <ErrorBanner message="Couldn't load your saved broker configuration. Nothing has been changed — saving now would post default values over it." />
       <div style={{ marginTop: 14 }}>
         <Button variant="secondary" onClick={load}>Retry</Button>
@@ -141,7 +142,7 @@ const BrokerSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🏦" title="Broker Connection" description="Connect your live or paper trading account." />
+      <SectionHeader icon={<Landmark size={18} aria-hidden />} title="Broker Connection" description="Connect your live or paper trading account." />
 
       {statusErr && (
         <ErrorBanner
@@ -155,11 +156,11 @@ const BrokerSection: React.FC = () => {
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
                 Current connection
               </div>
               {brokerStatus.connected && brokerStatus.balance !== undefined && (
-                <div style={{ fontSize: 13, color: '#94a3b8' }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
                   Balance: <span style={{ color: '#22c55e', fontWeight: 600 }}>
                     {brokerStatus.currency ?? 'USD'} {brokerStatus.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
@@ -195,7 +196,7 @@ const BrokerSection: React.FC = () => {
                 autoComplete="off"
               />
               {keyOnFile && !form.api_key && (
-                <div style={{ fontSize: 11, color: '#4ade80', marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: 'var(--gain)', marginTop: 4 }}>
                   ✓ API key saved — leave blank to keep it, or enter a new key to replace.
                 </div>
               )}
@@ -234,10 +235,10 @@ const BrokerSection: React.FC = () => {
                 Test connection
               </Button>
               {testStatus === 'ok' && (
-                <span style={{ fontSize: 13, color: '#22c55e' }}>✅ {testMsg}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}>✅ {testMsg}</span>
               )}
               {testStatus === 'fail' && (
-                <span style={{ fontSize: 13, color: '#f87171' }}>❌ {testMsg}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>❌ {testMsg}</span>
               )}
             </div>
           </>
@@ -246,7 +247,7 @@ const BrokerSection: React.FC = () => {
         {form.type === 'paper' && (
           <div style={{
             marginTop: 12, padding: '12px 16px', background: '#0c1a2e',
-            border: '1px solid #1e3a5f', borderRadius: 8, fontSize: 13, color: '#60a5fa',
+            border: '1px solid #1e3a5f', borderRadius: 8, fontSize: 'var(--fs-body)', color: 'var(--link)',
           }}>
             Paper trading uses a simulated account with no real funds. All strategies and risk settings apply normally.
           </div>

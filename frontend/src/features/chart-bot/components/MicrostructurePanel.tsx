@@ -4,11 +4,11 @@
  * trade pressure gauge, VWAP/TWAP, and market impact display.
  */
 
-import React, { useMemo, memo, useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef } from 'react';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { useMicrostructure } from '../hooks/useChartData';
 import { COLORS } from '../utils/design-tokens';
-import { formatPrice, formatSpread, clamp, normalise } from '../utils/formatters';
+import { formatPrice, formatSpread, clamp } from '../utils/formatters';
 import type { VolumeDeltaBar } from '../types';
 
 // ─── Spread Gauge ─────────────────────────────────────────────────────────────
@@ -81,7 +81,6 @@ OFIBar.displayName = 'OFIBar';
 
 const TradePressureGauge = memo(({ pressure }: { pressure: number }) => {
   // pressure: 0–100
-  const angle = (pressure / 100) * 180 - 90; // -90 to +90 degrees
   const color = pressure > 70 ? COLORS.profit.base
               : pressure < 30 ? COLORS.loss.base
               : COLORS.neon.gold;

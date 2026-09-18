@@ -203,18 +203,19 @@ class CMEComexConnector(BrokerConnector):
         # config dict positionally, which would otherwise bind to ``fix_host``.
         # Detect that and map the dict onto the keyword params (env defaults for
         # anything absent) so CMEComexConnector(config_dict) works.
+        config_options: dict[str, Any] = {}
         if isinstance(fix_host, dict):
-            _cfg = fix_host
-            fix_host = _cfg.get("fix_host", _FIX_HOST)
-            fix_port = int(_cfg.get("fix_port", _FIX_PORT))
-            fix_sender_id = _cfg.get("fix_sender_id", _FIX_SENDER_ID)
-            fix_target_id = _cfg.get("fix_target_id", _FIX_TARGET_ID)
-            fix_username = _cfg.get("fix_username", _FIX_USERNAME)
-            fix_password = _cfg.get("fix_password", _FIX_PASSWORD)
-            fix_config_file = _cfg.get("fix_config_file", _FIX_CONFIG_FILE)
-            cme_account = _cfg.get("cme_account", _CME_ACCOUNT)
-            ibkr_fallback = bool(_cfg.get("ibkr_fallback", _IBKR_FALLBACK))
-            paper_fallback = bool(_cfg.get("paper_fallback", _PAPER_FALLBACK))
+            config_options = fix_host
+            fix_host = config_options.get("fix_host", _FIX_HOST)
+            fix_port = int(config_options.get("fix_port", _FIX_PORT))
+            fix_sender_id = config_options.get("fix_sender_id", _FIX_SENDER_ID)
+            fix_target_id = config_options.get("fix_target_id", _FIX_TARGET_ID)
+            fix_username = config_options.get("fix_username", _FIX_USERNAME)
+            fix_password = config_options.get("fix_password", _FIX_PASSWORD)
+            fix_config_file = config_options.get("fix_config_file", _FIX_CONFIG_FILE)
+            cme_account = config_options.get("cme_account", _CME_ACCOUNT)
+        ibkr_fallback = bool(config_options.get("ibkr_fallback", ibkr_fallback))
+        paper_fallback = bool(config_options.get("paper_fallback", paper_fallback))
 
         # Build a config dict for BrokerConnector.__init__ so self.config,
         # self.connected, self.name, and self.rate_limiter are all initialised.

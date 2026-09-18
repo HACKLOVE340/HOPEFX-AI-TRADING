@@ -1,5 +1,15 @@
 /**
  * AppBackground.tsx
+ *
+ * Theme-aware since 2026-09-15. This is a `position: fixed; inset: 0; z-index: 0`
+ * layer mounted on every authenticated route, and it painted
+ * `linear-gradient(180deg, #0a1424, #0a0f1c, #06090f)` as a literal — so
+ * choosing Light moved `body` and the chrome while the ground stayed navy. A
+ * white sidebar over a dark page is what that looked like on a phone.
+ *
+ * Every colour here now comes from a token that BOTH themes define (see the
+ * `--ground-*`, `--orb-*` and `--spark-*` block in index.css). The mask uses
+ * `black`, which is an alpha stencil rather than a colour anyone sees.
  * Premium animated backdrop used across the whole app.
  *
  * Two variants:
@@ -44,13 +54,13 @@ const AppBackground: React.FC<AppBackgroundProps> = ({ variant = 'auth' }) => {
           <svg viewBox="0 0 1440 360" preserveAspectRatio="none" width="100%" height="100%" style={{ display: 'block' }}>
             <defs>
               <linearGradient id="hopefxLineGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#22d3ee" />
-                <stop offset="55%" stopColor="#3b82f6" />
-                <stop offset="100%" stopColor="#f59e0b" />
+                <stop offset="0%" stopColor="var(--spark-a)" />
+                <stop offset="55%" stopColor="var(--link)" />
+                <stop offset="100%" stopColor="var(--spark-b)" />
               </linearGradient>
               <linearGradient id="hopefxAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgba(59,130,246,0.22)" />
-                <stop offset="100%" stopColor="rgba(59,130,246,0)" />
+                <stop offset="0%" stopColor="var(--ground-glow-a)" />
+                <stop offset="100%" stopColor="transparent" />
               </linearGradient>
               <filter id="hopefxGlow" x="-20%" y="-20%" width="140%" height="140%">
                 <feGaussianBlur stdDeviation="6" result="b" />
@@ -63,7 +73,7 @@ const AppBackground: React.FC<AppBackgroundProps> = ({ variant = 'auth' }) => {
 
             <g opacity="0.5">
               {CANDLES.map((c, i) => (
-                <g key={i} stroke={c.up ? '#22c55e' : '#ef4444'} fill={c.up ? '#22c55e' : '#ef4444'}>
+                <g key={i} stroke={c.up ? 'var(--spark-up)' : 'var(--spark-down)'} fill={c.up ? 'var(--spark-up)' : 'var(--spark-down)'}>
                   <line x1={c.x} x2={c.x} y1={c.wickTop} y2={c.wickBot} strokeWidth="1.5" opacity="0.35" />
                   <rect x={c.x - 5} y={c.bodyTop} width="10" height={c.bodyH} opacity="0.18" rx="1" />
                 </g>
@@ -135,30 +145,31 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 0,
     pointerEvents: 'none',
     background:
-      'radial-gradient(ellipse at 50% -8%, rgba(37,99,235,0.22), transparent 55%),' +
-      'radial-gradient(ellipse at 12% 18%, rgba(99,102,241,0.16), transparent 45%),' +
-      'radial-gradient(ellipse at 88% 100%, rgba(34,211,238,0.12), transparent 50%),' +
-      'linear-gradient(180deg, #0a1424 0%, #0a0f1c 45%, #06090f 100%)',
+      'radial-gradient(ellipse at 50% -8%, var(--ground-glow-a), transparent 55%),' +
+      'radial-gradient(ellipse at 12% 18%, var(--ground-glow-b), transparent 45%),' +
+      'radial-gradient(ellipse at 88% 100%, var(--ground-glow-c), transparent 50%),' +
+      'radial-gradient(ellipse at 30% 70%, var(--ground-glow-d), transparent 45%),' +
+      'linear-gradient(180deg, var(--ground-base) 0%, var(--ground-mid) 45%, var(--ground-deep) 100%)',
   },
   orb: orbBase,
   orbBlue: {
     width: 600, height: 600, top: -160, left: -110,
-    background: 'radial-gradient(circle, rgba(59,130,246,0.42) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, var(--orb-blue) 0%, transparent 70%)',
     animation: 'hopefxFloatA 22s ease-in-out infinite',
   },
   orbIndigo: {
     width: 520, height: 520, top: '8%', right: '6%',
-    background: 'radial-gradient(circle, rgba(99,102,241,0.30) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, var(--orb-indigo) 0%, transparent 70%)',
     animation: 'hopefxFloatD 26s ease-in-out infinite',
   },
   orbCyan: {
     width: 480, height: 480, bottom: -140, right: -80,
-    background: 'radial-gradient(circle, rgba(34,211,238,0.26) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, var(--orb-cyan) 0%, transparent 70%)',
     animation: 'hopefxFloatB 24s ease-in-out infinite',
   },
   orbGold: {
     width: 400, height: 400, top: '46%', left: '50%',
-    background: 'radial-gradient(circle, rgba(245,158,11,0.14) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, var(--orb-gold) 0%, transparent 70%)',
     animation: 'hopefxFloatC 30s ease-in-out infinite',
   },
   grid: {
@@ -167,11 +178,11 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 0,
     pointerEvents: 'none',
     backgroundImage:
-      'linear-gradient(rgba(59,130,246,0.05) 1px, transparent 1px),' +
-      'linear-gradient(90deg, rgba(59,130,246,0.05) 1px, transparent 1px)',
+      'linear-gradient(var(--ground-grid) 1px, transparent 1px),' +
+      'linear-gradient(90deg, var(--ground-grid) 1px, transparent 1px)',
     backgroundSize: '54px 54px',
-    WebkitMaskImage: 'radial-gradient(ellipse at 50% 42%, #000 28%, transparent 78%)',
-    maskImage: 'radial-gradient(ellipse at 50% 42%, #000 28%, transparent 78%)',
+    WebkitMaskImage: 'radial-gradient(ellipse at 50% 42%, black 28%, transparent 78%)',
+    maskImage: 'radial-gradient(ellipse at 50% 42%, black 28%, transparent 78%)',
     animation: 'hopefxGridPan 30s linear infinite',
   },
   chartWrap: {
@@ -191,10 +202,10 @@ const styles: Record<string, React.CSSProperties> = {
     inset: 0,
     zIndex: 0,
     pointerEvents: 'none',
-    background: 'radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(3,6,12,0.55) 100%)',
+    background: 'radial-gradient(ellipse at 50% 45%, transparent 40%, var(--ground-vignette) 100%)',
   },
   vignetteApp: {
-    background: 'radial-gradient(ellipse at 50% 40%, transparent 32%, rgba(3,6,12,0.72) 100%)',
+    background: 'radial-gradient(ellipse at 50% 40%, transparent 32%, var(--ground-vignette-strong) 100%)',
   },
 };
 

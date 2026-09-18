@@ -154,8 +154,7 @@ Let the system run continuously for 30 days. Track:
 | Daily loss limit triggers | Logged correctly |
 | Drawdown protection | Fires at 80% / 95% / 99% thresholds |
 
-After 30 days of clean paper trading with zero execution failures,
-you can enable live trading (Task 22).
+After 30 days of clean paper trading, live trading is still not automatic. Fresh model-promotion evidence, broker reconciliation, restart recovery, security checks, conservative risk limits, and explicit operator approval must also pass. See [the live-trading gate](live_trading_gate.md).
 
 ---
 

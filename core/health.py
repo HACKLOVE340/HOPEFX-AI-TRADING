@@ -107,6 +107,29 @@ def _probe_components(app_state: Any, kill_switch: Any) -> dict:
     else:
         components["broker"] = "unavailable"
 
+    # The engine. Absent from this probe until 2026-09-14, so `/health` answered
+    # identically whether or not a trading engine was running in THIS process —
+    # which is what "process health alone does not establish engine readiness"
+    # means in practice. Production runs `python app.py`, the component registry
+    # registers `engine`, and `init_trading_engine` auto-starts it whenever
+    # TRADING_MODE is not live (ENGINE_AUTOSTART defaults to true there), so an
+    # API deployment carries a paper-trading engine unless it says otherwise.
+    #
+    # Deliberately NOT folded into the `critical` list that decides the overall
+    # verdict: an API-only deployment (ENGINE_AUTOSTART=false) has no engine by
+    # design, and marking it degraded forever is how an operator learns to
+    # ignore a field.
+    _engine = getattr(app_state, "engine", None) or getattr(app_state, "hopefx_engine", None)
+    if _engine is None:
+        components["engine"] = "unavailable"
+    else:
+        try:
+            running = bool(getattr(_engine, "_running", False))
+            components["engine"] = "healthy" if running else "stopped"
+        except Exception as _ee:
+            logger.warning("Engine health probe failed: %s", _ee)
+            components["engine"] = "degraded"
+
     components["kill_switch"] = "active" if kill_switch.is_active() else "healthy"
 
     return components

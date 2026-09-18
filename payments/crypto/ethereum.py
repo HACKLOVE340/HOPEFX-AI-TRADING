@@ -31,10 +31,25 @@ class EthereumClient:
         self.transactions: dict[str, dict] = {}
 
     def generate_deposit_address(self, user_id: str) -> dict:
-        """Generate Ethereum deposit address"""
-        try:
+        """Generate an Ethereum deposit address by real BIP44 derivation.
+
+        This used to be::
+
             address_hash = hashlib.sha256(f"ETH{user_id}".encode()).hexdigest()
             address = f"0x{address_hash[:40]}"
+
+        A SHA-256 digest with ``0x`` in front is a *syntactically valid*
+        Ethereum address -- 40 hex characters, accepted by every wallet and
+        every address validator -- for which no private key exists anywhere.
+        The endpoint returned it with HTTP 200 and the UI rendered it beside a
+        QR code. Any ETH sent to it is unrecoverable, and nothing about the
+        value looks wrong (F267). Deriving from the platform's own HD wallet is
+        the difference between an address and a string of the right shape.
+        """
+        try:
+            from payments.crypto.address_generator import address_generator
+
+            address = address_generator.generate_address(user_id, "ETH")
 
             self.addresses[address] = {
                 "user_id": user_id,

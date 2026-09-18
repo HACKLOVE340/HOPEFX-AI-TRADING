@@ -997,24 +997,83 @@ class HybridEnsemblePredictor:
             _disagree_std = 0.0
             _disagree_penalty = 0.0
 
+        return self._blend_probabilities(
+            p_xgb,
+            p_lstm,
+            p_rl,
+            weights=(w_xgb, w_lstm, w_rl),
+            penalty=_disagree_penalty,
+        )
+
+    #: Logged once per process. The condition is structural — a scaler does not
+    #: appear between predictions — and this sits on a per-tick path.
+    _unscaled_meta_warned: bool = False
+
+    def _blend_probabilities(
+        self,
+        p_xgb: float,
+        p_lstm: float,
+        p_rl: float,
+        *,
+        weights: tuple[float, float, float] = (1 / 3, 1 / 3, 1 / 3),
+        penalty: float = 0.0,
+    ) -> float:
+        """Combine the component probabilities, via the meta-blender when usable.
+
+        Extracted from :meth:`predict_proba` so the usability decision below can
+        be tested without standing up three models.
+
+        **The scaler is not optional (MASTER_OUTSTANDING A8(b)).** This read:
+
+            if self._meta_scaler is not None:
+                meta_input = self._meta_scaler.transform(meta_input)
+            blended = float(self._meta.predict(meta_input)[0])
+
+        so a missing scaler did not stop the prediction — it removed the
+        transform and fed raw probabilities into a Ridge fitted on standardised
+        ones. Its coefficients are in units of standard deviations from the
+        training mean; handed raw [0,1] values they produce a number that is not
+        a probability of anything, which is then clipped into [0,1] and returned
+        as the ensemble's answer. Success reported for work that did not happen,
+        on the money path, behind a guard that reads like an ordinary None check.
+
+        The scaler goes missing in three unexotic ways: `_verify_checksum`
+        refuses an artifact whose recorded sha256 does not match and is
+        fail-closed in production (two artifacts are in that state today);
+        `_load_meta` catches every exception at WARNING, so a partial pickle
+        leaves `_meta` set and `_meta_scaler` None; and a `hybrid_meta.pkl`
+        written before the scaler existed has no `"scaler"` key at all.
+
+        Falling through is safe rather than drastic: the weighted average below
+        is the path this ensemble used before the blender existed.
+        """
+        w_xgb, w_lstm, w_rl = weights
+
         if self._meta_blend and self._meta_trained and self._meta is not None:
-            # Meta-blender: Ridge on scaled [p_xgb, p_lstm, p_rl]
-            try:
-                meta_input = np.array([[p_xgb, p_lstm, p_rl]])
-                if self._meta_scaler is not None:
-                    meta_input = self._meta_scaler.transform(meta_input)
-                blended = float(self._meta.predict(meta_input)[0])
-                blended = float(np.clip(blended, 0.0, 1.0))
-                # Apply disagreement penalty: pull towards 0.5
-                blended = blended + (0.5 - blended) * _disagree_penalty
-                return float(np.clip(blended, 0.0, 1.0))
-            except Exception:  # nosec B110 - meta-model failure falls through to weighted average
-                ...  # nosec B110
+            if self._meta_scaler is None:
+                if not HybridEnsemblePredictor._unscaled_meta_warned:
+                    HybridEnsemblePredictor._unscaled_meta_warned = True
+                    logger.error(
+                        "HybridEnsemble: meta-blender loaded WITHOUT its scaler — falling back "
+                        "to the weighted average. Predicting through the Ridge would feed raw "
+                        "probabilities to a model fitted on standardised ones. Check "
+                        "saved_models/hybrid_meta.pkl and its checksum (MASTER_OUTSTANDING A8)."
+                    )
+            else:
+                # Meta-blender: Ridge on scaled [p_xgb, p_lstm, p_rl]
+                try:
+                    meta_input = self._meta_scaler.transform(np.array([[p_xgb, p_lstm, p_rl]]))
+                    blended = float(np.clip(float(self._meta.predict(meta_input)[0]), 0.0, 1.0))
+                    # Apply disagreement penalty: pull towards 0.5
+                    blended = blended + (0.5 - blended) * penalty
+                    return float(np.clip(blended, 0.0, 1.0))
+                except Exception:  # nosec B110 - meta-model failure falls through to weighted average
+                    ...  # nosec B110
 
         # Weighted average fallback
         blended = w_xgb * p_xgb + w_lstm * p_lstm + w_rl * p_rl
         # Apply disagreement penalty: pull towards 0.5 when components disagree
-        blended = blended + (0.5 - blended) * _disagree_penalty
+        blended = blended + (0.5 - blended) * penalty
         return float(np.clip(blended, 0.0, 1.0))
 
     def fit_meta(

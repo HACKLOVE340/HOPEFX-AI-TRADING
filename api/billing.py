@@ -1709,13 +1709,33 @@ async def create_crypto_order(
         raise HTTPException(status_code=400, detail="Unsupported currency") from None
 
     order_id = str(_uuid.uuid4())
-    # Delegate to payments router for address generation
+    # Delegate to payments router for address generation.
+    #
+    # This used to end with::
+    #
+    #     except Exception:
+    #         address = f"hopefx_{currency.lower()}_{user.sub[:8]}"
+    #
+    # so a failure to derive an address produced the string
+    # "hopefx_btc_a1b2c3d4", returned with HTTP 200 and rendered in the UI as a
+    # deposit address beside a QR code. It was not a hypothetical branch:
+    # BitcoinClient was calling a hdwallet API that has not existed since v3,
+    # which requirements.txt has pinned throughout, so *every* BTC deposit
+    # request took it (F267).
+    #
+    # There is no fallback value for a deposit address. Anything returned here
+    # is somewhere a user sends money that cannot be retrieved, so the only
+    # honest failure is to not return one.
     try:
         from api.payments import _generate_address
 
         address = _generate_address(currency, user.sub, "mainnet")
-    except Exception:
-        address = f"hopefx_{currency.lower()}_{user.sub[:8]}"
+    except Exception as exc:
+        logger.error("Deposit address generation failed for %s/%s: %s", currency, user.sub, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"{currency} deposit addresses are temporarily unavailable. No funds should be sent.",
+        ) from exc
 
     order = {
         "order_id": order_id,

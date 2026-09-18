@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import re
 import sys
 from pathlib import Path
@@ -238,12 +239,31 @@ def check_doc(md_path: Path) -> list[str]:
 def main() -> int:
     all_violations: list[str] = []
 
+    missing = [p.name for p in DOCS_TO_SCAN if not p.exists()]
+    if missing:
+        # A SKIP IS NOT A PASS.  All three documents are committed to this
+        # repository and registered in docs/REGISTRY.toml, so one going absent
+        # means a rename, a move or a bad checkout — never an environmental
+        # quirk.  Skipping and exiting 0 made "the documented API matches the
+        # code" and "nobody checked" indistinguishable: renaming ARCHITECTURE.md
+        # silently turned this gate off with CI green, and with all three gone
+        # it still printed "checked 3 docs, no violations" — a count taken from
+        # the length of the constant tuple rather than from anything examined.
+        #
+        # Set DOC_ALLOW_SKIP=1 for a deliberate local run without them; never in
+        # CI, which is the one place a silent skip costs something.
+        if os.getenv("DOC_ALLOW_SKIP", "").strip().lower() in ("1", "true", "yes"):
+            print(f"[gate-f] SKIP  Missing doc(s): {', '.join(missing)} (DOC_ALLOW_SKIP is set)")
+            return 0
+        print(f"[gate-f] FAIL  Missing doc(s): {', '.join(missing)}")
+        print("These documents are committed to the repository, so their absence is a defect.")
+        print("Set DOC_ALLOW_SKIP=1 only for a local run that deliberately lacks them.")
+        return 1
+
+    checked = 0
     for doc_path in DOCS_TO_SCAN:
-        if not doc_path.exists():
-            print(f"[gate-f] SKIP  {doc_path.name} (file not found)")
-            continue
-        violations = check_doc(doc_path)
-        all_violations.extend(violations)
+        all_violations.extend(check_doc(doc_path))
+        checked += 1
 
     if all_violations:
         print("[gate-f] FAIL — documentation/code consistency violations:\n")
@@ -252,7 +272,9 @@ def main() -> int:
         print(f"\n  {len(all_violations)} violation(s). Update the documentation snippet to match the actual API.")
         return 1
 
-    print(f"[gate-f] PASS — checked {len(DOCS_TO_SCAN)} docs, no violations")
+    # `checked`, not len(DOCS_TO_SCAN): the number has to come from what was
+    # actually read, or it is a claim rather than a measurement.
+    print(f"[gate-f] PASS — checked {checked} docs, no violations")
     return 0
 
 

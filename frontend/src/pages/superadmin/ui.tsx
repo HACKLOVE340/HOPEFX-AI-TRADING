@@ -1,5 +1,6 @@
 // superadmin/ui.tsx — shared UI primitives for all superadmin sections
 import React from 'react';
+import { Inbox } from 'lucide-react';
 
 // ── KPI Tile ──────────────────────────────────────────────────────────────────
 
@@ -7,24 +8,49 @@ interface KpiTileProps {
   label: string;
   value: string | number;
   sub?: string;
-  icon?: string;
+  icon?: React.ReactNode;
   accent?: string;
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
   onClick?: () => void;
+  /** What activating the tile opens. Used for the accessible name and tooltip;
+   *  only meaningful alongside `onClick`. */
+  title?: string;
 }
 
 export const KpiTile: React.FC<KpiTileProps> = ({
-  label, value, sub, icon, accent = '#3b82f6', trend, trendValue, onClick,
+  label, value, sub, icon, accent = '#3b82f6', trend, trendValue, onClick, title,
 }) => (
+  // A <div onClick> is reachable by mouse only: no tab stop, no Enter/Space,
+  // no focus ring, and assistive tech is never told it does anything. When a
+  // tile is interactive it announces itself as a button and is operable from
+  // the keyboard; when it is not, it stays an inert div rather than becoming
+  // an empty tab stop. See audit F187.
   <div
-    onClick={onClick}
+    {...(onClick
+      ? {
+          role: 'button' as const,
+          tabIndex: 0,
+          onClick,
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
+          },
+        }
+      : {})}
+    className={onClick
+      ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]'
+      : undefined}
+    // The label alone ("Total Users") does not tell a screen-reader user what
+    // activating the tile does. Carry the value and the destination.
+    aria-label={onClick ? `${label}: ${value}${title ? ` — ${title}` : ''}` : undefined}
+    title={onClick ? title : undefined}
     style={{
-      background: '#0f172a',
+      background: 'var(--surface)',
       border: `1px solid #1e293b`,
       borderTop: `3px solid ${accent}`,
       borderRadius: 12,
       padding: '18px 20px',
+      minHeight: onClick ? 44 : undefined,
       cursor: onClick ? 'pointer' : 'default',
       transition: 'border-color 0.15s, transform 0.1s',
       position: 'relative',
@@ -34,24 +60,24 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     onMouseLeave={e => onClick && ((e.currentTarget as HTMLDivElement).style.borderColor = '#1e293b')}
   >
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
         {label}
       </div>
       {icon && <span style={{ fontSize: 18, opacity: 0.7 }}>{icon}</span>}
     </div>
-    <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc', marginTop: 8, letterSpacing: '-0.02em' }}>
+    <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)', marginTop: 8, letterSpacing: '-0.02em' }}>
       {value}
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
       {trend && trendValue && (
         <span style={{
           fontSize: 11, fontWeight: 600,
-          color: trend === 'up' ? '#4ade80' : trend === 'down' ? '#f87171' : '#94a3b8',
+          color: trend === 'up' ? 'var(--gain)' : trend === 'down' ? 'var(--loss)' : 'var(--text-dim)',
         }}>
           {trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—'} {trendValue}
         </span>
       )}
-      {sub && <span style={{ fontSize: 11, color: '#475569' }}>{sub}</span>}
+      {sub && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{sub}</span>}
     </div>
   </div>
 );
@@ -61,7 +87,10 @@ export const KpiTile: React.FC<KpiTileProps> = ({
 interface SectionCardProps {
   title: string;
   subtitle?: string;
-  icon?: string;
+  // ReactNode, not string: a section heading should be able to carry an SVG
+  // icon rather than an emoji glyph. Widening is backward compatible — every
+  // existing caller passes a string, which is already a ReactNode.
+  icon?: React.ReactNode;
   accent?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
@@ -72,8 +101,8 @@ export const SectionCard: React.FC<SectionCardProps> = ({
   title, subtitle, icon, accent = '#3b82f6', actions, children, noPad,
 }) => (
   <div style={{
-    background: '#0f172a',
-    border: '1px solid #1e293b',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: 14,
     overflow: 'hidden',
     marginBottom: 20,
@@ -81,7 +110,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '16px 20px',
-      borderBottom: '1px solid #1e293b',
+      borderBottom: '1px solid var(--border)',
       background: '#0a1628',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -96,8 +125,8 @@ export const SectionCard: React.FC<SectionCardProps> = ({
           </div>
         )}
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 12, color: '#475569', marginTop: 1 }}>{subtitle}</div>}
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 1 }}>{subtitle}</div>}
         </div>
       </div>
       {actions && <div style={{ display: 'flex', gap: 8 }}>{actions}</div>}
@@ -109,23 +138,23 @@ export const SectionCard: React.FC<SectionCardProps> = ({
 // ── Status Badge ──────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  active:    { bg: '#052e16', color: '#4ade80' },
-  running:   { bg: '#052e16', color: '#4ade80' },
-  healthy:   { bg: '#052e16', color: '#4ade80' },
-  ok:        { bg: '#052e16', color: '#4ade80' },
-  online:    { bg: '#052e16', color: '#4ade80' },
-  banned:    { bg: '#450a0a', color: '#f87171' },
-  stopped:   { bg: '#450a0a', color: '#f87171' },
-  critical:  { bg: '#450a0a', color: '#f87171' },
-  error:     { bg: '#450a0a', color: '#f87171' },
-  paused:    { bg: '#78350f', color: '#fbbf24' },
-  degraded:  { bg: '#78350f', color: '#fbbf24' },
-  warn:      { bg: '#78350f', color: '#fbbf24' },
-  training:  { bg: '#1e3a5f', color: '#60a5fa' },
+  active:    { bg: '#052e16', color: 'var(--gain)' },
+  running:   { bg: '#052e16', color: 'var(--gain)' },
+  healthy:   { bg: '#052e16', color: 'var(--gain)' },
+  ok:        { bg: '#052e16', color: 'var(--gain)' },
+  online:    { bg: '#052e16', color: 'var(--gain)' },
+  banned:    { bg: '#450a0a', color: 'var(--loss)' },
+  stopped:   { bg: '#450a0a', color: 'var(--loss)' },
+  critical:  { bg: '#450a0a', color: 'var(--loss)' },
+  error:     { bg: '#450a0a', color: 'var(--loss)' },
+  paused:    { bg: '#78350f', color: 'var(--warn)' },
+  degraded:  { bg: '#78350f', color: 'var(--warn)' },
+  warn:      { bg: '#78350f', color: 'var(--warn)' },
+  training:  { bg: '#1e3a5f', color: 'var(--link)' },
   staged:    { bg: '#2e1065', color: '#c084fc' },
-  pending:   { bg: '#78350f', color: '#fbbf24' },
-  inactive:  { bg: '#1e293b', color: '#64748b' },
-  retired:   { bg: '#1e293b', color: '#64748b' },
+  pending:   { bg: '#78350f', color: 'var(--warn)' },
+  inactive:  { bg: '#1e293b', color: 'var(--text-muted)' },
+  retired:   { bg: '#1e293b', color: 'var(--text-muted)' },
 };
 
 export const StatusBadge: React.FC<{ status: string; size?: 'sm' | 'md' }> = ({ status, size = 'md' }) => {
@@ -153,13 +182,13 @@ export const StatusBadge: React.FC<{ status: string; size?: 'sm' | 'md' }> = ({ 
 /** Fallback for an unrecognised key. Named so it is not itself an
     index access, which `noUncheckedIndexedAccess` types as possibly
     undefined (audit #38). Value is unchanged. */
-const SEV_COLORS_DEFAULT = { bg: '#1e293b', color: '#94a3b8' };
+const SEV_COLORS_DEFAULT = { bg: '#1e293b', color: 'var(--text-dim)' };
 
 const SEV_COLORS: Record<string, { bg: string; color: string }> = {
   low: SEV_COLORS_DEFAULT,
-  medium:   { bg: '#78350f', color: '#fbbf24' },
+  medium:   { bg: '#78350f', color: 'var(--warn)' },
   high:     { bg: '#7c2d12', color: '#fb923c' },
-  critical: { bg: '#450a0a', color: '#f87171' },
+  critical: { bg: '#450a0a', color: 'var(--loss)' },
 };
 
 export const SeverityBadge: React.FC<{ severity: string }> = ({ severity }) => {
@@ -186,18 +215,26 @@ interface ActionBtnProps {
   variant?: 'primary' | 'danger' | 'ghost' | 'warning' | 'success';
   disabled?: boolean;
   loading?: boolean;
-  icon?: string;
+  /**
+   * ReactNode, not string, for the same reason SectionCard's is: a button
+   * should be able to carry an SVG icon rather than an emoji glyph, which
+   * renders differently on every OS, cannot inherit currentColor so it ignores
+   * disabled and hover state, and is announced literally by a screen reader
+   * (F170). Widening is backward compatible — every existing caller passes a
+   * string, and a string is already a ReactNode.
+   */
+  icon?: React.ReactNode;
   size?: 'sm' | 'md';
   style?: React.CSSProperties;
   accent?: string;
 }
 
 const BTN_VARIANTS = {
-  primary: { bg: '#1e3a5f', color: '#60a5fa', border: '#1d4ed8' },
-  danger:  { bg: '#450a0a', color: '#f87171', border: '#dc2626' },
-  ghost:   { bg: 'transparent', color: '#94a3b8', border: '#334155' },
-  warning: { bg: '#78350f', color: '#fbbf24', border: '#d97706' },
-  success: { bg: '#052e16', color: '#4ade80', border: '#16a34a' },
+  primary: { bg: '#1e3a5f', color: 'var(--link)', border: '#1d4ed8' },
+  danger:  { bg: '#450a0a', color: 'var(--loss)', border: '#dc2626' },
+  ghost:   { bg: 'transparent', color: 'var(--text-dim)', border: '#334155' },
+  warning: { bg: '#78350f', color: 'var(--warn)', border: '#d97706' },
+  success: { bg: '#052e16', color: 'var(--gain)', border: '#16a34a' },
 };
 
 export const ActionBtn: React.FC<ActionBtnProps> = ({
@@ -214,12 +251,18 @@ export const ActionBtn: React.FC<ActionBtnProps> = ({
         border: `1px solid ${v.border}`,
         borderRadius: 7, cursor: disabled || loading ? 'not-allowed' : 'pointer',
         fontSize: size === 'sm' ? 12 : 13, fontWeight: 600,
-        padding: size === 'sm' ? '5px 12px' : '8px 16px',
+        // 44px minimum target. `sm` was ~26px tall (rubric: touch-target-size,
+        // CRITICAL) — these are the controls that ban users and trigger
+        // retrains, so they are exactly the ones that must not be mis-tapped.
+        minHeight: 44,
+        padding: size === 'sm' ? '0 12px' : '0 16px',
         opacity: disabled ? 0.5 : 1,
         transition: 'opacity 0.15s',
         whiteSpace: 'nowrap',
         ...style,
       }}
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
     >
       {loading ? <Spinner size={12} /> : icon ? <span>{icon}</span> : null}
       {label}
@@ -248,12 +291,12 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export const Input: React.FC<InputProps> = ({ label, style, ...rest }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    {label && <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>{label}</label>}
+    {label && <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>{label}</label>}
     <input
       {...rest}
       style={{
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
-        color: '#f1f5f9', fontSize: 13, padding: '8px 12px',
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
+        color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '8px 12px',
         outline: 'none', width: '100%', boxSizing: 'border-box',
         ...style,
       }}
@@ -270,12 +313,12 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select: React.FC<SelectProps> = ({ label, options, style, ...rest }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    {label && <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>{label}</label>}
+    {label && <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>{label}</label>}
     <select
       {...rest}
       style={{
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
-        color: '#f1f5f9', fontSize: 13, padding: '8px 12px',
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
+        color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '8px 12px',
         outline: 'none', width: '100%', boxSizing: 'border-box',
         cursor: 'pointer',
         ...style,
@@ -297,19 +340,49 @@ interface ToggleProps {
   accent?: string;
 }
 
-export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onChange, disabled, accent = '#22c55e' }) => (
+/**
+ * The switch takes its name from the text beside it.
+ *
+ * This used to be a `<label>` wrapping a `div[role="switch"]`, which looks
+ * labelled and is not: a `<label>` implicitly labels only *labelable* elements
+ * — input, select, textarea, button, meter, output, progress — and a div with a
+ * role is none of them. All 64 uses of this component therefore rendered a
+ * switch a screen reader announces as "switch, off", with nothing to say what
+ * it switches. Several of them change how the platform trades.
+ *
+ * `aria-labelledby` points at the element that already renders the visible
+ * text, so the accessible name IS what is on screen and cannot drift from it.
+ * An `aria-label` carrying a second copy of the string would pass the same
+ * check and start lying at the first rename.
+ */
+export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onChange, disabled, accent = '#22c55e' }) => {
+  // One id per instance. 64 toggles share this component and several pages
+  // render a dozen; a constant id would point every switch at the first one.
+  const uid = React.useId();
+  const labelId = `${uid}-label`;
+  const descId = `${uid}-desc`;
+  return (
   <label style={{
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '10px 0', cursor: disabled ? 'not-allowed' : 'pointer',
     userSelect: 'none', opacity: disabled ? 0.5 : 1,
   }}>
     <div>
-      <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500 }}>{label}</div>
-      {description && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{description}</div>}
+      <div id={labelId} style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 500 }}>{label}</div>
+      {description && <div id={descId} style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>}
     </div>
     <div
       role="switch"
       aria-checked={checked}
+      // Only claim a relationship that exists: `label` and `description` are
+      // both optional, and pointing at an id nothing renders is worse than
+      // pointing at nothing — it resolves to the empty string and the switch
+      // goes back to being nameless, silently.
+      aria-labelledby={label ? labelId : undefined}
+      aria-describedby={description ? descId : undefined}
+      // The tab order already skipped a disabled switch; nothing told assistive
+      // technology WHY it was skipped.
+      aria-disabled={disabled ? true : undefined}
       tabIndex={disabled ? -1 : 0}
       onClick={() => !disabled && onChange(!checked)}
       onKeyDown={e => !disabled && (e.key === 'Enter' || e.key === ' ') && onChange(!checked)}
@@ -328,20 +401,26 @@ export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onC
       }} />
     </div>
   </label>
-);
+  );
+};
 
 // ── Divider ───────────────────────────────────────────────────────────────────
 
 export const Divider: React.FC = () => (
-  <div style={{ height: 1, background: '#1e293b', margin: '8px 0' }} />
+  <div style={{ height: 1, background: 'var(--raised)', margin: '8px 0' }} />
 );
 
 // ── Empty State ───────────────────────────────────────────────────────────────
 
-export const EmptyState: React.FC<{ icon?: string; message: string }> = ({ icon = '📭', message }) => (
-  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569' }}>
+export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> = ({
+  // Was the "inbox tray" emoji, which renders differently on every OS and
+  // cannot inherit currentColor (audit F170/F175).
+  icon = <Inbox size={22} strokeWidth={1.5} aria-hidden />,
+  message,
+}) => (
+  <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-faint)' }}>
     <div style={{ fontSize: 32, marginBottom: 10 }}>{icon}</div>
-    <div style={{ fontSize: 13 }}>{message}</div>
+    <div style={{ fontSize: 'var(--fs-body)'}}>{message}</div>
   </div>
 );
 
@@ -349,12 +428,12 @@ export const EmptyState: React.FC<{ icon?: string; message: string }> = ({ icon 
 
 export const ErrorState: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (
   <div style={{ textAlign: 'center', padding: '32px 20px' }}>
-    <div style={{ fontSize: 28, marginBottom: 8 }}>⚠️</div>
-    <div style={{ fontSize: 13, color: '#f87171', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
+    <div style={{ fontSize: 'var(--fs-hero)', marginBottom: 8 }}>⚠️</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
     {onRetry && (
       <button onClick={onRetry} style={{
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
-        color: '#94a3b8', cursor: 'pointer', fontSize: 12, padding: '6px 14px',
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
+        color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '6px 14px',
       }}>
         Retry
       </button>
@@ -368,7 +447,7 @@ export const LoadingRows: React.FC<{ rows?: number }> = ({ rows = 5 }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
     {Array.from({ length: rows }).map((_, i) => (
       <div key={i} style={{
-        height: 40, borderRadius: 6, background: '#1e293b',
+        height: 40, borderRadius: 6, background: 'var(--raised)',
         animation: 'sa-pulse 1.5s ease-in-out infinite',
         animationDelay: `${i * 0.1}s`,
         opacity: 1 - i * 0.1,
@@ -386,12 +465,22 @@ interface ConfirmDialogProps {
   variant?: 'danger' | 'warning';
   /** @deprecated Use variant="danger" instead. Kept for backwards compat. */
   danger?: boolean;
+  /**
+   * Optional controls shown between the message and the buttons.
+   *
+   * Added because a confirm that only states a fixed value cannot let the
+   * operator change it: the alert-silence dialog said "for 60 minutes" with no
+   * way to pick a different number, which is why AlertingSection carried a
+   * `setSilenceDuration` that nothing ever called. Every existing call site is
+   * unaffected — omit it and the dialog is exactly what it was.
+   */
+  children?: React.ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
-  title, message, confirmLabel = 'Confirm', variant, danger, onConfirm, onCancel,
+  title, message, confirmLabel = 'Confirm', variant, danger, children, onConfirm, onCancel,
 }) => {
   // variant takes precedence; danger=false downgrades to 'warning' for backwards compat
   const resolvedVariant: 'danger' | 'warning' =
@@ -403,11 +492,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   }}>
     <div style={{
-      background: '#0f172a', border: `1px solid ${resolvedVariant === 'danger' ? '#7f1d1d' : '#92400e'}`,
+      background: 'var(--surface)', border: `1px solid ${resolvedVariant === 'danger' ? '#7f1d1d' : '#92400e'}`,
       borderRadius: 14, padding: '28px 32px', maxWidth: 420, width: '90%',
     }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc', marginBottom: 10 }}>{title}</div>
-      <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, marginBottom: 24 }}>{message}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 10 }}>{title}</div>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: children ? 16 : 24 }}>{message}</div>
+      {children && <div style={{ marginBottom: 24 }}>{children}</div>}
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <ActionBtn label="Cancel" onClick={onCancel} variant="ghost" />
         <ActionBtn label={confirmLabel} onClick={onConfirm} variant={resolvedVariant === 'danger' ? 'danger' : 'warning'} />

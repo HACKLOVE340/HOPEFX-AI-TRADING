@@ -103,7 +103,7 @@ export function EquityCurveChart() {
       ddSerRef.current     = null;
       priceLineRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Data update ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -182,7 +182,7 @@ export function EquityCurveChart() {
             fontFamily: 'monospace', cursor: 'pointer', letterSpacing: 0.5,
             border: `1px solid ${range === r ? '#3b82f6' : '#1e293b'}`,
             background: range === r ? 'rgba(59,130,246,0.15)' : 'transparent',
-            color: range === r ? '#60a5fa' : '#475569',
+            color: range === r ? 'var(--link)' : '#475569',
             transition: 'all 0.15s ease',
           }}
         >
@@ -195,10 +195,10 @@ export function EquityCurveChart() {
   const headerRight = (
     <div className="flex items-center gap-4">
       {rangeSelector}
-      <MetricTile label="Return" value={fmtPct(totalReturn)} valueColor={totalReturn >= 0 ? '#00e676' : '#ff1744'} compact />
-      <MetricTile label="Sharpe"  value={perf ? fmtRatio(perf.sharpe_ratio)  : '—'} valueColor="#00d4ff" compact />
-      <MetricTile label="Sortino" value={perf ? fmtRatio(perf.sortino_ratio) : '—'} valueColor="#a855f7" compact />
-      <MetricTile label="Max DD"  value={perf ? `${maxDD.toFixed(1)}%`        : '—'} valueColor="#ff3b5c" compact />
+      <MetricTile label="Return" to="/performance" toHint="performance detail" value={fmtPct(totalReturn)} valueColor={totalReturn >= 0 ? '#00e676' : '#ff1744'} compact />
+      <MetricTile label="Sharpe" to="/performance" toHint="risk-adjusted performance"  value={perf ? fmtRatio(perf.sharpe_ratio)  : '—'} valueColor="#00d4ff" compact />
+      <MetricTile label="Sortino" to="/performance" toHint="risk-adjusted performance" value={perf ? fmtRatio(perf.sortino_ratio) : '—'} valueColor="#a855f7" compact />
+      <MetricTile label="Max DD" to="/performance" toHint="the drawdown curve"  value={perf ? `${maxDD.toFixed(1)}%`        : '—'} valueColor="#ff3b5c" compact />
     </div>
   );
 
@@ -215,12 +215,12 @@ export function EquityCurveChart() {
           </div>
 
           {perf && (
-            <div className="flex items-center gap-6 px-4 py-2.5 border-t border-[#1e2d3d] shrink-0">
-              <MetricTile label="Win Rate"      value={fmtPctRaw(perf.win_rate, 1)} valueColor="#00e676" compact />
-              <MetricTile label="Profit Factor" value={fmtRatio(perf.profit_factor)}            valueColor="#00d4ff" compact />
-              <MetricTile label="Total Trades"  value={perf.total_trades?.toString() ?? '—'}            compact />
-              <MetricTile label="Avg Trade"     value={fmtPrice(perf.avg_trade_pnl, 2)}        valueColor={pnlColor(perf.avg_trade_pnl)} compact />
-              <MetricTile label="CVaR 95%"      value={fmtPct(perf.cvar_95, 1)} valueColor="#ff3b5c" compact />
+            <div className="flex items-center gap-6 px-4 py-2.5 border-t border-[var(--border)] shrink-0">
+              <MetricTile label="Win Rate" to="/journal" toHint="the trades behind it"      value={fmtPctRaw(perf.win_rate, 1)} valueColor="#00e676" compact />
+              <MetricTile label="Profit Factor" to="/journal" toHint="the trades behind it" value={fmtRatio(perf.profit_factor)}            valueColor="#00d4ff" compact />
+              <MetricTile label="Total Trades" to="/journal" toHint="the trade journal"  value={perf.total_trades?.toString() ?? '—'}            compact />
+              <MetricTile label="Avg Trade" to="/journal" toHint="the trade journal"     value={fmtPrice(perf.avg_trade_pnl, 2)}        valueColor={pnlColor(perf.avg_trade_pnl)} compact />
+              <MetricTile label="CVaR 95%" to="/risk-calculator" toHint="the Risk Calculator"      value={fmtPct(perf.cvar_95, 1)} valueColor="#ff3b5c" compact />
             </div>
           )}
         </div>

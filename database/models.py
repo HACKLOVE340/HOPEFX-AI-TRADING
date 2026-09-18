@@ -29,6 +29,7 @@ try:
     from sqlalchemy import (
         BigInteger,
         Boolean,
+        CheckConstraint,
         Column,
         DateTime,
         Enum,
@@ -36,6 +37,7 @@ try:
         ForeignKey,
         Index,
         Integer,
+        Numeric,
         String,
         Text,
         UniqueConstraint,
@@ -124,8 +126,19 @@ class Trade(Base):
 
     id = Column(Integer, primary_key=True)
     trade_id = Column(String(50), unique=True, nullable=True, index=True)
-    # Idempotency key — set before broker submission; UNIQUE prevents duplicate fills
-    # on network retry.  See Alembic migration b2c3d4e5f6a7.
+    # Idempotency key — LATENT, not live. Migration b2c3d4e5f6a7 added the
+    # UNIQUE constraint, and this comment used to say it "prevents duplicate
+    # fills on network retry". It cannot, today: no production writer sets the
+    # column. Both paths that insert here — brokers/__init__.py
+    # ::_persist_trade_record and brokers/paper_trading.py — persist a CLOSED
+    # trade after the fact and leave this NULL, and nothing calls
+    # TradeRepository.get_by_client_order_id. A UNIQUE column that is always
+    # NULL admits unlimited rows (measured: 500 inserts, 500 NULLs, 0 refusals).
+    # The engine→broker hop is actually guarded by the write-ahead intent
+    # journal in execution/trade_executor.py::_journal_intent (S7-02), pinned by
+    # tests/unit/test_trade_executor_comprehensive.py::TestOrderIntentJournal.
+    # Keep the constraint — it is a correct statement of intent and costs
+    # nothing — but do not count it as a control until a writer populates it.
     client_order_id = Column(String(100), unique=True, nullable=True, index=True)
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True, index=True)
     # user_id links trades directly to the auth user without requiring an Account row.
@@ -208,8 +221,10 @@ class Order(Base):
 
     id = Column(Integer, primary_key=True)
     order_id = Column(String(50), unique=True, nullable=False, index=True)
-    # Idempotency key — UNIQUE constraint prevents duplicate broker submissions.
-    # Set by the trading engine before the first submission attempt.
+    # Idempotency key — LATENT, as on Trade above, and more so: nothing in
+    # production imports this model at all, so no row is ever written here by
+    # the trading engine. "Set by the trading engine before the first
+    # submission attempt" described an intent, never a code path.
     client_order_id = Column(String(100), unique=True, nullable=True, index=True)
     # Owning user. The COLUMN has existed since migration o1p2q3r4s5t6, which
     # added it and indexed it — but this model never declared it, so the ORM had
@@ -254,6 +269,20 @@ class Order(Base):
     cancelled_at = Column(DateTime, nullable=True)
 
     # Status
+    # The COLUMN has existed since migration o1p2q3r4s5t6, which added it with
+    # server_default="pending" and indexed it as idx_orders_status — but this
+    # model never declared it, so nothing could ever read or set it and every
+    # row in every migrated database carries "pending" forever. Same shape as
+    # the user_id drift documented above: the schema was right, the model was
+    # blind to it. Declared here rather than dropped from the schema, because
+    # dropping a column on a production database is irreversible.
+    #
+    # server_default matches what the database already has, so rows written by
+    # code that does not set it keep the value they have always had.
+    #
+    # index=True is deliberately absent: idx_orders_status already exists, and
+    # both would produce two indexes on one column.
+    status = Column(String(20), nullable=False, server_default="pending")
     is_filled = Column(Boolean, default=False)
     is_cancelled = Column(Boolean, default=False)
     rejection_reason = Column(Text, nullable=True)
@@ -704,9 +733,16 @@ class TickData(Base):
     timestamp = Column(DateTime(timezone=True), default=_utcnow, nullable=False, index=True)
     source = Column(String(50), nullable=True, index=True)
     # Quality flag: good | stale | suspect | rejected
-    quality = Column(String(20), nullable=True, default="good")
-    # Confidence score from multi-source consensus (0.0–1.0)
-    confidence = Column(Float, nullable=True, default=1.0)
+    # "unknown", not "good": a row inserted without an assessment must not
+    # claim one. DataQualityEngine is what turns this into a grade.
+    quality = Column(String(20), nullable=True, default="unknown")
+    # Confidence score from multi-source consensus (0.0–1.0).
+    # None, not 1.0, for the same reason `quality` is "unknown": a row inserted
+    # without a consensus computation must not claim perfect confidence in a
+    # second field after the first one stopped claiming it. The repository
+    # signature moved with u1v2w3x4y5z6; this column did not, and the two
+    # disagreeing is worse than either default alone.
+    confidence = Column(Float, nullable=True, default=None)
     # Lineage ID links back to DataLineageStore record
     lineage_id = Column(String(36), nullable=True, index=True)
 
@@ -756,8 +792,8 @@ class WalletTransaction(Base):
     transaction_id = Column(String(50), unique=True, nullable=False, index=True)
     user_id = Column(String(50), nullable=False, index=True)
     transaction_type = Column(String(30), nullable=False)  # deposit, withdrawal, fee, commission
-    amount = Column(Float, nullable=False)
-    balance_after = Column(Float, nullable=False)
+    amount = Column(Numeric(18, 2), nullable=False)
+    balance_after = Column(Numeric(18, 2), nullable=False)
     currency = Column(String(10), default="USD")
     reference = Column(String(100), nullable=True)  # external payment ref
     status = Column(String(20), default="completed")  # pending, completed, failed
@@ -791,6 +827,108 @@ class AuditLogEntry(Base):
     user_id = Column(String(100), nullable=True, index=True)
     detail = Column(Text, nullable=True)
     ip_address = Column(String(45), nullable=True)
+
+
+class DepartmentMemoryEntry(Base):
+    """Spec §2's `memory/` — what an AI department has observed.
+
+    Departments declared a memory as `tuple[str, ...]`: labels with nothing
+    behind them. This is the store. Working memory rather than an archive — the
+    permanent record of what happened is `audit_log`, which has its own
+    retention and its own hash chain.
+
+    Scoped by department on purpose. Risk & Compliance must not read Platform
+    Engineering's audit history just because both rows live in one table, so
+    every read filters on `department` and the bus grants one recall action per
+    department rather than one parameterised tool.
+    """
+
+    __tablename__ = "ai_department_memory"
+
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
+    department = Column(String(64), nullable=False, index=True)
+    kind = Column(String(64), nullable=False, index=True)
+    # JSON text rather than a JSON column: this has to work identically on
+    # SQLite (tests, dev) and PostgreSQL (production), and the reads here are
+    # "most recent N of this kind", never "query inside the value".
+    value_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
+
+    __table_args__ = (Index("ix_ai_dept_memory_scope", "department", "kind", "created_at"),)
+
+
+class SupportTicket(Base):
+    """A customer conversation, and who is allowed to close it.
+
+    `support.triage` decides who should answer a question and whether a human
+    must; it decides and forgets. This is the record — and, more importantly,
+    the thing that carries the escalation forward. `needs_human` is not a
+    display flag: `support.tickets.TicketStore` refuses an AI resolution while
+    it is set, so the floor in triage cannot be undone one call later by the
+    same AI it escalated away from.
+
+    `first_response_at` is nullable and stays NULL until something actually
+    responds. A column defaulted to the creation time would report a desk
+    answering every ticket instantly — an unmeasured value presented as a
+    best case, which is the defect this programme keeps removing.
+
+    `matched_on` holds the phrase triage matched. An operator taking over a
+    ticket mid-thread needs to see why it landed with them, not just that it
+    did.
+    """
+
+    __tablename__ = "support_tickets"
+
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
+    ticket_id = Column(String(40), unique=True, nullable=False, index=True)
+    user_id = Column(String(64), nullable=False, index=True)
+    subject = Column(String(200), nullable=False)
+
+    #: open | awaiting_operator | with_operator | resolved
+    status = Column(String(24), nullable=False, default="open", index=True)
+
+    # The triage decision, kept so the ticket explains itself.
+    category = Column(String(48), nullable=True)
+    department = Column(String(48), nullable=True, index=True)
+    needs_human = Column(Boolean, nullable=False, default=False, index=True)
+    escalation_reason = Column(Text, nullable=True)
+    matched_on = Column(String(200), nullable=True)
+
+    assigned_operator_id = Column(String(64), nullable=True, index=True)
+
+    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    #: NULL until an AI or an operator actually replies. Never defaulted.
+    first_response_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        # The operator queue: waiting tickets, oldest first.
+        Index("ix_support_queue", "needs_human", "status", "created_at"),
+    )
+
+
+class SupportMessage(Base):
+    """One turn in a support conversation.
+
+    `author_kind` is one of customer / ai / operator / system. It is what
+    decides whether a message counts as a *response* — a customer chasing their
+    own ticket must not stop the clock, which is why the store checks the kind
+    rather than merely that a row was added.
+    """
+
+    __tablename__ = "support_messages"
+
+    id = Column(PKBigInt, primary_key=True, autoincrement=True)
+    ticket_id = Column(String(40), nullable=False, index=True)
+    #: customer | ai | operator | system
+    author_kind = Column(String(16), nullable=False)
+    #: The operator's id, or the AI department that answered. NULL for a customer.
+    author_id = Column(String(64), nullable=True)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
+
+    __table_args__ = (Index("ix_support_thread", "ticket_id", "created_at"),)
 
 
 class KYCRecord(Base):
@@ -1068,9 +1206,9 @@ if SQLALCHEMY_AVAILABLE:
         currency = Column(String(10), nullable=False)  # BTC | ETH | USDT
         network = Column(String(20), nullable=False)  # BTC | ERC20 | TRC20 | BEP20
         address = Column(String(200), nullable=False)
-        amount_usd = Column(Float, nullable=False)
-        amount_crypto = Column(Float, nullable=False)
-        rate_usd = Column(Float, nullable=False)  # USD price per coin at creation
+        amount_usd = Column(Numeric(18, 2), nullable=False)
+        amount_crypto = Column(Numeric(28, 8), nullable=False)
+        rate_usd = Column(Numeric(28, 8), nullable=False)  # USD price per coin at creation
         status = Column(
             String(20), nullable=False, default="pending", index=True
         )  # pending | confirming | complete | expired | failed
@@ -1173,6 +1311,245 @@ else:
         __table__ = type("T", (), {"columns": []})()
 
 
+# ── Creator marketplace ledger ────────────────────────────────────────────────
+# Creator balances, sales and payouts. Before these tables existed, all three
+# lived only in RevenueSplitEngine's dicts: a restart forgot every sale, every
+# balance and every payout, and there was nothing to reconcile a Stripe transfer
+# against (F208).
+#
+# Money is Numeric(18, 2), not Float. These are the first exact-decimal money
+# columns in this file — the other 104 monetary columns are Float, which is why
+# payments/wallet.py has to refuse sub-cent amounts to keep its balances
+# round-trippable (F235). New tables have nothing to migrate, so this is the
+# cheapest place to set the precedent rather than inherit the problem.
+#
+# The design is event-sourced with a reconcilable cache: creator_sales and
+# creator_payouts are append-only facts, and creator_balances is a summary the
+# facts can always re-derive. A stored balance that cannot be re-derived is the
+# defect this audit found repeatedly (F203, F136, F207).
+
+if SQLALCHEMY_AVAILABLE:
+
+    class CreatorPayoutRow(Base):
+        """A disbursement to a creator."""
+
+        __tablename__ = "creator_payouts"
+
+        id = Column(PKBigInt, primary_key=True)
+        payout_id = Column(String(64), unique=True, nullable=False, index=True)
+        creator_id = Column(String(64), nullable=False, index=True)
+        amount_usd = Column(Numeric(18, 2), nullable=False)
+        currency = Column(String(3), nullable=False, default="USD")
+        # TEXT + CHECK rather than a PG enum: the status set evolves with the
+        # payment provider, and a native enum needs a migration to extend.
+        status = Column(String(20), nullable=False, index=True)
+        # Guards a retried transfer. Stripe is called across a network that can
+        # time out after the transfer succeeded; without a unique key on the
+        # attempt, the retry pays the creator twice.
+        idempotency_key = Column(String(128), unique=True, nullable=False)
+        stripe_transfer_id = Column(String(128), unique=True, nullable=True)
+        failure_reason = Column(Text, nullable=True)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+        completed_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            CheckConstraint("amount_usd >= 0", name="ck_creator_payouts_amount_non_negative"),
+            CheckConstraint(
+                "status IN ('pending','processing','paid','failed','simulated')",
+                name="ck_creator_payouts_status",
+            ),
+            Index("idx_creator_payouts_creator_created", "creator_id", "created_at"),
+        )
+
+    class CreatorSale(Base):
+        """A single marketplace sale or refund, split between platform and creator."""
+
+        __tablename__ = "creator_sales"
+
+        id = Column(PKBigInt, primary_key=True)
+        transaction_id = Column(String(64), unique=True, nullable=False, index=True)
+        strategy_id = Column(String(64), nullable=False, index=True)
+        creator_id = Column(String(64), nullable=False, index=True)
+        buyer_id = Column(String(64), nullable=False, index=True)
+        # Signed: a refund is the negative mirror of its sale.
+        gross_amount = Column(Numeric(18, 2), nullable=False)
+        platform_fee = Column(Numeric(18, 2), nullable=False)
+        creator_amount = Column(Numeric(18, 2), nullable=False)
+        currency = Column(String(3), nullable=False, default="USD")
+        transaction_type = Column(String(20), nullable=False, index=True)
+        stripe_payment_intent_id = Column(String(128), nullable=True, unique=True)
+        # Which payout settled this sale. A sale can be claimed by at most one
+        # payout, and the database is what enforces it — in Python this was a
+        # filter that was simply absent, so every payout claimed every historical
+        # transaction and reconciliation double-counted (F207).
+        settled_by_payout_id = Column(
+            String(64),
+            ForeignKey("creator_payouts.payout_id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
+        # On a refund row: the policy in force when it was applied. Stored, not
+        # re-derived, so changing the setting never rewrites history.
+        refund_policy_applied = Column(String(32), nullable=True)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+
+        __table_args__ = (
+            # The split identity, enforced by the database. This makes the
+            # truncation bug in to_cents() unrepresentable rather than merely
+            # fixed: no row can exist where the parts do not sum to the whole
+            # (F206).
+            # Compared in integer cents, not in the column type. SQLite has no
+            # exact decimal: it stores NUMERIC as REAL, so "platform_fee +
+            # creator_amount = gross_amount" is evaluated in binary floating
+            # point there and refuses a correct 1c + 6c = 7c split
+            # (0.01 + 0.06 == 0.06999999999999999). PostgreSQL, where NUMERIC is
+            # exact, would have accepted it — so the constraint was right in
+            # production and silently wrong on every SQLite deployment. Scaling
+            # to integers first is exact on both and still refuses a wrong split.
+            CheckConstraint(
+                "CAST(ROUND(platform_fee * 100) AS INTEGER) "
+                "+ CAST(ROUND(creator_amount * 100) AS INTEGER) "
+                "= CAST(ROUND(gross_amount * 100) AS INTEGER)",
+                name="ck_creator_sales_split_sums_to_gross",
+            ),
+            CheckConstraint(
+                "transaction_type IN ('purchase','subscription','refund')",
+                name="ck_creator_sales_type",
+            ),
+            Index("idx_creator_sales_creator_settled", "creator_id", "settled_by_payout_id"),
+            Index("idx_creator_sales_creator_created", "creator_id", "created_at"),
+        )
+
+    class CreatorBalanceRow(Base):
+        """A creator's payout position. Derivable from creator_sales and creator_payouts."""
+
+        __tablename__ = "creator_balances"
+
+        creator_id = Column(String(64), primary_key=True)
+        pending_usd = Column(Numeric(18, 2), nullable=False, default=0)
+        total_earned_usd = Column(Numeric(18, 2), nullable=False, default=0)
+        total_paid_usd = Column(Numeric(18, 2), nullable=False, default=0)
+        # Owed back to the platform under the deduct_next_payout refund policy.
+        # Kept out of pending_usd so a debt never presents as a negative balance.
+        recoverable_usd = Column(Numeric(18, 2), nullable=False, default=0)
+        stripe_account_id = Column(String(128), nullable=True)
+        last_payout_at = Column(DateTime(timezone=True), nullable=True)
+        # Optimistic lock. RevenueSplitEngine's RLock only serialises threads in
+        # one process; production runs several workers, where an in-process lock
+        # protects nothing. A write that finds a changed version must retry.
+        version = Column(BigInteger, nullable=False, default=0)
+        updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+        __table_args__ = (
+            CheckConstraint("total_earned_usd >= 0", name="ck_creator_balances_earned_non_negative"),
+            CheckConstraint("total_paid_usd >= 0", name="ck_creator_balances_paid_non_negative"),
+            CheckConstraint("recoverable_usd >= 0", name="ck_creator_balances_recoverable_non_negative"),
+        )
+
+
+# ── Affiliate ledger ──────────────────────────────────────────────────────────
+# Affiliates, their referrals and their payouts. Before these tables existed all
+# three lived only in AffiliateManager's module dictionaries: a restart erased
+# what every affiliate was owed, and each worker in a multi-worker deployment
+# held its own disjoint copy, so two workers could each approve a withdrawal the
+# other could not see (F31/F32, second half).
+#
+# Money is Numeric(18, 2) for the same reason as the creator ledger above: a
+# commission that cannot round-trip is a commission that drifts against what was
+# actually paid. `commission_paid` is an amount and not a flag because a
+# withdrawal may settle part of one referral — it was a flag, and the referral
+# that crossed the requested total was marked fully paid, destroying the
+# difference.
+#
+# Same event-sourced shape: affiliate_referrals and affiliate_payouts are the
+# facts, and the totals on `affiliates` are a summary those facts can re-derive.
+
+if SQLALCHEMY_AVAILABLE:
+
+    class AffiliateRow(Base):
+        """An affiliate account."""
+
+        __tablename__ = "affiliates"
+
+        id = Column(PKBigInt, primary_key=True)
+        affiliate_id = Column(String(64), unique=True, nullable=False, index=True)
+        user_id = Column(String(64), unique=True, nullable=False, index=True)
+        code = Column(String(32), unique=True, nullable=False, index=True)
+        # TEXT + CHECK rather than a native enum, as above: the level and status
+        # sets evolve with the programme, and a PG enum needs a migration to
+        # extend.
+        level = Column(String(20), nullable=False)
+        status = Column(String(20), nullable=False, index=True)
+        payment_details_json = Column(Text, nullable=True)  # JSON object
+        total_referrals = Column(Integer, nullable=False, default=0)
+        total_revenue = Column(Numeric(18, 2), nullable=False, default=0)
+        total_commissions = Column(Numeric(18, 2), nullable=False, default=0)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+        approved_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            CheckConstraint("total_revenue >= 0", name="ck_affiliates_revenue_non_negative"),
+            CheckConstraint("total_commissions >= 0", name="ck_affiliates_commissions_non_negative"),
+            CheckConstraint("total_referrals >= 0", name="ck_affiliates_referrals_non_negative"),
+        )
+
+    class AffiliateReferralRow(Base):
+        """One referred user, and the commission it earned."""
+
+        __tablename__ = "affiliate_referrals"
+
+        id = Column(PKBigInt, primary_key=True)
+        referral_id = Column(String(64), unique=True, nullable=False, index=True)
+        affiliate_id = Column(String(64), nullable=False, index=True)
+        # One referral per referred user: `create_referral` enforces this in
+        # Python by scanning the working set, which protects nothing across
+        # workers. The database is what actually enforces it.
+        referred_user_id = Column(String(64), unique=True, nullable=False, index=True)
+        status = Column(String(20), nullable=False, index=True)
+        tier = Column(String(20), nullable=True)
+        subscription_amount = Column(Numeric(18, 2), nullable=True)
+        commission_amount = Column(Numeric(18, 2), nullable=True)
+        # How much of commission_amount has been paid out. An amount, never a
+        # flag — see the module comment above.
+        commission_paid = Column(Numeric(18, 2), nullable=False, default=0)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+        converted_at = Column(DateTime(timezone=True), nullable=True)
+        expires_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            CheckConstraint("commission_paid >= 0", name="ck_affiliate_referrals_paid_non_negative"),
+            Index("idx_affiliate_referrals_affiliate_status", "affiliate_id", "status"),
+        )
+
+    class AffiliatePayoutRow(Base):
+        """A disbursement to an affiliate, and the commissions it consumed."""
+
+        __tablename__ = "affiliate_payouts"
+
+        id = Column(PKBigInt, primary_key=True)
+        payout_id = Column(String(64), unique=True, nullable=False, index=True)
+        affiliate_id = Column(String(64), nullable=False, index=True)
+        amount = Column(Numeric(18, 2), nullable=False)
+        payment_method = Column(String(40), nullable=False)
+        status = Column(String(20), nullable=False, index=True)
+        transaction_id = Column(String(128), nullable=True)
+        notes = Column(Text, nullable=True)
+        # [[referral_id, amount], ...] — exactly what this payout took, so a
+        # failure returns that and not whatever happens to be outstanding when
+        # the failure is noticed.
+        settlements_json = Column(Text, nullable=True)
+        # Set once the settlements have been returned, so a duplicated failure
+        # notice is not a second credit.
+        reversed = Column(Boolean, nullable=False, default=False)
+        created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, index=True)
+        processed_at = Column(DateTime(timezone=True), nullable=True)
+
+        __table_args__ = (
+            CheckConstraint("amount >= 0", name="ck_affiliate_payouts_amount_non_negative"),
+            Index("idx_affiliate_payouts_affiliate_created", "affiliate_id", "created_at"),
+        )
+
+
 # ── Chargeback table ──────────────────────────────────────────────────────────
 # Tracks payment disputes raised by cardholders via their bank.
 # Populated by the Stripe webhook handler on charge.dispute.created events.
@@ -1189,7 +1566,7 @@ if SQLALCHEMY_AVAILABLE:
         payment_id = Column(String(100), nullable=False, index=True)
         user_id = Column(String(128), nullable=False, index=True)
         username = Column(String(255), nullable=True)
-        amount = Column(Float, nullable=False)
+        amount = Column(Numeric(18, 2), nullable=False)
         currency = Column(String(10), nullable=False, default="USD")
         reason = Column(String(255), nullable=False)
         # open | won | lost | pending_evidence
@@ -1238,10 +1615,11 @@ if SQLALCHEMY_AVAILABLE:
         report_id = Column(String(100), unique=True, nullable=False, index=True)
         period = Column(String(20), nullable=False)  # e.g. "2025-Q1" or "2025-01"
         jurisdiction = Column(String(100), nullable=False)  # e.g. "US-CA", "GB", "NG"
-        total_revenue = Column(Float, nullable=False, default=0.0)
-        taxable_amount = Column(Float, nullable=False, default=0.0)
-        tax_rate_pct = Column(Float, nullable=False, default=0.0)
-        tax_owed = Column(Float, nullable=False, default=0.0)
+        total_revenue = Column(Numeric(18, 2), nullable=False, default=0)
+        taxable_amount = Column(Numeric(18, 2), nullable=False, default=0)
+        # A rate, not an amount -- but it multiplies one, so it is exact too.
+        tax_rate_pct = Column(Numeric(9, 6), nullable=False, default=0)
+        tax_owed = Column(Numeric(18, 2), nullable=False, default=0)
         currency = Column(String(10), nullable=False, default="USD")
         # draft | filed | paid | overdue
         status = Column(String(20), nullable=False, default="draft", index=True)
@@ -1290,9 +1668,9 @@ if SQLALCHEMY_AVAILABLE:
         recon_id = Column(String(100), unique=True, nullable=False, index=True)
         period = Column(String(20), nullable=False)  # e.g. "2025-01"
         provider = Column(String(50), nullable=False)  # stripe | flutterwave | crypto
-        expected_amount = Column(Float, nullable=False, default=0.0)
-        actual_amount = Column(Float, nullable=False, default=0.0)
-        discrepancy = Column(Float, nullable=False, default=0.0)
+        expected_amount = Column(Numeric(18, 2), nullable=False, default=0)
+        actual_amount = Column(Numeric(18, 2), nullable=False, default=0)
+        discrepancy = Column(Numeric(18, 2), nullable=False, default=0)
         currency = Column(String(10), nullable=False, default="USD")
         transaction_count = Column(Integer, nullable=False, default=0)
         # matched | discrepancy | pending | resolved
@@ -1405,7 +1783,7 @@ if SQLALCHEMY_AVAILABLE:
         username = Column(String(100), nullable=True)
         alert_type = Column(String(50), nullable=False)
         severity = Column(String(20), nullable=False, default="medium")  # low/medium/high/critical
-        amount = Column(Float, nullable=False, default=0.0)
+        amount = Column(Numeric(18, 2), nullable=False, default=0)
         currency = Column(String(10), nullable=False, default="USD")
         description = Column(Text, nullable=True)
         status = Column(String(20), nullable=False, default="pending")  # pending/reviewed/escalated/dismissed
@@ -1513,7 +1891,7 @@ if SQLALCHEMY_AVAILABLE:
         # Hashed API key (shown once at creation, stored as SHA-256 hex)
         api_key_hash = Column(String(64), nullable=True)
         # Revenue tracking
-        revenue_usd = Column(Float, nullable=False, default=0.0)
+        revenue_usd = Column(Numeric(18, 2), nullable=False, default=0)
         user_count = Column(Integer, nullable=False, default=0)
         # Lifecycle
         trial_ends_at = Column(DateTime(timezone=True), nullable=True)
@@ -1719,10 +2097,10 @@ if SQLALCHEMY_AVAILABLE:
         # account_type: "personal" | "prop_firm" | "team" | "managed"
         account_type = Column(String(30), nullable=False, default="personal")
         currency = Column(String(10), nullable=False, default="USD")
-        initial_balance = Column(Float, nullable=True)
-        current_balance = Column(Float, nullable=True)
+        initial_balance = Column(Numeric(18, 2), nullable=True)
+        current_balance = Column(Numeric(18, 2), nullable=True)
         max_drawdown_pct = Column(Float, nullable=True)
-        daily_loss_limit = Column(Float, nullable=True)
+        daily_loss_limit = Column(Numeric(18, 2), nullable=True)
         is_active = Column(Boolean, nullable=False, default=True)
         broker = Column(String(50), nullable=True)
         broker_account_id = Column(String(100), nullable=True)
@@ -1820,7 +2198,7 @@ if SQLALCHEMY_AVAILABLE:
         # event_type: "payment_succeeded" | "payment_failed" | "subscription_created"
         #             | "subscription_cancelled" | "refund" | "chargeback"
         event_type = Column(String(50), nullable=False)
-        amount = Column(Float, nullable=True)
+        amount = Column(Numeric(18, 2), nullable=True)
         currency = Column(String(10), nullable=True, default="USD")
         plan = Column(String(30), nullable=True)
         # status: "pending" | "succeeded" | "failed" | "refunded"

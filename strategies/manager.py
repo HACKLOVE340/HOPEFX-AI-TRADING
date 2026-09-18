@@ -391,12 +391,18 @@ class BreakoutStrategy(BaseStrategy):
         if market_regime != "ranging":
             return []
         try:
-            recent = price_data[-self.lookback_period :]
-            if len(recent) < self.lookback_period:
+            # The range is measured from the bars before the one being tested.
+            # This was `price_data[-lookback:]`, which included `price_data[-1]`,
+            # so `resistance >= current` and the buy branch's
+            # `current > resistance * 1.001` could not hold for any positive
+            # price; the sell branch was the mirror. Both were unreachable —
+            # 3,000 random frames produced no signal at all before the fix.
+            prior = price_data[-(self.lookback_period + 1) : -1]
+            if len(prior) < self.lookback_period:
                 return []
 
-            resistance = float(np.max([c.high for c in recent]))
-            support = float(np.min([c.low for c in recent]))
+            resistance = float(np.max([c.high for c in prior]))
+            support = float(np.min([c.low for c in prior]))
             current = float(price_data[-1].close)
 
             if current > resistance * (1 + self.breakout_threshold):

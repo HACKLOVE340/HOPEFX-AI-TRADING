@@ -39,8 +39,8 @@ const NotFound: React.FC = () => {
         justifyContent: 'center',
         flex:           1,
         minHeight:      0,
-        background:     'var(--bg, #0a0f1a)',
-        color:          'var(--text, #f1f5f9)',
+        background:     'var(--bg, var(--bg))',
+        color:          'var(--text, var(--text-strong))',
         fontFamily:     'Inter, system-ui, -apple-system, sans-serif',
         padding:        '2rem',
         textAlign:      'center',
@@ -65,17 +65,17 @@ const NotFound: React.FC = () => {
 
       {/* Heading */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: '#f1f5f9' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-strong)' }}>
           Page not found
         </h1>
-        <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
           <code
             style={{
-              background:   '#1e2d3d',
+              background:   'var(--border)',
               borderRadius: '4px',
               padding:      '2px 6px',
               fontSize:     '0.8rem',
-              color:        '#94a3b8',
+              color:        'var(--text-dim)',
             }}
           >
             {location.pathname}
@@ -109,9 +109,9 @@ const NotFound: React.FC = () => {
           onClick={() => navigate(-1)}
           style={{
             background:   'transparent',
-            border:       '1px solid #334155',
+            border:       '1px solid var(--border-strong)',
             borderRadius: '8px',
-            color:        '#94a3b8',
+            color:        'var(--text-dim)',
             cursor:       'pointer',
             fontSize:     '0.875rem',
             fontWeight:   600,
@@ -148,9 +148,9 @@ const NotFound: React.FC = () => {
               onClick={() => navigate(path)}
               style={{
                 background:   'rgba(59,130,246,0.08)',
-                border:       '1px solid #1e2d3d',
+                border:       '1px solid var(--border)',
                 borderRadius: '6px',
-                color:        '#64748b',
+                color:        'var(--text-muted)',
                 cursor:       'pointer',
                 fontSize:     '0.75rem',
                 fontWeight:   600,

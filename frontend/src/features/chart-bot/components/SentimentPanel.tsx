@@ -18,7 +18,6 @@ import type { SentimentSnapshot, NewsItem } from '../types';
 const SentimentArc = memo(({ snapshot }: { snapshot: SentimentSnapshot }) => {
   // score: -1 to +1 → angle: -135° to +135°
   const score     = snapshot.score;
-  const angle     = score * 135; // degrees from centre
   const color     = sentimentColor(score);
   const labelText = snapshot.label.replace('_', ' ').toUpperCase();
 
@@ -192,7 +191,13 @@ const SentimentPanel: React.FC = () => {
   const { data: newsFetched } = useNews(symbol.replace('/', ''));
 
   const sentiment = sentStore ?? sentFetched;
-  const news      = newsStore.length ? newsStore : (newsFetched ?? []);
+  // Memoised because the ternary produces a new array reference on every
+  // render when it falls through to `[]`, which makes the sort below re-run
+  // every time regardless of whether any news changed.
+  const news      = useMemo(
+    () => (newsStore.length ? newsStore : (newsFetched ?? [])),
+    [newsStore, newsFetched],
+  );
 
   // Sort news: high impact first, then by recency
   const sortedNews = useMemo(() =>

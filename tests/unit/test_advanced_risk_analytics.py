@@ -10,6 +10,8 @@ Tests VaR calculations, Monte Carlo simulations, stress testing,
 drawdown analysis, and risk-adjusted performance metrics.
 """
 
+import math
+
 import numpy as np
 import pytest
 
@@ -467,11 +469,24 @@ class TestAdvancedRiskAnalytics:
         sortino = analytics.calculate_sortino_ratio(returns)
         assert isinstance(sortino, float)
 
-    def test_calculate_sortino_ratio_all_positive_returns_inf(self, analytics):
-        """When there are no downside returns, Sortino ratio is infinite."""
+    def test_calculate_sortino_ratio_all_positive_returns_is_finite(self, analytics):
+        """No shortfall below target -> undefined ratio, reported as a finite 0.0.
+
+        This asserted ``sortino == float("inf") or sortino > 0``. ``inf`` was
+        real: the method returned it explicitly, and it reached
+        ``calculate_risk_metrics()["sortino_ratio"]``, which is serialised to
+        JSON and written to a numeric column — neither of which accepts it.
+        Every other Sortino in this repository returns 0.0 for an undefined
+        ratio, and this one now agrees with them.
+
+        0.0 for a strategy with no downside is the mirror of the defect F120
+        fixed, and is tracked as an owner decision (report ``None`` and render
+        "n/a" instead). The assertion here pins only what is settled: the value
+        is finite and serialisable.
+        """
         positive_returns = np.abs(_make_returns()) + 0.001
         sortino = analytics.calculate_sortino_ratio(positive_returns)
-        assert sortino == float("inf") or sortino > 0
+        assert math.isfinite(sortino)
 
     def test_calculate_sortino_ratio_negative_mean(self, analytics):
         bad_returns = _make_returns(mean=-0.001)

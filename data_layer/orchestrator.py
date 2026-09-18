@@ -717,7 +717,7 @@ class MarketDataOrchestrator:
                         ask=cached["ask"],
                         mid=cached["mid"],
                         source=FeedSource(raw_source),
-                        quality=TickQuality(cached.get("quality", "good")),
+                        quality=TickQuality(cached.get("quality", TickQuality.UNKNOWN.value)),
                         confidence=cached.get("confidence", 1.0),
                         spread=cached.get("spread", 0.0),
                         lineage_id=cached.get("lineage_id", ""),
@@ -765,9 +765,45 @@ class MarketDataOrchestrator:
                 # Normalise and cache
                 tick = self._norm.normalize_tick(tick)
                 self._on_tick(tick)
+                self._observe_feed_health(tick.timestamp)
                 return tick
 
+        # No price is recoverable here. Record that, so an outage leaves a
+        # trace: without this the only evidence is an absence of trades, which
+        # looks exactly like a quiet market. See data_layer/outage.py.
+        self._observe_feed_health(None)
         return None
+
+    def _observe_feed_health(self, last_tick_at: datetime | None) -> None:
+        """Tell the outage supervisor what this read saw.
+
+        Called on every `get_latest_tick`, on both the success and the empty
+        path, because a supervisor that only hears about successes cannot
+        notice an outage. Never raises: this is bookkeeping around the price
+        path and must not be able to break it — but it logs at ERROR if it
+        fails, because a supervisor that silently stopped observing would
+        report "healthy" forever.
+        """
+        try:
+            from data_layer.outage import get_supervisor
+
+            if self._gold_feed is not None:
+                up = len(self._gold_feed.active_sources())
+                total = len(getattr(self._gold_feed, "_feeds", {})) or up
+            else:
+                up, total = 0, 0
+
+            recovered = get_supervisor().observe(last_tick_at=last_tick_at, sources_up=up, sources_total=total)
+            if recovered:
+                # Returned for re-decision, never replayed. The supervisor
+                # cannot execute and neither does this.
+                logger.warning(
+                    "Feed recovered with %d deferred item(s) awaiting re-decision (%d already past the replay age)",
+                    len(recovered),
+                    sum(1 for item in recovered if item.expired),
+                )
+        except Exception as exc:
+            logger.error("Orchestrator: feed-health observation failed: %s", exc, exc_info=True)
 
     def _on_tick(self, tick: GoldTick) -> None:
         """
@@ -1222,7 +1258,7 @@ class MarketDataOrchestrator:
                             ask=float(r["ask"]),
                             mid=float(r["mid"]),
                             source=FeedSource(raw_source),
-                            quality=TickQuality(r.get("quality", "good")),
+                            quality=TickQuality(r.get("quality", TickQuality.UNKNOWN.value)),
                             confidence=float(r.get("confidence", 1.0)),
                             spread=float(r.get("spread", 0.0)),
                             lineage_id=r.get("lineage_id", ""),
@@ -1462,3 +1498,28 @@ class MarketDataOrchestrator:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 orchestrator = MarketDataOrchestrator()
+
+
+def get_feed_outage_status() -> dict:
+    """Feed health as the three documented states, on the public surface.
+
+    `data_layer`'s public surface is `orchestrator`, `tick_store` and
+    `feeds.*` — enforced by `scripts/ci/gate_g_import_discipline.py`. The
+    outage supervisor is an internal, so a consumer that wants feed health had
+    no sanctioned way to ask for it and `api/data_layer.py` reached past the
+    boundary instead (ff765d2, caught by the gate).
+
+    This is where it belongs rather than a convenience: the orchestrator is
+    what feeds the supervisor its observations on every read
+    (`_observe_feed_health`), so it already owns the relationship. The import
+    stays inside the function, matching that method, so importing the
+    orchestrator does not pull the supervisor in.
+
+    Raises whatever the supervisor raises. Callers that serve this over HTTP
+    must not turn a read failure into an optimistic body — a status endpoint
+    that reports "healthy" because it could not read the real state is worse
+    than one that fails.
+    """
+    from data_layer.outage import get_supervisor
+
+    return get_supervisor().as_dict()

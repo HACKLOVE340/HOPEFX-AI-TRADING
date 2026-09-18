@@ -27,24 +27,25 @@ import { useStore } from '../store';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 
 const TD_CROSS_LINKS = [
-  { label: 'Trade',           href: '/trade',           icon: '⚡', color: '#3b82f6' },
-  { label: 'Portfolio',       href: '/portfolio',       icon: '📊', color: '#8b5cf6' },
-  { label: 'Performance',     href: '/performance',     icon: '📈', color: '#06b6d4' },
-  { label: 'AI Strategy',     href: '/ai-strategy',     icon: '🤖', color: '#f59e0b' },
-  { label: 'Journal',         href: '/journal',         icon: '📓', color: '#10b981' },
-  { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡',  color: '#ec4899' },
-  { label: 'Watchlist',       href: '/watchlist',       icon: '👁',  color: '#38bdf8' },
-  { label: 'Signals',         href: '/signals',         icon: '📡', color: '#a78bfa' },
+  { label: 'Trade',           href: '/trade',           icon: Zap, color: '#3b82f6' },
+  { label: 'Portfolio',       href: '/portfolio',       icon: BarChart3, color: '#8b5cf6' },
+  { label: 'Performance',     href: '/performance',     icon: TrendingUp, color: '#06b6d4' },
+  { label: 'AI Strategy',     href: '/ai-strategy',     icon: Bot, color: '#f59e0b' },
+  { label: 'Journal',         href: '/journal',         icon: NotebookPen, color: '#10b981' },
+  { label: 'Risk Calculator', href: '/risk-calculator', icon: Shield,  color: '#ec4899' },
+  { label: 'Watchlist',       href: '/watchlist',       icon: Eye,  color: '#38bdf8' },
+  { label: 'Signals',         href: '/signals',         icon: Radio, color: '#a78bfa' },
 ];
 // useBootstrapData and useWebSocket are intentionally NOT imported here —
 // both are managed globally in AppShell (App.tsx) to prevent duplicate
 // polling and duplicate WebSocket connections on page navigation.
 import { PanelErrorBoundary } from '../components/ui/PanelErrorBoundary';
-import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/Skeleton';
+import { PanelSkeleton, ChartSkeleton } from '../components/ui/Skeleton';
 
 // ── Eagerly loaded (above-the-fold, tiny) ─────────────────────────────────────
 import { LivePriceTicker }  from '../components/panels/LivePriceTicker';
 import { AccountBar }       from '../components/terminal/AccountBar';
+import { BarChart3, Bot, Eye, NotebookPen, Radio, Shield, TrendingUp, Zap } from 'lucide-react';
 
 
 // ── Quick-action bar ──────────────────────────────────────────────────────────
@@ -79,17 +80,17 @@ const QuickActionBar: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginRight: 4 }}>
         <Link
           to="/dashboard"
-          style={{ fontSize: 10, color: '#475569', textDecoration: 'none', fontWeight: 600, letterSpacing: 0.5 }}
+          style={{ fontSize: 10, color: 'var(--text-faint)', textDecoration: 'none', fontWeight: 600, letterSpacing: 0.5 }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#64748b'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
         >
           HOME
         </Link>
         <span style={{ fontSize: 10, color: '#1e293b' }}>›</span>
-        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
       </div>
 
-      <div style={{ width: 1, height: 20, background: '#1e293b', flexShrink: 0 }} />
+      <div style={{ width: 1, height: 20, background: 'var(--raised)', flexShrink: 0 }} />
 
       {/* Today P&L */}
       <div style={{
@@ -99,16 +100,16 @@ const QuickActionBar: React.FC = () => {
         border: `1px solid ${pnlColor}30`,
         borderRadius: 6, flexShrink: 0,
       }}>
-        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>OPEN P&L</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: pnlColor, fontFamily: 'monospace' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 1 }}>OPEN P&L</span>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 800, color: pnlColor, fontFamily: 'monospace' }}>
           {unrealisedPnl >= 0 ? '+' : ''}{Number(unrealisedPnl).toFixed(2)}
         </span>
         {positions.length > 0 && (
-          <span style={{ fontSize: 10, color: '#475569' }}>{positions.length} pos</span>
+          <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{positions.length} pos</span>
         )}
       </div>
 
-      <div style={{ width: 1, height: 20, background: '#1e293b', flexShrink: 0 }} />
+      <div style={{ width: 1, height: 20, background: 'var(--raised)', flexShrink: 0 }} />
 
       {/* Quick nav buttons */}
       {actions.map(({ label, path, color }) => (
@@ -119,7 +120,7 @@ const QuickActionBar: React.FC = () => {
             background: 'transparent',
             border: `1px solid ${color}30`,
             borderRadius: 6,
-            color: '#94a3b8',
+            color: 'var(--text-dim)',
             fontSize: 11,
             fontFamily: 'inherit',
             cursor: 'pointer',
@@ -168,7 +169,7 @@ function DashboardInner() {
 
   return (
     <div
-      className="flex flex-col bg-[#080c14] overflow-y-auto"
+      className="flex flex-col bg-[var(--bg)] overflow-y-auto"
       style={{ fontFamily: "'Inter', system-ui, sans-serif", flex: 1, minHeight: 0 }}
     >
       {/* ── Top: price ticker + account bar + quick actions ─────────────── */}
@@ -186,23 +187,31 @@ function DashboardInner() {
           panel (e.g. Risk's feed-source list) scrolls internally instead of
           ballooning the whole row. Each cell is `grid` so its Panel stretches
           to fill the cell — no empty gaps. The page scrolls if it overflows. */}
+      {/* `min-w-0` alongside `min-h-0`: a grid item defaults to
+          `min-width: auto`, so it refuses to shrink below its content's
+          intrinsic width and OVERFLOWS the track instead. At col-span-2
+          (~230px on a 1440px viewport) that clipped the Risk panel's own
+          two-column grid mid-number — equity rendered as "$100,000.(" — which
+          is unreadable on the one figure a trader most needs to trust.
+          The vertical equivalent was already handled above; this is the same
+          fix on the other axis. See audit F166. */}
       <div className="hidden lg:grid grid-cols-12 auto-rows-[minmax(300px,380px)] gap-2 p-2">
-        <div className="grid col-span-5 row-span-2 min-h-0">
+        <div className="grid col-span-5 row-span-2 min-h-0 min-w-0">
           <Suspense fallback={<ChartSkeleton />}><EquityCurveChart /></Suspense>
         </div>
-        <div className="grid col-span-3 row-span-2 min-h-0">
+        <div className="grid col-span-3 row-span-2 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={6} />}><LiveSignalFeedGuarded /></Suspense>
         </div>
-        <div className="grid col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><RiskDashboardGuarded /></Suspense>
         </div>
-        <div className="grid col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={8} />}><OrderBookDepthGuarded /></Suspense>
         </div>
-        <div className="grid col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={3} />}><SentimentGaugeGuarded /></Suspense>
         </div>
-        <div className="grid col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={5} />}><MicrostructurePanelGuarded /></Suspense>
         </div>
       </div>
@@ -226,13 +235,13 @@ function DashboardInner() {
       {/* ── Bottom row: macro calendar · orchestrator health · ML model ─── */}
       {/* Desktop */}
       <div className="hidden lg:grid h-[260px] grid-cols-12 gap-2 px-2 pb-2">
-        <div className="grid col-span-5 min-h-0">
+        <div className="grid col-span-5 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={3} />}><MacroCalendarGuarded /></Suspense>
         </div>
-        <div className="grid col-span-4 min-h-0">
+        <div className="grid col-span-4 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><OrchestratorHealthGridGuarded /></Suspense>
         </div>
-        <div className="grid col-span-3 min-h-0">
+        <div className="grid col-span-3 min-h-0 min-w-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><MLModelPanelGuarded /></Suspense>
         </div>
       </div>

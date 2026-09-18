@@ -10,8 +10,13 @@
  * Admin/ops surface — gated at the route level.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  Sparkles, Radar, FlaskConical, Cpu, RefreshCw,
+   Activity,
+} from 'lucide-react';
 import { mlOpsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { PageShell } from '../components/system/PageShell';
 
 interface Health {
   running?: boolean; retraining_state?: string; can_retrain?: boolean;
@@ -133,21 +138,52 @@ const MLDashboard: React.FC = () => {
     { label: 'Drift', value: driftValue() },
   ];
 
+  /*
+   * On the standard shell.
+   *
+   * The page carried its own `maxWidth: 1100` and its own padding, which is the
+   * twelfth width `PageShell` was built to replace; `wide` is the tier it now
+   * shares with the other analytics pages. The icon moved from inside the h1 to
+   * the shell's `icon` slot — the same icon, in the place every other page puts
+   * it — and both buttons became `actions`. Nothing it displayed is gone.
+   */
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', color: '#e2e8f0' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>🤖 ML-Ops</h1>
+    <PageShell
+      title="ML-Ops"
+      icon={Cpu}
+      width="wide"
+      subtitle="Pipeline health, drift checks and retraining"
+      /* Hand-picked, ahead of the derived links. These were rendered inside the
+         body before the migration, which with PageShell's own footer on by
+         default would have put two "Where to next" blocks on the page. */
+      related={[
+        { to: '/intelligence', label: 'AI intelligence', hint: 'Model health and attribution', icon: Sparkles },
+        { to: '/observability', label: 'Engine monitor', hint: 'Live orchestrator panels', icon: Activity },
+        { to: '/ab-testing', label: 'A/B testing', hint: 'Compare model versions', icon: FlaskConical },
+        { to: '/signals', label: 'Signal feed', hint: 'What the model publishes', icon: Radar },
+      ]}
+      actions={(
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Refresh</button>
+          <button
+            onClick={load}
+            aria-label="Refresh ML-Ops status"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
+                       font-bold text-[var(--link)] cursor-pointer transition-colors duration-150
+                       hover:bg-[rgba(59,130,246,0.25)] focus-visible:outline-none
+                       focus-visible:ring-2 focus-visible:ring-sky-500"
+            style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)' }}
+          >
+            <RefreshCw size={13} strokeWidth={2} aria-hidden /> Refresh
+          </button>
           <button onClick={retrain} disabled={busy === 'retrain' || health?.can_retrain === false}
-            style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, cursor: busy === 'retrain' ? 'default' : 'pointer', opacity: health?.can_retrain === false ? 0.5 : 1 }}>
+            style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, cursor: busy === 'retrain' ? 'default' : 'pointer', opacity: health?.can_retrain === false ? 0.5 : 1 }}>
             {busy === 'retrain' ? 'Retraining…' : 'Trigger Retrain'}
           </button>
         </div>
-      </div>
-
-      {msg && <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: '#60a5fa', marginBottom: 16 }}>{msg}</div>}
-      {loading && <div style={{ color: '#64748b', padding: 20 }}>Loading pipeline…</div>}
+      )}
+    >
+      {msg && <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: 'var(--link)', marginBottom: 16 }}>{msg}</div>}
+      {loading && <div style={{ color: 'var(--text-muted)', padding: 20 }}>Loading pipeline…</div>}
       {!loading && err && (
         <div style={{ padding: '12px 16px', background: '#2a1215', border: '1px solid #7f1d1d', borderRadius: 8, color: '#fca5a5', marginBottom: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: failedParts.length ? 4 : 0 }}>{err}</div>
@@ -165,24 +201,24 @@ const MLDashboard: React.FC = () => {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
             {tiles.map((t) => (
-              <div key={t.label} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
+              <div key={t.label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>{t.value}</div>
               </div>
             ))}
           </div>
 
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8', margin: '0 0 10px' }}>Shadow Models</h2>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12, marginBottom: 20 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Shadow Models</h2>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12, marginBottom: 20 }}>
             {Object.keys(shadows).length === 0 ? (
-              <div style={{ color: '#64748b', padding: 8 }}>No shadow deployments.</div>
+              <div style={{ color: 'var(--text-muted)', padding: 8 }}>No shadow deployments.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {Object.entries(shadows).map(([id]) => (
-                  <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: '#0f172a', borderRadius: 8 }}>
+                  <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: 'var(--surface)', borderRadius: 8 }}>
                     <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 12 }}>{id}</span>
                     <button onClick={() => promote(id)} disabled={busy === `promote:${id}`}
-                      style={{ padding: '4px 12px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, color: '#4ade80', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                      style={{ padding: '4px 12px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, color: 'var(--gain)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                       {busy === `promote:${id}` ? 'Promoting…' : 'Promote'}
                     </button>
                   </div>
@@ -191,14 +227,14 @@ const MLDashboard: React.FC = () => {
             )}
           </div>
 
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8', margin: '0 0 10px' }}>Retrain / Promotion History</h2>
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 12 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Retrain / Promotion History</h2>
+          <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12 }}>
             {history.length === 0 ? (
-              <div style={{ color: '#64748b', padding: 8 }}>No retrain history yet.</div>
+              <div style={{ color: 'var(--text-muted)', padding: 8 }}>No retrain history yet.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {history.map((h, i) => (
-                  <div key={i} style={{ padding: '6px 10px', background: '#0f172a', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', color: '#94a3b8', wordBreak: 'break-all' }}>
+                  <div key={i} style={{ padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', color: 'var(--text-dim)', wordBreak: 'break-all' }}>
                     {typeof h === 'string' ? h : JSON.stringify(h)}
                   </div>
                 ))}
@@ -207,7 +243,7 @@ const MLDashboard: React.FC = () => {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

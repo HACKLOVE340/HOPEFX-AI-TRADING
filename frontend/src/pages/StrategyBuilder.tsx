@@ -9,6 +9,7 @@
  * Pick a template, tune its parameters + symbol/timeframe, and deploy it as a
  * live dynamic strategy. The node-type catalogue is shown for reference.
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { nocodeApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
@@ -21,7 +22,7 @@ interface NodeType { id: string; name: string; params?: string[] }
 
 const SYMBOLS = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSD', 'ETHUSD'];
 const TIMEFRAMES = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
-const COMPLEXITY_COLOR: Record<string, string> = { beginner: '#4ade80', intermediate: '#fbbf24', advanced: '#f87171' };
+const COMPLEXITY_COLOR: Record<string, string> = { beginner: 'var(--gain)', intermediate: 'var(--warn)', advanced: 'var(--loss)' };
 
 const StrategyBuilder: React.FC = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -73,31 +74,31 @@ const StrategyBuilder: React.FC = () => {
     }
   };
 
-  const labelStyle: React.CSSProperties = { fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 4 };
-  const inputStyle: React.CSSProperties = { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: '8px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' };
+  const labelStyle: React.CSSProperties = { fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 4 };
+  const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box' };
 
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto', color: '#e2e8f0' }}>
+    <PageShell title="Strategy Builder" width="standard">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>🧩 Strategy Builder</h1>
-        <button onClick={() => setShowCatalog((v) => !v)} style={{ padding: '6px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+
+        <button onClick={() => setShowCatalog((v) => !v)} style={{ padding: '6px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
           {showCatalog ? 'Hide' : 'Show'} node catalogue
         </button>
       </div>
 
-      {loading && <div style={{ color: '#64748b', padding: 20 }}>Loading templates…</div>}
+      {loading && <div style={{ color: 'var(--text-muted)', padding: 20 }}>Loading templates…</div>}
       {!loading && err && (
         <div style={{ padding: '12px 16px', background: '#2a1215', border: '1px solid #7f1d1d', borderRadius: 8, color: '#fca5a5', marginBottom: 16 }}>{err}</div>
       )}
 
       {showCatalog && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 14, marginBottom: 20 }}>
+        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 14, marginBottom: 20 }}>
           {Object.entries(nodeTypes).map(([group, items]) => (
             <div key={group} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{group.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{group.replace(/_/g, ' ')}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {items.map((it) => (
-                  <span key={it.id} title={(it.params ?? []).join(', ')} style={{ fontSize: 12, padding: '3px 9px', background: '#0f172a', border: '1px solid #334155', borderRadius: 6 }}>{it.name}</span>
+                  <span key={it.id} title={(it.params ?? []).join(', ')} style={{ fontSize: 12, padding: '3px 9px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6 }}>{it.name}</span>
                 ))}
               </div>
             </div>
@@ -108,16 +109,16 @@ const StrategyBuilder: React.FC = () => {
       {!loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 12, marginBottom: 20 }}>
           {templates.length === 0 && !err && (
-            <div style={{ color: '#64748b' }}>No templates available.</div>
+            <div style={{ color: 'var(--text-muted)' }}>No templates available.</div>
           )}
           {templates.map((t) => (
-            <button key={t.id} onClick={() => pick(t)} style={{ textAlign: 'left', cursor: 'pointer', background: selected?.id === t.id ? '#1c2438' : '#1e293b', border: `1px solid ${selected?.id === t.id ? '#3b82f6' : '#334155'}`, borderRadius: 10, padding: '14px 16px', color: 'inherit' }}>
+            <button key={t.id} onClick={() => pick(t)} style={{ textAlign: 'left', cursor: 'pointer', background: selected?.id === t.id ? '#1c2438' : 'var(--raised)', border: `1px solid ${selected?.id === t.id ? '#3b82f6' : '#334155'}`, borderRadius: 10, padding: '14px 16px', color: 'inherit' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <span style={{ fontWeight: 700 }}>{t.name}</span>
-                {t.complexity && <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: COMPLEXITY_COLOR[t.complexity] ?? '#94a3b8' }}>{t.complexity}</span>}
+                {t.complexity && <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: COMPLEXITY_COLOR[t.complexity] ?? 'var(--text-dim)' }}>{t.complexity}</span>}
               </div>
-              {t.category && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{t.category}</div>}
-              {t.description && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>{t.description}</div>}
+              {t.category && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t.category}</div>}
+              {t.description && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6 }}>{t.description}</div>}
             </button>
           ))}
         </div>
@@ -125,7 +126,7 @@ const StrategyBuilder: React.FC = () => {
 
       {/* Configure & deploy the selected template */}
       {selected && (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 20 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 14px' }}>Configure “{selected.name}”</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
             <label>
@@ -155,7 +156,7 @@ const StrategyBuilder: React.FC = () => {
           </div>
 
           {deployMsg && (
-            <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: '#60a5fa', marginBottom: 12, fontSize: 13 }}>{deployMsg}</div>
+            <div style={{ padding: '10px 14px', background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, color: 'var(--link)', marginBottom: 12, fontSize: 'var(--fs-body)'}}>{deployMsg}</div>
           )}
 
           <button onClick={deploy} disabled={deploying} style={{ padding: '10px 20px', background: deploying ? '#1e3a5f' : '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: deploying ? 'default' : 'pointer' }}>
@@ -163,7 +164,7 @@ const StrategyBuilder: React.FC = () => {
           </button>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 

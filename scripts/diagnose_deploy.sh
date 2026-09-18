@@ -154,7 +154,7 @@ if [ -f .env ]; then
     DBPW="$(grep -E '^DB_PASSWORD=' .env | head -1 | cut -d= -f2-)"
     URLPW="$(grep -E '^DATABASE_URL=' .env | head -1 | sed -nE 's#.*://[^:]+:([^@]+)@.*#\1#p')"
     if [ -n "${PGPW}" ] && [ "${PGPW}" = "${DBPW}" ] && [ "${PGPW}" = "${URLPW}" ]; then
-        echo "  ok      POSTGRES_PASSWORD == DB_PASSWORD == password inside DATABASE_URL"
+        echo "  ok      POSTGRES_PASSWORD / DB_PASSWORD / DATABASE_URL all agree"
     else
         echo "  MISMATCH between POSTGRES_PASSWORD / DB_PASSWORD / DATABASE_URL"
         echo "          regenerate with: python3 scripts/bootstrap_env.py --domain <domain> --force"

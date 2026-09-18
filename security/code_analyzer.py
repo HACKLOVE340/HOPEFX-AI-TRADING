@@ -189,6 +189,14 @@ _NAN_GUARD_RE = re.compile(
     r"""dropna\(|fillna\(|isnan\(|isfinite\(|notna\(|notnull\(|np\.nan_to_num\(|\.replace\(.*np\.nan"""
 )
 
+# np.log/sqrt/exp of a NUMERIC LITERAL. The rule flags those calls because they
+# produce NaN for invalid inputs — but `np.sqrt(252)` is decided at authoring
+# time and cannot be NaN unless it was written that way, so an annualisation
+# constant tripped a high-severity gate with no defect behind it. Only a bare
+# literal argument is exempt; a variable can hold a negative number, which is
+# exactly what the rule exists for.
+_NAN_SAFE_LITERAL_CALL_RE = re.compile(r"""np\.(?:log|sqrt|exp)\(\s*[-+]?\d[\d_]*(?:\.\d*)?(?:[eE][-+]?\d+)?\s*\)""")
+
 # Division by zero risk — dividing by a variable without a zero-check nearby
 _DIV_ZERO_RE = re.compile(r"""(?<![=!<>])/(?![/=])""")  # bare / operator
 _DIV_SAFE_RE = re.compile(r"""if.*==\s*0|if.*!=\s*0|max\(.*,\s*1\)|np\.where|try:|except""")
@@ -425,7 +433,7 @@ class _ASTAnalyzer(ast.NodeVisitor):
                 return
             # Check the except line itself for a nosec annotation
             except_line = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
-            if "nosec" in except_line or "# noqa" in except_line:
+            if _is_suppressed(except_line):
                 self.generic_visit(node)
                 return
             self._add(
@@ -736,7 +744,28 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
             )
 
         # NaN leak — numeric aggregation without a NaN guard in the surrounding context
-        if _NAN_LEAK_RE.search(line) and not is_test:
+        #
+        # `in_doc` is consulted here for the same reason the look-ahead rule
+        # consults it: a docstring that *describes* an aggregation — "this
+        # replaces ``returns[returns < 0].std()``" — is not executed. The
+        # exemption already existed and this rule simply never invoked it, so
+        # documenting a numeric expression raised a high-severity finding in a
+        # repo whose gate requires zero.
+        #
+        # Literal-argument np.sqrt/log/exp calls are removed before the match so
+        # a constant like np.sqrt(252) does not stand in for a real leak; any
+        # other occurrence on the same line still matches.
+        # Comment text is not executed either. `in_doc` covers triple-quoted
+        # strings only, so a `#` comment describing an aggregation still tripped
+        # the rule — the comment block above this one did, which is how the gap
+        # was found. `_strip_string_literals` locates the real comment marker so
+        # a `#` inside a string is not mistaken for one. Suppression markers are
+        # read from the raw lines elsewhere and are unaffected.
+        _code_only = _strip_string_literals(line)
+        _hash = _code_only.find("#")
+        _leak_probe = line[:_hash] if _hash != -1 else line
+        _leak_probe = _NAN_SAFE_LITERAL_CALL_RE.sub("", _leak_probe)
+        if _NAN_LEAK_RE.search(_leak_probe) and not is_test and not in_doc:
             # Check a window of ±5 lines for a NaN guard
             window_start = max(0, i - 6)
             window_end = min(len(lines), i + 5)
@@ -941,6 +970,13 @@ _SKIP_DIRS = {
     "data",
     "logs",
     "quarantine",
+    # Vendored agent-skill assets (.claude/skills/**) are third-party reference
+    # material, not HOPEFX production code: upstream templates deliberately ship
+    # `...` placeholders for a developer to fill in, and their helper scripts are
+    # not ours to edit. Scanning them made this gate fail on files no HOPEFX
+    # runtime ever imports. Scope correction, not a severity relaxation — every
+    # rule still applies at full strength to all first-party code.
+    ".claude",
 }
 
 # File patterns to include

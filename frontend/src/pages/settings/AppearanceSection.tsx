@@ -5,6 +5,9 @@ import type { AppearanceSettings } from './types';
 import { ACCENT_COLORS } from './types';
 import { Card, SectionHeader, Field, Select, Toggle, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { Palette } from 'lucide-react';
+import { useDensityPref } from '../../lib/densityPref';
+import type { Density } from '../../components/system/PageSurface';
 
 const DEFAULT: AppearanceSettings = {
   theme: 'dark',
@@ -28,7 +31,21 @@ function applyTheme(theme: AppearanceSettings['theme'], accent: string) {
   root.setAttribute('data-theme', isDark ? 'dark' : 'light');
 }
 
+/**
+ * The density tiers, and what each one is FOR.
+ *
+ * Named by what they do to the page rather than by their token values: nobody
+ * chooses a setting called "promax" on the strength of the word.
+ */
+const DENSITIES: readonly { value: Density | null; label: string; hint: string }[] = [
+  { value: null, label: 'Per page', hint: 'Each page picks what suits it. The default.' },
+  { value: 'comfortable', label: 'Comfortable', hint: 'More room. Easier to read, less on screen.' },
+  { value: 'promax', label: 'Pro', hint: 'Tighter. A working balance.' },
+  { value: 'ultra', label: 'Ultra', hint: 'Tightest. The most on screen at once.' },
+];
+
 const AppearanceSection: React.FC = () => {
+  const [density, setDensity] = useDensityPref();
   const [form, setForm] = useState<AppearanceSettings>(() => {
     try {
       const cached = localStorage.getItem(STORAGE_KEY);
@@ -79,11 +96,11 @@ const AppearanceSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🎨" title="Appearance" description="Theme, colors, and display preferences." />
+      <SectionHeader icon={<Palette size={18} aria-hidden />} title="Appearance" description="Theme, colors, and display preferences." />
 
       {/* Theme */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>Theme</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Theme</h3>
         <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
           {(['dark', 'light', 'system'] as const).map((t) => (
             <button
@@ -92,9 +109,9 @@ const AppearanceSection: React.FC = () => {
               style={{
                 flex: 1, padding: '14px 8px', borderRadius: 10, cursor: 'pointer',
                 border: `2px solid ${form.theme === t ? '#3b82f6' : '#334155'}`,
-                background: form.theme === t ? '#0c1a2e' : '#0f172a',
-                color: form.theme === t ? '#60a5fa' : '#64748b',
-                fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+                background: form.theme === t ? '#0c1a2e' : 'var(--surface)',
+                color: form.theme === t ? 'var(--link)' : 'var(--text-muted)',
+                fontSize: 'var(--fs-body)', fontWeight: 600, transition: 'all 0.15s',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
               }}
             >
@@ -106,12 +123,62 @@ const AppearanceSection: React.FC = () => {
           ))}
         </div>
 
+        {/*
+          A button group, not a `Field`.
+
+          `Field` renders a `<label>` that WRAPS its control, which is right for
+          one input and wrong for four buttons: a label may name a single
+          control, and wrapping a group makes every button carry the same
+          accessible name. The Theme picker above already uses a heading plus a
+          group for exactly this reason.
+        */}
+        <div style={{ marginBottom: 20 }}>
+          <h3 id="density-label" style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>
+            Density
+          </h3>
+          <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: '0 0 12px' }}>
+            How tightly the interface packs. Trading surfaces — positions, P&amp;L, the
+            order ticket — stay at Ultra whatever you choose here, because how many
+            rows of open risk you can see at once is not a preference.
+          </p>
+          <div role="group" aria-labelledby="density-label" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {DENSITIES.map((option) => {
+              const selected = density === option.value;
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => setDensity(option.value)}
+                  aria-pressed={selected}
+                  style={{
+                    flex: '1 1 140px', padding: '12px 10px', borderRadius: 10, cursor: 'pointer',
+                    border: `2px solid ${selected ? 'var(--link)' : 'var(--border)'}`,
+                    background: selected ? 'var(--surface-raised)' : 'var(--surface)',
+                    color: selected ? 'var(--link)' : 'var(--text-muted)',
+                    fontSize: 'var(--fs-body)', fontWeight: 600, transition: 'border-color .15s, color .15s',
+                    display: 'grid', gap: 4, textAlign: 'left',
+                  }}
+                >
+                  {option.label}
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-dim)' }}>
+                    {option.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <Field label="Accent color">
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {ACCENT_COLORS.map((color) => (
               <button
                 key={color}
                 onClick={() => update({ accent_color: color })}
+                // The only text here is a hex code, which says what the swatch
+                // is rather than what pressing it does.
+                aria-label={`Accent colour ${color}`}
+                aria-pressed={form.accent_color === color}
                 title={color}
                 style={{
                   width: 36, height: 36, borderRadius: '50%', background: color,
@@ -126,9 +193,10 @@ const AppearanceSection: React.FC = () => {
               type="color"
               value={form.accent_color}
               onChange={(e) => update({ accent_color: e.target.value })}
+              aria-label="Custom accent colour"
               title="Custom color"
               style={{
-                width: 36, height: 36, borderRadius: '50%', border: '2px solid #334155',
+                width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--border-strong)',
                 cursor: 'pointer', background: 'transparent', padding: 0,
               }}
             />
@@ -138,7 +206,7 @@ const AppearanceSection: React.FC = () => {
 
       {/* Charts */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>Charts</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>Charts</h3>
         <Field label="Default chart style">
           <Select
             value={form.chart_style}
@@ -155,7 +223,7 @@ const AppearanceSection: React.FC = () => {
 
       {/* Display */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 8 }}>Display</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Display</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <Field label="Number format">
             <Select

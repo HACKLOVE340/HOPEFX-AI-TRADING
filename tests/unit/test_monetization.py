@@ -661,12 +661,26 @@ class TestStripeIntegration:
         self._run_with_mock(_test)
 
     def test_handle_webhook(self):
+        """`payment_intent.succeeded` is acknowledged, not claimed as an action.
+
+        This asserted `result["status"] == "success"` against a handler that
+        logged one line and returned `{"status": "success", "action":
+        "payment_confirmed"}` — a claim about work no code performed. The test
+        was therefore pinning the defect in place.
+
+        The real work for this event happens in the endpoint
+        (`api/monetization.py` activates a marketplace purchase) before this
+        dispatcher is reached, so the handler having no side effect is correct.
+        What was wrong was naming one.
+        """
+
         def _test(si, mock_stripe):
             result = si.handle_webhook(
                 event_type=StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value,
                 event_data={"id": "pi_test123"},
             )
-            assert result["status"] == "success"
+            assert result["status"] == "acknowledged"
+            assert "action" not in result, "an event nothing acts on must not name an action"
 
         self._run_with_mock(_test)
 

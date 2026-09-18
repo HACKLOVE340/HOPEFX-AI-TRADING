@@ -82,8 +82,10 @@ __version__ = "1.0.0"
 
 # ── Macro-aware model loader ──────────────────────────────────────────────────
 import hashlib as _hashlib
+import os as _os
 import json as _json
 import logging as _logging
+from dataclasses import dataclass as _dataclass
 from pathlib import Path as _Path
 from typing import Any as _Any
 from api.error_details import safe_error
@@ -188,35 +190,102 @@ def _sha256(path: _Path) -> str:
     return h.hexdigest()
 
 
+# Environments where bootstrapping an integrity baseline from whatever happens
+# to be on disk is acceptable. Anything else -- production, staging, a typo --
+# requires a baseline that already exists.
+_BOOTSTRAP_OK_ENVS = frozenset({"development", "dev", "test", "testing", "local"})
+
+
+def _bootstrap_allowed(directory: _Path) -> bool:
+    """Whether *directory* may have its integrity baseline created on demand.
+
+    Two cases are legitimate:
+
+    * a recognised development environment, where no baseline has been shipped;
+    * any directory that is not the packaged one -- notably ``ML_MODEL_DIR``,
+      which holds models an operator's own retrain job just wrote. There is no
+      shipped baseline for those and could not be.
+
+    The packaged directory in production is the case that is not legitimate: its
+    baseline is committed alongside the artefacts it covers, so a missing one
+    means the file was removed, not that none was ever made.
+    """
+    if directory.resolve() != _PACKAGED.resolve():
+        return True
+    return _os.getenv("APP_ENV", "development").strip().lower() in _BOOTSTRAP_OK_ENVS
+
+
 def _verify_checksum(path: _Path) -> bool:
     """
     Verify a model file against the stored SHA-256 checksum.
 
-    Returns True if:
-    - The checksum file does not exist (first run — no baseline yet).
-    - The file matches the stored checksum.
+    Returns False -- refusing the load -- when the file does not match its
+    recorded checksum, and, in production, when there is no usable record to
+    match it against.
 
-    Returns False (and logs CRITICAL) if the file has been tampered with.
-    The checksum file is written automatically on first successful load so
-    subsequent loads can detect modifications.
+    This check gates a ``pickle.load`` (see ``_try_load``), so what it permits
+    is arbitrary code execution, not merely a wrong prediction. It used to
+    return True in three separate cases:
+
+    1. the checksum file did not exist -- it recorded a baseline from whatever
+       was on disk and allowed the load;
+    2. the checksum file could not be parsed -- "skipping verification";
+    3. the file was not listed in the baseline -- it recorded and allowed.
+
+    Each is a one-step bypass: delete the baseline, corrupt it, or give the
+    payload a name the baseline does not mention. Worse, ``model_checksums.json``
+    was not committed, so case 1 fired on **every fresh deployment** -- the
+    check established its own reference from the artefacts it was meant to
+    verify, on every container start, and could only ever have detected
+    tampering that happened after the first load inside a container that was
+    about to be replaced anyway.
+
+    The baseline is now committed for the packaged directory, and the three
+    fail-open branches refuse in production instead. Bootstrapping remains for
+    development and for ``ML_MODEL_DIR``, where the operator's own retrain job
+    wrote the files and no shipped baseline can exist.
     """
     checksum_file = _checksum_file_for(path.parent)
     if not checksum_file.exists():
-        # First run for this directory — record a baseline for it.
-        _record_checksums(path.parent)
-        return True
+        if _bootstrap_allowed(path.parent):
+            _record_checksums(path.parent)
+            return True
+        _ml_logger.critical(
+            "MODEL INTEGRITY BASELINE MISSING: %s does not exist. It is committed "
+            "with the packaged models, so its absence means it was removed. Refusing "
+            "to load %s rather than trusting the file to describe itself.",
+            checksum_file,
+            path.name,
+        )
+        return False
 
     try:
         stored = _json.loads(checksum_file.read_text())
     except Exception as exc:
-        _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
-        return True
+        if _bootstrap_allowed(path.parent):
+            _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
+            return True
+        _ml_logger.critical(
+            "MODEL INTEGRITY BASELINE UNREADABLE: %s (%s). Refusing to load %s.",
+            checksum_file,
+            exc,
+            path.name,
+        )
+        return False
 
     name = path.name
     if name not in stored:
-        # New model file not yet in this directory's registry — record and allow
-        _record_checksums(path.parent)
-        return True
+        if _bootstrap_allowed(path.parent):
+            _record_checksums(path.parent)
+            return True
+        _ml_logger.critical(
+            "MODEL NOT IN INTEGRITY BASELINE: %s is not listed in %s. A model file "
+            "that arrived without being recorded is exactly what this check exists "
+            "to catch. Refusing to load it.",
+            name,
+            checksum_file,
+        )
+        return False
 
     actual = _sha256(path)
     if actual != stored[name]:
@@ -249,50 +318,102 @@ def _record_checksums(directory: _Path | None = None) -> None:
         _ml_logger.warning("Could not record model checksums: %s", exc)
 
 
-def _try_load(path: _Path) -> _Any | None:
-    """Load a model file via joblib with SHA-256 integrity check.
+@_dataclass(frozen=True)
+class ArtifactLoad:
+    """The outcome of loading one model artifact, with the three failures kept apart.
 
-    Uses joblib (not raw pickle) — joblib handles numpy arrays more safely
-    and is the standard for sklearn/XGBoost pipelines.  Raw pickle is kept
-    as a fallback for files that joblib cannot read.
+    `_try_load` returned ``None`` for all of them, and one caller could not
+    afford the ambiguity: `_load_from_registry` checks ``exists()`` itself
+    before loading, so a ``None`` there means refused or unreadable — never
+    absent — and it returned ``(None, "")``, which is also what "no registry
+    configured" returns. `_load_models` then fell through its priority chain and
+    loaded a DIFFERENT model. An integrity refusal on the active model became a
+    silent model substitution.
 
-    On load failure a CRITICAL log is emitted with the exact remediation
-    command so operators can detect silent model degradation in log aggregators.
+    status is one of:
+
+    ``loaded``      the artifact is here, verified, and unpickled
+    ``absent``      no such file
+    ``refused``     `_verify_checksum` rejected it — a mismatch, or, in
+                    production, a file that arrived unlisted. An integrity
+                    event, not a missing file.
+    ``unreadable``  it passed integrity and then failed to unpickle. A
+                    different problem with a different remedy.
+    """
+
+    status: str
+    value: _Any | None = None
+    reason: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return self.status == "loaded"
+
+
+def load_artifact(path: _Path) -> ArtifactLoad:
+    """Load one model artifact, reporting WHICH way it failed.
+
+    See :class:`ArtifactLoad`. `_try_load` is the older entry point and is kept
+    as a thin wrapper over this, so its five call sites keep working unchanged.
+
+    This function deliberately does NOT decide what a caller should do about a
+    refusal. Whether an integrity refusal on the active model should halt
+    inference or fall through to the next model in the chain is a policy
+    question for the owner — see MASTER_OUTSTANDING §A8, which names making the
+    distinction available as the half engineering may do without one.
     """
     if not path.exists():
-        return None
+        return ArtifactLoad("absent", None, f"{path.name} is not present")
+
     if not _verify_checksum(path):
-        # Checksum mismatch — refuse to load potentially tampered model
-        return None
+        # _verify_checksum has already logged CRITICAL with the specifics.
+        return ArtifactLoad(
+            "refused",
+            None,
+            f"{path.name} failed the integrity check — it exists but was refused, which is not the same as missing",
+        )
+
     try:
         import joblib as _joblib
 
-        return _joblib.load(path)  # nosec B301 - path is always from ml/saved_models (internal)
+        return ArtifactLoad("loaded", _joblib.load(path))  # nosec B301 - integrity-checked above
     except Exception as _jl_exc:
         _ml_logger.debug("joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc)
-        try:
-            import pickle as _pickle  # nosec B403
 
-            with _Path(path).open("rb") as f:
-                return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch
-        except Exception as exc:
-            import sys as _sys
+    try:
+        import pickle as _pickle  # nosec B403
 
-            _ml_logger.critical(
-                "CANNOT LOAD MODEL %s: %s\n"
-                "  Python version: %s\n"
-                "  This is usually a pickle protocol mismatch between the Python\n"
-                "  version used to train the model and the current runtime.\n"
-                "  Remediation (run inside Docker on Python 3.10):\n"
-                "    docker compose run --rm app python scripts/resave_models.py\n"
-                "  Or retrain from scratch:\n"
-                "    docker compose run --rm app python ml/train_advanced.py --years 50 --oos-years 3\n"
-                "  The engine will fall back to a weaker model — live trading is NOT recommended.",
-                path.name,
-                exc,
-                _sys.version,
-            )
-            return None
+        with _Path(path).open("rb") as f:
+            return ArtifactLoad("loaded", _pickle.load(f))  # nosec B301 - joblib failed; legacy fallback
+    except Exception as exc:
+        import sys as _sys
+
+        _ml_logger.critical(
+            "CANNOT LOAD MODEL %s: %s\n"
+            "  Python version: %s\n"
+            "  The artifact passed its integrity check and still could not be\n"
+            "  unpickled — usually a pickle protocol mismatch between the Python\n"
+            "  that trained it and this runtime.\n"
+            "  Production and the retrain workflows both run Python 3.12; an\n"
+            "  artifact pickled under anything else is loaded by nothing.\n"
+            "  Remediation:\n"
+            "    docker compose run --rm app python scripts/resave_models.py\n",
+            path.name,
+            exc,
+            _sys.version.split()[0],
+        )
+        return ArtifactLoad("unreadable", None, f"{path.name} passed integrity and failed to unpickle: {exc}")
+
+
+def _try_load(path: _Path) -> _Any | None:
+    """Load a model artifact, or return None.
+
+    The older entry point, kept because it has five call sites here. It cannot
+    say WHY a load failed — absent, refused and unreadable all arrive as None —
+    and that ambiguity had a consequence: see :class:`ArtifactLoad`. Any caller
+    that needs to tell them apart should use :func:`load_artifact` instead.
+    """
+    return load_artifact(path).value
 
 
 def _load_from_registry() -> "tuple[_Any | None, str]":
@@ -330,9 +451,33 @@ def _load_from_registry() -> "tuple[_Any | None, str]":
             _ml_logger.warning("_load_from_registry: active model file not found: %s", pkl_file)
             return None, ""
 
-        model = _try_load(pkl_file)
-        if model is None:
+        loaded = load_artifact(pkl_file)
+        if not loaded.ok:
+            # This used to be `if model is None: return None, ""` — the same
+            # value `_load_from_registry` returns when there is no registry at
+            # all. `_load_models` then falls through its priority chain and
+            # loads a DIFFERENT model, so an integrity refusal on the ACTIVE
+            # model became a silent substitution. The fall-through is unchanged
+            # (that policy is the owner's — §A8); what changes is that a refusal
+            # now says so, at a level an operator sees.
+            if loaded.status == "refused":
+                _ml_logger.critical(
+                    "ACTIVE MODEL REFUSED: %s (%s) failed its integrity check. The model "
+                    "chain will now fall through to the next candidate, so inference "
+                    "continues on a model that was NOT the one selected in registry.json.",
+                    active,
+                    pkl_file.name,
+                )
+            else:
+                _ml_logger.error(
+                    "Active model %s (%s) could not be loaded: %s — falling through to the "
+                    "next candidate in the chain.",
+                    active,
+                    pkl_file.name,
+                    loaded.reason,
+                )
             return None, ""
+        model = loaded.value
 
         # ── Unwrap stacking_dict format (MTF ensemble) ────────────────────────
         pkl_format = entry.get("pkl_format", "sklearn_estimator")
@@ -373,7 +518,11 @@ class StackingEnsemblePredictor:
     Calling ``predict_proba(X)`` returns an (N, 2) array where column 1 is
     P(up) — consistent with the sklearn API consumed by the signal engine.
 
-    Missing feature columns are filled with 0.0 (safe default for scaled features).
+    Missing feature columns are set to the training mean — 0.0 in *scaled*
+    space, applied after the scaler runs. Filling them with 0.0 beforehand
+    sent every naturally-scaled feature to ``z = -mean/std``, about -15 sigma
+    for a price column, so the model received a confident description of a
+    market that has never existed rather than an incomplete one (F145).
     """
 
     def __init__(self, payload: dict) -> None:
@@ -391,15 +540,36 @@ class StackingEnsemblePredictor:
         import numpy as np
         import pandas as pd
 
+        imputed = None  # boolean mask of cells with no live value
+
         if isinstance(X, pd.DataFrame):
             # Work on a copy to avoid mutating caller's DataFrame
             X_in = X.copy()
             if self._feature_cols:
                 for col in self._feature_cols:
                     if col not in X_in.columns:
-                        X_in[col] = 0.0
+                        X_in[col] = np.nan
                 X_in = X_in[self._feature_cols]
-            X_in = X_in.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            X_in = X_in.replace([np.inf, -np.inf], np.nan)
+
+            # Which cells have no live value. Recorded BEFORE any fill, because
+            # what the model must see for them depends on the space it is in.
+            imputed = X_in.isna().to_numpy()
+
+            # A finite placeholder so the scaler has numbers to work on. The
+            # value is irrelevant: every cell in `imputed` is overwritten after
+            # scaling.
+            X_in = X_in.fillna(0.0)
+
+            if imputed.any():
+                coverage = 1.0 - (imputed.sum() / imputed.size)
+                _ml_logger.warning(
+                    "StackingEnsemblePredictor: feature coverage %.1f%% — %d of %d cells "
+                    "had no live value and were set to the training mean",
+                    coverage * 100.0,
+                    int(imputed.sum()),
+                    int(imputed.size),
+                )
         else:
             X_in = X
 
@@ -407,7 +577,19 @@ class StackingEnsemblePredictor:
             try:
                 X_in = self._scaler.transform(X_in)
             except Exception as exc:
-                _ml_logger.debug("StackingEnsemblePredictor: scaler.transform failed: %s", exc)
+                # This used to log at DEBUG — off in production — and pass the
+                # UNSCALED frame to the base learners. A raw price of 3200 where
+                # the model expects a z-score is not a degraded prediction, it
+                # is a meaningless one, so refuse instead of guessing (F145).
+                _ml_logger.error("StackingEnsemblePredictor: scaler.transform failed: %s", exc)
+                raise RuntimeError("feature scaling failed; refusing to predict on an unscaled frame") from exc
+
+            if imputed is not None and imputed.any():
+                # 0.0 in scaled space IS the training mean. Filling before the
+                # scaler ran instead sent every naturally-scaled feature to
+                # z = -mean/std — about -15 sigma for a price column (F145).
+                X_in = np.asarray(X_in, dtype=float)
+                X_in[imputed] = 0.0
 
         base_probas = []
         for idx, m in enumerate(self._base_learners):

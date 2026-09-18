@@ -27,7 +27,7 @@
 
 import React from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { ConfirmDialogProvider, useConfirm } from '../components/ConfirmDialog';
@@ -39,7 +39,7 @@ const Harness: React.FC = () => {
       <button id="behind" onClick={() => void confirm({ title: 'Close everything?' })}>
         Close all
       </button>
-      <input id="other" />
+      <input id="other" aria-label="Another field on the page" />
     </div>
   );
 };

@@ -405,7 +405,7 @@ const ChartDashboard: React.FC = () => {
   // Inject global CSS once
   useEffect(() => { injectGlobalCSS(); }, []);
 
-  const handleChartClick = useCallback((ctx: ChartClickContext) => {
+  const handleChartClick = useCallback((_ctx: ChartClickContext) => {
     setShowAIBot(true);
     // Context is already written to store by CoreChart via setClickContext
     // AIChartBot reads it and auto-triggers analysis

@@ -47,6 +47,41 @@ describe('useVoice — unsupported environment', () => {
     expect(() => act(() => result.current.cancelSpeak())).not.toThrow();
     expect(result.current.speaking).toBe(false);
   });
+
+  it('normalizes financial terms before handing text to Web Speech', async () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'speechSynthesis');
+    const spoken: Array<{ text: string }> = [];
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        cancel: vi.fn(),
+        speak: (utterance: { text: string }) => spoken.push(utterance),
+      },
+    });
+    class FakeUtterance {
+      lang = '';
+      onboundary: ((event: SpeechSynthesisEvent) => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public text: string) {}
+    }
+    vi.stubGlobal('SpeechSynthesisUtterance', FakeUtterance);
+
+    try {
+      const { result } = renderHook(() => useVoice());
+      await act(async () => {
+        result.current.speak('XAUUSD reached SL');
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(spoken).toHaveLength(1);
+      expect(spoken[0]?.text).toBe('gold reached stop loss');
+    } finally {
+      if (original) Object.defineProperty(window, 'speechSynthesis', original);
+      else Reflect.deleteProperty(window, 'speechSynthesis');
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('voicePrefs', () => {

@@ -315,7 +315,7 @@ def dry_run(args: argparse.Namespace) -> None:
         sys.exit(0)
 
     except Exception:
-        logger.exception("Dry run failed: %s")
+        logger.exception("Dry run failed")
         sys.exit(1)
 
 

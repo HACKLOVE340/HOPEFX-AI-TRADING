@@ -451,7 +451,7 @@ class AutoRollbackManager:
             if cfg_path.exists():
                 import json as _json
 
-                cfg = _json.loads(cfg_path.read_text())
+                cfg = _json.loads(await asyncio.to_thread(cfg_path.read_text))
                 h.apply_config(cfg)
                 result.actions_taken.append("Restored auto-healing config from disk")
         except Exception as exc:
@@ -506,7 +506,8 @@ class AutoRollbackManager:
                 result.errors.append(f"Unsafe path rejected for git checkout: {rel_path!r}")
                 continue
             try:
-                proc = subprocess.run(  # nosec B603 B607
+                proc = await asyncio.to_thread(
+                    subprocess.run,  # nosec B603 B607
                     ["git", "checkout", "--", rel_path],
                     cwd=str(PROJECT_ROOT),
                     capture_output=True,
@@ -545,7 +546,8 @@ class AutoRollbackManager:
             import re as _re
 
             # Find last tag — fixed args, no user input
-            proc = subprocess.run(  # nosec B603 B607
+            proc = await asyncio.to_thread(
+                subprocess.run,  # nosec B603 B607
                 ["git", "describe", "--tags", "--abbrev=0"],
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,
@@ -564,7 +566,8 @@ class AutoRollbackManager:
                 return
 
             # Reset to last tag (soft reset — keeps working tree changes staged)
-            proc2 = subprocess.run(  # nosec B603 B607
+            proc2 = await asyncio.to_thread(
+                subprocess.run,  # nosec B603 B607
                 ["git", "reset", "--soft", last_tag],
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,

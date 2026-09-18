@@ -13,7 +13,7 @@ import type { IChartApi, ISeriesApi, UTCTimestamp, SeriesMarker } from 'lightwei
 import { useEquityCurve } from '../hooks/useChartData';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { COLORS, CHART_DIMS } from '../utils/design-tokens';
-import { formatPnl, formatPct, formatDateTime } from '../utils/formatters';
+import { formatPnl, formatPct } from '../utils/formatters';
 import { fmtRatio } from '../../../lib/utils';
 import type { EquityPoint } from '../types';
 
@@ -201,7 +201,7 @@ const EquityCurve: React.FC = () => {
       sharpeSerRef.current  = null;
       sortinoSerRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Drawdown sub-chart init ────────────────────────────────────────────────
   useEffect(() => {
@@ -236,7 +236,7 @@ const EquityCurve: React.FC = () => {
       ddChartRef.current = null;
       ddSerRef.current   = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Data update ────────────────────────────────────────────────────────────
   useEffect(() => {

@@ -156,7 +156,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: compact ? '12px 14px' : '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {empty && (
-          <div style={{ color: '#94a3b8', fontSize: fs, lineHeight: 1.6 }}>
+          <div style={{ color: 'var(--text-dim)', fontSize: fs, lineHeight: 1.6 }}>
             <div style={{ marginBottom: suggestions?.length ? 14 : 0 }}>{renderText(intro ?? 'Hi — how can I help?')}</div>
             {suggestions?.map(s => (
               <button
@@ -185,7 +185,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
                 background: own ? '#1e3a5f' : '#16233a',
                 border: `1px solid ${own ? '#1e4a7f' : '#243b5a'}`,
                 borderRadius: own ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                padding: pad, fontSize: fs, color: '#e2e8f0', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                padding: pad, fontSize: fs, color: 'var(--text)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               }}>
                 {renderText(t.content)}
               </div>
@@ -193,7 +193,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
           );
         })}
         {sending && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#64748b', fontSize: fs }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', fontSize: fs }}>
             <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: '#16233a' }}>🤖</div>
             <span>Thinking…</span>
           </div>
@@ -202,18 +202,19 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
       </div>
 
       {/* Input */}
-      <div style={{ borderTop: '1px solid #1e293b', padding: compact ? '10px 12px' : '12px 20px' }}>
+      <div style={{ borderTop: '1px solid var(--border)', padding: compact ? '10px 12px' : '12px 20px' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             ref={inputRef}
+            aria-label="Message"
             value={input}
             rows={1}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder ?? 'Ask the AI assistant…'}
             style={{
-              flex: 1, resize: 'none', maxHeight: 120, background: '#1e293b', border: '1px solid #334155',
-              borderRadius: 10, color: '#f1f5f9', fontSize: fs, outline: 'none', padding: pad, fontFamily: 'inherit',
+              flex: 1, resize: 'none', maxHeight: 120, background: 'var(--raised)', border: '1px solid var(--border-strong)',
+              borderRadius: 10, color: 'var(--text-strong)', fontSize: fs, outline: 'none', padding: pad, fontFamily: 'inherit',
             }}
           />
           {voice.sttSupported && (
@@ -224,9 +225,9 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
               aria-label={voice.listening ? 'Stop listening' : 'Speak your message'}
               aria-pressed={voice.listening}
               style={{
-                background: voice.listening ? '#dc2626' : '#1e293b',
+                background: voice.listening ? '#dc2626' : 'var(--raised)',
                 border: `1px solid ${voice.listening ? '#ef4444' : '#334155'}`, borderRadius: 10,
-                color: voice.listening ? '#fff' : '#94a3b8', cursor: 'pointer',
+                color: voice.listening ? '#fff' : 'var(--text-dim)', cursor: 'pointer',
                 fontSize: fs + 2, padding: compact ? '8px 11px' : '10px 13px',
               }}
             >
@@ -241,9 +242,9 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
               aria-label={speakReplies ? 'Mute spoken replies' : 'Read replies aloud'}
               aria-pressed={speakReplies}
               style={{
-                background: speakReplies ? '#1e3a5f' : '#1e293b',
+                background: speakReplies ? '#1e3a5f' : 'var(--raised)',
                 border: `1px solid ${speakReplies ? '#1d4ed8' : '#334155'}`, borderRadius: 10,
-                color: speakReplies ? '#60a5fa' : '#94a3b8', cursor: 'pointer',
+                color: speakReplies ? 'var(--link)' : 'var(--text-dim)', cursor: 'pointer',
                 fontSize: fs + 2, padding: compact ? '8px 11px' : '10px 13px',
               }}
             >
@@ -254,8 +255,8 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
             onClick={() => void send(input)}
             disabled={!input.trim() || sending}
             style={{
-              background: input.trim() && !sending ? '#3b82f6' : '#1e293b', border: 'none', borderRadius: 10,
-              color: input.trim() && !sending ? '#fff' : '#475569', cursor: input.trim() && !sending ? 'pointer' : 'not-allowed',
+              background: input.trim() && !sending ? '#3b82f6' : 'var(--raised)', border: 'none', borderRadius: 10,
+              color: input.trim() && !sending ? '#fff' : 'var(--text-faint)', cursor: input.trim() && !sending ? 'pointer' : 'not-allowed',
               fontSize: fs, fontWeight: 700, padding: compact ? '8px 14px' : '10px 18px',
             }}
           >
@@ -263,7 +264,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
           </button>
         </div>
         {!empty && (
-          <button onClick={() => void clear()} style={{ marginTop: 6, background: 'none', border: 'none', color: '#475569', fontSize: 11, cursor: 'pointer', padding: 0 }}>
+          <button onClick={() => void clear()} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: 11, cursor: 'pointer', padding: 0 }}>
             Clear conversation
           </button>
         )}

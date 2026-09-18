@@ -167,7 +167,15 @@ async def test_per_user_namespace_is_stable_under_test_env(monkeypatch):
 
     first = await reg.resolve("alice")
     second = await reg.resolve("alice")
-    assert first.broker._redis_namespace == second.broker._redis_namespace == "user:alice"
+    # The property, not the literal. Under a test run the namespace is scoped to
+    # the current test (brokers/paper_trading.py), so asserting the exact string
+    # "user:alice" would pin an implementation detail rather than the
+    # requirement — which is that one user reaches one account every time.
+    # Production still resolves to exactly "user:alice"; that is asserted in
+    # tests/unit/test_paper_broker_test_isolation.py.
+    assert first.broker._redis_namespace == second.broker._redis_namespace
+    assert first.broker._redis_namespace.endswith("user:alice")
+    assert first.broker is second.broker
 
 
 # ── Honesty about live venues ────────────────────────────────────────────────

@@ -325,6 +325,33 @@ def test_model_performance_doc_accuracy_within_tolerance() -> None:
 # ---------------------------------------------------------------------------
 
 
+#: Documents that quote an accuracy figure they are not *claiming*.
+#:
+#: Kept as an explicit path→reason map rather than a glob, so adding one is a
+#: visible decision with a written justification. This is the same carve-out
+#: already made for ``archive/``: a record of what someone wrote is not a claim
+#: about the current model, and forcing it to track retrains would falsify the
+#: record. Anything that actually states the platform's accuracy belongs in the
+#: scan — do not add it here to make a red test green.
+_QUOTATION_ONLY_DOCS: dict[str, str] = {
+    "docs/audit/AI_CORE_SPEC.md": (
+        "Verbatim transcription of the owner's AI Core build spec. The figures "
+        "in it are the spec author's words, not statements about the model "
+        "this repo ships; editing them to match a retrain would corrupt the "
+        "record it exists to preserve."
+    ),
+}
+
+
+def test_every_quotation_only_exclusion_has_a_reason() -> None:
+    """An exclusion without a written reason is a loophole, not a carve-out."""
+    for path, reason in _QUOTATION_ONLY_DOCS.items():
+        assert reason.strip(), f"{path} is excluded with no reason given"
+        assert (REPO_ROOT / path).exists(), (
+            f"{path} is excluded but does not exist — stale exclusions silently widen the scan's blind spot"
+        )
+
+
 def test_docs_directory_accuracy_within_tolerance() -> None:
     """
     All Markdown files in docs/ that quote OOS accuracy must be within
@@ -349,6 +376,9 @@ def test_docs_directory_accuracy_within_tolerance() -> None:
             continue
         # model_performance.md has its own dedicated test above
         if md_file == MODEL_PERF_DOC_PATH:
+            continue
+        # Documents that quote a figure rather than claim one.
+        if str(md_file.relative_to(REPO_ROOT)) in _QUOTATION_ONLY_DOCS:
             continue
 
         text = md_file.read_text(encoding="utf-8")

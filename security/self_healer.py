@@ -135,8 +135,19 @@ RUNTIME_PATHS: set[str] = {
 # Patches written to fixes:approved must be signed with this key so that a
 # compromised Redis instance cannot inject arbitrary code.  Set
 # HEAL_PATCH_SIGNING_KEY in the environment (min 32 bytes recommended).
-# If unset, signing is skipped and a warning is emitted on every drain cycle.
+# If unset, the patch queue is REFUSED — see _patch_entry_is_trusted. It used to
+# be accepted with a warning, and this variable was set in no shipped
+# configuration anywhere in the repository, so the control was on nowhere (F130).
 _PATCH_SIGNING_KEY: bytes = os.getenv("HEAL_PATCH_SIGNING_KEY", "").encode()
+
+# Explicit development opt-out. Without a signing key the patch queue is
+# refused; this is the only way through, and it is deliberately not the default
+# — the control it disables exists to stop Redis injecting executable code.
+_ALLOW_UNSIGNED_PATCHES: bool = os.getenv("HEAL_ALLOW_UNSIGNED_PATCHES", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Dangerous AST node types / call patterns that must never appear in a patch.
 # This is a defence-in-depth check on top of the compile() gate.
@@ -335,11 +346,27 @@ def _patch_entry_is_trusted(raw: str, fix: dict[str, Any]) -> bool:
     is logged so operators know signing is disabled.
     """
     if not _PATCH_SIGNING_KEY:
-        logger.warning(
-            "SelfHealer: HEAL_PATCH_SIGNING_KEY not set — patch queue trust "
-            "verification disabled.  Set this env var to prevent Redis injection."
+        if _ALLOW_UNSIGNED_PATCHES:
+            # A deliberate act, for local development. Loud every time, because
+            # a queue anyone can write to is writing Python onto this machine.
+            logger.warning(
+                "SelfHealer: accepting an UNSIGNED patch because "
+                "HEAL_ALLOW_UNSIGNED_PATCHES is set. Anything able to write to the "
+                "Redis patch queue can execute code here. Never set this in production."
+            )
+            return True
+        # Fail closed. This returned True — accepting every entry — and
+        # HEAL_PATCH_SIGNING_KEY was set in no shipped configuration anywhere in
+        # the repository, so there was no deployment in which the control was
+        # on. The threat is the one this module's own comment names: "a
+        # compromised Redis instance cannot inject arbitrary code" (F130).
+        logger.error(
+            "SelfHealer: REJECTING patch — HEAL_PATCH_SIGNING_KEY is not set, so the "
+            "entry cannot be verified. Set it (min 32 bytes) to enable the patch queue, "
+            "or set HEAL_ALLOW_UNSIGNED_PATCHES=true to accept unsigned patches in "
+            "development."
         )
-        return True
+        return False
     sig = fix.get("_sig", "")
     if not sig:
         logger.warning("SelfHealer: patch entry has no _sig field — rejecting")
@@ -417,7 +444,7 @@ def _import_ok(path: Path) -> bool:
         return False
 
 
-# ── Patch applier ─────────────────────────────────────────────────────────────
+# ── Patch applier ───────���─────────────────────────────────────────────────────
 
 
 def _apply_patch(target_path: Path, new_code: str) -> tuple[bool, str]:
@@ -608,7 +635,19 @@ class SelfHealer:
         getattr(logger, level)(msg, *args)
 
     def _is_protected(self, rel_path: str) -> bool:
-        """Return True if rel_path matches any protected path prefix/pattern."""
+        """Return True if rel_path is in the vault floor or this healer's own list.
+
+        The floor is consulted FIRST and is not overridable. `_protected_paths`
+        used to be the whole answer, and `apply_config` replaced it wholesale
+        with a config field whose Pydantic default is `""` — so the first config
+        save from the dashboard erased every protected path on the live healer.
+        Configuration now adds to the floor and cannot subtract from it.
+        """
+        from ai.vault import protected as _vault
+
+        if _vault.is_protected(rel_path):
+            return True
+
         norm = rel_path.replace("\\", "/")
         for raw_p in self._protected_paths:
             p = raw_p.strip()
@@ -656,11 +695,21 @@ class SelfHealer:
             cfg.get("require_approval_categories", self._require_approval_categories)
         )
         self._baseline_auto_rebuild = bool(cfg.get("baseline_auto_rebuild", self._baseline_auto_rebuild))
+        # Additions only. This used to REPLACE the list, and the config field it
+        # reads defaults to "" — so a config save that never mentioned protected
+        # paths erased all thirty of them on the live healer, and risk/manager.py
+        # became auto-patchable. The vault floor in `ai/vault/protected.py` is
+        # consulted by `_is_protected` regardless of anything here.
         raw_paths = cfg.get("protected_paths", "")
         if isinstance(raw_paths, str):
-            self._protected_paths = [p.strip() for p in raw_paths.split(",") if p.strip()]
+            additions = [p.strip() for p in raw_paths.split(",") if p.strip()]
         elif isinstance(raw_paths, list):
-            self._protected_paths = list(raw_paths)
+            additions = [str(p).strip() for p in raw_paths if str(p).strip()]
+        else:
+            additions = []
+        for addition in additions:
+            if addition not in self._protected_paths:
+                self._protected_paths.append(addition)
         # Propagate to module-level constants used by helpers
         global HEAL_SCAN_INTERVAL, HEAL_PATCH_INTERVAL, MAX_PATCH_SIZE
         HEAL_SCAN_INTERVAL = int(cfg.get("scan_interval_sec", HEAL_SCAN_INTERVAL))
@@ -760,7 +809,7 @@ class SelfHealer:
 
             cfg_path = PROJECT_ROOT / "data" / "auto_healing_config.json"
             if cfg_path.exists():
-                cfg = _json.loads(cfg_path.read_text())
+                cfg = _json.loads(await asyncio.to_thread(cfg_path.read_text))
                 self.apply_config(cfg)
                 return
         except Exception as exc:
@@ -1001,7 +1050,7 @@ class SelfHealer:
 
             original_code = ""
             if target.exists():
-                original_code = target.read_text(encoding="utf-8", errors="replace")
+                original_code = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
 
             success, msg = _apply_patch(target, new_code)
             diff = _unified_diff(original_code, new_code, target.name) if success else ""
@@ -1302,7 +1351,7 @@ class SelfHealer:
 
             # Read the file
             try:
-                source = target.read_text(encoding="utf-8", errors="replace")
+                source = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
             except OSError as exc:
                 logger.warning("SelfHealer: cannot read %s for Claude fix: %s", file_rel, exc)
                 continue
@@ -1373,17 +1422,23 @@ class SelfHealer:
     @staticmethod
     def _call_claude_for_fix(source: str, issue: dict[str, Any], api_key: str) -> str:
         """
-        Call the Anthropic Claude API to generate a production-ready fix.
+        Ask a model for a production-ready fix, through the gateway.
 
         Returns the complete fixed file content, or empty string on failure.
         This is a synchronous function run in an executor.
-        """
-        try:
-            import anthropic
-        except ImportError:
-            logger.warning("SelfHealer: anthropic package not installed — pip install anthropic")
-            return ""
 
+        It used to construct `anthropic.Anthropic(api_key=...)` here and call the
+        SDK directly, with `security.llm_wrapper` only as a fallback. That put
+        the loop that rewrites this repository's own source outside every model
+        control: no spend ceiling on a healer that runs one fix every five
+        seconds, no record of what was asked or what it cost, and no second
+        vendor when the first was down. The fallback path was already the right
+        one; it is now the only one.
+
+        `api_key` is kept in the signature for callers and is deliberately
+        unused: credentials belong to the gateway's adapters, not to a caller
+        passing one around.
+        """
         category = issue.get("category", "unknown")
         description = issue.get("description", "")
         line = issue.get("line", 0)
@@ -1474,51 +1529,29 @@ Rules:
 
 Return the complete fixed file:"""
 
+        # asyncio.run() rather than a hand-built loop: it creates, runs and
+        # cleans up atomically, and is safe from a thread-pool executor thread
+        # (which has no running loop of its own).
         try:
-            # Prefer the env-configured model; fall back to claude-opus-4-5
-            model = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-5")
-            client = anthropic.Anthropic(api_key=api_key)
-            response = client.messages.create(
-                model=model,
-                max_tokens=16384,
-                system=(
-                    "You are an expert Python engineer specialising in production-grade "
-                    "financial trading systems. You write clean, robust, fully-implemented "
-                    "code with no stubs, no TODO comments, no mock data, and no pass-only "
-                    "function bodies. Every fix you produce must be immediately deployable."
-                ),
-                messages=[{"role": "user", "content": prompt}],
-            )
-            fixed = response.content[0].text.strip()
-            # Strip markdown code fences if Claude wrapped the response
-            for fence in ("```python\n", "```py\n", "```\n"):
-                if fixed.startswith(fence):
-                    fixed = fixed[len(fence) :]
-                    break
-            if fixed.endswith("```"):
-                fixed = fixed[:-3]
-            return fixed.strip()
-        except Exception as exc:
-            logger.warning("SelfHealer: Claude API error: %s — trying llm_wrapper fallback", exc)
-            # Fallback: try the shared llm_wrapper (may use OpenAI if configured).
-            # Use asyncio.run() rather than manually creating a loop — it handles
-            # loop creation, running, and cleanup atomically and is safe to call
-            # from a thread-pool executor thread (which has no running loop).
-            try:
-                import asyncio as _asyncio
-                from security.llm_wrapper import call_llm as _call_llm
+            import asyncio as _asyncio
 
-                fixed = _asyncio.run(_call_llm(prompt))
-                for fence in ("```python\n", "```py\n", "```\n"):
-                    if fixed.startswith(fence):
-                        fixed = fixed[len(fence) :]
-                        break
-                if fixed.endswith("```"):
-                    fixed = fixed[:-3]
-                return fixed.strip()
-            except Exception as fallback_exc:
-                logger.warning("SelfHealer: llm_wrapper fallback also failed: %s", fallback_exc)
-                return ""
+            from security.llm_wrapper import call_llm as _call_llm
+
+            fixed = _asyncio.run(_call_llm(prompt))
+        except Exception as exc:
+            # An empty string means "no fix", which every caller already treats
+            # as "do nothing". A healer that guesses on a failed call would be
+            # rewriting source from no answer at all.
+            logger.warning("SelfHealer: model call failed, no fix produced: %s", exc)
+            return ""
+
+        for fence in ("```python\n", "```py\n", "```\n"):
+            if fixed.startswith(fence):
+                fixed = fixed[len(fence) :]
+                break
+        if fixed.endswith("```"):
+            fixed = fixed[:-3]
+        return fixed.strip()
 
     # ── Advanced diagnostics loop ─────────────────────────────────────────────
 
@@ -1685,6 +1718,36 @@ Return the complete fixed file:"""
     async def run_diagnostics_now(self) -> dict[str, Any]:
         """Trigger an immediate full diagnostics run and return the report."""
         return await self._run_diagnostics()
+
+    async def run_ai_recovery_assessment(self, observation_id: str) -> dict[str, Any]:
+        """Assess diagnostics through the AI recovery layer without applying repairs."""
+        from core.ai_operations import decide_recovery, observe_health
+
+        report = await self.run_diagnostics_now()
+        critical_results = [
+            result for result in report.get("results", []) if result.get("status") in {"critical", "error"}
+        ]
+        overall = "critical" if critical_results else "ok"
+        observation = observe_health(
+            {"overall": overall, "components": tuple(report.get("results", ()))},
+            observation_id,
+        )
+        decision = decide_recovery(observation)
+        return {
+            "observation": {
+                "observation_id": observation.observation_id,
+                "observation_hash": observation.observation_hash,
+                "overall": observation.overall,
+                "components": observation.components,
+            },
+            "decision": {
+                "status": decision.status,
+                "action": decision.action,
+                "reason_codes": decision.reason_codes,
+                "decision_hash": decision.decision_hash,
+            },
+            "repair_applied": False,
+        }
 
     def get_last_diagnostic_report(self) -> dict[str, Any]:
         """Return the most recent diagnostics report."""
@@ -1899,10 +1962,19 @@ Return the complete fixed file:"""
             )
             return success
 
-        except FileNotFoundError:
-            # python -m pytest failed — python itself not on PATH (shouldn't happen)
-            self._log("warning", "SelfHealer: python not found on PATH — skipping test run")
-            return True
+        except FileNotFoundError as exc:
+            # This returned True: "could not run the tests" recorded as "the
+            # tests passed", on the gate that admits a patch to the running
+            # system and on the check that validates it afterwards. The safe
+            # value for "I could not verify" is False — which is what the
+            # timeout and generic-exception branches already return (F184).
+            self._log(
+                "error",
+                "SelfHealer: could not start the test run (%s) — treating as FAILED, "
+                "no patch will be applied or validated on this cycle",
+                exc,
+            )
+            return False
         except Exception as exc:
             logger.warning("SelfHealer: test run error: %s", exc)
             return False

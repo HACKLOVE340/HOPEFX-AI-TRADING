@@ -17,6 +17,29 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+
+import a11yDebt from './a11y-debt.json' with { type: 'json' };
+
+// One options object for `jsx-a11y/control-has-associated-label`, shared by the
+// error-level rule and the warn-level debt override below.
+//
+// They were two separate configurations and the second was a bare `'warn'`,
+// which in flat config RESETS the options to the rule's defaults. So the 18
+// files on the debt list were not merely being warned instead of errored —
+// they were being checked by a DIFFERENT RULE: no `controlComponents`, and the
+// default `depth: 2`.
+//
+// Sharing the object changes no current finding — 18 warnings before and 18
+// after, verified — and that is the point: the two configurations agreeing is
+// what makes the debt list a severity switch rather than a second rule.
+//
+// `depth` was tried here and deliberately NOT kept. The hypothesis was that
+// the remaining warnings are controls whose label text sits deeper than the
+// default reach; raising it to 6 changed nothing, because this rule looks DOWN
+// into a control's children and never UP at a wrapping <label>. Implicit label
+// association is valid HTML the rule cannot see. See a11y-debt.json.
+const A11Y_LABEL_OPTIONS = { controlComponents: ['button'] };
 
 export default tseslint.config(
   {
@@ -34,7 +57,7 @@ export default tseslint.config(
 
   {
     files: ['**/*.{ts,tsx}'],
-    plugins: { 'react-hooks': reactHooks },
+    plugins: { 'react-hooks': reactHooks, 'jsx-a11y': jsxA11y },
     languageOptions: {
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
@@ -87,6 +110,33 @@ export default tseslint.config(
       // tsconfig already sets noUnusedLocals/noUnusedParameters to false
       // deliberately; do not contradict it with an error here.
 
+      // ── Accessibility: the one rule, and why only one ───────────────────
+      //
+      // F172 — "icon-only buttons without an accessible name" — sat UNVERIFIED
+      // in the correction register for a reason worth keeping: two attempts to
+      // measure it by regex each produced a confident WRONG answer, one saying
+      // clean across 552 buttons and the other finding 9 files. A JSX opening
+      // tag cannot be bracketed by a regex, because an attribute may contain
+      // `>` and `onClick={() => nav('/x')}` ends the match at the arrow.
+      //
+      // A real parser answers it: 138 violations across 67 files. The rule is
+      // the fix and the count came with it.
+      //
+      // Classified with that same parser on 2026-09-14, the NAME was wrong even
+      // though the count was right: by tag the 138 were input 108, textarea 17,
+      // div 5, td 4, th 2, **button 1**, option 1. Sixteen more were controls
+      // carrying id="x" beside a <label htmlFor="x"> — correctly labelled at
+      // runtime, and unresolvable by this rule, which reads one element's own
+      // props and children and cannot follow a reference to a sibling. Clear one
+      // of those by giving the label an id and the control an aria-labelledby,
+      // never by copying the text into an aria-label that can drift from what is
+      // on screen (WCAG 2.5.3). See a11y-debt.json's `_shape`.
+      //
+      // Only this rule is on. `jsx-a11y`'s recommended set produces a wall on
+      // an established codebase, and the config above already refuses that
+      // trade twice (no-use-before-define at 1,990, no-explicit-any).
+      'jsx-a11y/control-has-associated-label': ['error', A11Y_LABEL_OPTIONS],
+
       // ── Genuine footguns ────────────────────────────────────────────────
       eqeqeq: ['error', 'always', { null: 'ignore' }],
       'no-fallthrough': 'error',
@@ -122,6 +172,26 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
+
+  // ── The a11y debt list, and the rule that makes it a ratchet ────────────
+  //
+  // 67 files carried the 138 violations the parser found on 2026-09-13 (64 and
+  // 127 after the sign-in/register/profile flow was cleared on 2026-09-14; the
+  // file itself is the current figure, this comment is not). Turning
+  // the rule on at `error` across all of them would be a wall nobody adopts,
+  // and at `warn` everywhere it would bury the hook rules above. So it is an
+  // ERROR everywhere EXCEPT these files, which means a violation in any file
+  // not listed fails `npm run lint` — new debt cannot arrive quietly.
+  //
+  // The list may only shrink. `src/test/a11y_debt_is_accurate.test.ts` fails if
+  // a listed file has no violations left, or no longer exists: an entry that
+  // describes nothing is how a ratchet stops being one.
+  {
+    files: Object.keys(a11yDebt.files),
+    rules: {
+      'jsx-a11y/control-has-associated-label': ['warn', A11Y_LABEL_OPTIONS],
     },
   },
 );

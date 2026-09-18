@@ -6,7 +6,7 @@
  */
 
 import React, {
-  useEffect, useRef, useCallback, useState, memo,
+  useEffect, useRef, useCallback, useMemo, useState, memo,
 } from 'react';
 import {
   createChart,
@@ -19,7 +19,6 @@ import {
   LineSeries,
   CrosshairMode,
   PriceScaleMode,
-  UTCTimestamp,
   CandlestickData,
   HistogramData,
   LineData,
@@ -35,6 +34,8 @@ import { COLORS, CHART_DIMS } from '../utils/design-tokens';
 import { fmtSpread } from '../../../lib/utils';
 import { formatPrice, formatTime } from '../utils/formatters';
 import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartPattern, ChartClickContext } from '../types';
+import { toUTCSeconds as toUTC } from '../../../lib/chartTime';
+import { assessBars } from '../../../lib/barQuality';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,9 +55,6 @@ const INDICATORS: { key: IndicatorKey; label: string }[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toUTC(ts: number): UTCTimestamp {
-  return (ts > 1e10 ? Math.floor(ts / 1000) : ts) as UTCTimestamp;
-}
 
 function barToCandle(b: OHLCVBar): CandlestickData {
   return { time: toUTC(b.time), open: b.open, high: b.high, low: b.low, close: b.close };
@@ -579,6 +577,15 @@ const CoreChart: React.FC<CoreChartProps> = ({
   const bid = liveTick?.bid ?? 0;
   const ask = liveTick?.ask ?? 0;
   const noData = !isLoading && (isError || !bars || bars.length === 0);
+  /*
+   * What the bars that DID arrive are worth. `noData` covers "nothing came";
+   * this covers "these are not candles" — measured on the daily series this
+   * chart can serve with no live feed, 62 of 500 bars have no body or no
+   * wicks. Derived rather than stored: it is a pure function of `bars`, and a
+   * second state to keep in step with them is a second thing to forget to
+   * clear. See `lib/barQuality.ts`.
+   */
+  const barNotice = useMemo(() => assessBars(bars ?? []).notice, [bars]);
 
   return (
     <div ref={wrapperRef} style={styles.wrapper}>
@@ -632,6 +639,13 @@ const CoreChart: React.FC<CoreChartProps> = ({
         )}
         <div ref={containerRef} style={{ width: '100%', height }} />
       </div>
+      {/* Beside the chart, not over it: these bars are still worth looking at,
+          and an overlay would hide the thing it describes. */}
+      {barNotice && !noData && (
+        <div role="status" style={{ padding: '2px 10px 6px', fontSize: 10, lineHeight: 1.4, color: 'var(--warn)' }}>
+          {barNotice}
+        </div>
+      )}
     </div>
   );
 };

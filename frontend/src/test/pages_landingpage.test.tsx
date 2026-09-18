@@ -25,19 +25,25 @@ import React from 'react';
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 // framer-motion: render children directly, skip animations
-vi.mock('framer-motion', () => {
-  const React = require('react');
+// An async factory rather than require(): vi.mock factories are hoisted above
+// the import block, so a top-level import is not yet initialised inside one.
+vi.mock('framer-motion', async () => {
+  // Named `ReactRuntime` so it does not shadow the React type namespace the
+  // annotations below use: with `const React = await import('react')`,
+  // `React.FC` resolved to a property of the value rather than to the type,
+  // and `children` widened to unknown.
+  const ReactRuntime = await import('react');
   const motion: Record<string, React.FC<Record<string, unknown>>> = new Proxy({}, {
     get: (_t, tag: string) => {
-      const Component = React.forwardRef(
-        ({ children, ...props }: Record<string, unknown>, ref: unknown) => {
+      const Component = ReactRuntime.forwardRef(
+        ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>, ref: unknown) => {
           // Strip framer-motion-specific props
           const { initial, animate, exit, variants, transition, whileHover, whileTap,
                   onHoverStart, onHoverEnd, custom, layout, layoutId, ...rest } = props;
           void initial; void animate; void exit; void variants; void transition;
           void whileHover; void whileTap; void onHoverStart; void onHoverEnd;
           void custom; void layout; void layoutId;
-          return React.createElement(tag, { ...rest, ref }, children);
+          return ReactRuntime.createElement(tag, { ...rest, ref }, children);
         }
       );
       Component.displayName = `motion.${tag}`;
@@ -565,12 +571,17 @@ describe('LandingPage — Footer', () => {
 describe('LandingPage — Live ticker', () => {
   it('renders ticker bar when WebSocket sends price data', async () => {
     let wsInstance: MockWebSocket | null = null;
-    vi.stubGlobal('WebSocket', class extends MockWebSocket {
-      constructor(url: string) {
-        super(url);
-        wsInstance = this;
-      }
-    });
+    // `wsInstance = this` inside the constructor is exactly the aliasing
+    // no-this-alias exists to stop. A factory captures the instance without
+    // it, and reads the same at the call site.
+    vi.stubGlobal(
+      'WebSocket',
+      function StubWebSocket(url: string) {
+        const socket = new MockWebSocket(url);
+        wsInstance = socket;
+        return socket;
+      },
+    );
 
     await renderLanding();
 

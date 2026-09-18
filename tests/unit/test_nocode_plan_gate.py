@@ -108,7 +108,7 @@ def test_deploy_is_refused_before_any_strategy_is_registered(client, monkeypatch
             registered.append(kwargs.get("name", "?"))
             return "v1"
 
-        async def activate_strategy(self, version_id):
+        async def activate_strategy(self, version_id, *, scope=None, approval=None):
             registered.append(f"activate:{version_id}")
 
     import strategies.dynamic_registry as reg
@@ -166,7 +166,7 @@ def test_deployed_strategy_is_attributed_to_the_deploying_user(client, monkeypat
             seen.update(kwargs)
             return "v1"
 
-        async def activate_strategy(self, version_id):
+        async def activate_strategy(self, version_id, *, scope=None, approval=None):
             return None
 
     class _Builder:

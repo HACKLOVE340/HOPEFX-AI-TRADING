@@ -1,0 +1,85 @@
+# helm/hopefx/templates/kill-switch.yaml
+# Layer 5 of the kill switch — the Redis-outage fallback — for the chart ArgoCD
+# actually deploys.
+#
+# `k8s/` and `deployments/k8s/` have carried these three objects for some time,
+# and twenty-three tests verify them there. `k8s/argocd-app.yaml` syncs
+# `spec.source.path: helm/hopefx`, which had none of them, so on the cluster
+# that is actually built:
+#
+#   * the watcher had no ConfigMap to poll or patch;
+#   * pods ran as the namespace `default` ServiceAccount, which no RoleBinding
+#     named, so every get/patch would have been refused anyway;
+#   * and `syncPolicy.automated.prune: true` DELETED a kill-switch ConfigMap
+#     applied by hand from `k8s/`, because it was not in this chart.
+#
+# The name is literal rather than `{{ include "hopefx.fullname" . }}`-prefixed
+# on purpose: `kill_switch.py` reads `K8S_KS_CONFIGMAP_NAME` (default
+# `hopefx-kill-switch`), the Role below grants that exact `resourceName`, and the
+# documented reset procedure is a `kubectl patch` against it. A templated name
+# would break all three at once and read as tidier.
+#
+# Pinned by tests/unit/test_the_deployed_chart_carries_the_safety_posture.py.
+#
+# Reset procedure, after the event is resolved:
+#   kubectl patch configmap hopefx-kill-switch -n {{ .Release.Namespace }} \
+#     --patch '{"data":{"kill_switch_active":"false","kill_switch_reason":"","kill_switch_timestamp":""}}'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopefx-kill-switch
+  labels:
+    {{- include "hopefx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kill-switch
+  annotations:
+    description: "Kill switch state for cross-pod propagation fallback"
+    # ArgoCD must not revert this object's data. A pod engages the switch by
+    # patching it, which `selfHeal` reads as a manual edit — see
+    # `ignoreDifferences` in k8s/argocd-app.yaml, which this annotation
+    # documents rather than replaces.
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+data:
+  # kill_switch_active: set to "true" by any pod that detects a breach when
+  # Redis is unavailable. All pods poll this and halt trading.
+  kill_switch_active: "false"
+  kill_switch_reason: ""
+  kill_switch_timestamp: ""
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "hopefx.fullname" . }}
+  labels:
+    {{- include "hopefx.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "hopefx.fullname" . }}-kill-switch
+  labels:
+    {{- include "hopefx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kill-switch
+rules:
+  # Least privilege, matching k8s/kill-switch-rbac.yaml: one named ConfigMap,
+  # two verbs. No list, no watch, no create, no delete.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["hopefx-kill-switch"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "hopefx.fullname" . }}-kill-switch
+  labels:
+    {{- include "hopefx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kill-switch
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "hopefx.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ include "hopefx.fullname" . }}-kill-switch
+  apiGroup: rbac.authorization.k8s.io

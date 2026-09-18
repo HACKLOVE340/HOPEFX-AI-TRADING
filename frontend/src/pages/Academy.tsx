@@ -13,11 +13,12 @@
  * the plan is insufficient).
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Clapperboard, GraduationCap, Lock, Play } from 'lucide-react';
 import { tutorialsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Modal } from '../components/Modal';
 import { PLAN_LABELS, PLAN_COLORS, type Plan } from '../lib/subscription';
@@ -62,7 +63,7 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
       onClick={() => onOpen(ep)}
       style={{
         textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-        background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 12,
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
         overflow: 'hidden', transition: 'border-color 0.15s, transform 0.15s',
       }}
       onMouseEnter={(e) => { e.currentTarget.style.borderColor = ep.locked ? '#334155' : '#3b82f6'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
@@ -72,16 +73,16 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
       <div style={{
         position: 'relative', height: 116, display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 14, background: 'linear-gradient(135deg, #0a1628 0%, #0d1f33 100%)',
-        borderBottom: '1px solid #1e2d3d',
+        borderBottom: '1px solid var(--border)',
       }}>
         <span style={{
           position: 'absolute', top: 8, left: 10, fontSize: 11, fontWeight: 800,
-          color: '#64748b', letterSpacing: '0.08em',
+          color: 'var(--text-muted)', letterSpacing: '0.08em',
         }}>
           EP {ep.episode.toString().padStart(2, '0')}
         </span>
         <span style={{
-          textAlign: 'center', fontSize: 13, fontWeight: 700, color: '#cbd5e1', lineHeight: 1.4,
+          textAlign: 'center', fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)', lineHeight: 1.4,
         }}>
           {ep.thumbnail_text}
         </span>
@@ -90,23 +91,27 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
           position: 'absolute', bottom: 8, right: 10, fontSize: 18,
           opacity: ep.locked ? 0.85 : 1,
         }}>
-          {ep.locked ? '🔒' : ep.published ? '▶' : '🎬'}
+          {ep.locked
+            ? <Lock size={14} strokeWidth={2} aria-label="Locked on your plan" />
+            : ep.published
+              ? <Play size={14} strokeWidth={2} aria-label="Ready to watch" />
+              : <Clapperboard size={14} strokeWidth={2} aria-label="Not published yet" />}
         </div>
       </div>
 
       {/* Body */}
       <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', flex: 1, minWidth: 0 }}>
             {ep.title}
           </span>
         </div>
-        <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5, margin: 0, flex: 1 }}>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0, flex: 1 }}>
           {ep.summary}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: levelColor(ep.level) }}>{ep.level}</span>
-          <span style={{ fontSize: 10, color: '#475569' }}>· {ep.duration_min} min</span>
+          <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>· {ep.duration_min} min</span>
           <span style={{ flex: 1 }} />
           {ep.locked ? (
             <span style={{
@@ -117,11 +122,11 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
               🔒 {PLAN_LABELS[ep.plan]}
             </span>
           ) : ep.published ? (
-            <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.35)', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: 'rgba(74,222,128,0.12)', color: 'var(--gain)', border: '1px solid rgba(74,222,128,0.35)', textTransform: 'uppercase' }}>
               Watch
             </span>
           ) : (
-            <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: 'var(--raised)', color: 'var(--text-dim)', border: '1px solid var(--border-strong)', textTransform: 'uppercase' }}>
               Coming soon
             </span>
           )}
@@ -149,17 +154,17 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
     <Modal open onClose={onClose} maxWidth={760}>
       <div>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingBottom: 14, borderBottom: '1px solid #1e2d3d' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
               EPISODE {ep.episode.toString().padStart(2, '0')} · {ep.level} · {ep.duration_min} min
             </span>
-            <h2 id="academy-detail-title" style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9', margin: '4px 0 0' }}>
+            <h2 id="academy-detail-title" style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-strong)', margin: '4px 0 0' }}>
               {ep.title}
             </h2>
           </div>
           <button onClick={onClose} aria-label="Close"
-            style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 0 }}>
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 0 }}>
             ×
           </button>
         </div>
@@ -180,22 +185,22 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               gap: 8, padding: '36px 20px', background: 'linear-gradient(135deg, #0a1628 0%, #0d1f33 100%)',
-              borderRadius: 10, border: '1px dashed #1e2d3d',
+              borderRadius: 10, border: '1px dashed var(--border)',
             }}>
-              <span style={{ fontSize: 28 }}>🎬</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#cbd5e1' }}>Coming soon</span>
-              <span style={{ fontSize: 12, color: '#64748b', textAlign: 'center', maxWidth: 420 }}>
+              <span style={{ fontSize: 'var(--fs-hero)'}}>🎬</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)' }}>Coming soon</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 420 }}>
                 This episode is scripted and in production. The full chapter outline is below so you
                 can preview what it covers.
               </span>
             </div>
           )}
 
-          <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>{ep.summary}</p>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6, margin: 0 }}>{ep.summary}</p>
 
           {/* Chapters */}
           <div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Chapters
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 8 }}>
@@ -209,8 +214,8 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
                 const title = m ? m[2] : c.trim();
                 return (
                   <div key={c} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid #0f1a2a' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{time}</span>
-                    <span style={{ fontSize: 12, color: '#cbd5e1' }}>{title}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{time}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{title}</span>
                   </div>
                 );
               })}
@@ -274,49 +279,58 @@ const Academy: React.FC = () => {
     }
   }, [navigate, toast]);
 
-  const unlockedCount = episodes.filter((e) => !e.locked).length;
+  // `!locked` means the user's PLAN permits the episode, not that there is
+  // anything to watch. Counting it as "available" told every subscriber that
+  // 15 episodes were available when none were published (audit F201).
+  const unlockedCount  = episodes.filter((e) => !e.locked).length;
+  const watchableCount = episodes.filter((e) => !e.locked && e.published).length;
 
   return (
-    <div className="page-content" style={{ flexDirection: 'column', overflow: 'auto', padding: 0 }}>
-      <div style={{ padding: '12px 16px 0', flexShrink: 0 }}>
-        <PageHeader
-          title="🎓 HOPEFX Academy"
-          icon="🎓"
-          subtitle="Step-by-step video tutorials — from your first backtest to production deployment"
-          breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Academy' }]}
-          badge={
-            <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: `${PLAN_COLORS[userPlan]}18`, color: PLAN_COLORS[userPlan], border: `1px solid ${PLAN_COLORS[userPlan]}40`, letterSpacing: 1 }}>
-              {PLAN_LABELS[userPlan]}
-            </span>
-          }
-        />
-      </div>
-
-      <div style={{ padding: 16, flex: 1, minHeight: 0 }}>
+    <PageShell
+      // The graduation cap was in the title AND in `icon`. One of them is the
+      // icon; the other rendered from a different font and could not take the
+      // heading's colour.
+      title="HOPEFX Academy"
+      icon={GraduationCap}
+      subtitle="Step-by-step video tutorials — from your first backtest to production deployment"
+      breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Academy' }]}
+      width="wide"
+      badge={
+        <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: `${PLAN_COLORS[userPlan]}18`, color: PLAN_COLORS[userPlan], border: `1px solid ${PLAN_COLORS[userPlan]}40`, letterSpacing: 1 }}>
+          {PLAN_LABELS[userPlan]}
+        </span>
+      }
+    >
+      <div style={{ flex: 1, minHeight: 0 }}>
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: '#64748b', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
             Loading tutorials…
           </div>
         ) : error ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: 48 }}>
-            <span style={{ color: '#f87171', fontSize: 13 }}>⚠ {error}</span>
-            <button onClick={() => void load()} style={{ background: '#1e2d3d', border: '1px solid #334155', borderRadius: 6, color: '#cbd5e1', fontSize: 12, fontWeight: 600, padding: '6px 14px', cursor: 'pointer' }}>
+            <span style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)'}}>⚠ {error}</span>
+            <button onClick={() => void load()} style={{ background: 'var(--border)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', fontSize: 12, fontWeight: 600, padding: '6px 14px', cursor: 'pointer' }}>
               Retry
             </button>
           </div>
         ) : episodes.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: '#64748b', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48, color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
             No tutorials available yet.
           </div>
         ) : (
           <>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-              {episodes.length} episodes · {unlockedCount} available on your plan
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+              {episodes.length} episodes ·{' '}
+              {watchableCount > 0
+                ? `${watchableCount} available to watch now`
+                : unlockedCount > 0
+                  ? `${unlockedCount} included in your plan — none published yet`
+                  : 'none included in your plan yet'}
               {unlockedCount < episodes.length && (
                 <>
                   {' · '}
                   <button onClick={() => navigate('/upgrade')}
-                    style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                    style={{ background: 'transparent', border: 'none', color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
                     Upgrade to unlock all
                   </button>
                 </>
@@ -332,7 +346,7 @@ const Academy: React.FC = () => {
       </div>
 
       {selected && <EpisodeDetail ep={selected} onClose={() => setSelected(null)} />}
-    </div>
+    </PageShell>
   );
 };
 

@@ -141,7 +141,10 @@ describe('microstructure strip', () => {
 
   it('flags the tick count itself when it is the limiting factor', async () => {
     const src = await import('../components/panels/LivePriceTicker.tsx?raw').then((m) => m.default);
-    expect(src).toContain("color: enough ? '#94a3b8' : '#ffb800'");
+    // Was `'#94a3b8'`, now the token that equals it. Same branch, same
+    // meaning — dim when the tick count is sufficient, amber when it is the
+    // limiting factor — and now it follows the theme.
+    expect(src).toContain("color: enough ? 'var(--text-dim)' : '#ffb800'");
   });
 
   it('requires enough ticks that a single burst cannot read as 100%', async () => {

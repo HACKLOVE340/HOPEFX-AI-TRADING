@@ -8,17 +8,18 @@
 
 import React, { Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
+import { CircleDot, Microscope, Search, Shield, Stethoscope, Wrench, Zap } from 'lucide-react';
 
 const SR_CROSS_LINKS = [
-  { label: 'Super Admin',         href: '/superadmin',         icon: '⚡', color: '#f87171' },
-  { label: 'System Status',       href: '/status',             icon: '🟢', color: '#4ade80' },
-  { label: 'Auto-Heal',           href: '/auto-heal',          icon: '🩺', color: '#34d399' },
-  { label: 'Security Dashboard',  href: '/security',           icon: '🛡️', color: '#f59e0b' },
-  { label: 'Audit Log',           href: '/audit',              icon: '🔍', color: '#a78bfa' },
-  { label: 'Admin Panel',         href: '/admin',              icon: '🔧', color: '#60a5fa' },
+  { label: 'Super Admin',         href: '/superadmin',         icon: Zap, color: '#f87171' },
+  { label: 'System Status',       href: '/status',             icon: CircleDot, color: '#4ade80' },
+  { label: 'Auto-Heal',           href: '/auto-heal',          icon: Stethoscope, color: '#34d399' },
+  { label: 'Security Dashboard',  href: '/security',           icon: Shield, color: '#f59e0b' },
+  { label: 'Audit Log',           href: '/audit',              icon: Search, color: '#a78bfa' },
+  { label: 'Admin Panel',         href: '/admin',              icon: Wrench, color: '#60a5fa' },
 ];
 
 const SystemReliabilitySection = lazy(
@@ -28,11 +29,11 @@ const SystemReliabilitySection = lazy(
 const Fallback: React.FC = () => (
   <div style={{
     display: 'flex', alignItems: 'center', gap: 10,
-    color: '#64748b', padding: '48px 0',
+    color: 'var(--text-muted)', padding: '48px 0',
     fontFamily: 'Inter, system-ui, sans-serif',
   }}>
     <div style={{
-      width: 20, height: 20, border: '2px solid #334155',
+      width: 20, height: 20, border: '2px solid var(--border-strong)',
       borderTopColor: '#3b82f6', borderRadius: '50%',
       animation: 'spin 0.7s linear infinite',
     }} />
@@ -43,10 +44,9 @@ const Fallback: React.FC = () => (
 const SystemReliability: React.FC = () => (
   <>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    <div className="page-content">
-        <PageHeader
+    <PageShell width="wide"
           title="System Reliability Dashboard"
-        icon="🔬"
+        icon={Microscope}
           subtitle="Real-time end-to-end connectivity, OTel tracing, self-test suite, environment audit, and system metrics for every platform component."
           breadcrumbs={[
             { label: 'Home',        href: '/home' },
@@ -58,16 +58,16 @@ const SystemReliability: React.FC = () => (
           actions={
             <div style={{ display: 'flex', gap: 8 }}>
               <Link to="/superadmin"
-                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 ⚡ Super Admin
               </Link>
               <Link to="/status"
-                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 🟢 Status
               </Link>
             </div>
           }
-        />
+    >
 
         {/* Section content */}
         <Suspense fallback={<Fallback />}>
@@ -75,7 +75,7 @@ const SystemReliability: React.FC = () => (
         </Suspense>
 
         <CrossLinkBar links={SR_CROSS_LINKS} title="Related" style={{ marginTop: 32 }} />
-    </div>
+    </PageShell>
   </>
 );
 

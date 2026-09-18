@@ -45,6 +45,35 @@ class TransactionStatus(Enum):
     REVERSED = "reversed"
 
 
+#: Which status may follow which. Modelled on
+#: `core/ai_contracts.py::_ALLOWED_TRANSITIONS`, which this audit identified as
+#: the right shape for exactly this problem.
+#:
+#: `update_transaction_status` used to assign any status over any status.
+#: `cancel` and `reverse` each guarded their own entry condition, but `complete`
+#: and `fail` did not — so a REVERSED transaction could be completed again, and
+#: then reversed again. Measured: one 100.00 deposit produced 200.00 of
+#: reversals through the module's own public API, with no tampering and no race.
+#:
+#: COMPLETED's only exit is REVERSED, and REVERSED, FAILED and CANCELLED are
+#: terminal. Settled money does not go backwards.
+_ALLOWED_TRANSITIONS: dict[TransactionStatus, frozenset[TransactionStatus]] = {
+    TransactionStatus.PENDING: frozenset(
+        {
+            TransactionStatus.PROCESSING,
+            TransactionStatus.COMPLETED,
+            TransactionStatus.FAILED,
+            TransactionStatus.CANCELLED,
+        }
+    ),
+    TransactionStatus.PROCESSING: frozenset({TransactionStatus.COMPLETED, TransactionStatus.FAILED}),
+    TransactionStatus.COMPLETED: frozenset({TransactionStatus.REVERSED}),
+    TransactionStatus.FAILED: frozenset(),
+    TransactionStatus.CANCELLED: frozenset(),
+    TransactionStatus.REVERSED: frozenset(),
+}
+
+
 @dataclass
 class Transaction:
     """Transaction record"""
@@ -185,6 +214,19 @@ class TransactionManager:
 
                 return False
 
+            current = transaction.status
+            # Re-asserting the same status is a no-op, not an illegal move: an
+            # idempotent retry of a webhook must not read as tampering.
+            if status is not current and status not in _ALLOWED_TRANSITIONS.get(current, frozenset()):
+                logger.error(
+                    "Refused illegal transaction transition %s -> %s for %s",
+                    current.value,
+                    status.value,
+                    transaction_id,
+                )
+
+                return False
+
             transaction.status = status
             transaction.updated_at = datetime.now(UTC)
 
@@ -271,9 +313,13 @@ class TransactionManager:
                 },
             )
 
-            # Mark original as reversed
-            original.status = TransactionStatus.REVERSED
-            original.updated_at = datetime.now(UTC)
+            # Through the transition table, not around it: an assignment here
+            # would be a second way to change a status, and the first one is
+            # what had to be fixed.
+            if not self.update_transaction_status(transaction_id, TransactionStatus.REVERSED):
+                logger.error("Refused to mark %s reversed", transaction_id)
+
+                return None
             original.metadata["reversed_by"] = reversal.transaction_id
             original.metadata["reversal_reason"] = reason
 

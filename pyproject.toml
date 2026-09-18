@@ -139,7 +139,7 @@ skips = [
 # Global defaults: non-strict for the annotation backlog.
 # Per-module overrides below enforce strict on the risk-critical packages.
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 # Prevents "HOPEFX-AI-TRADING is not a valid Python package name" when mypy
 # is invoked from the repo root — the directory name contains uppercase and
 # hyphens which are not valid Python identifiers.

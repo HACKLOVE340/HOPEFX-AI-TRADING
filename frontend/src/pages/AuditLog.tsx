@@ -13,12 +13,13 @@ import { adminApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
 import { openAuthenticatedWebSocket } from '../lib/ws';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
+import { Search } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     sortKey: 'created_at',
     sortable: true,
     render: (row) => (
-      <span style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 12 }}>
+      <span style={{ color: 'var(--text-dim)', fontFamily: 'monospace', fontSize: 12 }}>
         {row.created_at ? fmtDate(row.created_at) : '—'}
       </span>
     ),
@@ -94,7 +95,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     sortKey: 'user_id',
     sortable: true,
     render: (row) => (
-      <span style={{ color: '#60a5fa', fontFamily: 'monospace', fontSize: 12 }}>
+      <span style={{ color: 'var(--link)', fontFamily: 'monospace', fontSize: 12 }}>
         {row.user_id || '—'}
       </span>
     ),
@@ -115,7 +116,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     key: 'detail',
     header: 'Detail',
     render: (row) => (
-      <span style={{ color: '#cbd5e1', fontSize: 13 }}>{row.detail || '—'}</span>
+      <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{row.detail || '—'}</span>
     ),
   },
   {
@@ -123,7 +124,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     header: 'IP',
     width: '130px',
     render: (row) => (
-      <span style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 12 }}>
+      <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 12 }}>
         {row.ip_address || '—'}
       </span>
     ),
@@ -230,18 +231,17 @@ const AuditLog: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Audit Log"
         subtitle={`${total.toLocaleString()} events total${liveCount > 0 ? ` · ${liveCount} live` : ''}`}
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button onClick={() => navigate('/security')}
-              style={{ padding: '6px 13px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 13px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               🛡 Security
             </button>
             <button onClick={() => navigate('/auto-heal')}
-              style={{ padding: '6px 13px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 13px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               🔧 Auto-Heal
             </button>
             <button
@@ -253,11 +253,11 @@ const AuditLog: React.FC = () => {
             </button>
           </div>
         }
-      />
+    >
 
       {/* Filters */}
       <div style={s.filters}>
-        <input
+        <input aria-label="Filter by user ID"
           type="text"
           placeholder="Filter by user ID…"
           value={filterUser}
@@ -265,7 +265,7 @@ const AuditLog: React.FC = () => {
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           style={s.input}
         />
-        <input
+        <input aria-label="Filter by event type"
           type="text"
           placeholder="Filter by event type…"
           value={filterType}
@@ -298,7 +298,7 @@ const AuditLog: React.FC = () => {
 
       {!loading && events.length === 0 && !error ? (
         <EmptyState
-          icon="🔍"
+          icon={Search}
           title="No events match your filters"
           description="Try adjusting your filters or check back after some activity."
         />
@@ -316,7 +316,7 @@ const AuditLog: React.FC = () => {
       {/* Manual pagination (server-side) */}
       {pages > 1 && !loading && (
         <div style={s.pagination}>
-          <span style={{ color: '#64748b', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
             Page {page} of {pages}
           </span>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -337,7 +337,7 @@ const AuditLog: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -355,11 +355,11 @@ const s: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap',
   },
   input: {
-    background: 'var(--surface, #1e293b)',
-    border: '1px solid var(--border, #334155)',
+    background: 'var(--surface, var(--raised))',
+    border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
-    color: 'var(--text, #f1f5f9)',
-    fontSize: 13,
+    color: 'var(--text, var(--text-strong))',
+    fontSize: 'var(--fs-body)',
     padding: '7px 12px',
     width: 220,
     outline: 'none',
@@ -370,28 +370,28 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     color: '#fff',
     cursor: 'pointer',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)',
     fontWeight: 600,
     padding: '7px 16px',
   },
   clearBtn: {
     background: 'transparent',
-    border: '1px solid var(--border, #334155)',
+    border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
-    color: 'var(--text-muted, #94a3b8)',
+    color: 'var(--text-muted, var(--text-dim))',
     cursor: 'pointer',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)',
     padding: '7px 12px',
   },
   exportBtn: {
     alignItems: 'center',
     background: 'transparent',
-    border: '1px solid var(--border, #334155)',
+    border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
-    color: 'var(--text-muted, #94a3b8)',
+    color: 'var(--text-muted, var(--text-dim))',
     cursor: 'pointer',
     display: 'flex',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)',
     gap: 6,
     padding: '7px 14px',
   },
@@ -404,9 +404,9 @@ const s: Record<string, React.CSSProperties> = {
   },
   pageBtn: {
     background: 'transparent',
-    border: '1px solid var(--border, #334155)',
+    border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6,
-    color: '#94a3b8',
+    color: 'var(--text-dim)',
     cursor: 'pointer',
     fontSize: 12,
     padding: '5px 12px',

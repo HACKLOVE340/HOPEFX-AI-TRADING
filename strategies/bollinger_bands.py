@@ -20,7 +20,7 @@ from typing import Any
 
 import pandas as pd
 
-from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
+from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig, first_non_empty
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,10 @@ class BollingerBandsStrategy(BaseStrategy):
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute Bollinger Bands from OHLCV data dict."""
-        prices = data.get("prices") or data.get("close")
+        # Not `data.get("prices") or data.get("close")`: `or` raises on a
+        # pandas Series, which made the isinstance branch below unreachable.
+        # F277, and the same line in three strategies.
+        prices = first_non_empty(data.get("prices"), data.get("close"))
         if prices is None:
             return {"upper": None, "lower": None, "sma": None, "price": None}
         series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices

@@ -12,6 +12,7 @@
  *           GET    /api/alerts/history/triggers
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
@@ -62,9 +63,9 @@ const CONDITION_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  active:    '#4ade80',
+  active:    'var(--gain)',
   triggered: '#f97316',
-  paused:    '#94a3b8',
+  paused:    'var(--text-dim)',
   expired:   '#475569',
   cancelled: '#475569',
 };
@@ -179,16 +180,14 @@ const PriceAlerts: React.FC = () => {
   };
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Price Alerts</h1>
-          <p style={s.subtitle}>Get notified via Discord, Telegram, or email when price conditions are met.</p>
-        </div>
-        <button onClick={() => setShowForm(!showForm)} style={s.createBtn}>
+    <PageShell
+      width="wide" title="Price Alerts"
+      subtitle="Get notified via Discord, Telegram, or email when price conditions are met."
+      actions={<><button onClick={() => setShowForm(!showForm)} style={s.createBtn}>
           {showForm ? '✕ Cancel' : '+ Create Alert'}
-        </button>
-      </div>
+        </button></>}
+    >
+
 
       {/* Create form */}
       {showForm && (
@@ -198,8 +197,8 @@ const PriceAlerts: React.FC = () => {
 
           <div style={s.formGrid}>
             <div>
-              <label style={s.label}>Alert Name</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              <label id="pricealerts-alert-name-label" htmlFor="pricealerts-alert-name" style={s.label}>Alert Name</label>
+              <input id="pricealerts-alert-name" aria-labelledby="pricealerts-alert-name-label" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. Gold breaks 2100" style={s.input} />
             </div>
             <div>
@@ -215,8 +214,8 @@ const PriceAlerts: React.FC = () => {
               </select>
             </div>
             <div>
-              <label style={s.label}>Price / Level</label>
-              <input type="number" value={form.threshold} onChange={(e) => setForm({ ...form, threshold: e.target.value })}
+              <label id="pricealerts-price-level-label" htmlFor="pricealerts-price-level" style={s.label}>Price / Level</label>
+              <input id="pricealerts-price-level" aria-labelledby="pricealerts-price-level-label" type="number" value={form.threshold} onChange={(e) => setForm({ ...form, threshold: e.target.value })}
                 placeholder="e.g. 2100.00" style={s.input} />
             </div>
           </div>
@@ -278,10 +277,10 @@ const PriceAlerts: React.FC = () => {
         alerts.length === 0 ? (
           <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 36 }}>🔔</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>No alerts yet</div>
-            <div style={{ fontSize: 13, color: '#64748b' }}>Use the form above to create your first price alert.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>No alerts yet</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Use the form above to create your first price alert.</div>
             <button onClick={() => navigate('/watchlist')}
-              style={{ padding: '7px 18px', background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: 8, color: '#fbbf24', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+              style={{ padding: '7px 18px', background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: 8, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
               👁 Watchlist
             </button>
           </div>
@@ -290,18 +289,18 @@ const PriceAlerts: React.FC = () => {
           <div key={alert.id} style={s.alertRow}>
             <div style={{ ...s.statusDot, background: STATUS_COLOR[alert.status] ?? '#475569' }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 14 }}>{alert.name}</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              <div style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 14 }}>{alert.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                 {alert.symbol} · {(alert.conditions ?? []).map((c) => `${CONDITION_LABELS[c.type] ?? c.type} ${c.threshold}`).join(', ')}
                 {(alert.notification_channels?.length ?? 0) > 0 && <>{' · '}{alert.notification_channels!.join(', ')}</>}
               </div>
             </div>
-            <div style={{ fontSize: 12, color: '#475569', marginRight: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', marginRight: 12 }}>
               Triggered {alert.trigger_count}×
             </div>
             <button
               onClick={() => navigate('/trade', { state: { signal: { symbol: toSlashSymbol(alert.symbol) } } })}
-              style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', marginRight: 6 }}
+              style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', marginRight: 6 }}
               title={`Trade ${alert.symbol}`}
             >
               ⚡ Trade
@@ -311,7 +310,7 @@ const PriceAlerts: React.FC = () => {
               {alert.status === 'paused' ? '▶' : '⏸'}
             </button>
             <button onClick={() => handleDelete(alert.id)}
-              style={{ ...s.iconBtn, color: '#f87171' }} title="Delete">
+              style={{ ...s.iconBtn, color: 'var(--loss)' }} title="Delete">
               🗑
             </button>
           </div>
@@ -335,14 +334,14 @@ const PriceAlerts: React.FC = () => {
               )
           )
           : wsTriggered.map((t) => (
-            <div key={t.id} style={{ ...s.historyRow, background: '#1e293b', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
+            <div key={t.id} style={{ ...s.historyRow, background: 'var(--raised)', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
               <span style={{ color: '#f97316', fontSize: 16 }}>⚡</span>
               <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 13 }}>{t.symbol}</span>
-                <span style={{ color: '#64748b', fontSize: 12, marginLeft: 8 }}>{t.condition}</span>
-                {t.message && <span style={{ color: '#94a3b8', fontSize: 12, marginLeft: 8 }}>{t.message}</span>}
+                <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{t.symbol}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>{t.condition}</span>
+                {t.message && <span style={{ color: 'var(--text-dim)', fontSize: 12, marginLeft: 8 }}>{t.message}</span>}
               </div>
-              <span style={{ fontSize: 12, color: '#475569' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
                 {new Date(t.triggered_at).toLocaleString()}
               </span>
               <button
@@ -360,20 +359,20 @@ const PriceAlerts: React.FC = () => {
         history.length === 0 ? <div style={s.empty}>No triggers yet.</div> :
         history.slice(0, 50).map((t, i) => (
           <div key={i} style={s.historyRow}>
-            <span style={{ color: '#f97316', fontSize: 13 }}>⚡</span>
+            <span style={{ color: '#f97316', fontSize: 'var(--fs-body)'}}>⚡</span>
             <div style={{ flex: 1 }}>
-              <span style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 13 }}>{t.alert_name}</span>
-              <span style={{ color: '#64748b', fontSize: 12, marginLeft: 8 }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{t.alert_name}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>
                 {t.symbol} @ {t.trigger_value}
               </span>
             </div>
-            <span style={{ fontSize: 12, color: '#475569' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
               {new Date(t.triggered_at).toLocaleString()}
             </span>
           </div>
         ))
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -382,28 +381,28 @@ const PriceAlerts: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:             { padding: 24, maxWidth: 900, margin: '0 auto' },
   header:           { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  title:            { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
-  subtitle:         { fontSize: 14, color: '#64748b', margin: 0 },
+  title:            { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px' },
+  subtitle:         { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
   createBtn:        { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 18px' },
-  card:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 },
-  cardTitle:        { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' },
+  card:             { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 24, marginBottom: 20 },
+  cardTitle:        { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 16px' },
   formGrid:         { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 },
-  label:            { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6, fontWeight: 500 },
-  input:            { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14, boxSizing: 'border-box' },
-  select:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
+  label:            { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
+  input:            { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14, boxSizing: 'border-box' },
+  select:           { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
   channelRow:       { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
-  channelBtn:       { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', padding: '6px 14px', fontSize: 13 },
-  channelBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
+  channelBtn:       { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', padding: '6px 14px', fontSize: 'var(--fs-body)'},
+  channelBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   saveBtn:          { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 24px', marginTop: 8 },
   tabs:             { display: 'flex', gap: 8, marginBottom: 16 },
-  tab:              { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
-  tabActive:        { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  alertRow:         { display: 'flex', alignItems: 'center', gap: 12, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
+  tab:              { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 'var(--fs-body)'},
+  tabActive:        { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
+  alertRow:         { display: 'flex', alignItems: 'center', gap: 12, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
   statusDot:        { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
-  iconBtn:          { background: 'transparent', border: 'none', color: '#64748b', fontSize: 16, cursor: 'pointer', padding: '4px 6px' },
-  historyRow:       { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid #1e293b' },
-  errorBox:         { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: '#f87171', fontSize: 14, marginBottom: 16 },
-  empty:            { textAlign: 'center', color: '#475569', padding: 40 },
+  iconBtn:          { background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', padding: '4px 6px' },
+  historyRow:       { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' },
+  errorBox:         { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
+  empty:            { textAlign: 'center', color: 'var(--text-faint)', padding: 40 },
 };
 
 export default PriceAlerts;

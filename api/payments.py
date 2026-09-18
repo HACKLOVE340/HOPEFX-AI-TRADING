@@ -24,6 +24,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 UTC = timezone.utc
 
@@ -31,6 +32,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from api.auth import TokenPayload, get_current_user, require_kyc
 from monetization.activation import UnknownPlanError, activate_paid_plan, resolve_plan_price_usd
+from monetization.payment_processor import to_cents
 
 # ── Withdrawal rate limit ─────────────────────────────────────────────────────
 # Enforced via Depends() on the /withdraw route so it appears in OpenAPI docs
@@ -133,6 +135,18 @@ def _get_db_session():
     return None
 
 
+def _exact(value: float | str | Decimal | None) -> Decimal | None:
+    """Convert to Decimal without inheriting a float's binary error.
+
+    `crypto_payments.amount_usd/amount_crypto/rate_usd` are NUMERIC. Handing a
+    float straight to a NUMERIC column re-introduces the drift the column type
+    exists to remove, so the conversion happens here, once, through `str`.
+    """
+    if value is None:
+        return None
+    return value if isinstance(value, Decimal) else Decimal(str(value))
+
+
 def _save_payment(payment: dict) -> None:
     """Persist a new payment record to the database."""
     session = _get_db_session()
@@ -149,9 +163,14 @@ def _save_payment(payment: dict) -> None:
             currency=payment["currency"],
             network=payment["network"],
             address=payment["address"],
-            amount_usd=payment["amount_usd"],
-            amount_crypto=payment["amount_crypto"],
-            rate_usd=payment["rate_usd"],
+            # `Decimal(str(x))`, never `Decimal(x)`: the latter inherits the
+            # float's binary error verbatim, which would put the drift straight
+            # back into a column that was made exact to remove it. These three
+            # arrive as floats from the quote, so this is the named edge where
+            # the representation changes.
+            amount_usd=_exact(payment["amount_usd"]),
+            amount_crypto=_exact(payment["amount_crypto"]),
+            rate_usd=_exact(payment["rate_usd"]),
             status=payment["status"],
             confirmations=payment["confirmations"],
             confirmations_required=payment["confirmations_required"],
@@ -599,7 +618,12 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
 
             stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
             intent = stripe.PaymentIntent.create(
-                amount=int(req.amount * 100),
+                # `to_cents`, not `int(x * 100)`: truncation undercharges — a
+                # 10.999 deposit was collected as 10.99, and 1.005 lost its cent
+                # twice over, once to the float's binary error and once to the
+                # truncation. Third site of F206; the first two were in
+                # monetization/ and payments/, which is all the probe scanned.
+                amount=to_cents(Decimal(str(req.amount))),
                 currency="usd",
                 payment_method_types=["card"],
                 metadata={"reference": reference},
@@ -630,6 +654,76 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
     }
 
 
+def _screen_withdrawal_for_aml(user: TokenPayload, amount: float) -> None:
+    """Consult the AML gate, and refuse the withdrawal if it says no.
+
+    `compliance/aml.py::check_withdrawal` enforces a single-transaction cap, a
+    daily withdrawal count, a daily volume limit and sanctions/PEP screening. It
+    is built and wired correctly and, until this call existed, was never
+    consulted from here: its only production call site was
+    `payments/wallet.py::debit_wallet`, inside a class no production module uses
+    (WALLET-DEAD). So every AML rule — the single-transaction cap included — was
+    unreachable, while startup still registered the gate and made it look live
+    (AML-UNREACHED).
+
+    Note what was NOT wrong: money was not leaving unscreened, because this
+    endpoint persists nothing and disburses nothing. The gate belongs here now
+    precisely so that it is already in the path on the day `FIAT_PROVIDER` is
+    configured and the endpoint is made real.
+
+    Strictness mirrors `require_kyc`, which guards this same endpoint: reject in
+    production when the gate cannot be reached, pass through in development
+    where nothing wires one, and `HOPEFX_REQUIRE_AML_STRICT` overrides either
+    way. `payments/wallet.py` fails closed unconditionally; that is stricter,
+    and it is the right default for a ledger method with no dev callers. This
+    endpoint has them, and a blanket fail-closed here would reject every local
+    and test run — which is how a gate gets disabled by whoever is trying to
+    work.
+    """
+    strict_default = "true" if os.getenv("APP_ENV", "development").lower() == "production" else "false"
+    strict = os.getenv("HOPEFX_REQUIRE_AML_STRICT", strict_default).lower() in ("true", "1", "yes")
+
+    try:
+        from compliance.aml import get_aml_gate
+
+        kyc_status = "unverified"
+        try:
+            from core.app_state import app_state
+
+            cm = getattr(app_state, "compliance_manager", None)
+            if cm is not None:
+                kyc_status = "approved" if cm.is_kyc_approved(user.sub) else "unverified"
+        except Exception:  # nosec B110 - fail closed: an unknown status is unverified
+            kyc_status = "unverified"
+
+        decision = get_aml_gate().check_withdrawal(
+            user_id=user.sub,
+            # Decimal(str(x)), never Decimal(x): the gate compares against
+            # Decimal thresholds, and a float converted directly carries its
+            # binary error into that comparison.
+            amount=Decimal(str(amount)),
+            kyc_status=kyc_status,
+        )
+    except Exception as exc:
+        if strict:
+            logger.critical(
+                "AML screening unavailable (%s) — REFUSING withdrawal for user=%s. "
+                "An AML gate must be wired in production.",
+                exc,
+                user.sub,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Withdrawal screening is temporarily unavailable. Please try again shortly.",
+            ) from exc
+        logger.warning("AML screening skipped (%s) — permitted outside production only.", exc)
+        return
+
+    if not decision.allowed:
+        logger.warning("AML refused withdrawal for user=%s: %s", user.sub, decision.reason)
+        raise HTTPException(status_code=403, detail=f"Withdrawal refused: {decision.reason}")
+
+
 @router.post(
     "/withdraw",
     response_model=None,
@@ -644,12 +738,21 @@ async def fiat_withdraw(
     """
     Initiate a fiat (USD) withdrawal to bank account or card.
 
-    Minimum withdrawal and KYC verification are enforced server-side.
+    Minimum withdrawal, KYC verification and AML screening are enforced
+    server-side. Screening covers the single-transaction cap, the daily
+    withdrawal count and volume, and sanctions/PEP status; a refusal is a 403
+    carrying the gate's own reason. It reached this endpoint in 2026-09 — before
+    that the gate was registered at startup and consulted by nothing
+    (AML-UNREACHED).
 
     WARNING — NOT YET PERSISTED. No withdrawal record is created and nothing is
     queued: the response reports `status: "pending"` against a reference that
     exists only in this response body. Actual disbursement additionally requires
-    FIAT_PROVIDER to be configured.
+    FIAT_PROVIDER to be configured. Note this cuts both ways for the screening
+    above: because nothing is recorded, the daily *count* and *volume* rules have
+    no rows to count and only the per-transaction rules can currently fire. They
+    become real when the withdrawal path writes to a ledger — see WALLET-DEAD,
+    which is an owner decision.
     """
     min_withdrawal = float(os.getenv("FIAT_MIN_WITHDRAWAL_USD", "10.0"))
     if req.amount < min_withdrawal:
@@ -657,6 +760,8 @@ async def fiat_withdraw(
             status_code=422,
             detail=f"Minimum withdrawal is ${min_withdrawal:.2f}",
         )
+
+    _screen_withdrawal_for_aml(user, req.amount)
 
     reference = f"WDR-{uuid.uuid4().hex[:16].upper()}"
     logger.info(

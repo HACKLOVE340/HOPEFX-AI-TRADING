@@ -11,6 +11,7 @@ Connected to: nocode/builder.py, nocode/state_machine.py, nocode/ml_nodes.py
 
 from __future__ import annotations
 
+import os
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -19,7 +20,22 @@ from monetization.subscription import require_plan
 from pydantic import BaseModel, Field
 from api.error_details import safe_error
 
+from strategies.strategy_execution_boundary import ExecutionScope
+
 logger = logging.getLogger(__name__)
+
+
+def _activation_scope() -> ExecutionScope:
+    """The scope this deployment actually activates at.
+
+    Derived from BROKER_TYPE rather than defaulted. The gate this feeds
+    (`StrategyExecutionBoundary`) previously took `ExecutionScope.RESEARCH` as
+    its default and short-circuited every check on it, so activation happened
+    under a scope no caller had chosen. Choosing here means the claim matches
+    what the registry then does -- it sets StrategyState.ACTIVE either way.
+    """
+    return ExecutionScope.PAPER if os.getenv("BROKER_TYPE", "paper").strip().lower() == "paper" else ExecutionScope.LIVE
+
 
 router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"])
 
@@ -167,7 +183,7 @@ async def deploy_template(
         )
 
         # Auto-activate the deployed strategy
-        await registry.activate_strategy(version_id)
+        await registry.activate_strategy(scope=_activation_scope(), version_id=version_id)
 
         return {
             "status": "deployed",

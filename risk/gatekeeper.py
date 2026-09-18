@@ -757,8 +757,28 @@ class Gatekeeper:
         return float(getattr(signal, "data_quality", 1.0))
 
     def _get_data_quality_from_orch(self) -> float:
+        """Tick confidence, or a blocking score when it cannot be read.
+
+        Every branch here returns something at or below _MIN_DATA_QUALITY when
+        the value is unknown — including the absent-orchestrator case, which
+        returned 1.0 and was therefore the one unmeasured state this
+        fail-closed reader let through. An absent orchestrator is the least
+        measured state of all.
+
+        That branch was live: core/startup_factories.py built the Gatekeeper
+        with `orchestrator=getattr(s, "data_orchestrator", None)` against an
+        attribute nothing assigns, so on a booted instance `gk._orch` was None
+        and this returned 1.0. `_run_checks_on_dict` — the event-bus path —
+        calls this directly, so gate step 5 compared 1.0 < 0.40 forever.
+        core/main_loop.py also constructs `Gatekeeper()` with no orchestrator,
+        and run.py falls back to it when HopeFXEngine is unavailable.
+        """
         if getattr(self, "_orch", None) is None:
-            return 1.0
+            logger.warning(
+                "Gatekeeper: no orchestrator wired — data quality is unmeasurable, "
+                "returning 0.0 so gate step 5 blocks rather than passing"
+            )
+            return 0.0
         try:
             tick = getattr(self, "_orch", None) and self._orch.get_latest_tick()
             return float(tick.confidence) if tick else 0.0

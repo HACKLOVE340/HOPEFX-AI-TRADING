@@ -24,9 +24,10 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.auth import TokenPayload
+from api.error_details import safe_error
 from ._shared import require_superadmin_2fa, _utcnow, _log_superadmin_action
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,53 @@ router = APIRouter()
 
 _NUCLEAR_LOG_KEY = "superadmin:nuclear:log"
 _HEDGE_STATE_KEY = "superadmin:nuclear:hedge"
+
+
+#: Strong references to in-flight broadcast tasks.
+#:
+#: The event loop keeps only a WEAK reference to a task, so a bare
+#: `asyncio.create_task(...)` whose result nobody holds may be garbage-collected
+#: before it runs. For an emergency-halt banner that means the operator's
+#: warning silently never appears. Tasks discard themselves on completion.
+_BACKGROUND_TASKS: set = set()
+
+#: How long to wait for the halt/resume banner before reporting it undelivered.
+#: Short: an operator waiting on an emergency stop must not wait on a slow
+#: WebSocket fan-out, but "we could not tell anyone" is worth knowing.
+_BROADCAST_TIMEOUT_S = 2.0
+
+
+async def _broadcast_or_report(channel: str, message: dict, *, what: str) -> str:
+    """Send `message`, and say whether it arrived.
+
+    Returns a leg status the caller puts in its response. Awaited rather than
+    fired and forgotten: the caller is already async, and awaiting is the only
+    way to report delivery truthfully.
+
+    Failures log at ERROR, not DEBUG. These used to be
+    `logger.debug("... broadcast skipped: %s", exc)` — and DEBUG is off in
+    production, so a halt nobody was told about left no trace at all. A handler
+    around a safety action logs louder, not quieter.
+    """
+    import asyncio as _asyncio
+
+    try:
+        from api.ws_live import get_live_manager
+
+        coro = get_live_manager().broadcast(channel, message)
+        task = _asyncio.ensure_future(coro)
+        _BACKGROUND_TASKS.add(task)
+        task.add_done_callback(_BACKGROUND_TASKS.discard)
+        await _asyncio.wait_for(_asyncio.shield(task), timeout=_BROADCAST_TIMEOUT_S)
+        return "sent"
+    except TimeoutError:
+        # The task keeps running — it is still referenced — but we will not
+        # hold the operator's response open waiting for it.
+        logger.error("%s broadcast did not complete within %.1fs", what, _BROADCAST_TIMEOUT_S)
+        return f"timeout after {_BROADCAST_TIMEOUT_S}s"
+    except Exception as exc:
+        logger.error("%s broadcast FAILED — no client was told: %s", what, exc, exc_info=True)
+        return f"failed: {exc.__class__.__name__}"
 
 
 def _get_kill_switch():
@@ -144,9 +192,30 @@ async def nuclear_halt(
     body: dict,
     user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict:
+    # This handler used to end in an unconditional
+    #
+    #     return {"ok": True, "kill_switch_active": True, "reason": reason}
+    #
+    # reached by four paths that halted nothing: no kill switch resolved
+    # (`if ks is not None` skipped everything), activation raised, the
+    # cross-pod Redis write failed inside `except Exception: pass`, or there
+    # was no Redis client at all. This is the control of last resort, and it
+    # reported success for work that did not happen.
+    #
+    # Each leg now returns its own outcome and the response carries them, so an
+    # operator can see WHICH parts of the fleet actually stopped.
     reason = body.get("reason", "Superadmin emergency halt")
+    legs: dict[str, str] = {}
+    warnings: list[str] = []
+
+    # ── Leg 1: this pod ──────────────────────────────────────────────────────
     ks = _get_kill_switch()
-    if ks is not None:
+    local_halted = False
+    if ks is None:
+        legs["local"] = "no_switch"
+        warnings.append("No kill switch is available in this process — nothing was halted locally.")
+        logger.error("nuclear_halt: no kill switch available; NOTHING was halted locally")
+    else:
         try:
             # activate() is synchronous — awaiting its None return raises
             # TypeError, which the handler below logged as an activation error.
@@ -154,78 +223,138 @@ async def nuclear_halt(
                 ks.activate(reason)
             elif hasattr(ks, "enable"):
                 ks.enable(reason=reason)
+            else:
+                raise AttributeError("kill switch exposes neither activate() nor enable()")
+            local_halted = True
+            legs["local"] = "activated"
         except Exception as exc:
-            logger.error("Kill switch activate error: %s", exc)
+            legs["local"] = f"failed: {exc.__class__.__name__}"
+            warnings.append(f"Local kill switch did NOT activate: {safe_error(exc)}")
+            logger.error("Kill switch activate error: %s", exc, exc_info=True)
 
-    # Also set via Redis so all pods pick it up
+    # ── Leg 2: every other pod ───────────────────────────────────────────────
+    # This is the leg whose silent failure was most dangerous: the local halt
+    # works, so nothing looks wrong, and the rest of the fleet keeps trading
+    # until somebody notices a fill.
+    propagated = False
     try:
         from cache.redis_client import get_sync_redis_client
 
         rc = get_sync_redis_client()
-        if rc:
+        if rc is None:
+            legs["propagation"] = "no_client"
+            warnings.append("No Redis client — the halt did NOT propagate. Other pods are still trading.")
+            logger.error("nuclear_halt: no Redis client; halt did NOT propagate to other pods")
+        else:
             rc.set("kill_switch:active", "1", ex=86400)
             rc.set("kill_switch:reason", reason, ex=86400)
-    except Exception:  # nosec B110  # noqa: S110
-        pass
+            propagated = True
+            legs["propagation"] = "written"
+    except Exception as exc:
+        legs["propagation"] = f"failed: {exc.__class__.__name__}"
+        warnings.append(
+            f"The halt did NOT propagate to other pods ({safe_error(exc)}). "
+            "Halt them directly before assuming trading has stopped."
+        )
+        logger.error("nuclear_halt: cross-pod propagation FAILED: %s", exc, exc_info=True)
 
-    _append_nuclear_log("HALT", {"reason": reason}, user.sub)
-    _log_superadmin_action(user, "nuclear_halt", {"reason": reason})
+    _append_nuclear_log("HALT", {"reason": reason, "legs": legs}, user.sub)
+    _log_superadmin_action(user, "nuclear_halt", {"reason": reason, "legs": legs})
 
-    # Broadcast nuclear_halt to all connected WebSocket clients so the
-    # frontend can display the emergency halt banner immediately.
-    try:
-        from api.ws_live import get_live_manager
-        import asyncio as _asyncio
-
-        _halt_msg = {
+    # ── Leg 3: tell everyone watching ────────────────────────────────────────
+    legs["broadcast"] = await _broadcast_or_report(
+        "system",
+        {
             "type": "nuclear_halt",
             "data": {
                 "reason": reason,
                 "activated_by": user.sub,
                 "timestamp": _utcnow().isoformat(),
             },
-        }
-        _asyncio.create_task(get_live_manager().broadcast("system", _halt_msg))
-    except Exception as _ws_err:
-        logger.debug("nuclear_halt WS broadcast skipped: %s", _ws_err)
+        },
+        what="nuclear_halt",
+    )
 
-    return {"ok": True, "kill_switch_active": True, "reason": reason}
+    anything_halted = local_halted or propagated
+    if not anything_halted:
+        # The emergency control did not function at all. A 200 here would be
+        # the worst possible answer.
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "EMERGENCY HALT FAILED — nothing was halted. Stop trading manually.",
+                "legs": legs,
+                "warnings": warnings,
+            },
+        )
+
+    return {
+        "ok": local_halted and propagated,
+        "kill_switch_active": anything_halted,
+        "reason": reason,
+        "legs": legs,
+        "warnings": warnings,
+    }
 
 
 @router.post("/nuclear/resume")
 async def nuclear_resume(
     user: TokenPayload = Depends(require_superadmin_2fa),
 ) -> dict:
+    # Held to the same standard as the halt, and worth as much in the other
+    # direction: a resume that clears this pod but not Redis leaves the rest of
+    # the fleet halted while the operator believes trading is back, and they
+    # find out from a fill that never arrives.
+    legs: dict[str, str] = {}
+    warnings: list[str] = []
+
     ks = _get_kill_switch()
-    if ks is not None:
+    local_cleared = False
+    if ks is None:
+        legs["local"] = "no_switch"
+        warnings.append("No kill switch in this process — nothing was cleared locally.")
+        logger.error("nuclear_resume: no kill switch available; nothing cleared locally")
+    else:
         try:
             # deactivate() is synchronous — see the note in nuclear_halt.
             if hasattr(ks, "deactivate"):
                 ks.deactivate()
             elif hasattr(ks, "disable"):
                 ks.disable()
+            else:
+                raise AttributeError("kill switch exposes neither deactivate() nor disable()")
+            local_cleared = True
+            legs["local"] = "cleared"
         except Exception as exc:
-            logger.error("Kill switch deactivate error: %s", exc)
+            legs["local"] = f"failed: {exc.__class__.__name__}"
+            warnings.append(f"Local kill switch did NOT clear: {safe_error(exc)}")
+            logger.error("Kill switch deactivate error: %s", exc, exc_info=True)
 
+    propagated = False
     try:
         from cache.redis_client import get_sync_redis_client
 
         rc = get_sync_redis_client()
-        if rc:
+        if rc is None:
+            legs["propagation"] = "no_client"
+            warnings.append("No Redis client — other pods remain halted.")
+            logger.error("nuclear_resume: no Redis client; other pods remain halted")
+        else:
             rc.delete("kill_switch:active")
             rc.delete("kill_switch:reason")
-    except Exception:  # nosec B110  # noqa: S110
-        pass
+            propagated = True
+            legs["propagation"] = "cleared"
+    except Exception as exc:
+        legs["propagation"] = f"failed: {exc.__class__.__name__}"
+        warnings.append(f"The resume did NOT propagate ({safe_error(exc)}). Other pods remain halted.")
+        logger.error("nuclear_resume: cross-pod propagation FAILED: %s", exc, exc_info=True)
 
-    _append_nuclear_log("RESUME", {}, user.sub)
-    _log_superadmin_action(user, "nuclear_resume", {})
+    _append_nuclear_log("RESUME", {"legs": legs}, user.sub)
+    _log_superadmin_action(user, "nuclear_resume", {"legs": legs})
 
-    # Broadcast system_event so the frontend clears the halt banner.
-    try:
-        from api.ws_live import get_live_manager
-        import asyncio as _asyncio
-
-        _resume_msg = {
+    legs["broadcast"] = await _broadcast_or_report(
+        "system",
+        {
             "type": "system_event",
             "data": {
                 "event": "nuclear_resume",
@@ -233,12 +362,16 @@ async def nuclear_resume(
                 "activated_by": user.sub,
                 "timestamp": _utcnow().isoformat(),
             },
-        }
-        _asyncio.create_task(get_live_manager().broadcast("system", _resume_msg))
-    except Exception as _ws_err:
-        logger.debug("nuclear_resume WS broadcast skipped: %s", _ws_err)
+        },
+        what="nuclear_resume",
+    )
 
-    return {"ok": True, "kill_switch_active": False}
+    return {
+        "ok": local_cleared and propagated,
+        "kill_switch_active": not (local_cleared and propagated),
+        "legs": legs,
+        "warnings": warnings,
+    }
 
 
 @router.post("/nuclear/hedge/activate")

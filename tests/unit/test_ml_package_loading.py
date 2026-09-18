@@ -394,11 +394,41 @@ class TestStackingEnsemblePredictor:
 
         assert proba[:, 1] == pytest.approx([0.75, 0.75])
 
-    def test_a_failing_scaler_does_not_stop_the_prediction(self):
+    def test_a_failing_scaler_stops_the_prediction(self):
+        """Inverted deliberately. This test used to be
+        `test_a_failing_scaler_does_not_stop_the_prediction` and asserted that
+        `predict_proba` still returned a result when `scaler.transform` raised.
+
+        It does not any more, and the old assertion was the defect written down
+        as the requirement (F145). When the scaler fails, the frame handed to
+        the base learners is the *raw* one: a gold price of 3200 in a column the
+        model was trained to see as a z-score near 0. That is not a degraded
+        prediction, it is a meaningless one, and it sizes real trades.
+
+        Contrast `test_a_failing_base_learner_is_replaced_with_a_neutral_vote`
+        directly above, which is correct and stays: one learner among several
+        failing leaves the ensemble's remaining votes meaningful. The scaler is
+        not one voice among many -- it is a precondition for all of them, so
+        there is no neutral value to substitute.
+        """
         scaler = SimpleNamespace(transform=lambda X: (_ for _ in ()).throw(RuntimeError("scaler mismatch")))
         predictor = StackingEnsemblePredictor(_payload(scaler=scaler))
 
-        assert predictor.predict_proba(np.zeros((1, 2))).shape == (1, 2)
+        with pytest.raises(RuntimeError, match="refusing to predict on an unscaled frame"):
+            predictor.predict_proba(np.zeros((1, 2)))
+
+    def test_the_scaler_failure_is_logged_at_error(self, caplog):
+        """It used to log at DEBUG, which is off in production, so the
+        substitution left no trace at all."""
+        import logging
+
+        scaler = SimpleNamespace(transform=lambda X: (_ for _ in ()).throw(RuntimeError("scaler mismatch")))
+        predictor = StackingEnsemblePredictor(_payload(scaler=scaler))
+
+        with caplog.at_level(logging.ERROR), pytest.raises(RuntimeError):
+            predictor.predict_proba(np.zeros((1, 2)))
+
+        assert any(r.levelno >= logging.ERROR for r in caplog.records), "the scaler failure left no ERROR-level record"
 
     def test_a_working_scaler_is_applied(self):
         seen = {}

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 
@@ -51,6 +51,9 @@ class Strategy:
         self.created_at = datetime.now(UTC)
 
 
+_CENT = Decimal("0.01")
+
+
 class StrategyMarketplace:
     """Manages strategy publishing, listing, purchasing, and subscriptions."""
 
@@ -77,6 +80,28 @@ class StrategyMarketplace:
 
     # ── Purchase API ─────────────────────────────────────────────────────────
 
+    def split_revenue(self, price: float) -> tuple[float, float]:
+        """Split *price* into (platform_fee, creator_payout) so the two sum to it.
+
+        Quantise once, then derive the other side by subtraction. The previous
+        form rounded both sides independently, so on a sub-cent price the two
+        results were under no obligation to add back up to the price — and did
+        not, by half a cent, created or destroyed depending on which way
+        banker's rounding broke the tie:
+
+            price=10.025 -> 10.030 (+0.005)
+            price=12.575 -> 12.570 (-0.005) here, and 12.580 (+0.005) in
+                            monetization/marketplace.py — the same sale, two
+                            different creator payouts
+
+        Cent-priced listings always conserved and their numbers are unchanged,
+        so no existing receipt is restated. Found by counting the other places
+        with the same shape after fixing the sub-account transfer endpoint.
+        """
+        total = Decimal(str(price)).quantize(_CENT, rounding=ROUND_HALF_UP)
+        fee = (total * Decimal(str(self.PLATFORM_FEE_PCT))).quantize(_CENT, rounding=ROUND_HALF_UP)
+        return float(fee), float(total - fee)
+
     def purchase_strategy(
         self,
         strategy_id: str,
@@ -89,8 +114,7 @@ class StrategyMarketplace:
 
         listing = self.listings[strategy_id]
         price = listing.price
-        platform_fee = round(price * self.PLATFORM_FEE_PCT, 2)
-        creator_payout = round(price - platform_fee, 2)
+        platform_fee, creator_payout = self.split_revenue(price)
         license_key = str(uuid.uuid4())
 
         receipt = {

@@ -172,13 +172,64 @@ def _load_regime_size_map() -> dict[str, float]:
 _REGIME_SIZE_MAP: dict[str, float] = _load_regime_size_map()
 
 
+#: Set once the "regime is permanently unknown" warning has been emitted. This
+#: runs on the per-signal sizing path, so warning per order would bury the log it
+#: exists to make readable.
+_regime_unknown_warned: bool = False
+
+
 def get_regime_position_scalar(regime_name: str) -> float:
     """Return the position size scalar for the given regime name (0–1).
 
     Used by the risk manager and execution engine to scale lot size based on
     the current market regime detected by RegimeDetector.
+
+    **The scalars themselves are unchanged, deliberately.** ``UNKNOWN: 0.5`` is
+    an explicit entry in ``_DEFAULT_REGIME_SIZE_MAP``, overridable via the
+    ``REGIME_SIZE_MAP`` env var. It is a risk policy — "when you do not know the
+    regime, take half a position" — and the caller describes this overlay as one
+    that "never increases size above the risk-manager-approved maximum, only
+    reduces it in adverse regimes". Raising UNKNOWN to 1.0 would double every
+    position on the platform, which is weakening a risk control and the
+    dangerous direction to be wrong in.
+
+    What was wrong was the silence. ``RegimeRouter.route()`` is never called
+    anywhere in the repo, so the regime is the constructor's "unknown" for the
+    life of the process and the conservative fallback became the *universal*
+    case — with no signal that detection was not running at all (F94). The
+    warning below is that signal. Fixing the cause means wiring ``route()``,
+    which changes sizing behaviour and is tracked separately.
     """
-    return _REGIME_SIZE_MAP.get(regime_name.upper(), 0.5)
+    global _regime_unknown_warned
+
+    key = regime_name.upper()
+    scalar = _REGIME_SIZE_MAP.get(key)
+
+    if scalar is None:
+        # Not merely undetected — a name the size map has never heard of, which
+        # means the detector and the map disagree. Always logged: unlike a
+        # permanently-unknown regime this should be rare, and silence would hide
+        # a genuine mismatch.
+        logger.warning(
+            "Regime %r is not in the size map %s — falling back to the conservative "
+            "0.5 scalar. The regime detector and REGIME_SIZE_MAP disagree.",
+            regime_name,
+            sorted(_REGIME_SIZE_MAP),
+        )
+        return 0.5
+
+    if key == "UNKNOWN" and not _regime_unknown_warned:
+        _regime_unknown_warned = True
+        logger.warning(
+            "Regime is UNKNOWN — every position is being scaled by %.2f. If this "
+            "is constant, RegimeRouter.route() is not being called and detection "
+            "is not running at all (F94); the scalar is a conservative fallback "
+            "being applied universally rather than a detected adverse regime. "
+            "Logged once per process.",
+            scalar,
+        )
+
+    return scalar
 
 
 def _get_deep_ensemble_store() -> Any | None:
@@ -226,6 +277,45 @@ def _get_deep_ensemble_store() -> Any | None:
     return _deep_ensemble_store or None
 
 
+def _phase_gate_permits(phase: str, feature: str) -> bool:
+    """Return True when the paper-trading gate for *phase* has passed.
+
+    ``research/pipeline/paper_trading_gate.py`` implements both gates properly —
+    elapsed calendar days since PAPER_RUN_START_UTC plus a minimum fill count,
+    with a state file so they survive restarts. **Nothing consulted them before
+    enabling the feature.** ``phase3_ready()`` was called once, in
+    ``ml/inference_engine.py``, and its result went into a health dict: measured
+    and reported, gating nothing (F214).
+
+    Combined with F215 — the template shipped FEATURE_ONLINE_LEARNING=true —
+    every deployment ran an unvalidated online learner against live signals
+    while a gate sat next to it reporting that it was not ready.
+
+    Fails closed: a gate that cannot answer has not said yes.
+    """
+    try:
+        from research.pipeline.paper_trading_gate import get_gate
+
+        passed, reason = getattr(get_gate(), f"{phase}_ready")()
+    except Exception as exc:
+        logger.warning(
+            "%s: %s gate could not be evaluated (%s) — feature stays OFF (fail closed).",
+            feature,
+            phase,
+            exc,
+        )
+        return False
+
+    if not passed:
+        logger.warning(
+            "%s is enabled by flag but its %s gate has not passed: %s The feature stays OFF until the gate passes.",
+            feature,
+            phase,
+            reason,
+        )
+    return bool(passed)
+
+
 def _get_online_learner_store() -> Any | None:
     """Return the module-level OnlineLearnerStore singleton, creating it on first call."""
     global _online_learner_store
@@ -242,6 +332,11 @@ def _get_online_learner_store() -> Any | None:
         enabled = os.getenv("FEATURE_ONLINE_LEARNING", "").lower() in ("1", "true", "yes")
 
     if not enabled:
+        return None
+
+    # The flag is permission to try, not permission to run. The Phase-3 gate is
+    # the actual precondition and used to gate nothing at all (F214).
+    if not _phase_gate_permits("phase3", "FEATURE_ONLINE_LEARNING"):
         return None
 
     if _online_learner_store is None:
@@ -271,6 +366,11 @@ def _get_anomaly_store() -> Any | None:
         enabled = os.getenv("FEATURE_ANOMALY_WEIGHTING", "").lower() in ("1", "true", "yes")
 
     if not enabled:
+        return None
+
+    # Same shape as Phase 3: the flag was the only condition checked, and the
+    # Phase-2 gate that exists for this feature gated nothing (F214).
+    if not _phase_gate_permits("phase2", "FEATURE_ANOMALY_WEIGHTING"):
         return None
 
     if _anomaly_store is None:

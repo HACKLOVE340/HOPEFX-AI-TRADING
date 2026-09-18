@@ -120,13 +120,25 @@ class TestSortinoRatio:
         assert result == 0.0
         assert math.isfinite(result), "Sortino must be finite when no negative returns"
 
-    def test_zero_downside_std_returns_zero(self):
-        """All negative returns identical → downside std=0 → 0.0."""
+    def test_identical_losses_are_penalised_not_scored_zero(self):
+        """Five trades all at -1% must score as the loss they are.
+
+        This test previously read ``test_zero_downside_std_returns_zero`` and
+        asserted ``result == 0.0``, with the docstring "All negative returns
+        identical -> downside std=0 -> 0.0". That was the F120 defect written
+        down as the requirement: the old denominator was the dispersion *among*
+        the losses, which is zero when the losses are identical, so a strategy
+        that lost on every single trade scored 0.0 — the same value the method
+        returns for no data at all.
+
+        Under the real downside deviation, five losses of 1% have a shortfall of
+        exactly 1%, and the ratio is large and negative.
+        """
         engine = _make_engine()
         trades = [_make_trade(-100.0, -0.01) for _ in range(5)]
         result = engine._calculate_sortino_ratio(trades)
-        assert result == 0.0
         assert math.isfinite(result)
+        assert result < 0.0, "a strategy that lost every trade must not score 0.0"
 
     def test_single_trade_returns_zero(self):
         engine = _make_engine()

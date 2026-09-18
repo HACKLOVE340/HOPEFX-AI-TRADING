@@ -1221,18 +1221,34 @@ class AdvancedRiskAnalytics:
         returns: NDArray[np.float64],
         periods_per_year: int = 252,
     ) -> float:
-        """Calculate annualized Sortino ratio (using downside deviation)."""
+        """Calculate annualized Sortino ratio over the RMS shortfall below target.
+
+        The denominator was ``np.std(returns[returns < 0])`` — the dispersion
+        among the losses about the mean loss, over the losing periods only. F120
+        named that defect and fixed it in the backtesting engines; this module
+        kept its own copy, and the difference is not a bias but a different
+        statistic (see ``analytics.ratios``). A series of identical losses has
+        zero dispersion among them, so this method took the ``float("inf")``
+        branch — reporting flawless risk-adjusted performance — for exactly the
+        return shape a downside measure exists to penalise.
+
+        The result is always finite. ``inf`` reached ``calculate_risk_metrics``'s
+        ``sortino_ratio`` key, which is serialised to JSON and written to a
+        numeric column, and neither accepts it; every other Sortino in this
+        repository already returns ``0.0`` for an undefined ratio.
+        """
+        from analytics.ratios import downside_deviation
+
         returns = np.nan_to_num(returns, nan=0.0)
-        excess_returns = returns - self.risk_free_rate / periods_per_year
-        downside_returns = returns[returns < 0]
+        target = self.risk_free_rate / periods_per_year
+        excess_returns = returns - target
 
-        if len(downside_returns) == 0 or np.std(downside_returns) == 0:
-            return float("inf") if float(np.mean(excess_returns)) > 0 else 0.0
+        downside_std = downside_deviation(returns, target=target)
+        if downside_std < 1e-12:
+            # No shortfall below the target at all — the ratio is undefined.
+            return 0.0
 
-        downside_std = float(np.nan_to_num(np.std(downside_returns), nan=1e-9))
-        return float(
-            np.nan_to_num(np.sqrt(periods_per_year) * np.mean(excess_returns) / max(downside_std, 1e-9), nan=0.0)
-        )
+        return float(np.nan_to_num(np.sqrt(periods_per_year) * np.mean(excess_returns) / downside_std, nan=0.0))
 
     def calculate_calmar_ratio(
         self,

@@ -46,6 +46,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Final
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _OUTPUT = _REPO_ROOT / "docs" / "API_ENDPOINTS.md"
@@ -184,6 +185,46 @@ def _declares_auth(dependant, endpoint=None, _depth: int = 0) -> bool:
     return False
 
 
+#: A summary that would break the table or bury the row is not a summary.
+_SUMMARY_MAX_CHARS: Final = 110
+
+
+def _summary_for(route: object) -> str:
+    """What this endpoint does, in one line, from whatever the code already says.
+
+    The column was rendered empty for every one of 1,127 routes because only
+    ``route.summary`` was read, and only 337 routes set it explicitly. Another
+    809 carry an endpoint docstring, so 849 — three quarters — could say what
+    they do and said nothing.
+
+    Order is deliberate: an explicit ``summary=`` is a decision somebody made
+    about how this endpoint should be described, and a docstring is what was
+    written for the next programmer. The decision wins where both exist.
+
+    A row with neither stays EMPTY rather than being filled with the function
+    name dressed up as prose. An invented summary is worse than a blank one: a
+    blank cell reads as "nobody wrote this down", and `create_user_v2` rendered
+    as "Create user v2" reads as documentation.
+    """
+    explicit = (getattr(route, "summary", None) or "").strip()
+    if explicit:
+        return _one_line(explicit)
+
+    endpoint = getattr(route, "endpoint", None)
+    doc = (getattr(endpoint, "__doc__", None) or "").strip()
+    if not doc:
+        return ""
+    return _one_line(doc.split("\n", 1)[0])
+
+
+def _one_line(text: str) -> str:
+    """One table-safe line: no pipes, no newlines, bounded length."""
+    flat = " ".join(text.replace("|", "\\|").split())
+    if len(flat) <= _SUMMARY_MAX_CHARS:
+        return flat
+    return flat[: _SUMMARY_MAX_CHARS - 1].rstrip() + "\u2026"
+
+
 def _rows() -> list[tuple[str, str, str, str, str]]:
     """(method, path, auth, summary, tags) for every documented route."""
     from core.router_registry import iter_api_routes
@@ -195,7 +236,7 @@ def _rows() -> list[tuple[str, str, str, str, str]]:
         if not route.include_in_schema:
             continue
         auth = "JWT" if _declares_auth(route.dependant, route.endpoint) else "None"
-        summary = (route.summary or "").strip()
+        summary = _summary_for(route)
         tags = ", ".join(str(t) for t in (route.tags or []))
         for method in route.methods:
             if method in ("HEAD", "OPTIONS"):

@@ -144,11 +144,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', background: '#0f172a',
+        justifyContent: 'center', background: 'var(--surface)',
       }}>
         <div style={{
           width: 32, height: 32, borderRadius: '50%',
-          border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+          border: '3px solid var(--border)', borderTopColor: '#3b82f6',
           animation: 'spin 0.7s linear infinite',
         }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -175,18 +175,18 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
           style={{
             minHeight: '100vh', display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            background: '#0f172a', color: '#f1f5f9',
+            background: 'var(--surface)', color: 'var(--text-strong)',
             fontFamily: 'Inter, system-ui, sans-serif', gap: 12,
           }}
         >
           <span style={{ fontSize: 40 }}>🔒</span>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-strong)' }}>
             Access Denied
           </h2>
-          <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', textAlign: 'center', maxWidth: 360 }}>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-dim)', textAlign: 'center', maxWidth: 360 }}>
             This page requires the{' '}
-            <span style={{ color: '#60a5fa', fontWeight: 600 }}>{requiredRole}</span>{' '}
-            role. Your current role (<span style={{ color: '#94a3b8', fontWeight: 600 }}>{user.role}</span>)
+            <span style={{ color: 'var(--link)', fontWeight: 600 }}>{requiredRole}</span>{' '}
+            role. Your current role (<span style={{ color: 'var(--text-dim)', fontWeight: 600 }}>{user.role}</span>)
             does not have sufficient permissions.
           </p>
         </div>

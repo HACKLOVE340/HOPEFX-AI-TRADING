@@ -131,7 +131,10 @@ class TestPushNotificationManager:
 
         result = manager.send_notification(user_id="user_1", title="Test Title", body="Test body message")
 
-        assert result is True
+        # False: no FCM key and no device token, so nothing was delivered. This
+        # asserted True before, which is F219 -- a notification that reached no
+        # device reporting success. The log assertion below is the real subject.
+        assert result is False
 
         captured = capsys.readouterr()
         assert "Test Title" in captured.out
@@ -148,7 +151,7 @@ class TestPushNotificationManager:
             category="trade",
         )
 
-        assert result is True
+        assert result is False  # nothing delivered: no FCM key, no tokens (F219)
 
     def test_send_notification_with_data(self, capsys):
         """Test sending notification with data payload."""
@@ -161,7 +164,7 @@ class TestPushNotificationManager:
             data={"price": 50000, "change": 2.5},
         )
 
-        assert result is True
+        assert result is False  # nothing delivered: no FCM key, no tokens (F219)
 
     def test_send_price_alert(self, capsys):
         """Test sending price alert."""
@@ -169,7 +172,7 @@ class TestPushNotificationManager:
 
         result = manager.send_price_alert(user_id="user_1", symbol="BTC/USD", price=50000.0, direction="above")
 
-        assert result is True
+        assert result is False  # nothing delivered: no FCM key, no tokens (F219)
 
         captured = capsys.readouterr()
         assert "BTC/USD" in captured.out
@@ -180,4 +183,4 @@ class TestPushNotificationManager:
 
         result = manager.send_price_alert(user_id="user_1", symbol="ETH/USD", price=3000.0, direction="below")
 
-        assert result is True
+        assert result is False  # nothing delivered: no FCM key, no tokens (F219)

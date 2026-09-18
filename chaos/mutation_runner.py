@@ -220,7 +220,7 @@ class MutationTestRunner:
             return await self._parse_mutmut_results()
 
         except Exception:
-            logger.exception("mutmut run failed: %s")
+            logger.exception("mutmut run failed")
             return self._empty_report("mutmut", error="mutmut run failed — check server logs")
 
     async def _parse_mutmut_results(self) -> MutationReport:
@@ -257,7 +257,7 @@ class MutationTestRunner:
                 engine="mutmut",
             )
         except Exception:
-            logger.exception("mutmut results parse failed: %s")
+            logger.exception("mutmut results parse failed")
             return self._empty_report("mutmut", error="mutmut results parse failed — check server logs")
 
     # ── Built-in AST mutator ──────────────────────────────────────────────────
@@ -397,14 +397,14 @@ class MutationTestRunner:
 
         Returns: "killed" | "survived" | "timeout" | "error"
         """
-        original_source = py_file.read_text()
+        original_source = await asyncio.to_thread(py_file.read_text)
         mutated_source = self._apply_mutation(original_source, mutant)
 
         if mutated_source == original_source:
             return "error"  # mutation had no effect
 
         try:
-            py_file.write_text(mutated_source)
+            await asyncio.to_thread(py_file.write_text, mutated_source)
             proc = await asyncio.create_subprocess_exec(
                 sys.executable,
                 "-m",
@@ -429,7 +429,7 @@ class MutationTestRunner:
             return "error"
         finally:
             # Always restore original source
-            py_file.write_text(original_source)
+            await asyncio.to_thread(py_file.write_text, original_source)
 
     def _apply_mutation(self, source: str, mutant: dict[str, Any]) -> str:
         """Apply a single mutation to source text via token replacement."""

@@ -205,6 +205,23 @@ class SmartOrderRouter:
                             "fallback_reason": str(e),
                         },
                     }
+                except TimeoutError as te2:
+                    # Same rule as the primary, one broker later. A timeout is
+                    # not a confirmed failure, so continuing the chain would
+                    # place a SECOND order against a possibly-filled one. Stop
+                    # here and surface for reconciliation. `TimeoutError` is a
+                    # subclass of `Exception`, so this clause must precede the
+                    # generic one below or the loop swallows it and continues.
+                    logger.error(
+                        "Fallback broker %s timed out — STOPPING the chain (order "
+                        "outcome unknown, manual reconciliation required): %s",
+                        fallback,
+                        te2,
+                    )
+                    raise RuntimeError(
+                        f"Order outcome unknown: fallback {fallback} timed out — "
+                        "chain stopped to avoid a duplicate fill"
+                    ) from te2
                 except Exception as e2:
                     logger.error(
                         "Fallback broker %s also failed: %s",

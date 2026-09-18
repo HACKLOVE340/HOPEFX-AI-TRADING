@@ -2,6 +2,10 @@
 
 > For the full system architecture see [`docs/architecture.md`](docs/architecture.md).
 > This file documents canonical module locations and resolves naming ambiguities.
+>
+> **It does not say what to work on.** For that run `python scripts/backlog_report.py`,
+> and read [`docs/ai/MASTER_OUTSTANDING.md`](docs/ai/MASTER_OUTSTANDING.md) for the
+> decisions only the owner can make. [`CLAUDE.md`](CLAUDE.md) routes every other question.
 
 ---
 
@@ -14,8 +18,9 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 |--------|-----------|---------------|-------|
 | Backtesting | `backtesting/` | `backtest/` | `backtest/` re-exports from `backtesting/` |
 | Strategies | `strategies/` | `strategy/` | `strategy/` = live ML engine; `strategies/` = backtestable classes |
-| Data pipeline | `data_layer/` | `data/` | `data/` = CSV files + pre-`data_layer/` utilities |
-| WebSocket | `api/ws_live.py` | `websocket/manager.py` | `websocket/manager.py` = standalone server; FastAPI uses `api/ws_live.py` |
+| Data pipeline | `data_layer/` (access) | — | `data/` is live streaming/serving (real-time price engine, scheduler, DOM, tick feed, time & sales), 20 production importers; `market_data/` is broker-side feeds. **The boundary is decided — ADR 0013, 2026-09-09.** It is a rule, not a refactor: a module on the wrong side stays there until there is a reason beyond tidiness. This row previously said the boundary was undocumented (F216/F217), which stopped being true when the ADR was accepted. |
+| Customer support | `support/` (decide, record, draft) · `api/support.py` (HTTP) | — | `support.triage` decides **who** answers and whether a human must; `support.tickets` records the thread and refuses an AI resolution of an escalated ticket; `support.answering` drafts a reply from given facts or says it cannot. `ai/departments/` holds the eleven specialists it routes to. None of `support/` can send or act — a test asserts the surface stays free of `send`/`reply`/`execute`/`place_order`/`close_position`/`refund`. |
+| WebSocket | `api/ws_live.py` | **never create a top-level `websocket/`** | The old standalone server is **deleted**. Recreating that package shadows the `websocket-client` library for the whole project and silently disables the REST fallback in `market_data/mt5_live_feed.py` (audit S13-02a) |
 
 ---
 
@@ -31,10 +36,25 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | `core/startup_factories.py` | Component factory functions wired into FastAPI startup sequence |
 | `ml/inference_engine.py` | Live inference: feature build → stale check → drift check → predict |
 | `ml/train_advanced.py` | Offline training: XGBoost + LightGBM + RF + ET stacking, walk-forward CV |
+| `ml/cached_series.py` | The committed daily CSVs, loaded with their age and OHLC integrity attached. Returns `CachedSeries`, never a bare DataFrame — deliberately **not** wired into the live path, so cached history cannot satisfy a freshness check |
+| `scripts/predict_offline.py` | Run the model on that cached series with no market feed. Defaults to `CLEAN_SINCE` (2020+); `--full-history` opts into the pre-2020 bars |
+| `scripts/drift_guard_report.py` | Whether the feature-drift guard is live (stats loaded, coverage above floor, buffer filled) and what its z is made of. Splits features over the threshold into zero-filled and genuinely drifted, because `DRIFT_BLOCK` acting on the first halts trading for a feed outage. Reports; changes nothing |
+| `scripts/clamp_ohlc.py` | Reconstruct impossible OHLC bars into a *separate* file with a provenance sidecar recording every edit. Never overwrites the source |
+| `scripts/model_provenance_report.py` | Whether every committed model artifact still hashes to its recorded digest, which directories the integrity gate actually guarantees, and which loaders reach a check at all. Reports; repairs nothing, and never recomputes a mismatched checksum |
+| `scripts/adr.py` | Architecture Decision Records (Group 3 Ch 6) — numbered, immutable, two-options-minimum. `--check` runs in pre-commit; immutability is enforced against git |
+| `ai/ledger/decisions.py` | The Decision Ledger (Group 3 Ch 7) — one schema for every actor's operational decisions. **Refusals are entries, not absences**, and each names the control that refused |
+| `ai/ledger/outcomes.py` | Outcome and failure memory (Group 3 Ch 8) — attaches what actually happened to a stated prediction, and feeds `ai/core/calibration.py` the `resolve()` it never had |
+| `deployment/change_records.py` | Change records (Group 2 Ch 6) — generated from git, risk tier derived from paths. A `core`-tier change should carry an `Expected-Effect:` commit trailer. **Warns, does not block** (ADR 0012); `CHANGE_RECORD_ENFORCE=1` makes it block. `--report` measures the KPI |
 | `risk/manager.py` | Pre-trade gate, GARCH VaR, CVaR, Kelly sizing, kill switch, prop firm enforcement |
 | `execution/oms.py` | OMS: 9 order states, GTC/IOC/FOK/GTD/DAY, OCO/bracket |
 | `execution/smart_router.py` | Microstructure-aware broker routing with OFI alignment and circuit breakers |
 | `api/server.py` | FastAPI router aggregator — mounts all sub-routers |
+| `api/support.py` | Customer support desk: the customer's own thread and the operator queue. Router-level auth on both; every customer read checks ownership (an opaque ticket id authorises nothing) |
+| `api/ws_live.py` | The **only** WebSocket surface. Holds the JWT auth gate. Never create a top-level `websocket/` package |
+| `database/backup.py` | Scheduled snapshots. SQLite uses the online backup API — a file copy loses WAL content |
+| `database/restore.py` | Verify-before-restore, and six fail-closed refusals. See [`docs/runbooks/database-restore.md`](docs/runbooks/database-restore.md) |
+| `ai/hub/capabilities.py` | The capability registry — 233 rows, each with an evidence locator `verify()` resolves |
+| `invariants/registry.py` | Discovers the 339 `verify_*` / `catastrophic_*` predicates |
 
 ---
 
@@ -81,7 +101,7 @@ Trained via `ml/train_rl_nuclear.py`. Powers `brain/nuclear_supervisor.py`.
 | # | Fix | File |
 |---|-----|------|
 | 1 | LLM sandbox subprocess isolation | `brain/llm_agent.py` |
-| 2 | WebSocket JWT auth gate | `websocket/manager.py` |
+| 2 | WebSocket JWT auth gate | `api/ws_live.py` |
 | 3 | Redis TLS enforcement in production | `cache/redis_client.py` |
 | 4 | detect-secrets pre-commit hook | `.pre-commit-config.yaml` |
 | 5 | Gitignore WORDMAP.json + prop_firm_mode.json | `.gitignore` |
@@ -147,12 +167,45 @@ print(severity, meta["category_scores"])
 
 ---
 
+## Governance and programme state
+
+Not module locations, but a newcomer needs them and they live nowhere else in
+this file. Each is a **command**, so its answer is current rather than a snapshot:
+
+| Command | Answers |
+|---|---|
+| `python scripts/backlog_report.py` | What is left to build or fix, measured from the code |
+| `python scripts/gate_evidence.py` | Which safety gates have been proven able to fail |
+| `python scripts/drift_guard_report.py` | Whether the drift guard is running, and how much of its z is missing data rather than drift |
+| `python scripts/frontend_colour_ratchet.py --check` | Hardcoded colour literals in `frontend/src`; the count may only fall |
+| `python scripts/frontend_emoji_ratchet.py --check` | Emoji in `frontend/src`; the count may only fall. Emoji cannot inherit `currentColor`, so they ignore theme, hover and disabled state (F170, F175) |
+| `python scripts/model_provenance_report.py --check` | ml/ modules that load a model and reach no integrity check, and committed artifacts no baseline records; both lists may only fall (A8) |
+| `python scripts/schema_migration_check.py --check` | Every ORM `__tablename__` is created by a migration, not only by `create_all()` (F218) |
+| `python scripts/frontend_page_shell_ratchet.py --check` | Pages not yet built on `PageShell` — may only fall, and a NEW page that skips it blocks |
+| `python scripts/frontend_data_reachability.py` | Which routed pages reach live data, through the import graph rather than the page file. Reports only — a static page is legitimate |
+| `python scripts/frontend_size_ratchet.py --check` | Inline `fontSize` and numeric spacing utilities — the sizes `data-density` cannot reach. May only fall |
+| `npx vitest run src/test/design_tokens.test.ts` (in `frontend/`) | The token layer is complete: every base colour has a light value, no token is light-only, nothing references an undeclared token, the type scale is seven ascending steps, and the AI surface never redefines `--bull`/`--bear`/`--gain`/`--loss` |
+| `cd frontend && npm run lint` | Controls with no accessible name — inputs and textareas, not buttons: of the 138 first measured, exactly one was a button. Error everywhere except `frontend/a11y-debt.json`, which may only shrink (F172) |
+| `python scripts/group4_preservation.py` | Whether any specification title has been dropped |
+| `python scripts/docs_registry.py --check` | Document tiers, owners and contested subjects |
+| `python scripts/docs_freshness.py` | Stale references and false claims in living documents |
+| `python scripts/model_provenance_report.py` | Which model artifacts still match their recorded hashes, and which loaders verify anything |
+| `python scripts/aos_conformance.py` | Which AI OS specification invariants this repository enforces, resolved against live predicates |
+
+All but `backlog_report.py` run in `pre-commit` and are **ratcheted**: recorded
+debt may shrink, never grow. (This said "all five" while listing six commands —
+true, since `backlog_report.py` is a report rather than a gate, but a reader had
+to count to find that out.) `docs/ai/specs/GROUP4_CONSTITUTION.md` is T0 — above these documents
+and, on its twelve Articles, above code.
+
+---
+
 ## Environment Variables — Key Flags
 
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `BROKER_TYPE` | `paper` | `paper` / `live` — controls execution routing |
-| `STALE_MODEL_BLOCK` | `true` | Block inference when model > `MODEL_MAX_AGE_DAYS` old |
+| `STALE_MODEL_BLOCK` | `true` | Block inference when the model was TRAINED more than `MODEL_MAX_AGE_DAYS` ago. Age comes from a sha256-bound timestamp in `ml/saved_models/registry.json`, not the artifact's mtime — copying or touching a file is not retraining it (see AGENTS.md) |
 | `DRIFT_BLOCK` | `true` | Block signals when feature drift detected |
 | `ENFORCE_MULTIDAY_VAR` | `true` | Raise on sqrt(t) VaR scaling in production |
 | `WS_AUTH_REQUIRED` | `true` | Require JWT on WebSocket connections |
@@ -161,4 +214,4 @@ print(severity, meta["category_scores"])
 
 ---
 
-*Last updated: 2026-04-17 (v1.19 — corrected ML model facts, component status, and key entry points)*
+*Last updated: 2026-09-08 (v1.20 — removed two references to the deleted `websocket/` package, added the database, capability and invariant entry points, and routed programme state to the commands that measure it)*

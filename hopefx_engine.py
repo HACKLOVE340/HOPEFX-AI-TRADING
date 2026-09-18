@@ -187,6 +187,46 @@ def validate_startup_environment() -> list[str]:
 # ── engine ────────────────────────────────────────────────────────────────────
 
 
+#: Router refusal reasons that mean "no venue was reachable" rather than "this
+#: order is not permitted". Everything else `SmartRouter` refuses is a POLICY
+#: denial and is terminal — see `_router_refusal_is_terminal`.
+#:
+#: Deliberately an allow-list of the transport cases, not a deny-list of the
+#: policy ones. A deny-list means a policy reason added to `smart_router.py`
+#: later is silently treated as a transport gap and overruled, which is exactly
+#: how this defect would come back.
+_ROUTER_TRANSPORT_GAPS: tuple[str, ...] = ("no_brokers_available",)
+
+
+def _router_refusal_is_terminal(reason: object) -> bool:
+    """Is this router refusal a policy denial that the caller must not overrule?
+
+    `SmartRouter.route_and_execute` returns ``status="rejected"`` for two
+    different kinds of thing, and the fallback path in `_execute_decision` used
+    to treat them identically — logging a warning and placing the order
+    directly:
+
+    * **Policy denials**, which must be terminal —
+      ``unauthorized:…`` (``enforce_order_authorization`` refused; the router
+      logs it at CRITICAL as "Router BLOCKED order"), ``spread_too_wide:…``,
+      ``sentiment_blackout:…``, ``macro_impact_blackout:…`` and
+      ``fia_throttle:…`` (the FIA 3.4 regulatory message throttle).
+    * **Transport gaps**, where nothing was transmitted and the pre-route gates
+      already passed to get there — ``no_brokers_available``.
+
+    `all_brokers_failed:…` and `timeout:…` are transport failures but NOT gaps:
+    a broker was reached, so an order may be in flight. They are terminal here
+    too, because sending another is the duplicate fill ROUTER-TO was fixed to
+    prevent. Recovering them needs order-identity reconciliation, not a retry.
+
+    An unknown or missing reason is terminal. Rule 3: fail closed on anything
+    that trades.
+    """
+    if not isinstance(reason, str) or not reason:
+        return True
+    return reason.strip().split(":", 1)[0] not in _ROUTER_TRANSPORT_GAPS
+
+
 class HopeFXEngine:
     """
     Unified trading engine.
@@ -1514,14 +1554,39 @@ class HopeFXEngine:
                         sr_result.get("broker"),
                         sr_result.get("fill_price", price),
                     )
+                elif _router_refusal_is_terminal(sr_result.get("reason")):
+                    # A POLICY denial, not a transport gap. This branch used to
+                    # log a warning and then place the order directly anyway, so
+                    # `enforce_order_authorization` could log "Router BLOCKED
+                    # order" at CRITICAL and the order still reached the broker.
+                    # Five controls were bypassed this way: the authorization
+                    # token check, the spread guard, the news blackout, the
+                    # macro blackout and the FIA 3.4 regulatory throttle.
+                    logger.error(
+                        "SmartRouter REFUSED %s %s (%s) — policy denial is terminal, no order placed",
+                        side,
+                        symbol,
+                        sr_result.get("reason"),
+                    )
+                    return
                 else:
                     logger.warning(
-                        "SmartRouter rejected (%s) — falling back to direct order",
+                        "SmartRouter found no venue (%s) — falling back to direct order",
                         sr_result.get("reason"),
                     )
             except Exception as _sr_exc:
-                logger.warning("SmartRouter failed (%s) — direct order", _sr_exc)
+                # An exception can be raised after the order was transmitted, so
+                # the outcome is unknown. Sending another is the duplicate fill
+                # ROUTER-TO exists to prevent; refuse until it is reconciled.
+                logger.error(
+                    "SmartRouter raised mid-route for %s %s (%s) — outcome UNKNOWN, no order placed. "
+                    "Reconcile before retrying.",
+                    side,
+                    symbol,
+                    _sr_exc,
+                )
                 self._smart_router = None
+                return
 
             if not _used_smart_router:
                 _order_coro = self._broker.place_order(**order_kwargs)

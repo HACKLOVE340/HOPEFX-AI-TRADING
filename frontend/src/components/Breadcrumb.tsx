@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Home, ChevronRight } from 'lucide-react';
 
 export interface BreadcrumbItem {
   label: string;
@@ -25,7 +26,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
       alignItems: 'center',
       gap: 4,
       fontSize: 12,
-      color: '#64748b',
+      color: 'var(--text-muted)',
       marginBottom: 10,
       flexWrap: 'wrap',
       ...style,
@@ -35,7 +36,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
     <Link
       to="/dashboard"
       style={{
-        color: '#475569',
+        color: 'var(--text-faint)',
         textDecoration: 'none',
         display: 'flex',
         alignItems: 'center',
@@ -47,22 +48,30 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
       onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
       title="Dashboard"
     >
-      <span style={{ fontSize: 11 }}>⌂</span>
+      {/* Lucide, not the "house" glyph: it renders differently per OS and
+          cannot inherit currentColor (audit F170/F175). */}
+      <Home size={11} strokeWidth={2} aria-hidden />
     </Link>
 
     {items.map((item, idx) => {
       const isLast = idx === items.length - 1;
       return (
         <React.Fragment key={idx}>
-          <span style={{ color: '#2d3f55', userSelect: 'none', fontSize: 11 }}>›</span>
+          <ChevronRight size={11} strokeWidth={2} aria-hidden style={{ color: '#2d3f55', flexShrink: 0 }} />
           {item.href && !isLast ? (
             <Link
               to={item.href}
+              // Breadcrumb links were ~16px tall. They appear on most pages, so
+              // the target fix lifts all of them (rubric: touch-target-size).
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                         focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] rounded"
               style={{
-                color: '#64748b',
+                color: 'var(--text-muted)',
                 textDecoration: 'none',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
+                minHeight: 44,
+                cursor: 'pointer',
                 gap: 4,
                 transition: 'color 0.15s',
               }}
@@ -75,7 +84,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
           ) : (
             <span
               style={{
-                color: isLast ? '#94a3b8' : '#64748b',
+                color: isLast ? 'var(--text-dim)' : 'var(--text-muted)',
                 fontWeight: isLast ? 500 : 400,
                 display: 'flex',
                 alignItems: 'center',

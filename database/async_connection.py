@@ -424,19 +424,31 @@ class AsyncConnectionPool:
         def on_close(dbapi_conn, connection_record):
             self.metrics.disconnect_count += 1
 
-        # overflow and timeout events only exist on QueuePool, not NullPool or StaticPool.
-        from sqlalchemy.pool import NullPool as _NullPool, StaticPool as _StaticPool
-
-        _pool_cls = type(sync_engine.pool)
-        if not self.config.use_null_pool and _pool_cls not in (_NullPool, _StaticPool):
-
-            @event.listens_for(sync_engine.pool, "overflow")
-            def on_overflow(dbapi_conn, connection_record):
-                self.metrics.overflow_count += 1
-
-            @event.listens_for(sync_engine.pool, "timeout")
-            def on_timeout():
-                self.metrics.timeout_count += 1
+        # There is no "overflow" or "timeout" pool event, on QueuePool or on any
+        # other pool. SQLAlchemy 2.x PoolEvents are exactly: connect,
+        # first_connect, checkout, checkin, reset, invalidate, soft_invalidate,
+        # close, detach, close_detached.
+        #
+        # This block used to register listeners for both, guarded by a comment
+        # asserting they "only exist on QueuePool, not NullPool or StaticPool".
+        # The guard excluded NullPool and StaticPool -- the two pools where the
+        # code would not have run anyway -- and then registered on QueuePool and
+        # AsyncAdaptedQueuePool, where `event.listens_for` raises
+        # `InvalidRequestError: No such event 'overflow'`.
+        #
+        # So async pool initialisation failed on every deployment using the
+        # default pool, which is all of them. The caller logs that at WARNING and
+        # continues, so the only visible symptom was the `db_pool` component
+        # reporting critical-down forever -- and /api/health/ready is 503 while
+        # any critical component is down. In Kubernetes the pod never becomes
+        # ready. It surfaced here as the docker smoke test polling readiness 24
+        # times and getting `failed_critical: ["db_pool"]` every time.
+        #
+        # `metrics.overflow_count` and `metrics.timeout_count` therefore have no
+        # event source and stay at 0. They are left in place because callers read
+        # them, but nothing feeds them; sourcing them would mean sampling
+        # `sync_engine.pool.status()`, which is a different change. Registering a
+        # listener that cannot exist is not a way to populate a counter.
 
     @staticmethod
     def _redact_url(url: str) -> str:

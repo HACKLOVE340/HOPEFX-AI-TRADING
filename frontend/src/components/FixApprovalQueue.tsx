@@ -9,6 +9,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { securityFixesApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,10 @@ export const FixApprovalQueue: React.FC = () => {
       setFixes(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
-      setError('Failed to load fix queue');
+      // The server's own explanation, not a generic line over the top of it.
+      // Discarding it is F189: /correlation showed a blank card for ~20s while
+      // the API had already sent the remedy in plain English.
+      setError(extractApiError(err, 'Failed to load fix queue'));
     } finally {
       setLoading(false);
     }
@@ -162,7 +166,14 @@ const FixRow: React.FC<FixRowProps> = ({
     <div style={rowStyle}>
       {/* Row header */}
       <div style={rowHeaderStyle} onClick={onToggle} role="button" tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && onToggle()}>
+        aria-expanded={expanded}
+        aria-label={`Fix for ${fix.endpoint}`}
+        onKeyDown={e => {
+          // Space as well as Enter. A role="button" that ignores Space is not a
+          // button to anyone using a keyboard, and the default Space action on a
+          // focused div is to scroll the page away from the thing they pressed.
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); }
+        }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
           <span style={{ color: statusColour, fontSize: 10 }}>⬤</span>
           <span style={endpointStyle}>{fix.endpoint}</span>
@@ -172,7 +183,7 @@ const FixRow: React.FC<FixRowProps> = ({
           <span style={{ ...statusPillStyle, background: statusColour + '22', color: statusColour }}>
             {fix.status}
           </span>
-          <span style={{ color: '#64748b', fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
@@ -185,20 +196,20 @@ const FixRow: React.FC<FixRowProps> = ({
           </div>
           <div style={diffSectionStyle}>
             <div style={diffLabelStyle}>LLM Fix</div>
-            <pre style={{ ...codeStyle, borderLeft: '3px solid #4ade80' }}>{fix.fix}</pre>
+            <pre style={{ ...codeStyle, borderLeft: '3px solid var(--gain)' }}>{fix.fix}</pre>
           </div>
 
           {fix.status === 'pending' && (
             <div style={actionsStyle}>
               <button
-                style={btnStyle('#4ade80')}
+                style={btnStyle('var(--gain)')}
                 onClick={onApprove}
                 disabled={acting}
               >
                 {acting ? '…' : '✓ Approve'}
               </button>
               <button
-                style={btnStyle('#f87171')}
+                style={btnStyle('var(--loss)')}
                 onClick={onDecline}
                 disabled={acting}
               >
@@ -215,8 +226,8 @@ const FixRow: React.FC<FixRowProps> = ({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const wrapperStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
+  background: 'var(--surface, var(--raised))',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 10,
   display: 'flex',
   flexDirection: 'column',
@@ -228,18 +239,18 @@ const headerStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '12px 16px',
-  borderBottom: '1px solid var(--border, #334155)',
+  borderBottom: '1px solid var(--border, var(--border-strong))',
 };
 
 const titleStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
-  fontSize: 13,
+  color: 'var(--text, var(--text-strong))',
+  fontSize: 'var(--fs-body)',
   fontWeight: 700,
 };
 
 const badgeStyle = (hasPending: boolean): React.CSSProperties => ({
-  background: hasPending ? '#facc1522' : '#1e293b',
-  color: hasPending ? '#facc15' : '#64748b',
+  background: hasPending ? '#facc1522' : 'var(--raised)',
+  color: hasPending ? '#facc15' : 'var(--text-muted)',
   border: `1px solid ${hasPending ? '#facc15' : '#334155'}`,
   borderRadius: 12,
   fontSize: 11,
@@ -251,15 +262,15 @@ const errorStyle: React.CSSProperties = {
   background: '#ef444422',
   border: '1px solid #ef4444',
   borderRadius: 6,
-  color: '#f87171',
+  color: 'var(--loss)',
   fontSize: 12,
   margin: '8px 16px',
   padding: '8px 12px',
 };
 
 const emptyStyle: React.CSSProperties = {
-  color: '#64748b',
-  fontSize: 13,
+  color: 'var(--text-muted)',
+  fontSize: 'var(--fs-body)',
   padding: '24px 16px',
   textAlign: 'center',
 };
@@ -273,7 +284,7 @@ const listStyle: React.CSSProperties = {
 };
 
 const rowStyle: React.CSSProperties = {
-  borderBottom: '1px solid var(--border, #334155)',
+  borderBottom: '1px solid var(--border, var(--border-strong))',
 };
 
 const rowHeaderStyle: React.CSSProperties = {
@@ -287,7 +298,7 @@ const rowHeaderStyle: React.CSSProperties = {
 };
 
 const endpointStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
+  color: 'var(--text, var(--text-strong))',
   fontFamily: 'monospace',
   fontSize: 12,
   fontWeight: 600,
@@ -297,7 +308,7 @@ const endpointStyle: React.CSSProperties = {
 };
 
 const timeStyle: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--text-muted)',
   fontSize: 11,
   flexShrink: 0,
 };
@@ -311,7 +322,7 @@ const statusPillStyle: React.CSSProperties = {
 };
 
 const expandedStyle: React.CSSProperties = {
-  borderTop: '1px solid var(--border, #334155)',
+  borderTop: '1px solid var(--border, var(--border-strong))',
   display: 'flex',
   flexDirection: 'column',
   gap: 12,
@@ -325,7 +336,7 @@ const diffSectionStyle: React.CSSProperties = {
 };
 
 const diffLabelStyle: React.CSSProperties = {
-  color: '#94a3b8',
+  color: 'var(--text-dim)',
   fontSize: 10,
   fontWeight: 700,
   letterSpacing: 0.5,
@@ -333,9 +344,9 @@ const diffLabelStyle: React.CSSProperties = {
 };
 
 const codeStyle: React.CSSProperties = {
-  background: '#0f172a',
+  background: 'var(--surface)',
   borderRadius: 6,
-  color: '#e2e8f0',
+  color: 'var(--text)',
   fontFamily: 'monospace',
   fontSize: 11,
   lineHeight: 1.6,

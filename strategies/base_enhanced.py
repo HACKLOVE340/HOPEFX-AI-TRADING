@@ -161,14 +161,33 @@ class EnhancedStrategy(ABC):
 
 
 # Wrapper for your existing strategies
-class StrategyAdapter:
+class StrategyAdapter(EnhancedStrategy):
     """
     Wraps your existing strategies to work with MCC.
     No need to rewrite your strategies!
+
+    It subclasses :class:`EnhancedStrategy` because that is what
+    ``MasterControlCore.register_strategy`` checks for, and because the base
+    class already provides everything the MCC then calls. Until 2026-09-12 this
+    was a bare class and the wrapper could not do the one job it exists for:
+
+      * ``activate_strategy(name)`` raised
+        ``AttributeError: 'StrategyAdapter' object has no attribute 'activate'``,
+        so an adapted strategy never entered ``active_strategies`` and never
+        received a price.
+      * its ``on_price`` built a signal, returned it, and never called
+        ``self.mcc_callback`` — while ``MasterControlCore.on_price_update``
+        discards the return value, so a signal that *was* produced reached
+        nothing.
+      * ``get_status()`` builds ``{name: strat.get_metrics() ...}`` across every
+        registered strategy, so one adapted strategy raised for the whole
+        payload rather than for its own row.
+
+    Overriding :meth:`generate_signal` is now the whole adapter: the base class
+    holds the price history, gates on ``is_active`` and fires the callback.
     """
 
     def __init__(self, legacy_strategy):
-        self.legacy = legacy_strategy
         # Prefer config.name (set explicitly) over the bare .name attribute so
         # tests and callers that set strategy.config = StrategyConfig(name=...)
         # get the right name even when .name is a Mock.
@@ -177,19 +196,38 @@ class StrategyAdapter:
         # Only use a plain-string name; discard MagicMock / non-string values.
         if not isinstance(name, str):
             name = "unknown"
-        self.config = StrategyConfig(
-            name=name,
-            symbol=getattr(cfg, "symbol", None) or getattr(legacy_strategy, "symbol", "XAUUSD"),
-            timeframe=getattr(cfg, "timeframe", None) or getattr(legacy_strategy, "timeframe", "5m"),
+        super().__init__(
+            StrategyConfig(
+                name=name,
+                symbol=getattr(cfg, "symbol", None) or getattr(legacy_strategy, "symbol", "XAUUSD"),
+                timeframe=getattr(cfg, "timeframe", None) or getattr(legacy_strategy, "timeframe", "5m"),
+            )
         )
+        self.legacy = legacy_strategy
 
-    def on_price(self, timestamp, price, bid=None, ask=None):
-        # Call your existing method
-        if hasattr(self.legacy, "on_tick"):
-            result = self.legacy.on_tick(price)
-            if result:
-                return StrategySignal(
-                    action=result.get("signal", "HOLD"),
-                    strength=result.get("strength", 0.5),
-                )
-        return None
+    def generate_signal(
+        self,
+        timestamp: datetime,
+        price: Decimal,
+        bid: Decimal | None = None,
+        ask: Decimal | None = None,
+    ) -> StrategySignal | None:
+        """Translate the legacy ``on_tick(price)`` contract into a signal.
+
+        A legacy object with no ``on_tick`` yields nothing rather than raising —
+        that was the pre-existing behaviour and it is the right one, since the
+        adapter is constructed from whatever ``register_strategy`` was handed. A
+        non-mapping return still raises, also as before: the MCC logs that at
+        ERROR, and a wrapper that quietly dropped an unrecognised signal shape
+        would be the silent failure this class was just fixed for.
+        """
+        on_tick = getattr(self.legacy, "on_tick", None)
+        if not callable(on_tick):
+            return None
+        result = on_tick(price)
+        if not result:
+            return None
+        return StrategySignal(
+            action=result.get("signal", "HOLD"),
+            strength=result.get("strength", 0.5),
+        )

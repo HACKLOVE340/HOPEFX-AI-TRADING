@@ -11,9 +11,6 @@ Covers: InferenceEngine init, predict (neutral fallback, insufficient bars),
         singleton, and signal thresholding env vars.
 """
 
-import os
-import time
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -196,6 +193,32 @@ class TestInferenceEnginePredict:
 # ---------------------------------------------------------------------------
 
 
+def _write_registry(root, artifact, *, days_ago: float):
+    """A provenance registry stating when `artifact`'s exact bytes were trained.
+
+    Bound to the sha256, so copying or touching the file cannot change the age
+    it yields — which is the property this gate now depends on.
+    """
+    import hashlib
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    (root / "registry.json").write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "v1": {
+                        "file": artifact.name,
+                        "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                        "trained_at": (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat(),
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 @pytest.mark.unit
 class TestCheckModelStaleness:
     def test_disabled_when_max_age_zero(self, monkeypatch):
@@ -226,19 +249,23 @@ class TestCheckModelStaleness:
         import ml.inference_engine as ie
 
         engine = InferenceEngine()
-        # Create a file with old mtime (40 days ago)
+        # This aged the file with os.utime, which is no longer the input: model
+        # age is read from a timestamp bound to the artifact's sha256, because
+        # touching a 90-day-old file used to make it fresh without retraining
+        # anything. Same intent, real provenance.
         old_file = tmp_path / "old_model.pkl"
         old_file.write_bytes(b"fake model")
-        old_mtime = time.time() - (40 * 86400)
-        os.utime(old_file, (old_mtime, old_mtime))
         engine._active_model_path = old_file
-        # Patch the module-level constant directly
+        _write_registry(tmp_path, old_file, days_ago=40)
         original = ie._MODEL_MAX_AGE_DAYS
+        original_saved = ie._SAVED
         ie._MODEL_MAX_AGE_DAYS = 1.0
+        ie._SAVED = tmp_path
         try:
             result = engine._check_model_staleness()
         finally:
             ie._MODEL_MAX_AGE_DAYS = original
+            ie._SAVED = original_saved
         assert result is True
         assert engine._model_stale is True
         assert engine._model_age_days > 1
@@ -251,12 +278,20 @@ class TestCheckModelStaleness:
         fresh_file = tmp_path / "fresh_model.pkl"
         fresh_file.write_bytes(b"fake model")
         engine._active_model_path = fresh_file
+        # This previously passed with NO provenance at all, because a
+        # just-written file has a just-written mtime. That is precisely how a
+        # stale model deployed today read as current. A model is fresh when its
+        # recorded training time is recent, so the record has to exist.
+        _write_registry(tmp_path, fresh_file, days_ago=0)
         original = ie._MODEL_MAX_AGE_DAYS
+        original_saved = ie._SAVED
         ie._MODEL_MAX_AGE_DAYS = 30.0
+        ie._SAVED = tmp_path
         try:
             result = engine._check_model_staleness()
         finally:
             ie._MODEL_MAX_AGE_DAYS = original
+            ie._SAVED = original_saved
         assert result is False
         assert engine._model_stale is False
 

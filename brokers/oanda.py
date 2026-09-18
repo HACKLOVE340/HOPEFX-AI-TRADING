@@ -48,11 +48,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import re
 
 import aiohttp
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from brokers.base import MarketOrderResult
 import requests  # type: ignore[import-untyped]
 
 # AccountInfo is imported, never redefined. This module must NOT declare its own
@@ -382,6 +385,102 @@ class OANDABroker:
             self._total_fills += 1
 
         return result
+
+    #: Side values that mean "buy". Everything else is refused rather than
+    #: assumed, because ``_units()`` returns a NEGATIVE size for any direction it
+    #: does not recognise — so an empty string, a typo, or an un-unwrapped enum
+    #: would silently place the opposite of the intended trade.
+    #: Single letters are deliberately NOT accepted. "b"/"s" is a real
+    #: convention elsewhere, but on a path where an unrecognised value becomes a
+    #: sell, a one-character side is an ambiguity worth refusing.
+    _BUY_SIDES = frozenset({"buy", "long"})
+    _SELL_SIDES = frozenset({"sell", "short"})
+
+    @classmethod
+    def _normalise_side(cls, side: Any) -> str:
+        """Return "buy" or "sell", or raise for anything ambiguous.
+
+        ``trade_executor`` passes an ``OrderSide`` enum, whose ``str()`` is
+        ``"OrderSide.SELL"`` — which ``_units()`` does not recognise as a buy and
+        would therefore treat as a sell by default. Unwrap it explicitly.
+        """
+        raw = getattr(side, "value", side)
+        text = str(raw).strip().lower() if raw is not None else ""
+        # An enum that stringifies as "orderside.buy" rather than exposing .value
+        if "." in text:
+            text = text.rsplit(".", 1)[-1]
+        if text in cls._BUY_SIDES:
+            return "buy"
+        if text in cls._SELL_SIDES:
+            return "sell"
+        raise ValueError(
+            f"Unrecognised order side {side!r}. Refusing rather than defaulting: "
+            "_units() treats any unrecognised direction as a SELL, so guessing "
+            "here would place the opposite of the intended trade."
+        )
+
+    async def place_market_order(
+        self,
+        symbol: str,
+        side: Any,
+        quantity: float,
+        client_order_id: str | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        **_ignored: Any,
+    ) -> MarketOrderResult:
+        """Place a market order using the interface the executor calls.
+
+        ``execution/trade_executor.py:409`` calls this and expects a
+        ``MarketOrderResult``. This class only had ``place_order(dict)``, so
+        ``BROKER_TYPE=oanda`` raised AttributeError before an order was built
+        (F61/F107). This adapts the two.
+
+        **Not venue-verified.** Every test for this runs against a stubbed
+        ``place_order``; nothing here has spoken to OANDA. Exercise it on a
+        practice account before setting ``OANDA_PRACTICE=false``.
+        """
+        from brokers.base import MarketOrderResult
+
+        direction = self._normalise_side(side)
+
+        try:
+            qty = float(quantity)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Unreadable order quantity {quantity!r}") from exc
+        if not qty > 0:
+            raise ValueError(f"Order quantity must be positive, got {quantity!r}")
+
+        request: dict[str, Any] = {
+            "symbol": symbol,
+            "direction": direction,
+            "quantity": qty,
+            "order_type": "MARKET",
+            "order_id": client_order_id or str(uuid.uuid4()),
+        }
+        # Only forward brackets that were actually asked for: place_order turns
+        # these into stopLossOnFill / takeProfitOnFill, and passing None would
+        # not attach them anyway.
+        if stop_loss is not None:
+            request["stop_loss"] = float(stop_loss)
+        if take_profit is not None:
+            request["take_profit"] = float(take_profit)
+
+        result = await self.place_order(request)
+
+        status = str(result.get("status", "rejected"))
+        filled = status == "filled"
+        return MarketOrderResult(
+            order_id=str(result.get("order_id", "") or ""),
+            average_fill_price=float(result.get("fill_price", 0.0) or 0.0) if filled else 0.0,
+            filled_quantity=float(result.get("quantity", 0) or 0) if filled else 0.0,
+            status=status,
+            raw=result,
+            # place_order attaches stopLossOnFill/takeProfitOnFill server-side
+            # when they are present in the request, so a bracket that was asked
+            # for was placed. Never claim otherwise (F151).
+            brackets_applied=True,
+        )
 
     async def _post_order_with_retry(self, payload: dict[str, Any], client_ref: str) -> dict[str, Any]:
         if self._session is None:

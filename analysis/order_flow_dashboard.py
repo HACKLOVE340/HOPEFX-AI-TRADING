@@ -258,6 +258,17 @@ class OrderFlowDashboard:
         analysis = self.get_complete_analysis(symbol, lookback_minutes)
         return analysis.get("summary", {"bias": "neutral", "strength": "weak"})
 
+    def has_data(self, symbol: str) -> bool:
+        """Whether any tick has been ingested for *symbol*.
+
+        Everything this dashboard reports is derived from the order-flow
+        analyzer, so with no ticks the derivation still runs and still produces
+        a shape. `get_market_bias` returned ``{"bias": "neutral", "strength":
+        "weak"}`` from zero data — a defensible read of a real tape, and not
+        the same statement as "nothing has been measured" (F147).
+        """
+        return bool(self._ofa is not None and self._ofa.has_data(symbol))
+
     def get_key_levels(self, symbol: str) -> dict:
         """
         Get key support/resistance levels from order flow.
@@ -307,62 +318,13 @@ class OrderFlowDashboard:
                 logger.warning("Order flow add_trade error for %s: %s", symbol, exc)
 
     # ----------------------------------------------------------------
-    # Summary helpers
+    # `_summary_dom`, `_summary_order_flow`, `_summary_institutional` and
+    # `_summary_advanced` lived here and had no callers. `get_summary` below
+    # does the same four things inline, so they were a second copy that no test
+    # could reach and no reader could tell was dead. Removed 2026-09-13 rather
+    # than covered: writing tests for unreachable code to clear a coverage gate
+    # makes the gate lie about what is protected.
     # ----------------------------------------------------------------
-
-    def _summary_dom(self, symbol: str, result: dict) -> None:
-        """Populate DOM fields in *result* in-place."""
-        if self._dom is None:
-            return
-        try:
-            dom_analysis = self._dom.get_order_book_analysis(symbol)
-            if dom_analysis:
-                dom_dict = dom_analysis.to_dict() if hasattr(dom_analysis, "to_dict") else {}
-                result["dom_imbalance"] = dom_dict.get("imbalance_ratio")
-                result["spread"] = dom_dict.get("spread")
-        except Exception as exc:
-            logger.warning("DOM summary error for %s: %s", symbol, exc)
-
-    def _summary_order_flow(self, symbol: str, lookback_minutes: int, result: dict) -> None:
-        """Populate order-flow fields in *result* in-place."""
-        if self._ofa is None:
-            return
-        try:
-            of_analysis = self._ofa.analyze(symbol, lookback_minutes=lookback_minutes)
-            if of_analysis:
-                of_dict = of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
-                result["cumulative_delta"] = of_dict.get("cumulative_delta")
-                result["buy_pressure"] = of_dict.get("buy_volume")
-                result["sell_pressure"] = of_dict.get("sell_volume")
-        except Exception as exc:
-            logger.warning("Order flow summary error for %s: %s", symbol, exc)
-
-    def _summary_institutional(self, symbol: str, lookback_minutes: int, result: dict) -> None:
-        """Populate smart-money field in *result* in-place."""
-        if self._inst is None:
-            return
-        try:
-            smart = self._inst.get_smart_money_direction(symbol, lookback_minutes=lookback_minutes)
-            if smart is not None:
-                if hasattr(smart, "to_dict"):
-                    direction = smart.to_dict().get("direction")
-                elif hasattr(smart, "direction"):
-                    direction = smart.direction
-                else:
-                    direction = smart
-                result["smart_money_direction"] = direction
-        except Exception as exc:
-            logger.warning("Institutional summary error for %s: %s", symbol, exc)
-
-    def _summary_advanced(self, symbol: str, lookback_minutes: int, result: dict) -> None:
-        """Populate large-order-count field in *result* in-place."""
-        if self._adv is None:
-            return
-        try:
-            stacked = self._adv.get_stacked_imbalances(symbol, lookback_minutes=lookback_minutes)
-            result["large_order_count"] = len(stacked) if stacked else 0
-        except Exception as exc:
-            logger.warning("Advanced summary error for %s: %s", symbol, exc)
 
     def get_summary(self, symbol: str, lookback_minutes: int = 60) -> dict:
         """
@@ -435,7 +397,12 @@ class OrderFlowDashboard:
             except Exception as exc:
                 logger.warning("Advanced summary error for %s: %s", symbol, exc)
 
-        result["bias"] = self.get_bias(symbol)
+        bias, voted, declared = self.bias_with_quorum(symbol)
+        result["bias"] = bias
+        # Reported beside the bias, not only in a log line: a consumer must be
+        # able to tell a full poll from a partial one without reading the source.
+        result["bias_voters"] = voted
+        result["bias_voters_total"] = declared
         return result
 
     # ----------------------------------------------------------------
@@ -454,16 +421,58 @@ class OrderFlowDashboard:
             logger.warning("DOM get_bias error for %s: %s", symbol, exc)
         return None
 
+    #: Logged once per process rather than per call. The condition below is
+    #: structural — it cannot change between invocations — so warning on every
+    #: vote would flood a hot path with the same sentence.
+    _advanced_vote_warned: bool = False
+
     def _bias_vote_advanced(self, symbol: str) -> str | None:
-        """Return advanced-flow bias vote or None."""
+        """Decline to vote: the advanced analyzer exposes no directional read.
+
+        This used to call ``self._adv.analyze(symbol)``.
+        :class:`~analysis.advanced_order_flow.AdvancedOrderFlowAnalyzer` has no
+        ``analyze``. Its surface is ``get_aggression_metrics``,
+        ``get_pressure_gauges``, ``get_order_flow_oscillator``,
+        ``detect_delta_divergence``, ``get_stacked_imbalances``,
+        ``get_volume_clusters`` and ``get_volume_imbalance_by_level``.
+
+        So every call raised ``AttributeError`` into a handler that logged at
+        WARNING and returned ``None`` — one exception per invocation, and a vote
+        that was silently absent while :meth:`get_bias` read as a majority of
+        three. Two voters wearing three hats (OF-VOTER).
+
+        **Wiring it remains a quantitative decision and is not made here.**
+        Choosing which of those seven methods constitutes a bullish or bearish
+        read is a modelling choice; picking one to make the count come out right
+        would be inventing a signal, which is worse than declining to emit one.
+
+        What changes is honesty about the absence: the capability is checked and
+        the vote declined, so the gap is a stated condition rather than a
+        swallowed error, and :meth:`bias_with_quorum` reports that only two of
+        three voters answered.
+        """
         if self._adv is None:
             return None
+
+        reader = getattr(self._adv, "analyze", None)
+        if reader is None:
+            if not OrderFlowDashboard._advanced_vote_warned:
+                OrderFlowDashboard._advanced_vote_warned = True
+                logger.warning(
+                    "order flow bias: the advanced voter is not wired — %s exposes no "
+                    "directional read, so the bias is a majority of two, not three "
+                    "(OF-VOTER). get_summary reports this as bias_voters.",
+                    type(self._adv).__name__,
+                )
+            return None
+
         try:
-            analysis = self._adv.analyze(symbol)
-            if analysis and analysis.overall_bias in ("bullish", "bearish"):
-                return analysis.overall_bias
+            analysis = reader(symbol)
         except Exception as exc:
             logger.warning("Advanced get_bias error for %s: %s", symbol, exc)
+            return None
+        if analysis and getattr(analysis, "overall_bias", None) in ("bullish", "bearish"):
+            return analysis.overall_bias
         return None
 
     def _bias_vote_institutional(self, symbol: str) -> str | None:
@@ -480,31 +489,49 @@ class OrderFlowDashboard:
             logger.warning("Institutional get_bias error for %s: %s", symbol, exc)
         return None
 
+    def bias_with_quorum(self, symbol: str) -> tuple[str, int, int]:
+        """Aggregated bias, plus how many of the declared voters actually voted.
+
+        The count is the point. ``get_bias`` consults three vote functions and
+        tallies only the non-``None`` answers, so a voter that cannot answer
+        disappears from the result rather than reducing confidence in it — and
+        "bullish" decided by two voters is indistinguishable in the output from
+        "bullish" decided by three. Any consumer weighting this signal is
+        weighting a quorum it cannot see.
+
+        Today that is exactly the situation: the advanced voter declines
+        (OF-VOTER), so the honest reading of every bias this returns is
+        two-of-three.
+
+        Returns ``(bias, voted, declared)``.
+        """
+        voters = (
+            self._bias_vote_dom,
+            self._bias_vote_advanced,
+            self._bias_vote_institutional,
+        )
+        votes = [v for v in (fn(symbol) for fn in voters) if v is not None]
+
+        bull = votes.count("bullish")
+        bear = votes.count("bearish")
+        if bull > bear:
+            bias = "bullish"
+        elif bear > bull:
+            bias = "bearish"
+        else:
+            bias = "neutral"
+        return bias, len(votes), len(voters)
+
     def get_bias(self, symbol: str) -> str:
         """
         Get aggregated directional bias for a symbol via majority vote.
 
-        Returns 'bullish', 'bearish', or 'neutral'.
+        Returns 'bullish', 'bearish', or 'neutral'. Use
+        :meth:`bias_with_quorum` when the number of voters that answered
+        matters — with the advanced voter unwired it is two of three.
         """
-        votes: list[str] = []
-        for vote_fn in (
-            self._bias_vote_dom,
-            self._bias_vote_advanced,
-            self._bias_vote_institutional,
-        ):
-            v = vote_fn(symbol)
-            if v is not None:
-                votes.append(v)
-
-        if not votes:
-            return "neutral"
-        bull = votes.count("bullish")
-        bear = votes.count("bearish")
-        if bull > bear:
-            return "bullish"
-        if bear > bull:
-            return "bearish"
-        return "neutral"
+        bias, _voted, _declared = self.bias_with_quorum(symbol)
+        return bias
 
 
 # ================================================================
@@ -556,7 +583,7 @@ def create_dashboard_router(dashboard: OrderFlowDashboard):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter
+    from fastapi import APIRouter, HTTPException
 
     router = APIRouter(prefix="/api/dashboard", tags=["Order Flow Dashboard"])
 
@@ -565,14 +592,27 @@ def create_dashboard_router(dashboard: OrderFlowDashboard):
         """Get complete order flow analysis for a symbol."""
         return dashboard.get_complete_analysis(symbol, lookback_minutes)
 
+    def _require_data(symbol: str) -> None:
+        """Refuse to derive a read from a symbol with no ingested ticks."""
+        if not dashboard.has_data(symbol):
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No order-flow data recorded for {symbol}. This is not a neutral "
+                    "market read: no tick has been ingested for this symbol."
+                ),
+            )
+
     @router.get("/{symbol}/bias")
     async def get_market_bias(symbol: str, lookback_minutes: int = 60):
         """Get market bias summary."""
+        _require_data(symbol)
         return dashboard.get_market_bias(symbol, lookback_minutes)
 
     @router.get("/{symbol}/levels")
     async def get_key_levels(symbol: str):
         """Get key S/R levels."""
+        _require_data(symbol)
         return dashboard.get_key_levels(symbol)
 
     return router

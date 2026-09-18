@@ -16,6 +16,8 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
+
 import hashlib
 import logging
 import os
@@ -304,7 +306,7 @@ async def upload_avatar(
         for old in _AVATAR_DIR.glob(f"{stem}.*"):
             if old.name != name:
                 old.unlink(missing_ok=True)
-        (_AVATAR_DIR / name).write_bytes(data)
+        await asyncio.to_thread((_AVATAR_DIR / name).write_bytes, data)
     except OSError as exc:
         logger.error("avatar store failed for %s: %s", user.sub, exc)
         raise HTTPException(status_code=500, detail="Could not store avatar") from exc

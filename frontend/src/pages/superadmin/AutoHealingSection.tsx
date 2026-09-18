@@ -7,10 +7,11 @@ import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, ActionBtn, KpiTile, StatusBadge,
   Toggle, Input, Select, Divider,
-  ErrorState, LoadingRows, ConfirmDialog, Spinner,
+  ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
+import { AlertTriangle, Bandage, BarChart3, Brain, ClipboardList, Clock, FlaskConical, Folder, Globe, Hammer, Landmark, Lock, Microscope, Play, RefreshCw, Save, Search, Settings, Shield, ShieldCheck, Wrench, XCircle, Zap } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ interface TestCategory {
   label: string;
   description: string;
   accent: string;
-  icon: string;
+  icon: React.ReactNode;
 }
 
 interface TestIndex {
@@ -110,14 +111,14 @@ interface TestRunResult {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TEST_CATEGORIES: TestCategory[] = [
-  { key: 'unit',        label: 'Core Unit Tests',            description: 'Fast isolated unit tests for core modules', accent: '#3b82f6', icon: '🔬' },
-  { key: 'api',         label: 'API & Endpoint Tests',       description: 'FastAPI route and schema validation tests',  accent: '#8b5cf6', icon: '🌐' },
-  { key: 'broker',      label: 'Broker Integration Tests',   description: 'Broker connector and order routing tests',   accent: '#f59e0b', icon: '🏦' },
-  { key: 'risk',        label: 'Risk & Position Tests',      description: 'VaR, circuit breakers, position sizing',     accent: '#ef4444', icon: '⚡' },
-  { key: 'ml',          label: 'ML Model & Signal Tests',    description: 'Model inference, drift, signal pipeline',    accent: '#a78bfa', icon: '🧠' },
-  { key: 'security',    label: 'Security & Integrity Tests', description: 'Auth, JWT, self-healer, vault tests',        accent: '#f97316', icon: '🛡️' },
-  { key: 'performance', label: 'Performance & Load Tests',   description: 'Latency, throughput, k6 load scenarios',     accent: '#06b6d4', icon: '📊' },
-  { key: 'e2e',         label: 'End-to-End Trading Tests',   description: 'Full pipeline from signal to execution',     accent: '#22c55e', icon: '🔄' },
+  { key: 'unit',        label: 'Core Unit Tests',            description: 'Fast isolated unit tests for core modules', accent: '#3b82f6', icon: <Microscope size={16} aria-hidden /> },
+  { key: 'api',         label: 'API & Endpoint Tests',       description: 'FastAPI route and schema validation tests',  accent: '#8b5cf6', icon: <Globe size={16} aria-hidden /> },
+  { key: 'broker',      label: 'Broker Integration Tests',   description: 'Broker connector and order routing tests',   accent: '#f59e0b', icon: <Landmark size={16} aria-hidden /> },
+  { key: 'risk',        label: 'Risk & Position Tests',      description: 'VaR, circuit breakers, position sizing',     accent: '#ef4444', icon: <Zap size={16} aria-hidden /> },
+  { key: 'ml',          label: 'ML Model & Signal Tests',    description: 'Model inference, drift, signal pipeline',    accent: '#a78bfa', icon: <Brain size={16} aria-hidden /> },
+  { key: 'security',    label: 'Security & Integrity Tests', description: 'Auth, JWT, self-healer, vault tests',        accent: '#f97316', icon: <Shield size={16} aria-hidden /> },
+  { key: 'performance', label: 'Performance & Load Tests',   description: 'Latency, throughput, k6 load scenarios',     accent: '#06b6d4', icon: <BarChart3 size={16} aria-hidden /> },
+  { key: 'e2e',         label: 'End-to-End Trading Tests',   description: 'Full pipeline from signal to execution',     accent: '#22c55e', icon: <RefreshCw size={16} aria-hidden /> },
 ];
 
 const STRATEGY_OPTIONS = [
@@ -187,8 +188,8 @@ const LiveStatusCard: React.FC<{
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #0a1628 0%, #0f172a 100%)',
-      border: '1px solid #1e293b',
+      background: 'linear-gradient(135deg, #0a1628 0%, var(--surface) 100%)',
+      border: '1px solid var(--border)',
       borderTop: `3px solid ${stateColor}`,
       borderRadius: 14,
       padding: '20px 24px',
@@ -205,25 +206,25 @@ const LiveStatusCard: React.FC<{
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
           }}>🛡️</div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>Autonomous Healing Engine</div>
-            <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>Real-time integrity monitor · Self-patching system</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' }}>Autonomous Healing Engine</div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>Real-time integrity monitor · Self-patching system</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <StatusBadge status={healerState === 'running' ? 'running' : healerState === 'stopped' ? 'stopped' : 'degraded'} />
-          <ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={refreshing} />
+          <ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={refreshing} />
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
         {[
-          { label: 'Baseline Files',    value: status ? String(status.baseline_files) : '—',   icon: '📁', accent: '#3b82f6' },
-          { label: 'Drift Events',      value: status ? String(status.drift_events) : '—',      icon: '⚠️', accent: status?.drift_events ? '#f59e0b' : '#22c55e' },
-          { label: 'Patches Applied',   value: status ? String(status.patches_applied) : '—',   icon: '🔧', accent: '#22c55e' },
-          { label: 'Patches Failed',    value: status ? String(status.patches_failed) : '—',    icon: '❌', accent: status?.patches_failed ? '#ef4444' : '#475569' },
-          { label: 'Tests Indexed',     value: testIndex ? String(testIndex.total) : '—',       icon: '🧪', accent: '#8b5cf6' },
-          { label: 'Last Scan',         value: fmtAgo(status?.last_scan ?? null),               icon: '🕐', accent: '#06b6d4' },
-          { label: 'Last Test Run',     value: fmtAgo(testIndex?.last_run ?? null),             icon: '▶️', accent: '#a78bfa' },
-          { label: 'Last Run Result',   value: testIndex?.last_run_passed != null ? `${testIndex.last_run_passed}✓ ${testIndex.last_run_failed ?? 0}✗` : '—', icon: '📋', accent: testIndex?.last_run_failed ? '#ef4444' : '#22c55e' },
+          { label: 'Baseline Files',    value: status ? String(status.baseline_files) : '—',   icon: <Folder size={16} aria-hidden />, accent: '#3b82f6' },
+          { label: 'Drift Events',      value: status ? String(status.drift_events) : '—',      icon: <AlertTriangle size={16} aria-hidden />, accent: status?.drift_events ? '#f59e0b' : '#22c55e' },
+          { label: 'Patches Applied',   value: status ? String(status.patches_applied) : '—',   icon: <Wrench size={16} aria-hidden />, accent: '#22c55e' },
+          { label: 'Patches Failed',    value: status ? String(status.patches_failed) : '—',    icon: <XCircle size={16} aria-hidden />, accent: status?.patches_failed ? '#ef4444' : '#475569' },
+          { label: 'Tests Indexed',     value: testIndex ? String(testIndex.total) : '—',       icon: <FlaskConical size={16} aria-hidden />, accent: '#8b5cf6' },
+          { label: 'Last Scan',         value: fmtAgo(status?.last_scan ?? null),               icon: <Clock size={16} aria-hidden />, accent: '#06b6d4' },
+          { label: 'Last Test Run',     value: fmtAgo(testIndex?.last_run ?? null),             icon: <Play size={16} aria-hidden />, accent: '#a78bfa' },
+          { label: 'Last Run Result',   value: testIndex?.last_run_passed != null ? `${testIndex.last_run_passed}✓ ${testIndex.last_run_failed ?? 0}✗` : '—', icon: <ClipboardList size={16} aria-hidden />, accent: testIndex?.last_run_failed ? '#ef4444' : '#22c55e' },
         ].map(tile => (
           <KpiTile key={tile.label} label={tile.label} value={tile.value} icon={tile.icon} accent={tile.accent} />
         ))}
@@ -240,7 +241,7 @@ const HealingCorePanel: React.FC<{
   onRebuildBaseline: () => void;
   rebuildBusy: boolean;
 }> = ({ cfg, onChange, onRebuildBaseline, rebuildBusy }) => (
-  <SectionCard title="Healing Core Configuration" icon="⚙️" accent="#3b82f6"
+  <SectionCard title="Healing Core Configuration" icon={<Settings size={18} aria-hidden />} accent="#3b82f6"
     subtitle="Master controls for the autonomous healing engine">
     <Toggle
       label="Enable Self-Healing System"
@@ -291,7 +292,7 @@ const HealingCorePanel: React.FC<{
           label={rebuildBusy ? 'Rebuilding…' : 'Manual Rebuild Now'}
           onClick={onRebuildBaseline}
           variant="warning"
-          icon="🔨"
+          icon={<Hammer size={18} aria-hidden />}
           loading={rebuildBusy}
         />
       </div>
@@ -347,13 +348,13 @@ const TestIntelligencePanel: React.FC<{
   };
 
   return (
-    <SectionCard title="Intelligent Test Orchestration" icon="🧪" accent="#8b5cf6"
+    <SectionCard title="Intelligent Test Orchestration" icon={<FlaskConical size={18} aria-hidden />} accent="#8b5cf6"
       subtitle="Automated test discovery, categorization, and execution strategy"
       actions={
         <ActionBtn
           label={reindexBusy ? 'Scanning…' : 'Re-scan Tests'}
           onClick={onReindex}
-          icon="🔍"
+          icon={<Search size={18} aria-hidden />}
           size="sm"
           loading={reindexBusy}
           variant="primary"
@@ -365,23 +366,23 @@ const TestIntelligencePanel: React.FC<{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
         gap: 10, marginBottom: 20,
         padding: '14px 16px',
-        background: '#0a1628', borderRadius: 10, border: '1px solid #1e293b',
+        background: '#0a1628', borderRadius: 10, border: '1px solid var(--border)',
       }}>
         <div>
-          <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Total Tests</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#f1f5f9', marginTop: 2 }}>{testIndex?.total ?? '—'}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Total Tests</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', marginTop: 2 }}>{testIndex?.total ?? '—'}</div>
         </div>
         {TEST_CATEGORIES.map(cat => (
           <div key={cat.key}>
-            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{cat.label.split(' ')[0]}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{cat.label.split(' ')[0]}</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: cat.accent, marginTop: 2 }}>
               {testIndex?.by_category?.[cat.key] ?? 0}
             </div>
           </div>
         ))}
         <div>
-          <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Last Indexed</div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 4 }}>{fmtAgo(testIndex?.last_indexed ?? null)}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Last Indexed</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', marginTop: 4 }}>{fmtAgo(testIndex?.last_indexed ?? null)}</div>
         </div>
       </div>
 
@@ -399,7 +400,7 @@ const TestIntelligencePanel: React.FC<{
           {/* Master toggle + category grid */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Test Categories
               </div>
               <ActionBtn
@@ -415,7 +416,7 @@ const TestIntelligencePanel: React.FC<{
                 const enabled = cfg.test_categories[cat.key] ?? false;
                 return (
                   <div key={cat.key} style={{
-                    background: enabled ? `${cat.accent}11` : '#0f172a',
+                    background: enabled ? `${cat.accent}11` : 'var(--surface)',
                     border: `1px solid ${enabled ? cat.accent + '33' : '#1e293b'}`,
                     borderRadius: 10, padding: '10px 14px',
                     transition: 'all 0.15s',
@@ -424,20 +425,21 @@ const TestIntelligencePanel: React.FC<{
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 16 }}>{cat.icon}</span>
                         <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: enabled ? '#f1f5f9' : '#64748b' }}>{cat.label}</div>
-                          <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>{cat.description}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: enabled ? 'var(--text-strong)' : 'var(--text-muted)' }}>{cat.label}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>{cat.description}</div>
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
                         <span style={{
                           fontSize: 11, fontWeight: 700,
-                          color: enabled ? cat.accent : '#334155',
-                          background: enabled ? `${cat.accent}22` : '#1e293b',
+                          color: enabled ? cat.accent : 'var(--text-faint)',
+                          background: enabled ? `${cat.accent}22` : 'var(--raised)',
                           padding: '2px 7px', borderRadius: 10,
                         }}>{count}</span>
                         <div
                           role="switch"
                           aria-checked={enabled}
+                          aria-label={`Enable ${cat.label} tests`}
                           tabIndex={0}
                           onClick={() => onChange({ test_categories: { ...cfg.test_categories, [cat.key]: !enabled } })}
                           onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onChange({ test_categories: { ...cfg.test_categories, [cat.key]: !enabled } })}
@@ -466,7 +468,7 @@ const TestIntelligencePanel: React.FC<{
 
           {/* Execution strategy */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               Test Execution Strategy
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -479,8 +481,8 @@ const TestIntelligencePanel: React.FC<{
                     style={{
                       padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
                       cursor: 'pointer', transition: 'all 0.15s',
-                      background: active ? '#1e3a5f' : '#1e293b',
-                      color: active ? '#60a5fa' : '#64748b',
+                      background: active ? '#1e3a5f' : 'var(--raised)',
+                      color: active ? 'var(--link)' : 'var(--text-muted)',
                       border: `1px solid ${active ? '#1d4ed8' : '#334155'}`,
                     }}
                   >{opt.label}</button>
@@ -557,12 +559,12 @@ const SafetyGatesPanel: React.FC<{
   };
 
   return (
-    <SectionCard title="Healing Intelligence & Safety Gates" icon="🔒" accent="#ef4444"
+    <SectionCard title="Healing Intelligence & Safety Gates" icon={<Lock size={18} aria-hidden />} accent="#ef4444"
       subtitle="Approval matrix, protected paths, rollback sensitivity, and operational limits">
 
       {/* Aggressiveness */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Healing Aggressiveness
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -575,19 +577,19 @@ const SafetyGatesPanel: React.FC<{
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
-                  background: active ? `${opt.color}11` : '#0f172a',
+                  background: active ? `${opt.color}11` : 'var(--surface)',
                   border: `1px solid ${active ? opt.color + '44' : '#1e293b'}`,
                   transition: 'all 0.15s',
                 }}
               >
                 <div style={{
                   width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                  background: active ? opt.color : '#334155',
+                  background: active ? opt.color : 'var(--surface-hover)',
                   border: `2px solid ${active ? opt.color : '#475569'}`,
                   boxShadow: active ? `0 0 8px ${opt.color}66` : 'none',
                   transition: 'all 0.15s',
                 }} />
-                <span style={{ fontSize: 13, color: active ? '#f1f5f9' : '#64748b', fontWeight: active ? 600 : 400 }}>
+                <span style={{ fontSize: 'var(--fs-body)', color: active ? 'var(--text-strong)' : 'var(--text-muted)', fontWeight: active ? 600 : 400 }}>
                   {opt.label}
                 </span>
                 {opt.value === 'nuclear' && active && (
@@ -607,10 +609,10 @@ const SafetyGatesPanel: React.FC<{
 
       {/* Approval matrix */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
           Smart Approval Matrix
         </div>
-        <div style={{ fontSize: 11, color: '#475569', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 10 }}>
           Categories that require manual approval before the healer applies a patch
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -623,8 +625,8 @@ const SafetyGatesPanel: React.FC<{
                 style={{
                   padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                   cursor: 'pointer', transition: 'all 0.15s',
-                  background: required ? '#450a0a' : '#1e293b',
-                  color: required ? '#f87171' : '#64748b',
+                  background: required ? '#450a0a' : 'var(--raised)',
+                  color: required ? 'var(--loss)' : 'var(--text-muted)',
                   border: `1px solid ${required ? '#dc2626' : '#334155'}`,
                 }}
               >{cat.icon} {cat.label.split(' ')[0]} {required ? '🔒' : ''}</button>
@@ -637,10 +639,10 @@ const SafetyGatesPanel: React.FC<{
 
       {/* Protected paths */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
           Protected Paths
         </div>
-        <div style={{ fontSize: 11, color: '#475569', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 8 }}>
           Comma-separated files/directories the healer is forbidden from modifying
         </div>
         <Input
@@ -711,40 +713,40 @@ const DriftLogPanel: React.FC<{
   loading: boolean;
   onRefresh: () => void;
 }> = ({ events, loading, onRefresh }) => (
-  <SectionCard title="Drift Event Log" icon="⚠️" accent="#f59e0b"
+  <SectionCard title="Drift Event Log" icon={<AlertTriangle size={18} aria-hidden />} accent="#f59e0b"
     subtitle="File integrity violations detected by the scan loop"
-    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
     {events.length === 0 ? (
-      <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>
+      <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
         No drift events — all tracked files match baseline
       </div>
     ) : (
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid #1e293b' }}>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
               {['Time', 'Type', 'File', 'Protected', 'Hash (expected→actual)'].map(h => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {events.slice().reverse().map((e, i) => (
-              <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                <td style={{ padding: '7px 10px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</td>
+              <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                <td style={{ padding: '7px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</td>
                 <td style={{ padding: '7px 10px' }}>
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
                     background: `${DRIFT_TYPE_COLORS[e.type] ?? '#475569'}22`,
-                    color: DRIFT_TYPE_COLORS[e.type] ?? '#94a3b8',
+                    color: DRIFT_TYPE_COLORS[e.type] ?? 'var(--text-dim)',
                     textTransform: 'uppercase',
                   }}>{e.type}</span>
                 </td>
-                <td style={{ padding: '7px 10px', color: '#e2e8f0', fontFamily: 'monospace', fontSize: 11 }}>{e.path}</td>
+                <td style={{ padding: '7px 10px', color: 'var(--text)', fontFamily: 'monospace', fontSize: 11 }}>{e.path}</td>
                 <td style={{ padding: '7px 10px', textAlign: 'center' }}>
                   {e.protected && <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 700 }}>🔒</span>}
                 </td>
-                <td style={{ padding: '7px 10px', color: '#64748b', fontFamily: 'monospace', fontSize: 10 }}>
+                <td style={{ padding: '7px 10px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 10 }}>
                   {e.expected && e.actual ? `${e.expected}…→${e.actual}…` : '—'}
                 </td>
               </tr>
@@ -765,11 +767,11 @@ const PatchHistoryPanel: React.FC<{
 }> = ({ patches, loading, onRefresh }) => {
   const [expandedDiff, setExpandedDiff] = useState<number | null>(null);
   return (
-    <SectionCard title="Patch History" icon="🔧" accent="#22c55e"
+    <SectionCard title="Patch History" icon={<Wrench size={18} aria-hidden />} accent="#22c55e"
       subtitle="All patch attempts — applied, rejected, and rolled back"
-      actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+      actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
       {patches.length === 0 ? (
-        <EmptyState compact icon="🩹" title="No patches applied yet" description="Auto-heal patches will appear here once the system detects and resolves issues." />
+        <EmptyState compact icon={Bandage} title="No patches applied yet" description="Auto-heal patches will appear here once the system detects and resolves issues." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {patches.slice().reverse().map((p, i) => (
@@ -781,13 +783,13 @@ const PatchHistoryPanel: React.FC<{
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: p.success ? '#4ade80' : '#f87171' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: p.success ? 'var(--gain)' : 'var(--loss)' }}>
                       {p.success ? '✓ APPLIED' : '✗ REJECTED'}
                     </span>
-                    <span style={{ fontSize: 11, color: '#64748b' }}>{fmtDate(p.applied_at)}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtDate(p.applied_at)}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#e2e8f0', fontFamily: 'monospace', marginBottom: 2 }}>{p.file}</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>{p.message}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text)', fontFamily: 'monospace', marginBottom: 2 }}>{p.file}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.message}</div>
                 </div>
                 {p.diff && (
                   <ActionBtn
@@ -800,8 +802,8 @@ const PatchHistoryPanel: React.FC<{
               {expandedDiff === i && p.diff && (
                 <pre style={{
                   marginTop: 10, padding: '10px 12px', borderRadius: 6,
-                  background: '#020817', border: '1px solid #1e293b',
-                  fontSize: 10, color: '#94a3b8', overflowX: 'auto',
+                  background: '#020817', border: '1px solid var(--border)',
+                  fontSize: 10, color: 'var(--text-dim)', overflowX: 'auto',
                   maxHeight: 300, lineHeight: 1.5,
                 }}>{p.diff}</pre>
               )}
@@ -820,23 +822,23 @@ const QuarantinePanel: React.FC<{
   loading: boolean;
   onRefresh: () => void;
 }> = ({ entries, loading, onRefresh }) => (
-  <SectionCard title="Quarantine Log" icon="🔐" accent="#f97316"
+  <SectionCard title="Quarantine Log" icon={<ShieldCheck size={18} aria-hidden />} accent="#f97316"
     subtitle="Files copied to quarantine before any modification"
-    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
     {entries.length === 0 ? (
-      <EmptyState compact icon="🔒" title="Quarantine is empty" description="Suspicious files and processes will be isolated here when detected." />
+      <EmptyState compact icon={Lock} title="Quarantine is empty" description="Suspicious files and processes will be isolated here when detected." />
     ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {entries.slice().reverse().map((e, i) => (
           <div key={i} style={{
             display: 'grid', gridTemplateColumns: '140px 1fr 1fr',
             gap: 12, padding: '8px 12px', borderRadius: 7,
-            background: '#0f172a', border: '1px solid #1e293b',
+            background: 'var(--surface)', border: '1px solid var(--border)',
             fontSize: 11, alignItems: 'center',
           }}>
-            <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</span>
-            <span style={{ color: '#e2e8f0', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.original}</span>
-            <span style={{ color: '#475569', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>→ {e.quarantined_to}</span>
+            <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(e.ts)}</span>
+            <span style={{ color: 'var(--text)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.original}</span>
+            <span style={{ color: 'var(--text-faint)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>→ {e.quarantined_to}</span>
           </div>
         ))}
       </div>
@@ -853,11 +855,11 @@ const PendingApprovalPanel: React.FC<{
   onApprove: (idx: number) => void;
   approvingIdx: number | null;
 }> = ({ patches, loading, onRefresh, onApprove, approvingIdx }) => (
-  <SectionCard title="Pending Approval Queue" icon="📋" accent="#a78bfa"
+  <SectionCard title="Pending Approval Queue" icon={<ClipboardList size={18} aria-hidden />} accent="#a78bfa"
     subtitle="Patches waiting for manual approval before the healer applies them"
-    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
+    actions={<ActionBtn label="Refresh" onClick={onRefresh} icon={<RefreshCw size={18} aria-hidden />} size="sm" loading={loading} />}>
     {patches.length === 0 ? (
-      <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>No patches awaiting approval</div>
+      <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No patches awaiting approval</div>
     ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {patches.map((p, i) => (
@@ -869,13 +871,13 @@ const PendingApprovalPanel: React.FC<{
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 {p.category && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', background: '#2e1065', padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--ai-model)', background: '#2e1065', padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>
                     {p.category}
                   </span>
                 )}
-                <span style={{ fontSize: 11, color: '#64748b' }}>Queued {fmtDate(p.queued_at)}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Queued {fmtDate(p.queued_at)}</span>
               </div>
-              <div style={{ fontSize: 12, color: '#e2e8f0', fontFamily: 'monospace' }}>{p.endpoint}</div>
+              <div style={{ fontSize: 12, color: 'var(--text)', fontFamily: 'monospace' }}>{p.endpoint}</div>
             </div>
             <ActionBtn
               label={approvingIdx === i ? 'Approving…' : 'Approve'}
@@ -900,35 +902,35 @@ const TestRunPanel: React.FC<{
 }> = ({ onRunTests, running, lastResult }) => {
   const [showOutput, setShowOutput] = useState(false);
   return (
-    <SectionCard title="Manual Test Trigger" icon="▶️" accent="#06b6d4"
+    <SectionCard title="Manual Test Trigger" icon={<Play size={18} aria-hidden />} accent="#06b6d4"
       subtitle="Run the enabled test suites immediately and see results">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: lastResult ? 16 : 0 }}>
         <ActionBtn
           label={running ? 'Running Tests…' : 'Run Tests Now'}
           onClick={onRunTests}
           variant="primary"
-          icon="▶️"
+          icon={<Play size={18} aria-hidden />}
           loading={running}
         />
         {lastResult && !running && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{
               fontSize: 12, fontWeight: 700,
-              color: lastResult.success ? '#4ade80' : '#f87171',
+              color: lastResult.success ? 'var(--gain)' : 'var(--loss)',
             }}>
               {lastResult.success ? '✓ PASSED' : '✗ FAILED'}
             </span>
             {lastResult.passed != null && (
-              <span style={{ fontSize: 12, color: '#4ade80' }}>{lastResult.passed} passed</span>
+              <span style={{ fontSize: 12, color: 'var(--gain)' }}>{lastResult.passed} passed</span>
             )}
             {lastResult.failed != null && lastResult.failed > 0 && (
-              <span style={{ fontSize: 12, color: '#f87171' }}>{lastResult.failed} failed</span>
+              <span style={{ fontSize: 12, color: 'var(--loss)' }}>{lastResult.failed} failed</span>
             )}
             {lastResult.duration_sec != null && (
-              <span style={{ fontSize: 11, color: '#64748b' }}>{lastResult.duration_sec}s</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lastResult.duration_sec}s</span>
             )}
             {lastResult.ts && (
-              <span style={{ fontSize: 11, color: '#475569' }}>{fmtAgo(lastResult.ts)}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fmtAgo(lastResult.ts)}</span>
             )}
           </div>
         )}
@@ -943,8 +945,8 @@ const TestRunPanel: React.FC<{
           {showOutput && (
             <pre style={{
               marginTop: 10, padding: '12px 14px', borderRadius: 8,
-              background: '#020817', border: '1px solid #1e293b',
-              fontSize: 10, color: '#94a3b8', overflowX: 'auto',
+              background: '#020817', border: '1px solid var(--border)',
+              fontSize: 10, color: 'var(--text-dim)', overflowX: 'auto',
               maxHeight: 400, lineHeight: 1.6, whiteSpace: 'pre-wrap',
             }}>{lastResult.output}</pre>
           )}
@@ -960,11 +962,11 @@ const TestRunPanel: React.FC<{
 
 type LiveTab = 'drift' | 'patches' | 'quarantine' | 'approval';
 
-const LIVE_TABS: { id: LiveTab; label: string; icon: string; accent: string }[] = [
-  { id: 'drift',     label: 'Drift Events',      icon: '⚠️', accent: '#f59e0b' },
-  { id: 'patches',   label: 'Patch History',      icon: '🔧', accent: '#22c55e' },
-  { id: 'quarantine',label: 'Quarantine',         icon: '🔐', accent: '#f97316' },
-  { id: 'approval',  label: 'Pending Approval',   icon: '📋', accent: '#a78bfa' },
+const LIVE_TABS: { id: LiveTab; label: string; icon: React.ReactNode; accent: string }[] = [
+  { id: 'drift',     label: 'Drift Events',      icon: <AlertTriangle size={16} aria-hidden />, accent: '#f59e0b' },
+  { id: 'patches',   label: 'Patch History',      icon: <Wrench size={16} aria-hidden />, accent: '#22c55e' },
+  { id: 'quarantine',label: 'Quarantine',         icon: <ShieldCheck size={16} aria-hidden />, accent: '#f97316' },
+  { id: 'approval',  label: 'Pending Approval',   icon: <ClipboardList size={16} aria-hidden />, accent: '#a78bfa' },
 ];
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -1307,9 +1309,9 @@ const AutoHealingSection: React.FC = () => {
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '16px 20px', background: '#0a1628',
-        border: '1px solid #1e293b', borderRadius: 12, marginTop: 4, marginBottom: 24,
+        border: '1px solid var(--border)', borderRadius: 12, marginTop: 4, marginBottom: 24,
       }}>
-        <div style={{ fontSize: 12, color: '#475569' }}>
+        <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>
           Changes are applied immediately to the live healing engine
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -1319,7 +1321,7 @@ const AutoHealingSection: React.FC = () => {
             onClick={() => handleSave()}
             variant="primary"
             loading={saving}
-            icon="💾"
+            icon={<Save size={18} aria-hidden />}
           />
         </div>
       </div>
@@ -1333,12 +1335,12 @@ const AutoHealingSection: React.FC = () => {
 
       {/* Live data tabs */}
       <div style={{
-        background: '#0a1628', border: '1px solid #1e293b',
+        background: '#0a1628', border: '1px solid var(--border)',
         borderRadius: 14, overflow: 'hidden', marginTop: 4,
       }}>
         {/* Tab bar */}
         <div style={{
-          display: 'flex', borderBottom: '1px solid #1e293b',
+          display: 'flex', borderBottom: '1px solid var(--border)',
           background: '#060f1e', overflowX: 'auto',
         }}>
           {LIVE_TABS.map(tab => {
@@ -1352,9 +1354,9 @@ const AutoHealingSection: React.FC = () => {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7,
                   padding: '12px 18px', border: 'none', cursor: 'pointer',
-                  background: active ? '#0f172a' : 'transparent',
+                  background: active ? 'var(--surface)' : 'transparent',
                   borderBottom: `2px solid ${active ? tab.accent : 'transparent'}`,
-                  color: active ? '#f1f5f9' : '#64748b',
+                  color: active ? 'var(--text-strong)' : 'var(--text-muted)',
                   fontSize: 12, fontWeight: active ? 700 : 500,
                   whiteSpace: 'nowrap', transition: 'all 0.15s',
                 }}
@@ -1363,7 +1365,7 @@ const AutoHealingSection: React.FC = () => {
                 <span>{tab.label}</span>
                 {badge != null && (
                   <span style={{
-                    background: '#a78bfa', color: '#0f0a1e',
+                    background: 'var(--ai-model)', color: '#0f0a1e',
                     borderRadius: 10, fontSize: 10, fontWeight: 800,
                     padding: '1px 6px', minWidth: 18, textAlign: 'center',
                   }}>{badge}</span>
@@ -1440,9 +1442,9 @@ const AutoHealingSection: React.FC = () => {
         <div style={{
           marginTop: 12, padding: '12px 16px', borderRadius: 8,
           background: msgType === 'ok' ? '#052e16' : '#450a0a',
-          color: msgType === 'ok' ? '#4ade80' : '#f87171',
+          color: msgType === 'ok' ? 'var(--gain)' : 'var(--loss)',
           border: `1px solid ${msgType === 'ok' ? '#16a34a' : '#dc2626'}`,
-          fontSize: 13, fontWeight: 600,
+          fontSize: 'var(--fs-body)', fontWeight: 600,
         }}>{msg}</div>
       )}
     </div>

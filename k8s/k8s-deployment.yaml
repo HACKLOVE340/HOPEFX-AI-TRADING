@@ -79,6 +79,11 @@ spec:
 
           # ── Sensitive credentials from Secret ────────────────────────────────
           env:
+            # The flag file defaults to /app/kill_switch.flag, inside the image
+            # layer, and this pod has a read-only root filesystem. Point it at
+            # the kill-switch-state volume mounted below (F139).
+            - name: KILL_SWITCH_FLAG_FILE
+              value: /app/state/kill_switch.flag
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -196,11 +201,21 @@ spec:
               mountPath: /tmp
             - name: app-logs
               mountPath: /app/logs
+            - name: kill-switch-state
+              mountPath: /app/state
 
       volumes:
         - name: tmp
           emptyDir: {}
         - name: app-logs
+          emptyDir: {}
+        # The kill switch's flag file (layer 2). It defaulted to
+        # /app/kill_switch.flag, inside the image layer, and this pod runs with
+        # readOnlyRootFilesystem — so the write raised OSError and the file
+        # layer never worked here either. emptyDir carries it across a process
+        # restart inside the container; layers 4 and 5 carry the halt across a
+        # pod replacement (F139).
+        - name: kill-switch-state
           emptyDir: {}
 
 ---

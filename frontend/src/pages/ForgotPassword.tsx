@@ -56,7 +56,7 @@ const ForgotPassword: React.FC = () => {
             </div>
             <h2 style={s.heading}>Check your inbox</h2>
             <p style={s.subtext}>
-              If an account exists for <strong style={{ color: '#94a3b8' }}>{email}</strong>,
+              If an account exists for <strong style={{ color: 'var(--text-dim)' }}>{email}</strong>,
               you'll receive a password reset link within a few minutes.
               Check your spam folder if it doesn't arrive.
             </p>
@@ -73,8 +73,8 @@ const ForgotPassword: React.FC = () => {
 
             <form onSubmit={handleSubmit} style={s.form} noValidate>
               <div style={s.field}>
-                <label style={s.label} htmlFor="email">Email address</label>
-                <input
+                <label id="email-label" style={s.label} htmlFor="email">Email address</label>
+                <input aria-labelledby="email-label"
                   id="email" type="email" value={email}
                   onChange={(e) => { setEmail(e.target.value); setError(''); }}
                   onFocus={() => setFocused(true)}
@@ -120,11 +120,11 @@ const ForgotPassword: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: 'radial-gradient(ellipse at 50% 0%,rgba(59,130,246,0.06) 0%,#0f172a 60%)',
+    background: 'radial-gradient(ellipse at 50% 0%,rgba(59,130,246,0.06) 0%,var(--surface) 60%)',
     padding: 'clamp(12px, 4vw, 24px)',
   },
   card: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 16,
+    background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 16,
     padding: 'clamp(20px, 6vw, 40px) clamp(16px, 5vw, 36px)',
     width: '100%', maxWidth: 420,
     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
@@ -135,38 +135,38 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  logo:        { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
+  logo:        { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
   successIcon: { display: 'flex', justifyContent: 'center', marginBottom: 16 },
-  heading:     { fontSize: 20, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', margin: '0 0 8px' },
-  subtext:     { fontSize: 13, color: '#64748b', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
+  heading:     { fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', textAlign: 'center', margin: '0 0 8px' },
+  subtext:     { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
   form:        { display: 'flex', flexDirection: 'column', gap: 16 },
   field:       { display: 'flex', flexDirection: 'column' },
-  label:       { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  label:       { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   input: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     padding: '12px 14px', fontSize: 16, /* prevents iOS zoom */
-    color: '#f8fafc', outline: 'none',
+    color: 'var(--text-strong)', outline: 'none',
     transition: 'border-color 0.15s,box-shadow 0.15s', width: '100%', boxSizing: 'border-box',
     WebkitAppearance: 'none',
   },
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
-    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', lineHeight: 1.5,
+    borderRadius: 8, padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--loss)', lineHeight: 1.5,
   },
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
     color: '#fff', border: 'none', borderRadius: 8, padding: '14px',
-    fontSize: 15, fontWeight: 700, cursor: 'pointer',
+    fontSize: 'var(--fs-value)', fontWeight: 700, cursor: 'pointer',
     minHeight: 48, width: '100%',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     transition: 'opacity 0.15s', touchAction: 'manipulation',
   },
   footer:   { display: 'flex', justifyContent: 'center', marginTop: 20 },
-  backLink: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#64748b', textDecoration: 'none', minHeight: 44 },
+  backLink: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44 },
   backBtn: {
     display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44,
-    fontSize: 13, color: '#60a5fa', textDecoration: 'none', fontWeight: 500,
+    fontSize: 'var(--fs-body)', color: 'var(--link)', textDecoration: 'none', fontWeight: 500,
   },
 };
 

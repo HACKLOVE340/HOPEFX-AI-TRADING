@@ -125,7 +125,11 @@ describe('LivePriceTicker — S9-02 end to end', () => {
       n.textContent?.trim().startsWith('94%'),
     );
     expect(el, 'quality score not rendered').toBeTruthy();
-    expect(el!.getAttribute('style')).toContain('rgb(0, 230, 118)'); // #00e676
+    // The literal became `var(--bull)` when the token codemod ran. Asserting
+    // the TOKEN is the stronger claim, not the weaker one: it says the quality
+    // score is painted with the platform's up-colour whatever that colour is
+    // in the active theme, where the old assertion pinned one theme's hex.
+    expect(el!.getAttribute('style')).toContain('var(--bull)');
   });
 
   it('does NOT paint it green once the data has gone stale', async () => {

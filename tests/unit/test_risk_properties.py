@@ -69,6 +69,7 @@ def test_position_size_never_negative(entry, stop_offset, tp_offset, equity, vol
         account_equity=equity,
         volatility=vol,
         existing_positions=[],
+        data_quality=1.0,
     )
 
     assert result.recommended_size >= 0, f"Position size must be >= 0, got {result.recommended_size}"
