@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { securityFixesApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { Check, X } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -206,14 +207,14 @@ const FixRow: React.FC<FixRowProps> = ({
                 onClick={onApprove}
                 disabled={acting}
               >
-                {acting ? '…' : '✓ Approve'}
+                {acting ? '…' : <><Check size={13} aria-hidden /> Approve</>}
               </button>
               <button
                 style={btnStyle('var(--loss)')}
                 onClick={onDecline}
                 disabled={acting}
               >
-                {acting ? '…' : '✗ Decline'}
+                {acting ? '…' : <><X size={13} aria-hidden /> Decline</>}
               </button>
             </div>
           )}

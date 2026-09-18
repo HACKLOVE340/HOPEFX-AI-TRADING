@@ -53,9 +53,25 @@ second ratchet with different semantics is a second thing to remember.
 
 ## What counts as an emoji, and what deliberately does not
 
-Only ranges whose characters have emoji presentation. Typographic glyphs in the
-same neighbourhood are **not** counted, because they are legitimate UI text and
-counting them would make the gate absurd:
+Whole Unicode ranges, chosen so that the glyphs used in the ICON role are in
+and the ones used as text are out. It is a range sweep, not a presentation test
+— the distinction matters, and this paragraph used to get it wrong.
+
+It said "only ranges whose characters have emoji presentation", which is not
+what the code does: `☀-➿` takes in the whole of Miscellaneous Symbols and
+Dingbats, including `✓ ✕ ✗`, which have TEXT presentation by default — no
+variation selector, no colour, set in the page's font. 70 of those were in the
+tree while the docstring promised they were not counted, so a contributor who
+read this and reached for `✓` was blocked by a gate documented not to block.
+
+They stay counted and this paragraph was corrected instead, because the ROLE is
+what the rule is about: `✕` is a close button and `✓` is a status mark, and both
+should be an SVG for the same reasons a pictograph should.
+`tests/unit/test_frontend_emoji_ratchet.py::test_text_presentation_dingbats_are_counted`
+now pins that, so the two cannot disagree again.
+
+What is genuinely out is everything in the neighbouring blocks, because it is
+legitimate UI text and counting it would make the gate absurd:
 
 * `─ │ ├ ┤` (U+2500 block) — 79,148 occurrences, all of them comment banners in
   this repository. A regex that swept "symbols" would report eighty thousand
@@ -70,6 +86,17 @@ U+2B05–U+2B55 (`⬇ ⭐ ⬛`).
 
 U+FE0F, the variation selector that forces emoji presentation, is *not* counted
 separately — it always follows a base character that already is.
+
+## What the ratchet cannot express
+
+A glyph in a **string context the browser renders itself** — `document.title`, a
+`title` attribute, a desktop notification body — has no SVG alternative, because
+there is no markup there. `features/chart-bot/hooks/useNuclearWS.ts` holds the
+only one in the tree: a radiation glyph flashed into the page title on a
+severity>=8 nuclear alert, which is precisely when the operator is likely to be
+on another tab. That file stays in the baseline at 1 on purpose, and says so at
+the call site. If a second such case appears, the honest fix is an explicit
+exemption with a reason — not driving the count to zero by deleting a signal.
 
 ## Usage
 

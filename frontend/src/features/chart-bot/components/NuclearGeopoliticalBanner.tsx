@@ -8,6 +8,7 @@ import React, { memo, useEffect, useRef } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor, severityLabel } from '../types/nuclear';
 import type { NuclearState } from '../types/nuclear';
+import { Radiation } from 'lucide-react';
 
 // ─── Gauge bar ────────────────────────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ const NuclearGeopoliticalBanner = memo(({ onClickExplain }: Props) => {
         </div>
         <div style={s.labelStack}>
           <span style={{ ...s.gaugeLabel, color }}>
-            {isAlert && '☢️ '}{gaugeLabel}
+            {isAlert && <Radiation size={12} aria-hidden style={{ verticalAlign: '-1px', marginRight: 4 }} />}{gaugeLabel}
           </span>
           <span style={s.actionLabel}>
             {action.replace(/_/g, ' ').toUpperCase()}

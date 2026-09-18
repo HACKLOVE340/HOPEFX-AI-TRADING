@@ -7,8 +7,7 @@ import { SYMBOLS, TIMEFRAMES } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { TrendingUp } from 'lucide-react';
-
+import { AlertTriangle, TrendingUp } from 'lucide-react';
 const DEFAULT: TradingPreferences = {
   default_symbol: 'XAU_USD',
   default_timeframe: '1h',
@@ -257,7 +256,7 @@ const TradingSection: React.FC = () => {
               padding: '10px 14px', background: '#450a0a',
               border: '1px solid #7f1d1d', borderRadius: 8, fontSize: 'var(--fs-body)', color: 'var(--loss)',
             }}>
-              ⚠️ Kill switch is active. All automated trading is halted.
+              <AlertTriangle size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> Kill switch is active. All automated trading is halted.
             </div>
           ) : (
             <Button variant="danger" onClick={engageKillSwitch} disabled={killSwitchBusy}>

@@ -86,7 +86,7 @@ describe('Observability page', () => {
   it('renders empty states when nothing is returned', async () => {
     render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(await screen.findByText('No service data.')).toBeInTheDocument();
-    expect(screen.getByText('No active alerts. 🎉')).toBeInTheDocument();
+    expect(screen.getByText('No active alerts.')).toBeInTheDocument();
   });
 
   it('shows an error banner when every request fails', async () => {
@@ -241,7 +241,7 @@ describe('StrategyBuilder page', () => {
     mocks.nocodeApi.deploy.mockReturnValue(ok({ message: 'Strategy deployed.' }));
     render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     fireEvent.click(await screen.findByText('Momentum'));
-    fireEvent.click(await screen.findByText('🚀 Deploy Strategy'));
+    fireEvent.click(await screen.findByRole('button', { name: /deploy strategy/i }));
     await waitFor(() => expect(mocks.nocodeApi.deploy).toHaveBeenCalledTimes(1));
     expect(mocks.nocodeApi.deploy.mock.calls[0]?.[0]).toMatchObject({ template_id: 'tpl-momentum', symbol: 'XAUUSD', timeframe: 'M15' });
     expect(await screen.findByText('Strategy deployed.')).toBeInTheDocument();

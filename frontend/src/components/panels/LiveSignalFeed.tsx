@@ -431,7 +431,7 @@ export function LiveSignalFeed() {
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', padding: '32px 16px', gap: 8,
             }}>
-              <span style={{ fontSize: 24, opacity: 0.3 }}>📡</span>
+              <RadioTower size={24} aria-hidden style={{ opacity: 0.3 }} />
               <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
                 {signals.length === 0 ? 'Awaiting signals from inference engine…' : `No ${filter} signals`}
               </span>
@@ -445,4 +445,5 @@ export function LiveSignalFeed() {
 
 // ── Guarded export ────────────────────────────────────────────────────────────
 import { withPanelGuard } from '../ui/withPanelGuard';
+import { RadioTower } from 'lucide-react';
 export const LiveSignalFeedGuarded = withPanelGuard(LiveSignalFeed, 'Signal Feed', 5);

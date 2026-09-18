@@ -5,7 +5,7 @@
  *   GET /api/sentiment/latest
  *   GET /api/news/feed
  */
-import { Newspaper } from 'lucide-react';
+import { Newspaper, Radiation } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { newsApi } from '../hooks/useApi';
@@ -69,7 +69,7 @@ const NewsSentiment: React.FC = () => {
 
       {sentiment?.nuclear_alert && (
         <div style={{ padding: '10px 14px', background: '#2a1215', border: '1px solid #7f1d1d', borderRadius: 8, color: '#fca5a5', marginBottom: 16, fontWeight: 600 }}>
-          ☢️ Nuclear sentiment alert active for {sentiment.symbol ?? 'the market'}.
+          <Radiation size={14} aria-hidden style={{ verticalAlign: '-2px' }} /> Nuclear sentiment alert active for {sentiment.symbol ?? 'the market'}.
         </div>
       )}
 

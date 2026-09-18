@@ -12,6 +12,7 @@ import { fmtPrice, fmtPctRaw, fmtPnl } from '../../../lib/utils';
 import { severityColor, actionColor } from '../types/nuclear';
 import NuclearCandleChart from './NuclearCandleChart';
 import NuclearAlertOverlay from './NuclearAlertOverlay';
+import { BarChart3, Lock } from 'lucide-react';
 
 // ─── Mobile gauge strip ───────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ const MobileExplainAccordion = memo(() => {
           <p style={ms.explainText}>{nuclear.explanation}</p>
           {nuclear.historical_analog && (
             <div style={ms.analogBox}>
-              <span style={ms.analogLabel}>📊 HISTORICAL ANALOG</span>
+              <span style={ms.analogLabel}><BarChart3 size={11} aria-hidden style={{ verticalAlign: '-1px' }} /> HISTORICAL ANALOG</span>
               <p style={ms.analogText}>{nuclear.historical_analog}</p>
             </div>
           )}
@@ -163,7 +164,7 @@ const NuclearMobileView = memo(() => {
 
       {protectedView && (
         <div style={ms.protectedBar}>
-          🔒 PROTECTED VIEW — Trading halted
+          <Lock size={12} aria-hidden style={{ verticalAlign: '-1px' }} /> PROTECTED VIEW — Trading halted
         </div>
       )}
 

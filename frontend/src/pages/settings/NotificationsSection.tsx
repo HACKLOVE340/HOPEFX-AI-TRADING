@@ -5,8 +5,7 @@ import type { NotificationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { Bell } from 'lucide-react';
-
+import { Bell, CheckCircle2, XCircle } from 'lucide-react';
 const DEFAULT: NotificationSettings = {
   discord_enabled: false, discord_webhook_url: '',
   slack_enabled: false, slack_webhook_url: '',
@@ -118,8 +117,8 @@ const NotificationsSection: React.FC = () => {
       >
         Send test
       </Button>
-      {testStatus[channel] === 'ok' && <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}>✅ Delivered</span>}
-      {testStatus[channel] === 'fail' && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>❌ Failed — check credentials</span>}
+      {testStatus[channel] === 'ok' && <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}><CheckCircle2 size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> Delivered</span>}
+      {testStatus[channel] === 'fail' && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}><XCircle size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> Failed — check credentials</span>}
     </div>
   );
 

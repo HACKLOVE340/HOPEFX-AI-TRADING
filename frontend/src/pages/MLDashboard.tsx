@@ -110,7 +110,8 @@ const MLDashboard: React.FC = () => {
   /**
    * "Stable" has to be earned.
    *
-   * This read `health?.latest_drift?.is_drifted ? '⚠️ Drifted' : 'Stable'`,
+   * This read `health?.latest_drift?.is_drifted ? 'Drifted' : 'Stable'` (with a
+   * warning glyph on the drifted branch),
    * which reports Stable in two states where nothing is known:
    *
    *   - the request failed, so `health` is null and `?.` short-circuits — the
@@ -126,7 +127,7 @@ const MLDashboard: React.FC = () => {
    */
   const driftValue = (): string => {
     if (!health) return '—';
-    if (health.latest_drift?.is_drifted) return '⚠️ Drifted';
+    if (health.latest_drift?.is_drifted) return 'Drifted';
     if (!health.drift_history_count) return 'No checks yet';
     return 'Stable';
   };

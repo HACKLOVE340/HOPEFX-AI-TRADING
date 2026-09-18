@@ -10,6 +10,7 @@ import { useRiskMetrics } from '../hooks/useChartData';
 import { COLORS } from '../utils/design-tokens';
 import { formatPnl, formatPct, riskColor, clamp } from '../utils/formatters';
 import type { RiskMetrics } from '../types';
+import { AlertTriangle } from 'lucide-react';
 
 // ─── Risk Score Ring ──────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ const KillSwitchBanner = memo(({ active, reason }: { active: boolean; reason: st
     <div style={{ ...rh.ksBanner, ...rh.ksActive }}>
       <span style={rhDynamic.ksDot(COLORS.loss.strong)} />
       <div>
-        <div style={{ ...rh.ksText, color: COLORS.loss.strong }}>⚠ KILL SWITCH ACTIVE — TRADING HALTED</div>
+        <div style={{ ...rh.ksText, color: COLORS.loss.strong }}><AlertTriangle size={12} aria-hidden style={{ verticalAlign: '-1px' }} /> KILL SWITCH ACTIVE — TRADING HALTED</div>
         {reason && <div style={rh.ksReason}>{reason}</div>}
       </div>
     </div>
@@ -96,7 +97,7 @@ const MetricRow = memo(({
         </div>
       )}
       <span style={{ ...rh.metricValue, color: color ?? COLORS.text.primary }}>
-        {warning && <span style={{ color: COLORS.neon.amber, marginRight: 4 }}>⚠</span>}
+        {warning && <AlertTriangle size={11} aria-hidden style={{ color: COLORS.neon.amber, marginRight: 4 }} />}
         {value}
       </span>
     </div>

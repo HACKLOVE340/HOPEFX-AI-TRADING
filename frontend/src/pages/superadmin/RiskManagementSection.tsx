@@ -14,8 +14,7 @@ import type {
 } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { AlertTriangle, BarChart3, CheckCircle2, CircleOff, FlaskConical, Microscope, Mountain, Play, RefreshCw, Shield, Star, TrendingDown, Users, Zap } from 'lucide-react';
-
+import { AlertTriangle, BarChart3, CheckCircle2, CircleOff, FlaskConical, Microscope, Mountain, OctagonAlert, Play, RefreshCw, Shield, Star, TrendingDown, Users, Zap } from 'lucide-react';
 const fmtMoney = (n: number, cur = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n);
 const fmtPct = (n: number) => `${n.toFixed(2)}%`;
@@ -231,7 +230,7 @@ const RiskManagementSection: React.FC = () => {
           actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
           {openBreakers > 0 && (
             <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 16 }}>🛑</span>
+              <OctagonAlert size={16} aria-hidden />
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 600 }}>{openBreakers} circuit breaker{openBreakers > 1 ? 's' : ''} OPEN — affected services are failing fast</span>
             </div>
           )}

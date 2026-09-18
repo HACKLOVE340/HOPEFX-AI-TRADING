@@ -127,7 +127,7 @@ const Observability: React.FC = () => {
           <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)', margin: '0 0 10px' }}>Recent Alerts</h2>
           <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 12 }}>
             {alerts.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', padding: 8 }}>No active alerts. 🎉</div>
+              <div style={{ color: 'var(--text-muted)', padding: 8 }}>No active alerts.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {alerts.map((a, i) => (

@@ -6,10 +6,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-  Sparkles, FlaskConical, LineChart,
-   BarChart3,
-} from 'lucide-react';
+import { BarChart3, Bot, FlaskConical, LineChart, Sparkles, TrendingUp } from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -109,11 +106,11 @@ const ABTesting: React.FC = () => {
       actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/ai-strategy')}
             style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            🤖 AI Strategy
+            <Bot size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> AI Strategy
           </button>
           <button onClick={() => navigate('/walk-forward')}
             style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            📈 Walk-Forward
+            <TrendingUp size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> Walk-Forward
           </button>
         </div></>}
     >

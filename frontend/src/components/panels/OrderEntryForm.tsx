@@ -19,6 +19,7 @@ import { withPanelGuard } from '../ui/withPanelGuard';
 import { fmtPrice, cn, extractApiError, describeSubmitFailure } from '../../lib/utils';
 import { useConfirm } from '../ConfirmDialog';
 import { useHotkeys } from '../../hooks/useHotkeys';
+import { AlertTriangle } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -434,7 +435,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
           the form here so the trader gets immediate feedback before submitting. */}
       {isBlackout && (
         <div className="flex items-center gap-2 px-3 py-2 mb-2 rounded bg-[#ff3b5c]/10 border border-[#ff3b5c]/30">
-          <span className="text-[#ff3b5c] text-sm font-bold">⚠</span>
+          <AlertTriangle size={14} aria-hidden className="text-[#ff3b5c]" />
           <span className="text-[11px] text-[#ff3b5c] font-semibold">
             Trading paused — high-impact event blackout active
           </span>
@@ -600,7 +601,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
           )}
         >
           {isBlackout
-            ? '⚠ Blackout — trading paused'
+            ? 'Blackout — trading paused'
             : submitting
             ? 'Placing…'
             : `${side === 'buy' ? '▲ Buy' : '▼ Sell'} ${qty || '0'} ${symbol}`}

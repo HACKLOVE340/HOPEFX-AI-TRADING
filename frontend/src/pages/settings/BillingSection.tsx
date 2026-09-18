@@ -6,8 +6,7 @@ import type { BillingInfo } from './types';
 import { Card, SectionHeader, Button, StatusBadge, Divider } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { CreditCard } from 'lucide-react';
-
+import { Check, CreditCard } from 'lucide-react';
 interface Transaction {
   id: string;
   amount: number;
@@ -164,7 +163,7 @@ const BillingSection: React.FC = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                   {billing.features.map((f) => (
                     <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
-                      <span style={{ color: '#22c55e', fontSize: 'var(--fs-body)'}}>✓</span> {f}
+                      <Check size={13} aria-hidden style={{ color: '#22c55e', verticalAlign: '-2px' }} /> {f}
                     </div>
                   ))}
                 </div>
@@ -220,7 +219,7 @@ const BillingSection: React.FC = () => {
               </div>
               {features.map((f) => (
                 <div key={f} style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', marginBottom: 3, display: 'flex', gap: 5 }}>
-                  <span style={{ color: '#22c55e' }}>✓</span> {f}
+                  <Check size={13} aria-hidden style={{ color: '#22c55e', verticalAlign: '-2px' }} /> {f}
                 </div>
               ))}
               <Button

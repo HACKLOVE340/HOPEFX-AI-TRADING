@@ -13,6 +13,7 @@ import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor } from '../types/nuclear';
 import type { NuclearState, NuclearRiskData, NuclearEvent } from '../types/nuclear';
 import NuclearDecisionTrace from './NuclearDecisionTrace';
+import { Shield } from 'lucide-react';
 
 /** Guard .toFixed against undefined/NaN risk fields (partial WS payloads). */
 const safeFixed = (v: number | null | undefined, dec: number): string =>
@@ -240,7 +241,7 @@ const NuclearExplainPanel = memo(() => {
           </>
         ) : (
           <div style={s.emptyState}>
-            <div style={s.emptyIcon}>🛡️</div>
+            <Shield size={32} strokeWidth={1.5} aria-hidden />
             <div style={s.emptyText}>No nuclear events detected</div>
             <div style={s.emptySubtext}>System monitoring active</div>
           </div>
@@ -411,7 +412,6 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', alignItems: 'center',
     padding: '32px 16px', gap: 8,
   },
-  emptyIcon: { fontSize: 32 },
   emptyText: { fontSize: 'var(--fs-body)', color: 'var(--text-faint)', fontWeight: 600 },
   emptySubtext: { fontSize: 'var(--fs-label)', color: 'var(--text-faint)' },
 };

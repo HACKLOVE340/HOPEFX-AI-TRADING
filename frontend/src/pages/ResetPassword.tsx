@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { Activity, AlertCircle, CheckCircle2, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { authApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -206,7 +206,7 @@ const ResetPassword: React.FC = () => {
                   </button>
                 </div>
                 {confirm && confirm === password && (
-                  <span style={{ fontSize: 'var(--fs-label)', color: '#22c55e', marginTop: 4 }}>✓ Passwords match</span>
+                  <span style={{ fontSize: 'var(--fs-label)', color: '#22c55e', marginTop: 4 }}><Check size={12} aria-hidden style={{ verticalAlign: '-1px' }} /> Passwords match</span>
                 )}
               </div>
 

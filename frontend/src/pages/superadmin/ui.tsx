@@ -1,7 +1,6 @@
 // superadmin/ui.tsx — shared UI primitives for all superadmin sections
 import React from 'react';
-import { Inbox } from 'lucide-react';
-
+import { AlertTriangle, Inbox } from 'lucide-react';
 // ── KPI Tile ──────────────────────────────────────────────────────────────────
 
 interface KpiTileProps {
@@ -430,7 +429,7 @@ export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> =
 
 export const ErrorState: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (
   <div style={{ textAlign: 'center', padding: '32px 20px' }}>
-    <div style={{ fontSize: 'var(--fs-hero)', marginBottom: 8 }}>⚠️</div>
+    <div style={{ marginBottom: 8 }}><AlertTriangle size={26} aria-hidden /></div>
     <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
     {onRetry && (
       <button onClick={onRetry} style={{

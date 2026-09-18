@@ -10,6 +10,7 @@ import { useStore, selectKillSwitch } from '../../store';
 import { MetricTile } from '../ui/MetricTile';
 import { fmtPctRaw, fmtPct, fmtRatio, pnlColor, fmtMarginLevel, marginLevelIsSafe, fmtPrice, fmtPnl } from '../../lib/utils';
 import { notificationsApi } from '../../hooks/useApi';
+import { Bell } from 'lucide-react';
 
 function NotificationBell() {
   const navigate = useNavigate();
@@ -33,6 +34,12 @@ function NotificationBell() {
     <button
       onClick={() => navigate('/notifications')}
       title={count > 0 ? `${count} unread notification${count === 1 ? '' : 's'}` : 'Notifications'}
+      // The bell was an emoji until 2026-09-18, and an emoji is CONTENT: a screen
+      // reader announced "bell" and the button had a name by accident. An
+      // `aria-hidden` icon has none, and `title` is the weakest source in the
+      // accessible-name algorithm — so the name is stated here rather than
+      // depending on either.
+      aria-label={count > 0 ? `${count} unread notification${count === 1 ? '' : 's'}` : 'Notifications'}
       style={{
         position: 'relative', flexShrink: 0,
         background: 'transparent', border: 'none', cursor: 'pointer',
@@ -43,7 +50,7 @@ function NotificationBell() {
       onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'}
       onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
     >
-      <span style={{ fontSize: 14 }}>🔔</span>
+      <Bell size={14} aria-hidden />
       {count > 0 && (
         <span style={{
           position: 'absolute', top: 0, right: 2,

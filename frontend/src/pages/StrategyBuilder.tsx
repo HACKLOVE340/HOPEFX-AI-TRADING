@@ -13,6 +13,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { nocodeApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { Rocket } from 'lucide-react';
 
 interface Template {
   id: string; name: string; category?: string; description?: string;
@@ -160,7 +161,7 @@ const StrategyBuilder: React.FC = () => {
           )}
 
           <button onClick={deploy} disabled={deploying} style={{ padding: '10px 20px', background: deploying ? '#1e3a5f' : '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: deploying ? 'default' : 'pointer' }}>
-            {deploying ? 'Deploying…' : '🚀 Deploy Strategy'}
+            {deploying ? 'Deploying…' : <><Rocket size={14} aria-hidden /> Deploy Strategy</>}
           </button>
         </div>
       )}

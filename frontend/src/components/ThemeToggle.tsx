@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { useTheme } from './ThemeContext';
+import { Moon, Sun } from 'lucide-react';
 
 interface ThemeToggleProps {
   /** Additional inline styles */
@@ -32,7 +33,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ style }) => {
         ...style,
       }}
     >
-      {theme === 'dark' ? '☀️' : '🌙'}
+      {theme === 'dark' ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
     </button>
   );
 };

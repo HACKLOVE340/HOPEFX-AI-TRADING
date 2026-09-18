@@ -19,8 +19,7 @@ import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
 import { MetricCard } from '../components/MetricCard';
-import { Banknote, BarChart3, FolderTree, TrendingUp, Users } from 'lucide-react';
-
+import { Banknote, BarChart3, FolderTree, TrendingUp, Users, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SubAccount {
@@ -363,7 +362,7 @@ const SubAccounts: React.FC = () => {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/trade')}
               style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-              ⚡ Trade
+              <Zap size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> Trade
             </button>
             <button onClick={() => setShowCreateAcc(true)} style={s.primaryBtn}>+ Sub-Account</button>
             <button onClick={() => setShowCreateTeam(true)} style={s.secondaryBtn}>+ Team</button>

@@ -92,7 +92,7 @@ export function RiskDashboard() {
           className="text-[10px] font-bold px-2 py-0.5 rounded"
           style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: 'var(--warn)', cursor: 'pointer' }}
         >
-          🛡 Calculator
+          <Shield size={10} aria-hidden style={{ verticalAlign: '-1px' }} /> Calculator
         </button>
       }
     >
@@ -239,4 +239,5 @@ export function RiskDashboard() {
 
 // ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
 import { withPanelGuard } from '../ui/withPanelGuard';
+import { Shield } from 'lucide-react';
 export const RiskDashboardGuarded = withPanelGuard(RiskDashboard, 'Risk Dashboard', 4);

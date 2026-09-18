@@ -10,8 +10,7 @@ import {
 import type { AlertRule } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { Bell, Circle, Plus, Radio, Siren } from 'lucide-react';
-
+import { Bell, CheckCircle2, Circle, Plus, Radio, Siren, XCircle } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -190,7 +189,7 @@ const AlertingSection: React.FC = () => {
           borderRadius: 10, padding: '12px 16px', marginBottom: 16,
           display: 'flex', alignItems: 'center', gap: 12, fontSize: 'var(--fs-body)',
         }}>
-          <span style={{ fontSize: 16 }}>{promStatus.available ? '✅' : '❌'}</span>
+          {promStatus.available ? <CheckCircle2 size={16} aria-hidden /> : <XCircle size={16} aria-hidden />}
           <span style={{ color: promStatus.available ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
             Prometheus {promStatus.available ? 'connected' : 'offline'}
           </span>

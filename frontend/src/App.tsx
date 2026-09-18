@@ -44,6 +44,7 @@ import { isChunkLoadError, tryChunkReload } from './lib/chunkReload';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
 import { PageSurface } from './components/system/PageSurface';
+import { AlertTriangle } from 'lucide-react';
 
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
 const Login                   = React.lazy(() => import('./pages/Login'));
@@ -254,9 +255,9 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
           width: 48, height: 48, borderRadius: '50%',
           background: '#ff3b5c22', border: '1px solid #ff3b5c44',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 22, marginBottom: 16,
+          marginBottom: 16,
         }}>
-          ⚠
+          <AlertTriangle size={22} aria-hidden />
         </div>
 
         <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>

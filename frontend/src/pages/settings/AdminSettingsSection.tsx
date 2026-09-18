@@ -5,8 +5,7 @@ import type { AdminSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { Wrench } from 'lucide-react';
-
+import { AlertTriangle, Wrench } from 'lucide-react';
 const DEFAULT: AdminSettings = {
   allow_new_registrations: true,
   require_email_verification: true,
@@ -256,7 +255,7 @@ const AdminSettingsSection: React.FC = () => {
               variant="danger"
               onClick={activateGlobalKillSwitch}
             >
-              {killSwitchConfirm ? '⚠️ Confirm — halt all trading' : 'Activate global kill switch'}
+              {killSwitchConfirm ? <><AlertTriangle size={13} aria-hidden /> Confirm — halt all trading</> : 'Activate global kill switch'}
             </Button>
             {killSwitchConfirm && (
               <button

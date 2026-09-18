@@ -1,7 +1,7 @@
 /**
  * Social Signal Feed — community feed of high-confidence AI signals.
  * Features: opt-in/out toggle, real-time WS signal injection, pagination,
- * reactions (👍/👎), comments, copy counts.
+ * reactions (thumbs up / thumbs down), comments, copy counts.
  */
 import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';

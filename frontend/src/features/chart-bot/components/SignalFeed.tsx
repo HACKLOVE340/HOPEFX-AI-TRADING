@@ -13,6 +13,7 @@ import {
   regimeLabel, regimeColor, formatRelativeTime,
 } from '../utils/formatters';
 import type { MLSignal } from '../types';
+import { Check, X } from 'lucide-react';
 
 // ─── Signal Card ──────────────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ const TradeToast = memo(({ message, success }: { message: string; success: boole
     border: `1px solid ${success ? COLORS.profit.border : COLORS.loss.border}`,
     color: success ? COLORS.profit.base : COLORS.loss.base,
   }}>
-    {success ? '✓' : '✕'} {message}
+    {success ? <Check size={12} aria-hidden /> : <X size={12} aria-hidden />} {message}
   </div>
 ));
 TradeToast.displayName = 'TradeToast';

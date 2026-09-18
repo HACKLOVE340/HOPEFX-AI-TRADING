@@ -13,6 +13,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin, isAdmin } from '../lib/subscription';
+import { Zap } from 'lucide-react';
 
 interface Props {
   children: React.ReactNode;
@@ -59,9 +60,9 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
           background: 'linear-gradient(135deg, #450a0a, #7f1d1d)',
           border: '2px solid #dc2626',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 20px', fontSize: 'var(--fs-hero)',
+          margin: '0 auto 20px',
         }}>
-          ⚡
+          <Zap size={26} aria-hidden />
         </div>
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,

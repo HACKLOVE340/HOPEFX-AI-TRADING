@@ -30,6 +30,7 @@ import NuclearAlertOverlay       from './NuclearAlertOverlay';
 import NuclearMobileView         from './NuclearMobileView';
 import GeopoliticalPanel         from './GeopoliticalPanel';
 import { useStore }              from '../../../store';
+import { Brain, Lock } from 'lucide-react';
 
 // ─── Responsive breakpoint hook ───────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ const WsStatusBar = memo(({ status }: { status: string }) => {
 
 const ProtectedViewBanner = memo(() => (
   <div className="nuclear-glow" style={s.protectedBanner}>
-    <span style={s.protectedIcon}>🔒</span>
+    <Lock size={16} aria-hidden style={s.protectedIcon} />
     <span style={s.protectedText}>
       PROTECTED VIEW — Nuclear mode active. All trading halted. Awaiting manual resume.
     </span>
@@ -164,7 +165,7 @@ const NuclearDashboard = memo(() => {
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
-          🧠 AI Explain Panel {showExplainPanel ? '◀ Hide' : '▶ Show'}
+          <Brain size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> AI Explain Panel {showExplainPanel ? '◀ Hide' : '▶ Show'}
         </button>
       </div>
 

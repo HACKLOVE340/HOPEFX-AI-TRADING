@@ -11,6 +11,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { mlApi } from '../../hooks/useApi';
 import type { MlHealth } from '../../types';
+import { Brain } from 'lucide-react';
 
 // ── Small status pill ─────────────────────────────────────────────────────────
 const Pill: React.FC<{
@@ -84,7 +85,7 @@ export const MlSafetyStrip: React.FC = () => {
       padding: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>🧠 Model Health &amp; Safety Gates</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}><Brain size={14} aria-hidden style={{ verticalAlign: '-2px', marginRight: 6 }} />Model Health &amp; Safety Gates</span>
         <span style={{
           fontSize: 'var(--fs-micro)', fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',

@@ -14,7 +14,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useStore } from '../store';
 import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { Eye, EyeOff, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Activity, AlertCircle, Check, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import AppBackground from '../components/AppBackground';
 
 // ── Plan badge ────────────────────────────────────────────────────────────────
@@ -389,7 +389,7 @@ const Register: React.FC = () => {
               </div>
               {confirm && confirm === password && (
                 <span style={{ ...s.fieldHint, color: '#22c55e', marginTop: 4 }}>
-                  ✓ Passwords match
+                  <Check size={12} aria-hidden style={{ verticalAlign: '-1px' }} /> Passwords match
                 </span>
               )}
             </div>
