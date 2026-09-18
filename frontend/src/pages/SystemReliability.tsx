@@ -12,6 +12,7 @@ import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { CircleDot, Microscope, Search, Shield, Stethoscope, Wrench, Zap } from 'lucide-react';
+import { StatusDot } from '../components/ui/StatusDot';
 const SR_CROSS_LINKS = [
   { label: 'Super Admin',         href: '/superadmin',         icon: Zap, color: '#f87171' },
   { label: 'System Status',       href: '/status',             icon: CircleDot, color: '#4ade80' },
@@ -62,7 +63,7 @@ const SystemReliability: React.FC = () => (
               </Link>
               <Link to="/status"
                 style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                🟢 Status
+                <StatusDot status="ok" /> Status
               </Link>
             </div>
           }

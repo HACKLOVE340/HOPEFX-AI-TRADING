@@ -25,6 +25,7 @@ import { useMacro } from '../hooks/useOrchestratorData';
 import { useStore, selectMacro } from '../store';
 import { MacroCalendar } from '../components/panels/MacroCalendar';
 import { PanelSkeleton } from '../components/ui/Skeleton';
+import { StatusDot } from '../components/ui/StatusDot';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -325,7 +326,7 @@ const EconomicCalendar: React.FC = () => {
           display: 'flex', alignItems: 'center', gap: 10,
           color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600,
         }}>
-          🔴 Trading Blackout Active — high-impact event imminent. Order submission is paused.
+          <StatusDot status="error" /> Trading Blackout Active — high-impact event imminent. Order submission is paused.
           {macro.impact_score != null && (
             <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', fontWeight: 400, color: '#fca5a5' }}>
               Impact score: {(macro.impact_score * 100).toFixed(0)}%
@@ -358,7 +359,7 @@ const EconomicCalendar: React.FC = () => {
                 onClick={() => setFilter(f)}
                 style={{ ...s.tab, ...(filter === f ? s.tabActive : {}) }}
               >
-                {f === 'all' ? 'All Events (7 days)' : '🔴 High Impact Only'}
+                {f === 'all' ? 'All Events (7 days)' : <><StatusDot status="error" /> High Impact Only</>}
               </button>
             ))}
           </div>

@@ -158,7 +158,7 @@ const Marketplace: React.FC = () => {
 
   useEffect(() => { loadStrategies(); }, [loadStrategies]);
   useEffect(() => { if (mainTab === 'my-listings') loadMyListings(); }, [mainTab, loadMyListings]);
-  // Hydrate the "✅ Subscribed" markers from the user's existing subscriptions
+  // Hydrate the "Subscribed" markers from the user's existing subscriptions
   // so they reflect server state on load rather than resetting each refresh.
   useEffect(() => {
     let mounted = true;

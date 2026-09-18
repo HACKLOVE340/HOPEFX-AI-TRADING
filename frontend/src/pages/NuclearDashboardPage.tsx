@@ -28,7 +28,7 @@ const CROSS_LINKS = [
  *
  * The hand-rolled header strip is gone and nothing it carried is: the title,
  * the icon, the subtitle, the breadcrumbs, the LIVE badge and the four cross
- * links are all `PageShell` props now. The ☢ in the title went with it — the
+ * links are all `PageShell` props now. The radiation glyph in the title went with it — the
  * `icon={Radiation}` beside it said the same thing, and one of the two was an
  * emoji standing in for an icon.
  */

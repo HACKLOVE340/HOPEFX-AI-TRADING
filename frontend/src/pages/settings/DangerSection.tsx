@@ -27,7 +27,7 @@ const DangerSection: React.FC = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [emergencyLoading, setEmergencyLoading] = useState(false);
   // Server-reported halt state, not local optimism. A sticky local flag meant
-  // that once the button was pressed the page read "✅ Trading halted" for the
+  // that once the button was pressed the page read "Trading halted" (with a tick) for the
   // rest of the session and the control disappeared — so if trading resumed
   // (supervisor restart, another operator, partial failure) the screen kept
   // asserting a halt that no longer held, with no way to retry.

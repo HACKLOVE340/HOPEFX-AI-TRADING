@@ -150,7 +150,7 @@ const KYCPage: React.FC = () => {
       if (!mountedRef.current) return;
       const state = res.data as KYCState;
       setKycState(state);
-      // Hydrate the "✓ Uploaded" markers from documents the backend already
+      // Hydrate the "Uploaded" markers from documents the backend already
       // holds, so they persist across refreshes instead of resetting to empty.
       const serverDocs = (state.documents ?? []).map((d) => d.type).filter(Boolean);
       if (serverDocs.length) {
