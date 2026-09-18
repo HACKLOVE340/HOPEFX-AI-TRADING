@@ -2811,12 +2811,39 @@ S_DOC = "doc-freshness-review"
 # ── Frontend correctness, found by driving the app rather than reading it ───
 
 
-def _p_balance_source_split() -> tuple[str, str]:
-    """Does /billing/balance read the ledger it promises, or the broker?
+def _p_zero_balance_does_not_raise() -> tuple[str, str]:
+    """Does a broker balance of ZERO still fall through to a mapping lookup?
 
-    Read through this module's own `_read`, so the starvation harness can empty
-    it — a probe that reports FIXED against a tree it could not see is the F176
-    shape this register exists to refuse.
+    `getattr(account, name, 0) or account.get(name, 0)` conflates "missing" with
+    "zero", because 0.0 is falsy. Measured from the source rather than asserted.
+    """
+    src = _read("api/billing.py")
+    if not src:
+        return UNVERIFIED, "api/billing.py could not be read here"
+    if 'getattr(account, "balance", 0) or account.get(' in src:
+        return OPEN, "the falsy-or is still there: a zero balance falls through to .get()"
+    if "_account_field" not in src:
+        return UNVERIFIED, "neither the old falsy-or nor the _account_field helper is present"
+    return FIXED, "_account_field reads the attribute, then the mapping, without conflating zero"
+
+
+def _p_balance_source_split() -> tuple[str, str]:
+    """Does /billing/balance show the same number a withdrawal is checked against?
+
+    Three outcomes, because "reports the disagreement" and "has no disagreement"
+    are not the same state and must not read alike:
+
+      FIXED    the shown balance is DERIVED from the wallet ledger
+      PARTIAL  the split still exists but the response says so, and reports both
+      OPEN     two numbers, one shown, nothing saying they differ
+
+    The first version of this probe asked only whether `wallet_manager` appeared
+    in the body. Reporting the ledger alongside the broker figure would have
+    flipped it to FIXED while the sources still disagreed — a measurement that
+    stops being able to fail, which is the shape (F176) this register exists to
+    refuse.
+
+    Read through `_read` so the starvation harness can empty it.
     """
     src = _read("api/billing.py")
     if not src:
@@ -2826,20 +2853,29 @@ def _p_balance_source_split() -> tuple[str, str]:
     if marker not in src:
         return UNVERIFIED, "get_balance is not in api/billing.py on this tree"
 
-    body = src[src.index(marker) : src.index(marker) + 2000]
-    promises_wallet = "wallet balance" in body
-    reads_broker = "app_state, \"broker\"" in body or 'getattr(app_state, "broker"' in body
-    reads_ledger = "wallet_manager" in body or "WalletTransaction" in body
+    body = src[src.index(marker) : src.index(marker) + 6000]
+    reads_broker = 'getattr(app_state, "broker"' in body or "app_state, \"broker\"" in body
+    reports_split = "ledger_balance" in body and "sources_agree" in body
+    # The shown number comes from the ledger only if `balance` is assigned from it.
+    derives_from_ledger = "balance = " in body and "wallet_manager.get_balance" in body.split("ledger_balance")[0]
 
-    if reads_ledger:
-        return FIXED, "get_balance reads the wallet ledger it names"
-    if promises_wallet and reads_broker:
+    if derives_from_ledger:
+        return FIXED, "the shown balance is derived from the wallet ledger"
+    if reports_split:
+        return (
+            PARTIAL,
+            "the response now reports the ledger alongside the shown balance and whether they "
+            "agree, so the split is visible and measurable — but the shown number still comes "
+            "from the broker or the subscription manager, not the ledger a withdrawal is "
+            "refused against. Reconciliation is an owner decision, not a refactor",
+        )
+    if reads_broker:
         return (
             OPEN,
             "get_balance promises 'wallet balance' and reads the broker account; the "
-            "ledger the withdrawal path debits is a different number",
+            "ledger the withdrawal path debits is a different number, and nothing says so",
         )
-    return UNVERIFIED, "get_balance neither names a wallet balance nor reads the broker recognisably"
+    return UNVERIFIED, "get_balance neither reads the broker nor reports a ledger comparison"
 
 
 def _p_suite_does_not_rewrite_models() -> tuple[str, str]:
@@ -3205,6 +3241,31 @@ def _p_field_has_no_label() -> tuple[str, str]:
 
 
 FINDINGS: list[Finding] = [
+    Finding(
+        "BALANCE-ZERO-RAISES",
+        "A broker balance of exactly zero crashed the balance lookup, silently",
+        "P2",
+        "Money",
+        "This session, 2026-09-18 — surfaced by a test asserting a real zero is not a failed lookup",
+        "`api/billing.py::get_balance` read the broker account as "
+        "`float(getattr(account, \"balance\", 0) or account.get(\"balance\", 0))`. The `or` "
+        "conflates \"the attribute is missing\" with \"the attribute is ZERO\", because 0.0 is "
+        "falsy. A broker reporting a genuine zero therefore fell through to the mapping "
+        "branch, and an object-style account has no `.get`, so it raised AttributeError — "
+        "into an `except Exception` that logged at DEBUG, which is off in production. The "
+        "user was shown whatever the next source produced, and nothing recorded why. Fixed "
+        "by `_account_field`, which tries the attribute, then the mapping, and treats None "
+        "rather than falsiness as absence. The same `except` now logs at WARNING: the "
+        "difference between an operator seeing why a balance was wrong and seeing nothing.",
+        "`tests/unit/test_the_balance_says_where_it_came_from.py::"
+        "test_a_zero_balance_does_not_crash_the_broker_read`, parametrised over an "
+        "object-style and a mapping-style account because the fix has two branches and one "
+        "that works only for the shape the test uses is not a fix. Red on the pre-fix tree "
+        "for the object-style case.",
+        "python scripts/correction_register.py --id BALANCE-ZERO-RAISES",
+        _p_zero_balance_does_not_raise,
+        [S_MONEY, S_TDD],
+    ),
     Finding(
         "BALANCE-SOURCE-SPLIT",
         "The balance a user is shown and the balance a withdrawal checks are different numbers",

@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 665 commits and 1,561 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **Did the audit branch land?** | **Yes — PR #315 merged 2026-09-18**, merge commit `9cdc37a`: 666 commits and 1,561 files, in ONE merge, not nine slices. `docs/audit/LANDING_PLAN.md` is now a RECORD, not a plan — read its top box first, because everything below it is written in the present tense about a state that no longer holds. The branch is 3 commits and 18 files ahead of `main`, and that is follow-up work. Verified by local execution on Python 3.11 AND 3.12 (F95: Actions has assigned no runner for twelve days, so no CI run has ever executed against any of it). |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | **I am picking up the frontend / AI-presence work — what is done and what is next?** | **`docs/audit/FRONTEND_HANDOVER.md`** — what was built and why it is shaped that way, what is left in the order to do it, what is deliberately NOT worth doing, and the six traps this thread actually fell into. Start there before the plan. |
 | What was the frontend plan, and which parts are done? | `docs/audit/plans/2026-09-15-frontend-ultra.md` — Tasks 1–2 landed, 3–11 open. The handover above supersedes it where they differ, because it was measured later. |
@@ -491,6 +491,17 @@ they are the ones most often skipped under time pressure:
   looks like a money bug, and the pressure to fix it falls on the balance check,
   which is a real gate. Turn it on after reconciliation —
   `python scripts/correction_register.py --id BALANCE-SOURCE-SPLIT`.
+
+  `/billing/balance` now **reports that split** instead of hiding it:
+  `balance_known`, `source`, `ledger_balance` and `sources_agree` are in the
+  response, so the two numbers can be compared. It still SHOWS the broker's
+  figure — deciding which is authoritative is the owner's call, so that finding
+  reads PARTIAL, not FIXED. Two defects were fixed on the way there: a balance
+  of exactly **zero** crashed the broker read, because
+  `getattr(a, "balance", 0) or a.get("balance", 0)` conflates "missing" with
+  "zero" when 0.0 is falsy; and every failure was logged at DEBUG, which is off
+  in production, so a user whose lookup failed was shown `0.00` in a response
+  byte-identical to a genuinely empty account. `--id BALANCE-ZERO-RAISES`.
 
   Two things not to "tidy": the AML gate is consulted **twice** on the
   withdrawal path (`_screen_withdrawal_for_aml`, then again inside

@@ -890,16 +890,61 @@ async def flutterwave_status():
 @router.get("/balance")
 async def get_balance(user: TokenPayload = Depends(require_plan("starter"))):
     """
-    Return the authenticated user's wallet balance.
+    Return the balance this platform can show, and say where it came from.
 
-    Reads from the subscription manager's payment records when available;
-    falls back to the paper-trading account balance from the trading engine.
+    Two sources answer this, and NEITHER is the wallet ledger: the **broker**
+    account, then the subscription manager's `wallet_balance`, which overwrites
+    it when present. Meanwhile ADR 0021 makes `wallet_transactions` the ledger a
+    withdrawal is refused against. So the number a user is shown and the number
+    a withdrawal is checked against come from different places.
+
+    This function does not decide which is authoritative — that is
+    reconciliation, and it is the owner's call (`BALANCE-SOURCE-SPLIT`). It
+    makes the disagreement visible instead of hiding it, and reports the ledger
+    alongside so the two can be compared at all.
+
+    The docstring here used to say the subscription manager was read "when
+    available" and the broker was the fallback. The code does the opposite, and
+    has since it was written.
+
+    `balance_known` exists because a failed lookup used to be indistinguishable
+    from an empty account: both sources were wrapped in
+    `except Exception: logger.debug(...)`, DEBUG is off in production, and a user
+    whose broker call timed out was shown `0.00` in a response byte-identical to
+    a real zero.
     """
+    from decimal import ROUND_HALF_UP, Decimal
+
+    def _account_field(account, name: str) -> float:
+        """Read a field from a broker account that may be an object OR a mapping.
+
+        This was `getattr(account, name, 0) or account.get(name, 0)`, and the
+        `or` conflated "the attribute is missing" with "the attribute is ZERO".
+        A broker reporting a genuine zero balance fell through to the mapping
+        branch, and an object-style account has no `.get`, so it raised
+        AttributeError — into an `except` that logged at DEBUG. A real zero
+        balance crashed the lookup and nobody could see why.
+        """
+        value = getattr(account, name, None)
+        if value is None and hasattr(account, "get"):
+            value = account.get(name, 0)
+        return float(value if value is not None else 0)
+
+    def _cents(value) -> float:
+        """Quantize to cents, HALF_UP.
+
+        `round(x, 2)` is banker's rounding: `round(2.675, 2)` is 2.67. On a
+        displayed balance that is a cent, always in the same direction.
+        """
+        return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
     balance = 0.0
     frozen = 0.0
     pending = 0.0
+    source: str | None = None
+    failures: list[str] = []
 
-    # Try trading account balance first (most accurate for paper accounts)
+    # The broker account first — most accurate for paper accounts.
     try:
         from core.app_state import app_state
 
@@ -909,26 +954,61 @@ async def get_balance(user: TokenPayload = Depends(require_plan("starter"))):
 
             account = await asyncio.wait_for(broker.get_account(), timeout=3.0)
             if account:
-                balance = float(getattr(account, "balance", 0) or account.get("balance", 0))
-                margin_used = float(getattr(account, "margin_used", 0) or account.get("margin_used", 0))
-                frozen = margin_used
+                balance = _account_field(account, "balance")
+                frozen = _account_field(account, "margin_used")
+                source = "broker"
+        else:
+            failures.append("broker: not configured")
     except Exception as exc:
-        logger.debug("Broker balance unavailable: %s", exc)
+        # WARNING, not DEBUG. This is the difference between an operator seeing
+        # why a user was shown zero and an operator seeing nothing at all.
+        logger.warning("Balance: broker lookup failed for user=%s: %s", user.sub, exc)
+        failures.append(f"broker: {exc}")
 
-    # Try subscription manager for payment-based balance
+    # The subscription manager OVERWRITES the broker when it has a figure.
     try:
         mgr = _get_subscription_manager()
         sub = mgr.get_user_subscription(user.sub)
         if sub and hasattr(sub, "wallet_balance"):
             balance = float(sub.wallet_balance)
-    except Exception as _exc:
-        logger.debug("Suppressed exception: %s", _exc)
+            source = "subscription_manager"
+    except Exception as exc:
+        logger.warning("Balance: subscription lookup failed for user=%s: %s", user.sub, exc)
+        failures.append(f"subscription_manager: {exc}")
 
+    # The ledger a withdrawal is actually refused against, reported alongside so
+    # the split is measurable rather than merely documented. `None` means "no
+    # wallet", which is not the same as a wallet holding nothing.
+    ledger_balance: float | None = None
+    try:
+        from core.app_state import app_state as _app_state
+
+        wallet_manager = getattr(_app_state, "wallet_manager", None)
+        if wallet_manager is not None and wallet_manager.get_wallet(user.sub) is not None:
+            ledger_balance = _cents(wallet_manager.get_balance(user.sub)["total_balance"])
+    except Exception as exc:
+        logger.warning("Balance: wallet ledger lookup failed for user=%s: %s", user.sub, exc)
+        failures.append(f"wallet_ledger: {exc}")
+
+    if source is None:
+        logger.warning(
+            "Balance: no source could answer for user=%s (%s) — reporting balance_known=false "
+            "rather than a zero that looks like an empty account",
+            user.sub,
+            "; ".join(failures) or "no reason recorded",
+        )
+
+    shown = _cents(balance)
     return {
-        "balance": round(balance, 2),
-        "frozen": round(frozen, 2),
-        "pending": round(pending, 2),
+        "balance": shown,
+        "frozen": _cents(frozen),
+        "pending": _cents(pending),
         "currency": "USD",
+        # Everything below is additive. Existing callers keep reading `balance`.
+        "balance_known": source is not None,
+        "source": source,
+        "ledger_balance": ledger_balance,
+        "sources_agree": None if (ledger_balance is None or source is None) else ledger_balance == shown,
     }
 
 
