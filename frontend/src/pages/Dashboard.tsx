@@ -670,7 +670,7 @@ const RiskSnapshotPanel: React.FC = () => {
         },
         {
           label: 'Kill Switch',
-          value: risk?.kill_switch_active ? '🔴 ACTIVE' : '🟢 Off',
+          value: risk?.kill_switch_active ? 'ACTIVE' : 'Off',
           warn: !!risk?.kill_switch_active,
         },
         {

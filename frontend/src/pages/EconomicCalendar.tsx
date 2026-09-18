@@ -58,11 +58,16 @@ const IMPORTANCE_COLOR: Record<string, string> = {
   low:      '#22c55e',
 };
 
+// The coloured dot that used to prefix each of these restated IMPORTANCE_COLOR
+// above, and was the ONLY severity signal in the row: the label rendered at
+// `var(--text-muted)` regardless. The colour now reaches the whole word, which
+// is both more legible and able to follow the theme — a glyph's colour is fixed
+// by the font.
 const IMPORTANCE_LABEL: Record<string, string> = {
-  critical: '🔴 Critical',
-  high:     '🟠 High',
-  medium:   '🟡 Medium',
-  low:      '🟢 Low',
+  critical: 'Critical',
+  high:     'High',
+  medium:   'Medium',
+  low:      'Low',
 };
 
 const FLAG: Record<string, string> = {
@@ -127,7 +132,7 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
           {ev.currency && <span style={s.currencyBadge}>{ev.currency}</span>}
         </div>
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
-          {IMPORTANCE_LABEL[ev.importance]}
+          <span style={{ color, fontWeight: 600 }}>{IMPORTANCE_LABEL[ev.importance]}</span>
           {mins <= 60 && mins > 0 && (
             <span style={{ color: '#f97316', marginLeft: 8 }}><AlertTriangle size="1em" aria-hidden /> Approaching</span>
           )}

@@ -379,7 +379,7 @@ const RiskBar: React.FC = () => {
     { label: 'Daily Loss', value: risk.daily_loss_pct != null ? `${risk.daily_loss_pct.toFixed(2)}%` : '—', warn: (risk.daily_loss_pct ?? 0) > 3 },
     { label: 'Max DD',     value: risk.max_drawdown_pct != null ? `${risk.max_drawdown_pct.toFixed(2)}%` : '—', warn: (risk.max_drawdown_pct ?? 0) > 8 },
     { label: 'Open Risk',  value: risk.open_risk_pct != null ? `${risk.open_risk_pct.toFixed(2)}%` : '—', warn: (risk.open_risk_pct ?? 0) > 5 },
-    { label: 'Kill Switch', value: risk.kill_switch_active ? '🔴 ACTIVE' : '🟢 Off', warn: !!risk.kill_switch_active },
+    { label: 'Kill Switch', value: risk.kill_switch_active ? 'ACTIVE' : 'Off', warn: !!risk.kill_switch_active },
   ];
 
   return (

@@ -13,7 +13,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { BarChart3, Calendar, CalendarDays, Globe2, LineChart, Link2, Microscope, Newspaper, Radiation, Radio, Zap } from 'lucide-react';
+import { Ban, BarChart3, Calendar, CalendarDays, Circle, CloudLightning, Flame, Fuel, Globe2, Hand, LineChart, Link2, Microscope, Mountain, Newspaper, Plug, Radiation, Radio, Server, Shield, Swords, Zap } from 'lucide-react';
 import { CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
@@ -22,6 +22,7 @@ import {
   queryKeys,
   type WorldMonitorViews,
 } from '../features/chart-bot/services/chart-api';
+import type { LucideIcon } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -44,19 +45,22 @@ const REGION_ICONS: Record<string, string> = {
   oceania:                   '🪸',
 };
 
-const LAYER_ICONS: Record<string, string> = {
-  conflicts:    '⚔',
-  hotspots:     '🔴',
-  sanctions:    '🚫',
-  weather:      '🌩',
-  outages:      '⚡',
-  natural:      '🌋',
-  military:     '🪖',
-  protests:     '✊',
-  nuclear:      '☢',
-  pipelines:    '🛢',
-  cables:       '🔌',
-  datacenters:  '🖥',
+// Components, not characters. A glyph here could not take the layer's colour,
+// rendered differently on every OS, and was announced literally by a screen
+// reader beside a label that already said the same word.
+const LAYER_ICONS: Record<string, LucideIcon> = {
+  conflicts:    Swords,
+  hotspots:     Flame,
+  sanctions:    Ban,
+  weather:      CloudLightning,
+  outages:      Zap,
+  natural:      Mountain,
+  military:     Shield,
+  protests:     Hand,
+  nuclear:      Radiation,
+  pipelines:    Fuel,
+  cables:       Plug,
+  datacenters:  Server,
 };
 
 const LAYER_COLORS: Record<string, string> = {
@@ -101,7 +105,7 @@ const LayerSelector = memo(({ allLayers, active, onChange }: LayerSelectorProps)
           onClick={() => onChange(layer)}
           title={`Toggle ${layer} layer`}
         >
-          <span>{LAYER_ICONS[layer] ?? '●'}</span>
+          <span>{(() => { const Icon = LAYER_ICONS[layer] ?? Circle; return <Icon size="1em" aria-hidden />; })()}</span>
           {layer}
         </button>
       );
