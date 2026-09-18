@@ -36,6 +36,19 @@
 - Known infrastructure limitation: full-repository per-module coverage pre-commit hook is prohibitively long and previously terminated with exit 137; it must be optimized or bounded as its own work item, not silently skipped.
 - Known external dependency exposure: GitHub reported 29 Dependabot vulnerabilities on the default branch; dependency remediation requires package-by-package verification and compatibility tests.
 
+## Verified Follow-up Findings — 2026-09-16
+
+- Frontend production build: fixed the Tailwind scanner regression caused by a
+  dynamic class-shaped test assertion. The focused shell test, full Vitest
+  suite, TypeScript check, and production build now pass; the change is tracked
+  by issue #323 and pull request #325.
+- Mypy bootstrap: corrected the invalid bare `type: ignore` in the Redis tick
+  writer fixture and aligned the mypy language target with the documented
+  Python 3.12 runtime so NumPy's current stubs parse correctly. A repository-
+  wide run now reaches project code and reports the larger pre-existing
+  annotation backlog; those errors remain separate remediation items and are
+  not suppressed by this batch.
+
 ## Ordered Workstreams
 
 ### Workstream 1 — Developer and governance gates
