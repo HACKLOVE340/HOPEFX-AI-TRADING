@@ -322,13 +322,22 @@ See `helm/hopefx/values.yaml` for all configurable parameters.
 
 ### Kubernetes Manifests
 
-Staging manifest: `k8s/staging-deployment.yaml`
-Production manifest: `k8s/production-deployment.yaml`
+There is no staging/production manifest split. Two manifest trees exist, and
+they differ by invariant-enforcement posture rather than by environment:
 
-Key differences between staging and production:
-- Production uses `replicas: 3`, staging uses `replicas: 1`
-- Production image tag is pinned to the release version, staging uses `main`
-- Production has resource limits set, staging uses defaults
+- `k8s/` — full enforcement against a live broker. The Deployment is
+  `k8s/k8s-deployment.yaml` (`hopefx-api`, `replicas: 3`, resource requests and
+  limits set), alongside `k8s/k8s-service.yaml`, `k8s/k8s-configmap.yaml`,
+  `k8s/k8s-secrets.yaml`, `k8s/ingress.yaml`, `k8s/network-policy.yaml`,
+  `k8s/pdb.yaml` and the kill-switch ConfigMap and RBAC.
+- `deployments/k8s/` — the staged rollout described in
+  `docs/INVARIANT_ROLLOUT.md`, where the global invariant mode stays `monitor`
+  and `HOPEFX_INVARIANT_ENFORCE_KINDS` turns kinds on one at a time.
+
+Replica count and image tag are not baked into an environment-specific manifest:
+`helm/hopefx/values.yaml` defaults to `replicaCount: 1` and `image.tag: latest`,
+and a deploy overrides them with `--set` (the production command above pins
+`image.tag` to the release version).
 
 ---
 

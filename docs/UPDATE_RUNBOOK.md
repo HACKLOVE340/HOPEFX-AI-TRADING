@@ -25,7 +25,8 @@ prometheus, grafana). Every application service — `app`, `trading`,
 code reaches them **only** through `docker compose build`.
 
 This matters most for the frontend. `Dockerfile` stage 1 runs `npm run build`
-and stage 2 copies the result to `./static`; `frontend/dist` is not committed.
+and stage 2 copies the result to `./static`; the `dist/` build output under
+`frontend/` is a build artefact and is not committed.
 A frontend fix that is not rebuilt is not deployed, however many times you
 restart the container.
 

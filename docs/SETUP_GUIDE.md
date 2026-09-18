@@ -120,7 +120,7 @@ docker run -d -p 6379:6379 redis:7-alpine
 
 ### Required: Live Price Streaming
 
-The `NuclearStreamer` in `market_data/nuclear_streamer.py` provides live XAUUSD WebSocket ticks.
+The `NuclearStreamer` in `data_feed/nuclear_streamer.py` provides live XAUUSD WebSocket ticks.
 Set at least one key. All configured sources run concurrently — anomalous ticks are discarded.
 
 | API | Free Tier | Sign Up | Symbol |

@@ -261,7 +261,9 @@ var = calculate_var_ewma(returns, confidence=0.95, lambda_=0.94)
 ## Kill Switch
 
 The kill switch immediately halts all trading and blocks all new orders.
-It persists to `risk/halt_state.json` — it survives application restarts.
+It persists to `kill_switch.state.json`, written next to the kill-switch flag
+file (`KILL_SWITCH_FLAG_FILE`, defaulting to the repository root) — it survives
+application restarts.
 
 ### Activate
 
@@ -301,18 +303,19 @@ curl -X DELETE http://localhost:8000/api/trading/emergency-stop \
 ### Halt State File
 
 ```bash
-cat risk/halt_state.json
+cat kill_switch.state.json
 ```
 
 ```json
 {
   "active": true,
-  "activated_at": "2026-07-14T10:30:00Z",
   "reason": "daily_loss_limit",
-  "daily_loss_pct": 2.1,
-  "drawdown_pct": 3.4
+  "activated_at": "2026-07-14T10:30:00Z"
 }
 ```
+
+Those three fields are the whole file — `KillSwitch._persist_state` in
+`kill_switch.py` writes no others.
 
 ### Auto-Activation Triggers
 

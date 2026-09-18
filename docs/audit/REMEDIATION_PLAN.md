@@ -317,7 +317,7 @@ per unit of work, since the backend is already done:
    AI" into "here is why"; it is the differentiator the landing page claims.
 4. **`api/status.py`** (10 endpoints, zero UI) — incidents and history, which a
    subscriber checks before funding an account (see F212).
-5. **`api/custom-indicators`** `test` + `deploy` + `builtin` — **F186**: two
+5. **`api/custom_indicators.py`** (route prefix `/api/custom-indicators`) `test` + `deploy` + `builtin` — **F186**: two
    parallel indicator APIs exist and the page is wired to the weaker one.
 6. **`api/portfolio_allocator.py`** + `api/portfolio.py` factor endpoints — the
    institutional layer.

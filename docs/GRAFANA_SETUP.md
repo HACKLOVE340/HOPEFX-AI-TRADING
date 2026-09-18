@@ -229,12 +229,12 @@ grafana/
 │   └── trading_performance.json
 └── provisioning/
     ├── dashboards/
-    │   └── dashboards.yaml      # Points Grafana at the dashboards/ directory
+    │   └── default.yml          # Points Grafana at the dashboards/ directory
     └── datasources/
-        └── prometheus.yaml      # Configures Prometheus as the default datasource
+        └── prometheus.yml       # Configures Prometheus as the default datasource
 ```
 
-`grafana/provisioning/datasources/prometheus.yaml`:
+`grafana/provisioning/datasources/prometheus.yml`:
 ```yaml
 apiVersion: 1
 datasources:
@@ -248,16 +248,20 @@ datasources:
       timeInterval: "15s"
 ```
 
-`grafana/provisioning/dashboards/dashboards.yaml`:
+`grafana/provisioning/dashboards/default.yml`:
 ```yaml
 apiVersion: 1
+
 providers:
   - name: hopefx
+    orgId: 1
     type: file
-    disableDeletion: true
+    disableDeletion: false
     updateIntervalSeconds: 30
+    allowUiUpdates: true
     options:
-      path: /var/lib/grafana/dashboards
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false
 ```
 
 ---

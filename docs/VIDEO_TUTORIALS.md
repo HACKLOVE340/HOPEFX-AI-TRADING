@@ -870,7 +870,7 @@ curl -X POST http://localhost:8000/api/trading/emergency-stop \
 # Check kill switch status
 curl http://localhost:8000/api/risk/status
 ```
-Kill switch state persists to `risk/halt_state.json` — survives restarts.
+Kill switch state persists to `kill_switch.state.json` — survives restarts.
 
 **[40:00–50:00] VaR and CVaR**
 ```bash
