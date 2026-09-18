@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **Did the audit branch land?** | **Yes — PR #315 merged 2026-09-18**, merge commit `9cdc37a`: 666 commits and 1,561 files, in ONE merge, not nine slices. `docs/audit/LANDING_PLAN.md` is now a RECORD, not a plan — read its top box first, because everything below it is written in the present tense about a state that no longer holds. The branch is 6 commits and 171 files ahead of `main`, and that is follow-up work. Verified by local execution on Python 3.11 AND 3.12 (F95: Actions has assigned no runner for twelve days, so no CI run has ever executed against any of it). |
+| **Did the audit branch land?** | **Yes — PR #315 merged 2026-09-18**, merge commit `9cdc37a`: 666 commits and 1,561 files, in ONE merge, not nine slices. `docs/audit/LANDING_PLAN.md` is now a RECORD, not a plan — read its top box first, because everything below it is written in the present tense about a state that no longer holds. The branch is 7 commits and 174 files ahead of `main`, and that is follow-up work. Verified by local execution on Python 3.11 AND 3.12 (F95: Actions has assigned no runner for twelve days, so no CI run has ever executed against any of it). |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | **I am picking up the frontend / AI-presence work — what is done and what is next?** | **`docs/audit/FRONTEND_HANDOVER.md`** — what was built and why it is shaped that way, what is left in the order to do it, what is deliberately NOT worth doing, and the six traps this thread actually fell into. Start there before the plan. |
 | What was the frontend plan, and which parts are done? | `docs/audit/plans/2026-09-15-frontend-ultra.md` — Tasks 1–2 landed, 3–11 open. The handover above supersedes it where they differ, because it was measured later. |
@@ -429,6 +429,21 @@ they are the ones most often skipped under time pressure:
   `ml/inference_engine.py` among them. `python
   scripts/model_provenance_report.py --check` holds those at their baseline so
   they cannot grow.
+- **The Dockerfile's `npm ci` carries `--legacy-peer-deps`, and that is a
+  workaround, not a preference.** npm's arborist loads the *optional* peer sets
+  of packages named in the lockfile even for `ci`, which resolves nothing and
+  should not need the registry. On 2026-09-18 that walk reached
+  `@vitest/browser-playwright@5.0.1` — an optional peer of the locked
+  `vitest@4.1.11` — which peers on `vitest@*`, resolving to the newly published
+  vitest 5, and crashed: `Cannot read properties of null (reading 'edgesOut')`.
+  Reproduced on npm 10.9.7 **and** npm 10.8.2, the version `node:20-alpine`
+  ships, so **no image could be built** — with nothing in this repository
+  changed and the full suite green hours earlier. The lockfile is sound: with
+  the flag, `npm ci` installs 738 packages at 0 version mismatches and 0
+  packages absent from the lock. Remove the flag once npm ships the fix;
+  `tests/unit/test_frontend_lockfile_installs_cleanly.py` now READS the
+  Dockerfile's flags rather than repeating them, so it proves whether removing
+  it is safe. `python scripts/correction_register.py --id DOCKER-NPM-PEER-CRASH`.
 - `WORDMAP.json` is gitignored; copy from `WORDMAP.json.example` locally.
   `prop_firm_mode.json` is **not** — `.gitignore` commits it deliberately with
   placeholder credentials so CI has a config to load. This file previously said

@@ -3209,6 +3209,44 @@ def _p_density_cannot_reach() -> tuple[str, str]:
     )
 
 
+def _p_docker_build_crashed_on_optional_peers() -> tuple[str, str]:
+    """Could the production image be built at all?
+
+    Reads the Dockerfile and the test that claims to run what it runs. It does
+    NOT run `npm ci` — that needs the network and twelve seconds, and a probe
+    that does either is a probe nobody runs. So this measures the fix, not the
+    upstream bug: the flag being present and the test being bound to it.
+    """
+    dockerfile = _read(ROOT / "Dockerfile")
+    if not dockerfile:
+        return ("UNKNOWN", "Dockerfile is not present")
+
+    m = re.search(r"^RUN\s+npm\s+ci\b(?P<flags>.*)$", dockerfile, re.MULTILINE)
+    if not m:
+        return ("UNKNOWN", "Dockerfile has no `RUN npm ci` line")
+    has_flag = "--legacy-peer-deps" in m.group("flags")
+
+    test = _read(ROOT / "tests" / "unit" / "test_frontend_lockfile_installs_cleanly.py")
+    bound = "_dockerfile_npm_ci_flags()" in test
+
+    if has_flag and bound:
+        return (
+            "FIXED",
+            "Dockerfile runs `npm ci --legacy-peer-deps` and the lockfile test derives its "
+            "flags from that line, so the two cannot diverge",
+        )
+    if has_flag:
+        return (
+            "PARTIAL",
+            "the workaround is in the Dockerfile but the test hard-codes its own argv — "
+            "it is no longer running what the image runs",
+        )
+    return (
+        "OPEN",
+        "Dockerfile runs a bare `npm ci`; if npm still crashes loading optional peer sets, no image can be built",
+    )
+
+
 def _p_field_has_no_label() -> tuple[str, str]:
     """Settings fields showed a label and had no accessible name.
 
@@ -3490,6 +3528,39 @@ FINDINGS: list[Finding] = [
         "pytest tests/unit/test_agent_deadline_is_enforced.py tests/unit/test_agentic_loop.py -q",
         _p_agent_deadline,
         [S_TDD, S_VBC, S_DEAD],
+    ),
+    Finding(
+        "DOCKER-NPM-PEER-CRASH",
+        "npm ci crashed loading optional peer sets, so no image could be built",
+        "P0",
+        "Deployment",
+        "Reproduced 2026-09-18 from a clean directory on npm 10.9.7 and npm 10.8.2",
+        "`Dockerfile:4` builds the frontend on `node:20-alpine` and stage 1 is "
+        "`COPY frontend/package.json frontend/package-lock.json ./` then `RUN npm ci`. "
+        "npm's arborist loads the OPTIONAL peer sets of packages named in the lockfile even "
+        "for `ci`, which resolves nothing and should not need the registry at all. That walk "
+        "reached `@vitest/browser-playwright@5.0.1` — an optional peer of the locked "
+        "`vitest@4.1.11` — which peers on `vitest@*`, resolving to the newly published vitest 5, "
+        "whose `@vitejs/devtools-*@^0.7.5` peers sent it into a recursion that dereferences "
+        "null: `Cannot read properties of null (reading 'edgesOut')` at `#loadPeerSet "
+        "(build-ideal-tree.js:1289)`. Nothing in this repository changed — the trigger was a "
+        "registry publish — and the lockfile is sound: `npm ci --legacy-peer-deps` installs 738 "
+        "packages at 0 version mismatches and 0 packages absent from the lock, which is exactly "
+        "the locked tree. The flag is therefore a WORKAROUND and is commented as one; remove it "
+        "when npm ships the fix and let the slow test prove it is safe to. Found by the repo's "
+        "own gate while verifying an unrelated frontend change, on a tree whose full suite had "
+        "been green hours earlier — which is the whole argument for a gate that starts from two "
+        "files and an empty directory rather than from a populated `node_modules`.",
+        "tests/unit/test_frontend_lockfile_installs_cleanly.py::"
+        "test_npm_ci_succeeds_from_a_clean_directory fails with the arborist crash on the "
+        "pre-fix tree — verified against a detached worktree at the previous commit, not just "
+        "against the edited one — and passes in 12s after it. Its sibling "
+        "test_the_install_command_is_read_from_the_dockerfile holds the binding: the slow test "
+        "now READS the Dockerfile's `npm ci` flags rather than repeating them, so a test that "
+        "claims to run what the image runs cannot quietly stop doing so.",
+        "python scripts/correction_register.py --id DOCKER-NPM-PEER-CRASH",
+        _p_docker_build_crashed_on_optional_peers,
+        [S_VBC, S_TDD],
     ),
     Finding(
         "DENSITY-CANNOT-REACH",
