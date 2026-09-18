@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **Did the audit branch land?** | **Yes — PR #315 merged 2026-09-18**, merge commit `9cdc37a`: 666 commits and 1,561 files, in ONE merge, not nine slices. `docs/audit/LANDING_PLAN.md` is now a RECORD, not a plan — read its top box first, because everything below it is written in the present tense about a state that no longer holds. The branch is 11 commits and 218 files ahead of `main`, and that is follow-up work. Verified by local execution on Python 3.11 AND 3.12 (F95: Actions has assigned no runner for twelve days, so no CI run has ever executed against any of it). |
+| **Did the audit branch land?** | **Yes — PR #315 merged 2026-09-18**, merge commit `9cdc37a`: 666 commits and 1,561 files, in ONE merge, not nine slices. `docs/audit/LANDING_PLAN.md` is now a RECORD, not a plan — read its top box first, because everything below it is written in the present tense about a state that no longer holds. The branch is 12 commits and 219 files ahead of `main`, and that is follow-up work. Verified by local execution on Python 3.11 AND 3.12 (F95: Actions has assigned no runner for twelve days, so no CI run has ever executed against any of it). |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | **I am picking up the frontend / AI-presence work — what is done and what is next?** | **`docs/audit/FRONTEND_HANDOVER.md`** — what was built and why it is shaped that way, what is left in the order to do it, what is deliberately NOT worth doing, and the six traps this thread actually fell into. Start there before the plan. |
 | What was the frontend plan, and which parts are done? | `docs/audit/plans/2026-09-15-frontend-ultra.md` — Tasks 1–2 landed, 3–11 open. The handover above supersedes it where they differ, because it was measured later. |
@@ -547,6 +547,22 @@ they are the ones most often skipped under time pressure:
   because an empty list satisfies a `for` loop. Found because the test took
   131s against a 120s `pytest-timeout`: flaky whenever the machine is busy,
   which is when CI runs. `--id LEAKAGE-GUARD-CHECKED-NOTHING`.
+- **`.env.example` documented three risk limits that nothing read.** 26 of its
+  969 keys appeared in no source file, and they were near-misses of live names
+  rather than random rot — `SELF_HEAL_ENABLED` for `SELF_HEALER_ENABLED`,
+  `SPREAD_SPIKE_THRESHOLD` for `SPREAD_SPIKE_MULTIPLIER`, `TWAP_DURATION_S` for
+  `TWAP_DEFAULT_SECS`. Three sat under `# Risk limits`:
+  `RISK_DAILY_LOSS_LIMIT=500` (live: `RISK_MAX_DAILY_LOSS_PCT`, a fraction not
+  dollars), `RISK_MAX_LEVERAGE=10` (live: `MAX_LEVERAGE_RATIO`) and
+  `RISK_PER_TRADE_PCT=0.01` (live: `MAX_RISK_PCT_PER_TRADE`) — and 0.01 is also
+  the live default, so halving it to 0.005 showed a file agreeing with the risk
+  in force while changing nothing. Every dead line is now a comment naming the
+  live key. `tests/unit/test_env_example_documents_real_variables.py` blocks a
+  key that appears in no source file; its rule is a literal match rather than an
+  `os.getenv` scan, because this codebase reads env through helpers
+  (`_env_float(...)`) and tables (`_FeatureDef(...)`) and the stricter version
+  would have called eleven live strategy knobs dead.
+  `--id ENV-EXAMPLE-DEAD-KNOBS`.
 - `test-results.xml` is a CI-generated artifact — never commit it.
 </content>
 </invoke>

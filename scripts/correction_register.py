@@ -3176,6 +3176,43 @@ def _p_chart_gate_vacuous() -> tuple[str, str]:
     )
 
 
+def _p_env_example_documents_dead_keys() -> tuple[str, str]:
+    """Does .env.example document a knob the code does not read?
+
+    A key an operator can set that changes nothing is worse than an undocumented
+    one, because it reads as a control. Counted the way the test counts it: a
+    literal that appears in no source file cannot be read by anything. Markdown
+    is excluded — a key named in a document is documented, not read.
+    """
+    example = _read(".env.example")
+    if not example:
+        return ("UNKNOWN", ".env.example is not present")
+
+    declared = set(re.findall(r"^\s*([A-Z][A-Z0-9_]*)\s*=", example, re.M))
+    if not declared:
+        return ("UNVERIFIED", "no keys parsed from .env.example")
+
+    exts = {".py", ".ts", ".tsx", ".sh", ".yml", ".yaml", ".json", ".template", ".toml", ".tf", ".conf"}
+    skip = {".venv", "node_modules", ".git", "static", "dashboard", "htmlcov"}
+    guard = ROOT / "tests" / "unit" / "test_env_example_documents_real_variables.py"
+    blob: list[str] = []
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path.suffix not in exts:
+            continue
+        if any(s in path.parts for s in skip) or path.name.startswith(".env") or path == guard:
+            continue
+        try:
+            blob.append(path.read_text(encoding="utf-8", errors="ignore"))
+        except OSError:
+            continue
+    source = "\n".join(blob)
+
+    dead = sorted(k for k in declared if k not in source)
+    if not dead:
+        return ("FIXED", f"all {len(declared)} documented keys appear in the source")
+    return ("OPEN", f"{len(dead)} of {len(declared)} documented keys appear in no source file: {', '.join(dead[:8])}")
+
+
 def _p_leakage_guard_checked_nothing() -> tuple[str, str]:
     """Does the calibration-leakage guard assert against code that exists?
 
@@ -3596,6 +3633,42 @@ FINDINGS: list[Finding] = [
         "python scripts/correction_register.py --id DOCKER-NPM-PEER-CRASH",
         _p_docker_build_crashed_on_optional_peers,
         [S_VBC, S_TDD],
+    ),
+    Finding(
+        "ENV-EXAMPLE-DEAD-KNOBS",
+        "Three risk limits an operator could set, and nothing read any of them",
+        "P1",
+        "Configuration",
+        "Measured 2026-09-18 by comparing every key against the whole source tree",
+        "`.env.example` is the only description of this platform's configuration an operator "
+        "has, and 26 of its 969 keys appeared in NO source file. They were not random rot \u2014 "
+        "almost every one was a near-miss of a live name: `SELF_HEAL_ENABLED` for "
+        "`SELF_HEALER_ENABLED`, `SPREAD_SPIKE_THRESHOLD` for `SPREAD_SPIKE_MULTIPLIER`, "
+        "`TWAP_DURATION_S` for `TWAP_DEFAULT_SECS`, `PAPER_SPREAD_BPS` for "
+        "`PAPER_FALLBACK_SPREAD_PCT`. Three sat under a heading reading `# Risk limits` on a "
+        "money-moving system: `RISK_DAILY_LOSS_LIMIT=500` (the live knob is "
+        "`RISK_MAX_DAILY_LOSS_PCT`, a fraction rather than dollars), `RISK_MAX_LEVERAGE=10` "
+        "(`MAX_LEVERAGE_RATIO`) and `RISK_PER_TRADE_PCT=0.01` (`MAX_RISK_PCT_PER_TRADE`). The "
+        "last is the worst of them: 0.01 is also the DEFAULT of the live name, so an operator "
+        "halving it to 0.005 saw a file that agreed with the risk actually in force and had no "
+        "way to tell it had changed nothing. Each dead line is now a comment naming the live "
+        "key, so the old spelling stays searchable. Two keys going the other way \u2014 `JWT_SECRET` "
+        "and `REQUIRE_EMAIL_VERIFICATION`, written into every generated `.env` by "
+        "`scripts/bootstrap_dev.py` \u2014 were documented for the first time; `JWT_SECRET` signs "
+        "white-label tenant tokens and is now placeholder-guarded at startup.",
+        "tests/unit/test_env_example_documents_real_variables.py fails with all 26 named and "
+        "line-numbered on the pre-fix tree. Its rule is deliberately weak in the safe "
+        "direction \u2014 a key must appear as a literal SOMEWHERE in the source \u2014 because the "
+        'first version scanned for `os.getenv("X")` and would have reported eleven live '
+        "trading-strategy knobs as dead: this codebase reads env through helpers "
+        '(`_env_float("EDGE_SELECTOR_MAX_LOT", 0.01)`) and declarative tables '
+        '(`_FeatureDef("FEATURE_COPY_TRADING", ...)`). The checker also excludes ITSELF: its '
+        "docstring names seven dead keys to explain them, and on the first run that table was "
+        "the only place they appeared, so it passed them \u2014 F257 committed by the checker "
+        "written to prevent it.",
+        "python scripts/correction_register.py --id ENV-EXAMPLE-DEAD-KNOBS",
+        _p_env_example_documents_dead_keys,
+        [S_DEAD, S_VBC],
     ),
     Finding(
         "LEAKAGE-GUARD-CHECKED-NOTHING",
