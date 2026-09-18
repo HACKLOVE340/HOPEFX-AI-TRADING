@@ -93,20 +93,20 @@ const ComponentCard: React.FC<{
         {statusIcon(comp.status)} {comp.label}
       </span>
       <span style={{
-        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+        fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px', borderRadius: 6,
         background: statusColor(comp.status) + '22', color: statusColor(comp.status),
         border: `1px solid ${statusColor(comp.status)}44`,
         textTransform: 'uppercase',
       }}>{comp.status}</span>
     </div>
-    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{comp.detail}</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{comp.detail}</div>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{comp.latency_ms}ms</span>
+      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{comp.latency_ms}ms</span>
       <button
         onClick={() => onProbe(comp.name)}
         disabled={probing}
         style={{
-          fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid var(--border-strong)',
+          fontSize: 'var(--fs-label)', padding: '3px 10px', borderRadius: 6, border: '1px solid var(--border-strong)',
           background: 'var(--raised)', color: 'var(--text-dim)', cursor: probing ? 'not-allowed' : 'pointer',
         }}
       >{probing ? '…' : 'Re-probe'}</button>
@@ -120,14 +120,14 @@ const TraceRow: React.FC<{ span: TraceSpan }> = ({ span }) => (
   <div style={{
     display: 'grid', gridTemplateColumns: '1fr 80px 60px 80px',
     gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border)',
-    fontSize: 12, color: 'var(--text-dim)',
+    fontSize: 'var(--fs-body)', color: 'var(--text-dim)',
   }}>
     <span style={{ color: 'var(--text)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       {span.name}
     </span>
     <span style={{ color: span.status_code >= 400 ? '#ef4444' : '#22c55e' }}>{span.status_code}</span>
     <span>{span.duration_ms}ms</span>
-    <span style={{ color: 'var(--text-faint)', fontSize: 10 }}>{new Date(span.timestamp).toLocaleTimeString()}</span>
+    <span style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-micro)'}}>{new Date(span.timestamp).toLocaleTimeString()}</span>
   </div>
 );
 
@@ -240,7 +240,7 @@ const HealthEnginePanel: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <SectionHeader icon={<Hospital size={18} aria-hidden />} title="Auto-Discovering Health Engine" />
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 4 }}>
             {report ? `${report.total_components} components probed in ${report.probe_duration_ms}ms` : 'Probes all registered components concurrently'}
           </div>
         </div>
@@ -266,7 +266,7 @@ const HealthEnginePanel: React.FC = () => {
           ].map(m => (
             <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 0', textAlign: 'center' }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: m.color }}>{m.value}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', marginTop: 2 }}>{m.label}</div>
+              <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textTransform: 'uppercase', marginTop: 2 }}>{m.label}</div>
             </div>
           ))}
         </div>
@@ -276,7 +276,7 @@ const HealthEnginePanel: React.FC = () => {
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {HTABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
+            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)',
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#1e3a5f' : 'var(--raised)',
             color: tab === t.id ? 'var(--link)' : 'var(--text-dim)',
@@ -297,23 +297,23 @@ const HealthEnginePanel: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{c.label}</span>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{c.latency_ms}ms</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(c.status), textTransform: 'uppercase' }}>{c.status}</span>
-                    <Button onClick={() => runProbe(c.name)} disabled={probing === c.name} size="sm" variant="secondary" style={{ padding: '2px 8px', fontSize: 11 }}>
+                    <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{c.latency_ms}ms</span>
+                    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: statusColor(c.status), textTransform: 'uppercase' }}>{c.status}</span>
+                    <Button onClick={() => runProbe(c.name)} disabled={probing === c.name} size="sm" variant="secondary" style={{ padding: '2px 8px', fontSize: 'var(--fs-label)'}}>
                       {probing === c.name ? '…' : '▶'}
                     </Button>
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.detail}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.detail}</div>
               </div>
             </div>
           ))}
           {probeResult && (
             <div style={{ marginTop: 8, padding: '12px 14px', borderRadius: 8, background: 'var(--surface)', border: `1px solid ${statusColor(probeResult.status)}44` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', marginBottom: 6 }}>Single probe result: {probeResult.label}</div>
-              <div style={{ fontSize: 12, color: statusColor(probeResult.status), fontWeight: 700 }}>{probeResult.status.toUpperCase()} — {probeResult.detail}</div>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--link)', marginBottom: 6 }}>Single probe result: {probeResult.label}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: statusColor(probeResult.status), fontWeight: 700 }}>{probeResult.status.toUpperCase()} — {probeResult.detail}</div>
               {probeResult.extra && Object.keys(probeResult.extra).length > 0 && (
-                <pre style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, overflow: 'auto', maxHeight: 120 }}>
+                <pre style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6, overflow: 'auto', maxHeight: 120 }}>
                   {JSON.stringify(probeResult.extra, null, 2)}
                 </pre>
               )}
@@ -330,9 +330,9 @@ const HealthEnginePanel: React.FC = () => {
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: statusColor(h.overall) }}>{h.overall.toUpperCase()}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{h.checked_at}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{h.checked_at}</span>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 4 }}>
                 {h.total_components} components — ✅ {h.ok_count} OK / ⚠️ {h.warning_count} warn / ❌ {h.error_count} err — {h.probe_duration_ms}ms
               </div>
             </div>
@@ -348,21 +348,21 @@ const HealthEnginePanel: React.FC = () => {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
             {probes.map(p => (
-              <span key={p} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--raised)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{p}</span>
+              <span key={p} style={{ fontSize: 'var(--fs-label)', padding: '3px 8px', borderRadius: 4, background: 'var(--raised)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{p}</span>
             ))}
           </div>
           <div style={{ padding: '14px 16px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 10 }}>Register Custom HTTP Probe</div>
+            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 10 }}>Register Custom HTTP Probe</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
               <input type="text" value={customName} onChange={e => setCustomName(e.target.value)}
                 aria-label="Probe name" placeholder="probe-name"
-                style={{ flex: 1, minWidth: 120, padding: '7px 10px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 12 }} />
+                style={{ flex: 1, minWidth: 120, padding: '7px 10px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}} />
               <input type="text" value={customUrl} onChange={e => setCustomUrl(e.target.value)}
                 aria-label="Probe health-check URL" placeholder="https://service/health"
-                style={{ flex: 2, minWidth: 200, padding: '7px 10px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 12 }} />
+                style={{ flex: 2, minWidth: 200, padding: '7px 10px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}} />
               <Button onClick={registerProbe} disabled={!customName.trim() || !customUrl.trim()} size="sm">Register</Button>
             </div>
-            {registerMsg && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{registerMsg}</div>}
+            {registerMsg && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{registerMsg}</div>}
             <ActionBanner message={panelMsg} ok={panelOk} onDismiss={() => setPanelMsg('')} />
           </div>
         </>
@@ -495,7 +495,7 @@ const DiagnosticsPanel: React.FC = () => {
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {DTABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
+            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)',
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#1e3a5f' : 'var(--raised)',
             color: tab === t.id ? 'var(--link)' : 'var(--text-dim)',
@@ -519,18 +519,18 @@ const DiagnosticsPanel: React.FC = () => {
             ].map(m => (
               <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', textAlign: 'center', minWidth: 80 }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: m.color }}>{m.value}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2, textTransform: 'uppercase' }}>{m.label}</div>
+                <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginTop: 2, textTransform: 'uppercase' }}>{m.label}</div>
               </div>
             ))}
           </div>
           {Array.isArray(summary.top_issues) && summary.top_issues.length > 0 && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Top Issues</div>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Top Issues</div>
               {(summary.top_issues as Array<Record<string,string>>).map((issue, i) => (
                 <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#450a0a', border: '1px solid #dc262633', marginBottom: 6 }}>
                   <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: '#fca5a5' }}>{issue.check_name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{issue.message}</div>
-                  {issue.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Fix: {issue.remediation}</div>}
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4 }}>{issue.message}</div>
+                  {issue.remediation && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>Fix: {issue.remediation}</div>}
                 </div>
               ))}
             </div>
@@ -543,7 +543,7 @@ const DiagnosticsPanel: React.FC = () => {
           {!report && <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>No report loaded. Run diagnostics first.</div>}
           {report && (
             <>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Completed: {String(report.completed_at ?? 'N/A')}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>Completed: {String(report.completed_at ?? 'N/A')}</div>
               {(report.results as Array<Record<string,string>> ?? []).map((r, i) => (
                 <div key={i} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -553,10 +553,10 @@ const DiagnosticsPanel: React.FC = () => {
                 }}>
                   <div>
                     <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{r.check_name}</span>
-                    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.message}</div>
-                    {r.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Fix: {r.remediation}</div>}
+                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{r.message}</div>
+                    {r.remediation && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>Fix: {r.remediation}</div>}
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, marginLeft: 12,
+                  <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, marginLeft: 12,
                     color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444' }}>
                     {r.status}
                   </span>
@@ -589,10 +589,10 @@ const DiagnosticsPanel: React.FC = () => {
                   <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>
                     {String(r.check_name ?? r.name ?? `Check ${i + 1}`)}
                   </span>
-                  {Boolean(r.message) && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{String(r.message as string)}</div>}
-                  {Boolean(r.duration_ms) && <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>Duration: {String(r.duration_ms as number)}ms</div>}
+                  {Boolean(r.message) && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{String(r.message as string)}</div>}
+                  {Boolean(r.duration_ms) && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>Duration: {String(r.duration_ms as number)}ms</div>}
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, marginLeft: 12, color: statusColor }}>
+                <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, marginLeft: 12, color: statusColor }}>
                   {status}
                 </span>
               </div>
@@ -606,9 +606,9 @@ const DiagnosticsPanel: React.FC = () => {
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>Run a single diagnostic check and see results immediately.</div>
           {checkResult && (
             <div style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--link)', marginBottom: 8 }}>Result: {String(checkResult.check_name)}</div>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--link)', marginBottom: 8 }}>Result: {String(checkResult.check_name)}</div>
               {(checkResult.results as Array<Record<string,string>> ?? []).map((r, i) => (
-                <div key={i} style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>
+                <div key={i} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 4 }}>
                   <span style={{ fontWeight: 700, color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444' }}>[{r.status}]</span>
                   {' '}{r.message}
                 </div>
@@ -620,7 +620,7 @@ const DiagnosticsPanel: React.FC = () => {
               <div key={c.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
                 <div>
                   <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'monospace' }}>{c.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.description}</div>
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{c.description}</div>
                 </div>
                 <Button onClick={() => runCheck(c.name)} disabled={runningCheck === c.name} size="sm" variant="secondary">
                   {runningCheck === c.name ? '…' : '▶ Run'}
@@ -639,10 +639,10 @@ const DiagnosticsPanel: React.FC = () => {
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{String(entry.action ?? entry.type ?? 'action')}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{String(entry.timestamp ?? entry.taken_at ?? '')}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{String(entry.timestamp ?? entry.taken_at ?? '')}</span>
               </div>
-              {entry.detail != null && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{String(entry.detail)}</div>}
-              {entry.check_name != null && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Check: {String(entry.check_name)}</div>}
+              {entry.detail != null && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4 }}>{String(entry.detail)}</div>}
+              {entry.check_name != null && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>Check: {String(entry.check_name)}</div>}
             </div>
           ))}
         </>
@@ -707,22 +707,22 @@ const RoutesPanel: React.FC = () => {
           style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }}
         />
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{filtered.length} routes{filter ? ` matching "${filter}"` : ''}</div>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8 }}>{filtered.length} routes{filter ? ` matching "${filter}"` : ''}</div>
       <div style={{ maxHeight: 500, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {filtered.map((r, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
               {(Array.isArray(r.methods) ? r.methods : [String(r.methods ?? 'GET')]).map((m: string) => (
-                <span key={m} style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: methodColor(m) + '22', color: methodColor(m), border: `1px solid ${methodColor(m)}44` }}>
+                <span key={m} style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: methodColor(m) + '22', color: methodColor(m), border: `1px solid ${methodColor(m)}44` }}>
                   {m}
                 </span>
               ))}
             </div>
-            <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: 'var(--fs-body)', color: 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {String(r.path ?? '')}
             </span>
             {r.tags != null && (
-              <span style={{ fontSize: 10, color: 'var(--text-faint)', flexShrink: 0 }}>{String(r.tags)}</span>
+              <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', flexShrink: 0 }}>{String(r.tags)}</span>
             )}
           </div>
         ))}
@@ -790,7 +790,7 @@ const ValidatePanel: React.FC = () => {
         <ActionBanner message={validateErr} ok={false} onDismiss={() => setValidateErr('')} />
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label id="superadmin-systemreliabilitysect-config-key-label" htmlFor="superadmin-systemreliabilitysect-config-key" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
+            <label id="superadmin-systemreliabilitysect-config-key-label" htmlFor="superadmin-systemreliabilitysect-config-key" style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
             <input id="superadmin-systemreliabilitysect-config-key" aria-labelledby="superadmin-systemreliabilitysect-config-key-label" type="text" value={key} onChange={e => setKey(e.target.value)} placeholder="e.g. maintenance_mode"
               style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </div>
@@ -802,20 +802,20 @@ const ValidatePanel: React.FC = () => {
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '14px 16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: 'var(--text-strong)' }}>Key: <code style={{ color: 'var(--link)' }}>{String(result.key)}</code></span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: result.consistent ? '#22c55e' : '#ef4444' }}>
+              <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: result.consistent ? '#22c55e' : '#ef4444' }}>
                 {result.consistent ? '✅ Consistent' : '❌ Inconsistent'}
               </span>
             </div>
             {Object.entries(result.layers as Record<string, Record<string, unknown>> ?? {}).map(([layer, info]) => (
               <div key={layer} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: 6, background: 'var(--raised)', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'monospace' }}>{layer}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{layer}</span>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {info.error ? (
-                    <span style={{ fontSize: 11, color: '#ef4444' }}>Error: {String(info.error)}</span>
+                    <span style={{ fontSize: 'var(--fs-label)', color: '#ef4444' }}>Error: {String(info.error)}</span>
                   ) : (
                     <>
-                      <span style={{ fontSize: 11, color: info.found ? '#22c55e' : 'var(--text-muted)' }}>{info.found ? 'Found' : 'Not found'}</span>
-                      {info.found && <span style={{ fontSize: 11, color: layerColor(info) }}>{info.match ? '✓ Match' : '✗ Mismatch'}</span>}
+                      <span style={{ fontSize: 'var(--fs-label)', color: info.found ? '#22c55e' : 'var(--text-muted)' }}>{info.found ? 'Found' : 'Not found'}</span>
+                      {info.found && <span style={{ fontSize: 'var(--fs-label)', color: layerColor(info) }}>{info.match ? '✓ Match' : '✗ Mismatch'}</span>}
                     </>
                   )}
                 </div>
@@ -832,12 +832,12 @@ const ValidatePanel: React.FC = () => {
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
           <div style={{ flex: 1, minWidth: 160 }}>
-            <label id="superadmin-systemreliabilitysect-config-key-2-label" htmlFor="superadmin-systemreliabilitysect-config-key-2" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
+            <label id="superadmin-systemreliabilitysect-config-key-2-label" htmlFor="superadmin-systemreliabilitysect-config-key-2" style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Config Key</label>
             <input id="superadmin-systemreliabilitysect-config-key-2" aria-labelledby="superadmin-systemreliabilitysect-config-key-2-label" type="text" value={toggleKey} onChange={e => setToggleKey(e.target.value)} placeholder="e.g. maintenance_mode"
               style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </div>
           <div style={{ flex: 1, minWidth: 120 }}>
-            <label id="superadmin-systemreliabilitysect-expected-value-label" htmlFor="superadmin-systemreliabilitysect-expected-value" style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Expected Value</label>
+            <label id="superadmin-systemreliabilitysect-expected-value-label" htmlFor="superadmin-systemreliabilitysect-expected-value" style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Expected Value</label>
             <input id="superadmin-systemreliabilitysect-expected-value" aria-labelledby="superadmin-systemreliabilitysect-expected-value-label" type="text" value={toggleExpected} onChange={e => setToggleExpected(e.target.value)} placeholder="true / false / 42"
               style={{ width: '100%', padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </div>
@@ -852,8 +852,8 @@ const ValidatePanel: React.FC = () => {
             </div>
             {Object.entries(toggleResult.layers as Record<string, Record<string, unknown>> ?? {}).map(([layer, info]) => (
               <div key={layer} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 10px', borderRadius: 6, background: 'var(--raised)', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'monospace' }}>{layer}</span>
-                <span style={{ fontSize: 11, color: info.match ? '#22c55e' : info.error ? '#ef4444' : '#f59e0b' }}>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{layer}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: info.match ? '#22c55e' : info.error ? '#ef4444' : '#f59e0b' }}>
                   {info.error ? `Error: ${String(info.error)}` : info.match ? `✓ ${JSON.stringify(info.value)}` : `✗ got ${JSON.stringify(info.value)}`}
                 </span>
               </div>
@@ -1061,7 +1061,7 @@ const SystemReliabilitySection: React.FC = () => {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            {lastRefresh && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Last: {lastRefresh}</span>}
+            {lastRefresh && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>Last: {lastRefresh}</span>}
             <div style={{
               padding: '6px 16px', borderRadius: 8, fontWeight: 700, fontSize: 'var(--fs-body)',
               background: statusBg(overall), color: statusColor(overall),
@@ -1090,7 +1090,7 @@ const SystemReliabilitySection: React.FC = () => {
                 padding: '10px 16px', textAlign: 'center', minWidth: 80,
               }}>
                 <div style={{ fontSize: 20, fontWeight: 800, color: m.color }}>{m.value}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{m.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>{m.label}</div>
               </div>
             ))}
           </div>
@@ -1102,7 +1102,7 @@ const SystemReliabilitySection: React.FC = () => {
           <span>❌ {error}</span>
           <button
             onClick={fetchStatus}
-            style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: 'transparent', color: '#fca5a5', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}
+            style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: 'transparent', color: '#fca5a5', cursor: 'pointer', fontSize: 'var(--fs-body)', flexShrink: 0 }}
           >
             Retry
           </button>
@@ -1114,7 +1114,7 @@ const SystemReliabilitySection: React.FC = () => {
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
             padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-            fontSize: 12, fontWeight: activeTab === t.id ? 700 : 500,
+            fontSize: 'var(--fs-body)', fontWeight: activeTab === t.id ? 700 : 500,
             background: activeTab === t.id ? '#1e3a5f' : 'var(--raised)',
             color: activeTab === t.id ? 'var(--link)' : 'var(--text-dim)',
           }}>{t.label}</button>
@@ -1162,7 +1162,7 @@ const SystemReliabilitySection: React.FC = () => {
           </div>
           {tracesErr && <ActionBanner message={tracesErr} ok={false} onDismiss={() => setTracesErr('')} />}
           {traceTestResult && (
-            <div style={{ background: '#052e16', border: '1px solid #16a34a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12 }}>
+            <div style={{ background: '#052e16', border: '1px solid #16a34a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 'var(--fs-body)'}}>
               ✅ Test trace emitted — trace_id: <code style={{ color: '#86efac' }}>{String(traceTestResult.trace_id)}</code>
               {' | '}DB: <strong>{String((traceTestResult.probes as Record<string,string>)?.database)}</strong>
               {' | '}Redis: <strong>{String((traceTestResult.probes as Record<string,string>)?.redis)}</strong>
@@ -1173,7 +1173,7 @@ const SystemReliabilitySection: React.FC = () => {
             <div style={{
               display: 'grid', gridTemplateColumns: '1fr 80px 60px 80px',
               gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border-strong)',
-              fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+              fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
             }}>
               <span>Span Name</span><span>Status</span><span>Duration</span><span>Time</span>
             </div>
@@ -1210,7 +1210,7 @@ const SystemReliabilitySection: React.FC = () => {
                     padding: '10px 16px', textAlign: 'center',
                   }}>
                     <div style={{ fontSize: 20, fontWeight: 800, color: m.color }}>{m.value}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{m.label}</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{m.label}</div>
                   </div>
                 ))}
               </div>
@@ -1226,11 +1226,11 @@ const SystemReliabilitySection: React.FC = () => {
                       <span style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: 'var(--text-strong)' }}>
                         {r.passed ? '✅' : '❌'} {r.test}
                       </span>
-                      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{r.detail}</div>
+                      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 2 }}>{r.detail}</div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                      <div style={{ fontSize: 11, color: statusColor(r.status), fontWeight: 700 }}>{r.status}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{r.duration_ms}ms</div>
+                      <div style={{ fontSize: 'var(--fs-label)', color: statusColor(r.status), fontWeight: 700 }}>{r.status}</div>
+                      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{r.duration_ms}ms</div>
                     </div>
                   </div>
                 ))}
@@ -1296,7 +1296,7 @@ const SystemReliabilitySection: React.FC = () => {
               </div>
               {/* Table */}
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
                       <th style={{ textAlign: 'left', padding: '6px 10px' }}>Timestamp</th>
@@ -1351,7 +1351,7 @@ const SystemReliabilitySection: React.FC = () => {
                   reflects what actually happens when the variable is absent. */}
               {Object.entries((envAudit.groups ?? {}) as Record<string, Record<string, { set: boolean; required: boolean; severity?: string; effect?: string }>>).map(([group, vars]) => (
                 <div key={group}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                  <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
                     {group}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1363,16 +1363,16 @@ const SystemReliabilitySection: React.FC = () => {
                         border: `1px solid ${info.set ? '#16a34a33' : (info.required ? '#dc262633' : '#334155')}`,
                       }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                          <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text)' }}>{key}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: 'var(--fs-body)', color: 'var(--text)' }}>{key}</span>
                           {!info.set && info.effect && (
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{info.effect}</span>
+                            <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)' }}>{info.effect}</span>
                           )}
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                           {info.required && (
-                            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#1e3a5f', color: 'var(--link)' }}>REQUIRED</span>
+                            <span style={{ fontSize: 'var(--fs-micro)', padding: '2px 6px', borderRadius: 4, background: '#1e3a5f', color: 'var(--link)' }}>REQUIRED</span>
                           )}
-                          <span style={{ fontSize: 12, fontWeight: 700, color: info.set ? '#22c55e' : (info.required ? '#ef4444' : 'var(--text-muted)') }}>
+                          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: info.set ? '#22c55e' : (info.required ? '#ef4444' : 'var(--text-muted)') }}>
                             {info.set ? '✓ SET' : (info.required ? '✗ MISSING' : '— not set')}
                           </span>
                         </div>
@@ -1419,7 +1419,7 @@ const SystemReliabilitySection: React.FC = () => {
                   <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--link)' }}>
                     {typeof val === 'number' ? (Number.isFinite(val) ? (key.includes('pct') ? `${val}%` : val) : '—') : String(val)}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {key.replace(/_/g, ' ')}
                   </div>
                 </div>
@@ -1431,7 +1431,7 @@ const SystemReliabilitySection: React.FC = () => {
                   <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--ai-model)' }}>
                     {typeof val === 'number' ? (Number.isFinite(val) ? val.toLocaleString() : '—') : String(val)}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Redis: {key.replace(/_/g, ' ')}
                   </div>
                 </div>

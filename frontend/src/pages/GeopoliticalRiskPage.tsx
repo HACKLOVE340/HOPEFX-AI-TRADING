@@ -315,21 +315,21 @@ const GeopoliticalRiskPage: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <Link to="/research"
-              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: 'var(--ai-model)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
               🔬 Research
             </Link>
             <Link to="/correlation"
-              style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 8, color: 'var(--link)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
               📊 Correlation
             </Link>
             <Link to="/nuclear"
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: 'var(--loss)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
               ☢ Nuclear AI
             </Link>
             <Link
               to="/trade"
               state={{ signal: { symbol: 'XAU/USD', direction: 'BUY' } }}
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}
+              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}
               title="Gold tends to rally during geopolitical risk — buy XAU/USD"
             >
               ⚡ Trade XAU/USD
@@ -394,7 +394,7 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--text)',
     letterSpacing: 0.5,
   },
-  pageSubtitle: { margin: '6px 0 0', fontSize: 12, color: 'var(--text-faint)' },
+  pageSubtitle: { margin: '6px 0 0', fontSize: 'var(--fs-body)', color: 'var(--text-faint)' },
 
   grid: {
     display: 'grid',
@@ -420,14 +420,14 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 200,
     textAlign: 'center' as const,
   },
-  fallbackText: { margin: 0, fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.6 },
+  fallbackText: { margin: 0, fontSize: 'var(--fs-body)', color: 'var(--text-faint)', lineHeight: 1.6 },
 
   wmHeader: { display: 'flex', flexDirection: 'column', gap: 4 },
   wmTitleRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  wmTitle: { fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)' },
+  wmTitle: { fontSize: 'var(--fs-label)', fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)' },
   liveDot: { color: '#00ff88', fontSize: 9, letterSpacing: 1, animation: 'pulse 2s infinite' },
-  wmSubtitle: { margin: 0, fontSize: 11, color: 'var(--text-faint)' },
-  wmExtLink: { fontSize: 11, color: '#3b82f6', textDecoration: 'none' },
+  wmSubtitle: { margin: 0, fontSize: 'var(--fs-label)', color: 'var(--text-faint)' },
+  wmExtLink: { fontSize: 'var(--fs-label)', color: '#3b82f6', textDecoration: 'none' },
 
   groupRow: { display: 'flex', gap: 6 },
   groupBtn: {
@@ -436,7 +436,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #1e3a5f',
     borderRadius: 6,
     color: 'var(--text-muted)',
-    fontSize: 11,
+    fontSize: 'var(--fs-label)',
     fontFamily: 'monospace',
     cursor: 'pointer',
   },
@@ -456,7 +456,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #1e3a5f',
     borderRadius: 5,
     color: 'var(--text-muted)',
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     fontFamily: 'monospace',
     cursor: 'pointer',
     whiteSpace: 'nowrap' as const,
@@ -522,7 +522,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: '3px 9px',
     border: '1px solid',
     borderRadius: 4,
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     fontFamily: 'monospace',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
@@ -541,7 +541,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #1e3a5f',
     borderRadius: 4,
     color: '#3b82f6',
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     fontFamily: 'monospace',
     textDecoration: 'none',
     cursor: 'pointer',

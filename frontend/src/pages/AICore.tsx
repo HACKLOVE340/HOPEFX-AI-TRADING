@@ -84,7 +84,7 @@ const button: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 7, justifyContent: 'center',
   minHeight: 44, padding: '0 14px', borderRadius: 8,
   background: '#172740', border: '1px solid #2c4c7a', color: '#c9dcfb',
-  fontSize: 12, fontWeight: 800, cursor: 'pointer',
+  fontSize: 'var(--fs-body)', fontWeight: 800, cursor: 'pointer',
 };
 
 /**
@@ -95,7 +95,7 @@ const button: React.CSSProperties = {
  * correctly under pressure.
  */
 const Verdict: React.FC<{ ok: boolean; yes: string; no: string }> = ({ ok, yes, no }) => (
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ok ? COLOR.ok : COLOR.bad, fontWeight: 800, fontSize: 12 }}>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ok ? COLOR.ok : COLOR.bad, fontWeight: 800, fontSize: 'var(--fs-body)'}}>
     {ok ? <CheckCircle2 size={13} aria-hidden /> : <XCircle size={13} aria-hidden />}
     {ok ? yes : no}
   </span>
@@ -105,7 +105,7 @@ const Stat: React.FC<{ name: string; value: React.ReactNode; sub?: string; color
   <div style={{ ...panel, padding: '12px 14px', flex: 1, minWidth: 150 }}>
     <div style={label}>{name}</div>
     <div style={{ fontSize: 20, fontWeight: 850, marginTop: 4, color: color ?? COLOR.text }}>{value}</div>
-    {sub && <div style={{ color: COLOR.muted, fontSize: 10, marginTop: 3 }}>{sub}</div>}
+    {sub && <div style={{ color: COLOR.muted, fontSize: 'var(--fs-micro)', marginTop: 3 }}>{sub}</div>}
   </div>
 );
 
@@ -140,7 +140,7 @@ const Section: React.FC<{ title: string; icon: React.ElementType; note?: string;
       <Icon size={16} color={COLOR.info} aria-hidden />
       <h2 style={{ margin: 0, fontSize: 'var(--fs-value)', color: COLOR.text }}>{title}</h2>
     </div>
-    {note && <p style={{ margin: '0 0 12px', color: COLOR.muted, fontSize: 11, lineHeight: 1.6, maxWidth: '72ch' }}>{note}</p>}
+    {note && <p style={{ margin: '0 0 12px', color: COLOR.muted, fontSize: 'var(--fs-label)', lineHeight: 1.6, maxWidth: '72ch' }}>{note}</p>}
     {children}
   </section>
 );
@@ -354,7 +354,7 @@ export const AICore: React.FC = () => {
                   />
                   <Stat name="Spend (you)" value={`$${s.spent_usd.toFixed(2)}`} sub="this month, your operator id" />
                 </div>
-                <div style={{ display: 'grid', gap: 8, fontSize: 12, color: COLOR.dim }}>
+                <div style={{ display: 'grid', gap: 8, fontSize: 'var(--fs-body)', color: COLOR.dim }}>
                   <div>
                     <strong style={{ color: COLOR.text }}>Reachable providers: </strong>
                     {s.providers_reachable.length ? s.providers_reachable.join(', ') : <span style={{ color: COLOR.bad }}>none — no model call can succeed</span>}
@@ -425,9 +425,9 @@ export const AICore: React.FC = () => {
                 {chain.data.roles.map((role) => (
                   <div key={role.role} style={{ marginBottom: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-                      <span style={{ ...label, color: COLOR.text, fontSize: 12 }}>{role.role}</span>
+                      <span style={{ ...label, color: COLOR.text, fontSize: 'var(--fs-body)'}}>{role.role}</span>
                       <Verdict ok={role.fallback_available} yes="fallback available" no="no usable fallback" />
-                      <span style={{ color: COLOR.muted, fontSize: 11 }}>{role.usable_legs} of {role.legs.length} legs usable</span>
+                      <span style={{ color: COLOR.muted, fontSize: 'var(--fs-label)'}}>{role.usable_legs} of {role.legs.length} legs usable</span>
                     </div>
                     <div style={scrollBox}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
@@ -455,7 +455,7 @@ export const AICore: React.FC = () => {
                     </div>
                   </div>
                 ))}
-                <p style={{ color: COLOR.muted, fontSize: 11, margin: '4px 0 0', lineHeight: 1.6, maxWidth: '72ch' }}>
+                <p style={{ color: COLOR.muted, fontSize: 'var(--fs-label)', margin: '4px 0 0', lineHeight: 1.6, maxWidth: '72ch' }}>
                   Embeddings: <strong style={{ color: COLOR.dim }}>{chain.data.embedding.provider} · {chain.data.embedding.model}</strong>.
                   {' '}Credential presence is reported as a yes/no; the key itself never leaves the server.
                 </p>
@@ -511,7 +511,7 @@ export const AICore: React.FC = () => {
                     </table>
                   </div>
                 ) : (
-                  <p style={{ color: COLOR.muted, fontSize: 11, margin: 0, lineHeight: 1.6, maxWidth: '72ch' }}>
+                  <p style={{ color: COLOR.muted, fontSize: 'var(--fs-label)', margin: 0, lineHeight: 1.6, maxWidth: '72ch' }}>
                     You are seeing your own spend. The per-operator breakdown and the platform total are superadmin-only.
                   </p>
                 )}
@@ -569,7 +569,7 @@ export const AICore: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
-                <p style={{ color: COLOR.muted, fontSize: 11, margin: '10px 0 0' }}>
+                <p style={{ color: COLOR.muted, fontSize: 'var(--fs-label)', margin: '10px 0 0' }}>
                   Showing {calls.data.returned} of {calls.data.total_visible} visible. Retention: {calls.data.retention}.
                 </p>
               </>

@@ -417,21 +417,21 @@ const RiskCalculator: React.FC = () => {
                 fetch is failing — the price feeding position sizing would then
                 look current when it is not (F1-01). */}
             {livePrice && !freshness.failed && (
-              <div style={{ fontSize: 11, color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
                 ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: 'var(--text-faint)' }}>{livePriceAge}s</span>
               </div>
             )}
             <button onClick={() => setShowHistory(h => !h)}
-              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               📋 History {history.length > 0 ? `(${history.length})` : ''}
             </button>
-            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
               ⚡ Trade
             </Link>
-            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
               📓 Journal
             </Link>
-            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
               🛡 Prop Firm
             </Link>
           </div>
@@ -447,7 +447,7 @@ const RiskCalculator: React.FC = () => {
             display: 'flex', alignItems: 'flex-start', gap: 8,
             padding: '8px 12px', borderRadius: 6, marginBottom: 12,
             background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.3)',
-            fontSize: 12, color: '#ffb800',
+            fontSize: 'var(--fs-body)', color: '#ffb800',
           }}
         >
           <span aria-hidden="true">⚠</span>
@@ -582,13 +582,13 @@ const RiskCalculator: React.FC = () => {
                   value={calcLabel}
                   onChange={e => setCalcLabel(e.target.value)}
                   placeholder="Label (optional)"
-                  style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 12, padding: '6px 10px', outline: 'none' }}
+                  style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '6px 10px', outline: 'none' }}
                 />
                 <button onClick={() => void handleSave()} disabled={saving}
-                  style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                  style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
                   {saving ? '…' : '💾 Save'}
                 </button>
-                {saveMsg && <span style={{ fontSize: 11, color: saveMsg.startsWith('✓') ? '#22c55e' : 'var(--loss)', alignSelf: 'center' }}>{saveMsg}</span>}
+                {saveMsg && <span style={{ fontSize: 'var(--fs-label)', color: saveMsg.startsWith('✓') ? '#22c55e' : 'var(--loss)', alignSelf: 'center' }}>{saveMsg}</span>}
               </div>
             </>
           )}
@@ -626,20 +626,20 @@ const RiskCalculator: React.FC = () => {
                     <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
                       {h.label || h.symbol} · 1:{Number.isFinite(h.rr_ratio) ? h.rr_ratio.toFixed(2) : '—'} R:R
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
                       Entry {h.entry_price} · SL {h.stop_loss} · TP {h.take_profit} · {h.lot_size.toFixed(4)} lots
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>
+                    <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginTop: 2 }}>
                       {new Date(h.saved_at).toLocaleString()}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={() => loadFromHistory(h)}
-                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 11, cursor: 'pointer' }}>
+                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', cursor: 'pointer' }}>
                       Load
                     </button>
                     <button onClick={() => void handleDeleteHistory(h.id)}
-                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: 'var(--loss)', fontSize: 11, cursor: 'pointer' }}>
+                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: 'var(--loss)', fontSize: 'var(--fs-label)', cursor: 'pointer' }}>
                       ✕
                     </button>
                   </div>
@@ -701,11 +701,11 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
 
       {/* Cross-links */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Prop Firm</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
-        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
-        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
+        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Prop Firm</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
+        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
+        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
+        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
       </div>
       <RelatedPages
         links={[
@@ -826,8 +826,8 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'flex-end',
     padding: '0 12px 4px',
   },
-  vizLineLabel: { fontSize: 11, fontWeight: 600 },
-  vizLinePrice: { fontSize: 11 },
+  vizLineLabel: { fontSize: 'var(--fs-label)', fontWeight: 600 },
+  vizLinePrice: { fontSize: 'var(--fs-label)'},
   tipList: { display: 'flex', flexDirection: 'column', gap: 8 },
   tip: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.5 },
 };

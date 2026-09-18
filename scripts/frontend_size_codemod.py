@@ -117,7 +117,32 @@ EXACT: dict[str, str] = {
 # Sizes that appear often and sit BETWEEN tokens. Reported, never rewritten:
 # each needs a decision per call site, because rounding one to its neighbour
 # changes what the page looks like at the default density.
-AMBIGUOUS = ("12", "11", "10", "14", "16", "18", "20", "22", "24", "9")
+AMBIGUOUS = ("14", "16", "18", "20", "22", "24", "9")
+
+# ── The ULTRA table ──────────────────────────────────────────────────────────
+#
+# `:root` declares the PROMAX values, so the table above could not see the three
+# commonest literals in the tree: `fontSize: 12` (x638), `11` (x532) and `10`
+# (x257) are byte-exact at the ULTRA tier and match nothing at `:root`. That is
+# 1,436 sites the codemod existed to convert and was structurally blind to.
+#
+# Ultra is not an edge case here: `frontend/src/lib/densityPref.ts` defaults a
+# person to it, and `PageSurface` stamps it on every data surface, which is what
+# most of this application is.
+#
+# `15` is DELIBERATELY ABSENT. It is `--fs-value` at `:root` and `--fs-title` at
+# ultra, so converting it under either anchor would leave the same literal
+# meaning two different things depending on which run touched it. Any value
+# exact at both anchors is excluded rather than resolved by precedence, and
+# `selftest_ultra` fails if one is ever added back.
+EXACT_ULTRA: dict[str, str] = {
+    "10": "--fs-micro",
+    "11": "--fs-label",
+    "12": "--fs-body",
+    "13.5": "--fs-value",
+    "19": "--fs-head",
+    "26": "--fs-hero",
+}
 
 # `fontSize: 13` / `fontSize: 13,` / `fontSize: 13 }` — a bare numeric literal
 # only. Anything computed (`fontSize: size * 0.115`) is left alone: it is not a
@@ -125,9 +150,11 @@ AMBIGUOUS = ("12", "11", "10", "14", "16", "18", "20", "22", "24", "9")
 _FONT_SIZE = re.compile(r"\bfontSize:\s*(\d+(?:\.\d+)?)\s*(?=[,}\n])")
 
 
-def _substitute(segment: str, counts: dict[str, int]) -> str:
+def _substitute(segment: str, counts: dict[str, int], table: dict[str, str] | None = None) -> str:
+    lookup = EXACT if table is None else table
+
     def repl(m: re.Match[str]) -> str:
-        token = EXACT.get(m.group(1))
+        token = lookup.get(m.group(1))
         if token is None:
             return m.group(0)
         counts[token] = counts.get(token, 0) + 1
@@ -137,7 +164,10 @@ def _substitute(segment: str, counts: dict[str, int]) -> str:
     return _FONT_SIZE.sub(repl, segment)
 
 
-def rewrite(text: str, allow_declarations: bool) -> tuple[str, dict[str, int]]:
+def rewrite(
+    text: str, allow_declarations: bool, table: dict[str, str] | None = None
+) -> tuple[str, dict[str, int]]:
+    """Rewrite literal sizes to tokens. `table` picks the anchor; default `:root`."""
     counts: dict[str, int] = {}
 
     spans = _balanced_spans(text, _STYLE_ATTR, "{", "}")
@@ -156,8 +186,54 @@ def rewrite(text: str, allow_declarations: bool) -> tuple[str, dict[str, int]]:
 
     out = text
     for start, end in reversed(merged):
-        out = out[:start] + _substitute(out[start:end], counts) + out[end:]
+        out = out[:start] + _substitute(out[start:end], counts, table) + out[end:]
     return out, counts
+
+
+def _declared(selector: str) -> dict[str, str]:
+    """The custom properties a selector's block declares, comments stripped."""
+    css = (SRC / "index.css").read_text(encoding="utf-8")
+    at = css.index(selector)
+    open_at = css.index("{", at)
+    depth, end = 0, len(css)
+    for i in range(open_at, len(css)):
+        if css[i] == "{":
+            depth += 1
+        elif css[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    block = css[open_at:end]
+    return {
+        m.group(1): m.group(2).strip().lower()
+        for m in re.finditer(r"(--[\w-]+)\s*:\s*([^;]+);", re.sub(r"/\*.*?\*/", " ", block, flags=re.S))
+    }
+
+
+def selftest_ultra() -> int:
+    """The ultra table must be exact against `[data-density="ultra"]`.
+
+    And must not overlap the `:root` table: a number exact at both anchors would
+    mean two different tokens depending on which run converted it, and nothing
+    in the file would say which was intended.
+    """
+    declared = _declared('[data-density="ultra"]')
+    bad = [
+        f"  fontSize: {number} -> {token}, but {token} is {declared.get(token)!r} at ultra"
+        for number, token in EXACT_ULTRA.items()
+        if declared.get(token) != f"{number}px"
+    ]
+    overlap = sorted(set(EXACT) & set(EXACT_ULTRA))
+    if overlap:
+        bad.append(f"  {overlap} is exact at BOTH anchors — it must be in neither table")
+    if bad:
+        print("frontend_size_codemod: the ultra mapping is not safe:", file=sys.stderr)
+        print("\n".join(bad), file=sys.stderr)
+        print("\nA retuned token must LEAVE this table, not silently move its call sites.", file=sys.stderr)
+        return 1
+    print(f"frontend_size_codemod: all {len(EXACT_ULTRA)} ultra mappings are exact and do not overlap :root")
+    return 0
 
 
 def selftest() -> int:
@@ -199,12 +275,24 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true", help="rewrite files in place")
     ap.add_argument("--check", action="store_true", help="report what would change")
     ap.add_argument("--selftest", action="store_true", help="verify the mapping is still exact")
+    ap.add_argument(
+        "--anchor",
+        choices=("root", "ultra"),
+        default="root",
+        help=(
+            "which tier a literal must be byte-identical to. 'root' (default) is the promax "
+            "scale :root declares; 'ultra' is the tier densityPref defaults a person to and "
+            "PageSurface stamps on every data surface. The two tables never share a number."
+        ),
+    )
     args = ap.parse_args()
 
     if args.selftest:
-        return selftest()
-    if selftest() != 0:
+        return selftest() or selftest_ultra()
+    if selftest() != 0 or selftest_ultra() != 0:
         return 1
+
+    table = EXACT_ULTRA if args.anchor == "ultra" else EXACT
 
     total: dict[str, int] = {}
     touched = 0
@@ -214,7 +302,7 @@ def main() -> int:
         if "/test/" in path.as_posix() or path.name.endswith((".test.ts", ".test.tsx")):
             continue
         text = path.read_text(encoding="utf-8")
-        new, counts = rewrite(text, allow_declarations=not _reads_canvas(text))
+        new, counts = rewrite(text, allow_declarations=not _reads_canvas(text), table=table)
         if new == text:
             continue
         touched += 1
@@ -225,7 +313,9 @@ def main() -> int:
 
     moved = sum(total.values())
     verb = "replaced" if args.apply else "would replace"
-    print(f"frontend_size_codemod: {verb} {moved} literal size(s) across {touched} file(s)")
+    print(
+        f"frontend_size_codemod[{args.anchor}]: {verb} {moved} literal size(s) across {touched} file(s)"
+    )
     for token, n in sorted(total.items(), key=lambda kv: -kv[1]):
         print(f"  {n:>5}  var({token})")
 

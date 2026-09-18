@@ -157,7 +157,7 @@ const DailyLossMeter = memo(({ used, limit }: { used: number; limit: number }) =
     <div style={rh.dlMeter}>
       <div style={rh.dlHeader}>
         <span style={rh.metricLabel}>DAILY LOSS LIMIT</span>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color }}>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', color }}>
           {formatPnl(used)} / {formatPnl(limit)} ({pct.toFixed(1)}%)
         </span>
       </div>
@@ -283,7 +283,7 @@ const rh: Record<string, React.CSSProperties> = {
   },
   title: {
     fontFamily: '"JetBrains Mono", monospace',
-    fontSize: 10, fontWeight: 700,
+    fontSize: 'var(--fs-micro)', fontWeight: 700,
     color: COLORS.text.muted, letterSpacing: '0.12em',
   },
   riskBadge: {
@@ -307,7 +307,7 @@ const rh: Record<string, React.CSSProperties> = {
     animation: 'pulse 2s infinite',
   },
   ksText: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em' },
-  ksReason: { fontFamily: '"Inter", sans-serif', fontSize: 10, color: COLORS.text.secondary, marginTop: 2 },
+  ksReason: { fontFamily: '"Inter", sans-serif', fontSize: 'var(--fs-micro)', color: COLORS.text.secondary, marginTop: 2 },
 
   topSection: { display: 'flex', alignItems: 'center', gap: 12 },
   ringWrapper: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 2, flexShrink: 0 },
@@ -316,7 +316,7 @@ const rh: Record<string, React.CSSProperties> = {
   cvarGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 },
   cvarCell: { borderRadius: 5, padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 2 },
   cvarLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, letterSpacing: '0.06em' },
-  cvarValue: { fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700 },
+  cvarValue: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-label)', fontWeight: 700 },
 
   dlMeter: { display: 'flex', flexDirection: 'column' as const, gap: 5 },
   dlHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
@@ -330,7 +330,7 @@ const rh: Record<string, React.CSSProperties> = {
   metricRight: { display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' as const },
   metricBarBg: { width: 60, height: 3, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },
   metricBarFill: { height: '100%', borderRadius: 2, transition: 'width 400ms ease' },
-  metricValue: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, fontWeight: 700, minWidth: 80, textAlign: 'right' as const },
+  metricValue: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', fontWeight: 700, minWidth: 80, textAlign: 'right' as const },
 
   dqRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 6, borderTop: `1px solid ${COLORS.bg.border}` },
   dqRight: { display: 'flex', alignItems: 'center', gap: 8 },
@@ -338,7 +338,7 @@ const rh: Record<string, React.CSSProperties> = {
   dqBarFill: { height: '100%', borderRadius: 2, transition: 'width 400ms ease' },
   dqLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700 },
 
-  noData: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: COLORS.text.muted, padding: '20px', textAlign: 'center' as const },
+  noData: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', color: COLORS.text.muted, padding: '20px', textAlign: 'center' as const },
 };
 
 export default memo(RiskHeatmap);

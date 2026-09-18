@@ -32,7 +32,7 @@ const Pill: React.FC<{
       background: colors.bg, border: `1px solid ${colors.bd}`,
       minWidth: 110,
     }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {label}
       </span>
       <span style={{ fontSize: 14, fontWeight: 700, color: colors.fg }}>{value}</span>
@@ -86,7 +86,7 @@ export const MlSafetyStrip: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>🧠 Model Health &amp; Safety Gates</span>
         <span style={{
-          fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
+          fontSize: 'var(--fs-micro)', fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',
           color: statusTone === 'ok' ? '#22c55e' : statusTone === 'warn' ? 'var(--warn)' : 'var(--loss)',
           background: statusTone === 'ok' ? 'rgba(34,197,94,0.12)' : statusTone === 'warn' ? 'rgba(251,191,36,0.12)' : 'rgba(248,113,113,0.12)',
@@ -95,11 +95,11 @@ export const MlSafetyStrip: React.FC = () => {
           {data.status}
         </span>
         {data.model_id && (
-          <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>
             {data.model_id}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
           {data.predict_count.toLocaleString()} inferences
         </span>
       </div>
@@ -147,7 +147,7 @@ export const MlSafetyStrip: React.FC = () => {
         />
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-faint)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 10, fontSize: 'var(--fs-label)', color: 'var(--text-faint)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <span>Long threshold: <strong style={{ color: 'var(--text-muted)' }}>{data.threshold_long.toFixed(3)}</strong></span>
         <span>Short threshold: <strong style={{ color: 'var(--text-muted)' }}>{data.threshold_short.toFixed(3)}</strong></span>
         {/* The date the freshness gate ACTED on, preferred over the meta file's.

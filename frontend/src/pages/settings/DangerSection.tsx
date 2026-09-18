@@ -154,7 +154,7 @@ const DangerSection: React.FC = () => {
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 600 }}>🛑 Trading halted</span>
             )}
             {tradingHalted === null && (
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Status unavailable</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>Status unavailable</span>
             )}
             <Button variant="danger" onClick={handleEmergencyStop} loading={emergencyLoading}>
               {tradingHalted === true ? 'Halt again' : 'Emergency stop'}

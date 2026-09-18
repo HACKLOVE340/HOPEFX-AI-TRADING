@@ -187,7 +187,7 @@ const NuclearControlsSection: React.FC = () => {
           )}
         </div>
         {halted && status?.halted_at && (
-          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--loss)' }}>
+          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>
             Halted at {fmtDate(status.halted_at)} — reason: {status.halt_reason ?? 'not specified'}
           </div>
         )}
@@ -262,7 +262,7 @@ const NuclearControlsSection: React.FC = () => {
           />
         </div>
         {status?.risk_override && (
-          <div style={{ marginTop: 10, fontSize: 12, color: '#f97316' }}>
+          <div style={{ marginTop: 10, fontSize: 'var(--fs-body)', color: '#f97316' }}>
             Active override: max risk = {((status.max_risk_fraction ?? 1) * 100).toFixed(0)}%
           </div>
         )}
@@ -286,14 +286,14 @@ const NuclearControlsSection: React.FC = () => {
                 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: ACTION_COLORS[entry.action] ?? 'var(--text-dim)', textTransform: 'uppercase' }}>
+                    <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: ACTION_COLORS[entry.action] ?? 'var(--text-dim)', textTransform: 'uppercase' }}>
                       {entry.action.replace(/_/g, ' ')}
                     </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{entry.actor}</span>
+                    <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{entry.actor}</span>
                   </div>
-                  {entry.reason && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{entry.reason}</div>}
+                  {entry.reason && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 2 }}>{entry.reason}</div>}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(entry.timestamp)}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(entry.timestamp)}</div>
               </div>
             ))}
           </div>
@@ -354,7 +354,7 @@ const PropFirmBreachPanel: React.FC = () => {
     <SectionCard title="Prop Firm Breach Tracker" icon={<BarChart3 size={18} aria-hidden />} accent="#f59e0b">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Real-time prop firm rule violation monitoring</div>
-        <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
+        <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)'}}>
           {loading ? '…' : '↻'}
         </button>
       </div>
@@ -369,7 +369,7 @@ const PropFirmBreachPanel: React.FC = () => {
           ].map(m => (
             <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: m.color }}>{m.value}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2, textTransform: 'uppercase' }}>{m.label}</div>
+              <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginTop: 2, textTransform: 'uppercase' }}>{m.label}</div>
             </div>
           ))}
         </div>
@@ -398,22 +398,22 @@ const PropFirmBreachPanel: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{String(b.username ?? b.user_id ?? '')}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{String(b.breach_type ?? '').replace(/_/g, ' ')}</span>
+              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginLeft: 8 }}>{String(b.breach_type ?? '').replace(/_/g, ' ')}</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: severityColor(String(b.severity ?? '')), textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: severityColor(String(b.severity ?? '')), textTransform: 'uppercase' }}>
               {String(b.severity ?? '')}
             </span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4 }}>
             Threshold: {String(b.threshold ?? '')} | Actual: {String(b.actual_value ?? '')}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{String(b.detected_at ?? '')}</div>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>{String(b.detected_at ?? '')}</div>
         </div>
       ))}
 
       {/* Prop firm modes info */}
       <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>Supported Prop Firm Modes</div>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>Supported Prop Firm Modes</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 6 }}>
           {[
             { name: 'FTMO Standard', dd: '10%', daily: '5%', target: '10%' },
@@ -422,8 +422,8 @@ const PropFirmBreachPanel: React.FC = () => {
             { name: 'Goat Funded Swing', dd: '15%', daily: '—', target: '8%' },
           ].map(f => (
             <div key={f.name} style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--raised)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)' }}>{f.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>DD: {f.dd} | Daily: {f.daily} | Target: {f.target}</div>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{f.name}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>DD: {f.dd} | Daily: {f.daily} | Target: {f.target}</div>
             </div>
           ))}
         </div>

@@ -135,7 +135,7 @@ const TradingSection: React.FC = () => {
             { label: 'Daily P&L', value: `$${account.daily_pnl?.toFixed(2) ?? '—'}`, color: (account.daily_pnl ?? 0) >= 0 ? '#22c55e' : '#f87171' },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '12px 16px' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
               <div style={{ fontSize: 18, fontWeight: 700, color: color ?? 'var(--text-strong)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
             </div>
           ))}
@@ -218,7 +218,7 @@ const TradingSection: React.FC = () => {
 
         {/* Risk bar visual */}
         <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 4 }}>
             <span>Risk per trade</span>
             <span style={{ color: form.max_risk_per_trade > 3 ? 'var(--warn)' : '#22c55e', fontWeight: 600 }}>
               {form.max_risk_per_trade}%
@@ -249,7 +249,7 @@ const TradingSection: React.FC = () => {
             reported from the server — never saved along with lot size. */}
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>Kill switch</div>
-          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 10 }}>
             Immediately halt all automated trading. Resuming requires an administrator.
           </div>
           {form.kill_switch_enabled ? (

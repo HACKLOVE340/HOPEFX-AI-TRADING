@@ -23,7 +23,7 @@ const LatencyBar: React.FC<{ ms: number; max?: number }> = ({ ms, max = 500 }) =
       <div style={{ flex: 1, height: 5, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.5s' }} />
       </div>
-      <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 50 }}>{ms}ms</span>
+      <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color, minWidth: 50 }}>{ms}ms</span>
     </div>
   );
 };
@@ -35,7 +35,7 @@ const FillRateBar: React.FC<{ pct: number }> = ({ pct }) => {
       <div style={{ flex: 1, height: 5, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3 }} />
       </div>
-      <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 40 }}>{pct.toFixed(1)}%</span>
+      <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color, minWidth: 40 }}>{pct.toFixed(1)}%</span>
     </div>
   );
 };
@@ -157,17 +157,17 @@ const BrokerManagementSection: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{b.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{b.type} · {b.broker_id}</div>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{b.type} · {b.broker_id}</div>
                 </div>
                 <StatusBadge status={b.status} size="sm" />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Latency</div>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 3 }}>Latency</div>
                   <LatencyBar ms={b.latency_ms} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Fill Rate</div>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 3 }}>Fill Rate</div>
                   <FillRateBar pct={b.fill_rate_pct} />
                 </div>
               </div>
@@ -178,13 +178,13 @@ const BrokerManagementSection: React.FC = () => {
                   { label: 'Uptime',      value: `${b.uptime_pct.toFixed(1)}%` },
                 ].map(m => (
                   <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '6px 8px' }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)' }}>{m.value}</div>
+                    <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{m.label}</div>
+                    <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-dim)' }}>{m.value}</div>
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Last heartbeat: {fmtDate(b.last_heartbeat)}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>Last heartbeat: {fmtDate(b.last_heartbeat)}</span>
                 {b.status !== 'connected' && (
                   <ActionBtn label="Reconnect" onClick={() => reconnect(b.broker_id)} variant="primary" size="sm" loading={busy === `reconnect-${b.broker_id}`} />
                 )}
@@ -206,7 +206,7 @@ const BrokerManagementSection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Broker', 'Avg Slippage', 'Fill Rate', 'Rejection Rate', 'Avg Execution', 'Total Orders', 'Period'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -223,7 +223,7 @@ const BrokerManagementSection: React.FC = () => {
                   </td>
                   <td style={{ padding: '10px 12px', minWidth: 120 }}><LatencyBar ms={t.avg_execution_ms} /></td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{t.total_orders.toLocaleString()}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{t.period}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{t.period}</td>
                 </tr>
               ))}
             </tbody>
@@ -263,7 +263,7 @@ const BrokerManagementSection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Broker', 'Symbol pattern', 'Weight', 'Active'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -290,7 +290,7 @@ const BrokerManagementSection: React.FC = () => {
                   </td>
                   <td style={{ padding: '8px 12px' }}>
                     {editRouting ? (
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)' }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
                         <input
                           type="checkbox"
                           checked={r.active}

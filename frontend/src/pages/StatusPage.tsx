@@ -299,7 +299,7 @@ const StatusPage: React.FC = () => {
       {(liveGate || paperGate || sharpe) && (
         <section aria-labelledby="readiness-h" style={{ marginBottom: 16 }}>
           <h2 id="readiness-h" style={{
-            fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+            fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase',
             letterSpacing: '0.08em', color: 'var(--text-faint)', margin: '0 0 8px 2px',
           }}>
             Trading readiness
@@ -333,7 +333,7 @@ const StatusPage: React.FC = () => {
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
             {sharpe && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
+                <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
                   Statistical confidence
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'ui-monospace, monospace', marginTop: 4 }}>
@@ -353,7 +353,7 @@ const StatusPage: React.FC = () => {
                     height: '100%', background: 'var(--accent)', transition: 'width 0.3s',
                   }} />
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 }}>
                   {(sharpe.pct_complete ?? 0).toFixed(1)}% of the sample needed for a stable Sharpe
                 </div>
               </div>
@@ -361,7 +361,7 @@ const StatusPage: React.FC = () => {
 
             {paperGate && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
+                <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
                   Validation phases
                 </div>
                 <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -374,13 +374,13 @@ const StatusPage: React.FC = () => {
                         ? <CheckCircle2 size={13} strokeWidth={2.5} aria-hidden style={{ color: '#22c55e', flexShrink: 0, marginTop: 2 }} />
                         : <Circle size={13} strokeWidth={2} aria-hidden style={{ color: 'var(--text-faint)', flexShrink: 0, marginTop: 2 }} />}
                       <span style={{ minWidth: 0 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: ph.ok ? '#22c55e' : 'var(--text-dim)' }}>{ph.n}</span>
-                        {ph.why && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{ph.why}</span>}
+                        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: ph.ok ? '#22c55e' : 'var(--text-dim)' }}>{ph.n}</span>
+                        {ph.why && <span style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{ph.why}</span>}
                       </span>
                     </li>
                   ))}
                 </ul>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 8 }}>
                   {paperGate.fill_count ?? 0} fills over {paperGate.elapsed_days ?? 0} days
                 </div>
               </div>
@@ -405,7 +405,7 @@ const StatusPage: React.FC = () => {
             {wsStatus.charAt(0).toUpperCase() + wsStatus.slice(1)}
           </strong>
         </span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
           Live market data stream
         </span>
       </div>
@@ -471,7 +471,7 @@ const StatusPage: React.FC = () => {
               </span>
               <span style={{ color: 'var(--text)', fontWeight: 500 }}>{inc.date}</span>
               <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)', flex: 1 }}>{inc.title}</span>
-              <span style={{ fontSize: 11, color: inc.resolved ? 'var(--gain)' : 'var(--warn)' }}>
+              <span style={{ fontSize: 'var(--fs-label)', color: inc.resolved ? 'var(--gain)' : 'var(--warn)' }}>
                 {inc.resolved ? 'Resolved' : 'Ongoing'}
               </span>
             </div>
@@ -523,7 +523,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 'var(--fs-body)',
     fontWeight: 600,
     color: 'var(--text-muted)',
     textTransform: 'uppercase',
@@ -546,7 +546,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   componentName: { fontSize: 14, fontWeight: 500, color: 'var(--text)' },
   componentStatus: { display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' },
-  componentMsg: { fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' },
+  componentMsg: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'right' },
   uptimeCard: {
     background: 'var(--raised)',
     border: '1px solid var(--border-strong)',
@@ -555,11 +555,11 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 28,
   },
   uptimeValue: { fontSize: 36, fontWeight: 800, color: 'var(--gain)' },
-  uptimeLabel: { fontSize: 12, color: 'var(--text-muted)', marginTop: 2 },
+  uptimeLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 },
   historyLabels: {
     display: 'flex',
     justifyContent: 'space-between',
-    fontSize: 11,
+    fontSize: 'var(--fs-label)',
     color: 'var(--text-faint)',
     marginTop: 6,
   },
@@ -580,7 +580,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   footer: {
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: 'var(--fs-body)',
     color: 'var(--text-faint)',
     paddingTop: 8,
   },

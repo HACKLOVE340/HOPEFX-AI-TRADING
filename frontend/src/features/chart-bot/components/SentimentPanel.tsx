@@ -255,7 +255,7 @@ const sg: Record<string, React.CSSProperties> = {
   subLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted, letterSpacing: '0.08em', width: 28, flexShrink: 0 },
   subBar: { flex: 1, height: 4, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },
   subFill: { height: '100%', borderRadius: 2, transition: 'width 400ms ease' },
-  subVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, fontWeight: 700, width: 28, textAlign: 'right' as const },
+  subVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', fontWeight: 700, width: 28, textAlign: 'right' as const },
   confidence: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted, letterSpacing: '0.06em', marginTop: 8, textAlign: 'center' as const },
 };
 
@@ -267,7 +267,7 @@ const nc: Record<string, React.CSSProperties> = {
   impactBadge: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, letterSpacing: '0.06em' },
   tag: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, background: COLORS.bg.elevated, padding: '1px 4px', borderRadius: 3 },
   time: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, marginLeft: 'auto' as const },
-  headline: { fontFamily: '"Inter", sans-serif', fontSize: 12, color: COLORS.text.primary, lineHeight: 1.4, marginBottom: 5 },
+  headline: { fontFamily: '"Inter", sans-serif', fontSize: 'var(--fs-body)', color: COLORS.text.primary, lineHeight: 1.4, marginBottom: 5 },
   footer: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   source: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted },
   scores: { display: 'flex', gap: 8 },
@@ -279,13 +279,13 @@ const nc: Record<string, React.CSSProperties> = {
 const sp: Record<string, React.CSSProperties> = {
   wrapper: { background: COLORS.bg.surface, border: `1px solid ${COLORS.bg.border}`, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 8px', borderBottom: `1px solid ${COLORS.bg.border}` },
-  title: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, fontWeight: 700, color: COLORS.text.muted, letterSpacing: '0.12em' },
+  title: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', fontWeight: 700, color: COLORS.text.muted, letterSpacing: '0.12em' },
   badge: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.06em' },
   newsHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px 6px', borderTop: `1px solid ${COLORS.bg.border}` },
   newsTitle: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700, color: COLORS.text.muted, letterSpacing: '0.1em' },
   newsCount: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted },
   newsList: { overflowY: 'auto' as const, maxHeight: 420, flex: 1 },
-  noData: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: COLORS.text.muted, padding: '20px', textAlign: 'center' as const },
+  noData: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', color: COLORS.text.muted, padding: '20px', textAlign: 'center' as const },
 };
 
 export default memo(SentimentPanel);

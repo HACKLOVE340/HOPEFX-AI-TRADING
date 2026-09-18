@@ -261,7 +261,7 @@ const PriceAlerts: React.FC = () => {
         </button>
         <button onClick={() => setTab('live')} style={{ ...s.tab, ...(tab === 'live' ? s.tabActive : {}) }}>
           Live Triggers {wsTriggered.length > 0 && (
-            <span style={{ marginLeft: 6, background: '#f97316', color: '#fff', borderRadius: 10, fontSize: 10, padding: '1px 6px', fontWeight: 700 }}>
+            <span style={{ marginLeft: 6, background: '#f97316', color: '#fff', borderRadius: 10, fontSize: 'var(--fs-micro)', padding: '1px 6px', fontWeight: 700 }}>
               {wsTriggered.length}
             </span>
           )}
@@ -290,17 +290,17 @@ const PriceAlerts: React.FC = () => {
             <div style={{ ...s.statusDot, background: STATUS_COLOR[alert.status] ?? '#475569' }} />
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 14 }}>{alert.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
                 {alert.symbol} · {(alert.conditions ?? []).map((c) => `${CONDITION_LABELS[c.type] ?? c.type} ${c.threshold}`).join(', ')}
                 {(alert.notification_channels?.length ?? 0) > 0 && <>{' · '}{alert.notification_channels!.join(', ')}</>}
               </div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-faint)', marginRight: 12 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginRight: 12 }}>
               Triggered {alert.trigger_count}×
             </div>
             <button
               onClick={() => navigate('/trade', { state: { signal: { symbol: toSlashSymbol(alert.symbol) } } })}
-              style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', marginRight: 6 }}
+              style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '4px 10px', cursor: 'pointer', marginRight: 6 }}
               title={`Trade ${alert.symbol}`}
             >
               ⚡ Trade
@@ -338,15 +338,15 @@ const PriceAlerts: React.FC = () => {
               <span style={{ color: '#f97316', fontSize: 16 }}>⚡</span>
               <div style={{ flex: 1 }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{t.symbol}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>{t.condition}</span>
-                {t.message && <span style={{ color: 'var(--text-dim)', fontSize: 12, marginLeft: 8 }}>{t.message}</span>}
+                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginLeft: 8 }}>{t.condition}</span>
+                {t.message && <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)', marginLeft: 8 }}>{t.message}</span>}
               </div>
-              <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
                 {new Date(t.triggered_at).toLocaleString()}
               </span>
               <button
                 onClick={() => navigate('/trade', { state: { signal: { symbol: toSlashSymbol(t.symbol) } } })}
-                style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.4)', borderRadius: 5, color: '#f97316', fontSize: 11, fontWeight: 800, padding: '4px 10px', cursor: 'pointer', marginLeft: 8 }}
+                style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.4)', borderRadius: 5, color: '#f97316', fontSize: 'var(--fs-label)', fontWeight: 800, padding: '4px 10px', cursor: 'pointer', marginLeft: 8 }}
               >
                 ⚡ Trade Now
               </button>
@@ -362,11 +362,11 @@ const PriceAlerts: React.FC = () => {
             <span style={{ color: '#f97316', fontSize: 'var(--fs-body)'}}>⚡</span>
             <div style={{ flex: 1 }}>
               <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{t.alert_name}</span>
-              <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginLeft: 8 }}>
                 {t.symbol} @ {t.trigger_value}
               </span>
             </div>
-            <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
               {new Date(t.triggered_at).toLocaleString()}
             </span>
           </div>

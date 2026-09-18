@@ -142,14 +142,14 @@ function SessionCard({ session, selected, onClick }: {
         <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>
           {session.symbol} · {session.timeframe}
         </span>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
           {session.current_bar}/{session.total_bars} bars
         </span>
       </div>
       <div style={{ height: 4, background: 'var(--surface-hover)', borderRadius: 2, marginBottom: 8 }}>
         <div style={{ height: '100%', width: `${pct}%`, background: '#3b82f6', borderRadius: 2 }} />
       </div>
-      <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
+      <div style={{ display: 'flex', gap: 12, fontSize: 'var(--fs-label)'}}>
         <span style={{ color: session.pnl >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
           P&L: {Number.isFinite(session.pnl) ? `${session.pnl >= 0 ? '+' : ''}${session.pnl.toFixed(2)}` : '—'}
         </span>
@@ -290,15 +290,15 @@ const ReplayPage: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <Link to="/ai-chart"
-              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', color: 'var(--link)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', color: 'var(--link)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
               📈 AI Charts
             </Link>
             <Link to="/walk-forward"
-              style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: 'var(--ai-model)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+              style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: 'var(--ai-model)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
               📊 Walk-Forward
             </Link>
             <Link to="/ai-strategy"
-              style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+              style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
               🤖 AI Strategy
             </Link>
             <button onClick={() => setShowCreate((s: boolean) => !s)}
@@ -316,7 +316,7 @@ const ReplayPage: React.FC = () => {
           padding: 20, marginBottom: 20 }}>
           <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>New Replay Session</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               Symbol
               <select value={symbol} onChange={e => setSymbol(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
@@ -324,7 +324,7 @@ const ReplayPage: React.FC = () => {
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               Timeframe
               <select value={timeframe} onChange={e => setTimeframe(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
@@ -332,13 +332,13 @@ const ReplayPage: React.FC = () => {
                 {TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
               </select>
             </label>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               Start Date
               <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
                   border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)'}} />
             </label>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               End Date
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)',
@@ -356,7 +356,7 @@ const ReplayPage: React.FC = () => {
               style={{ padding: '8px 14px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
                 borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>Cancel</button>
             {createMut.isError && (
-              <span style={{ fontSize: 12, color: 'var(--loss)' }}>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>
                 ⚠ {extractApiError(createMut.error, 'Failed to create session')}
               </span>
             )}
@@ -373,7 +373,7 @@ const ReplayPage: React.FC = () => {
               padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📈</div>
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No replay sessions</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Create a session to replay historical market data</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>Create a session to replay historical market data</div>
               <button onClick={() => navigate('/ai-chart')}
                 style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
                 📊 Open AI Chart
@@ -398,7 +398,7 @@ const ReplayPage: React.FC = () => {
                 <h2 style={{ margin: '0 0 2px', fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
                   {selected.symbol} · {selected.timeframe}
                 </h2>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                   Bar {selected.current_bar} / {selected.total_bars}
                   {' · '}
                   Price: <span style={{ color: 'var(--text)', fontWeight: 600 }}>{Number.isFinite(selected.current_price) ? selected.current_price.toFixed(5) : '—'}</span>
@@ -412,12 +412,12 @@ const ReplayPage: React.FC = () => {
                 </div>
                 <button onClick={() => deleteMut.mutate(selected.session_id)}
                   style={{ padding: '6px 10px', background: '#ef444422', color: '#ef4444',
-                    border: '1px solid #ef444444', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
+                    border: '1px solid #ef444444', borderRadius: 6, fontSize: 'var(--fs-label)', cursor: 'pointer' }}>
                   Delete
                 </button>
                 <button onClick={() => setSelected(null)}
                   style={{ padding: '6px 10px', background: 'var(--surface-hover)', color: 'var(--text-dim)',
-                    border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>✕</button>
+                    border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>✕</button>
               </div>
             </div>
 
@@ -460,7 +460,7 @@ const ReplayPage: React.FC = () => {
                 {SPEED_OPTIONS.map((opt, i) => (
                   <button key={opt.label} onClick={() => handleSpeedChange(i)}
                     style={{
-                      padding: '4px 8px', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      padding: '4px 8px', borderRadius: 4, border: 'none', fontSize: 'var(--fs-label)', fontWeight: 600, cursor: 'pointer',
                       background: speedIdx === i ? '#3b82f6' : 'transparent',
                       color: speedIdx === i ? '#fff' : 'var(--text-muted)',
                     }}>
@@ -482,11 +482,11 @@ const ReplayPage: React.FC = () => {
                 </button>
               </div>
               {selected.status === 'completed' && (
-                <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>✓ Completed</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e', fontWeight: 600 }}>✓ Completed</span>
               )}
             </div>
             {/* Keyboard hint */}
-            <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 16 }}>
+            <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginBottom: 16 }}>
               Keyboard: <kbd style={{ background: 'var(--raised)', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)' }}>Space</kbd> play/pause ·
               <kbd style={{ background: 'var(--raised)', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)', marginLeft: 4 }}>→</kbd> step ·
               <kbd style={{ background: 'var(--raised)', padding: '1px 5px', borderRadius: 3, color: 'var(--text-muted)', marginLeft: 4 }}>+/-</kbd> speed ·
@@ -496,7 +496,7 @@ const ReplayPage: React.FC = () => {
             {/* Trade log */}
             {(selected.trades ?? []).length > 0 && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8,
+                <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8,
                   textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Trades ({selected.trades.length})
                 </div>
@@ -505,7 +505,7 @@ const ReplayPage: React.FC = () => {
                     <div key={t.trade_id} style={{
                       display: 'flex', gap: 12, alignItems: 'center',
                       background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px',
-                      fontSize: 12,
+                      fontSize: 'var(--fs-body)',
                     }}>
                       <span style={{ color: t.side === 'buy' ? '#22c55e' : '#ef4444', fontWeight: 600,
                         textTransform: 'uppercase', width: 30 }}>{t.side}</span>
@@ -528,10 +528,10 @@ const ReplayPage: React.FC = () => {
 
       {/* Cross-links */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
-        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
-        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
+        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
+        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
+        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
       </div>
     </PageShell>
   );

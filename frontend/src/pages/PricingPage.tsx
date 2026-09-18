@@ -125,23 +125,23 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
       {badge && (
         <div style={{
           position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)',
-          background: accent, color: '#fff', fontSize: 11, fontWeight: 700,
+          background: accent, color: '#fff', fontSize: 'var(--fs-label)', fontWeight: 700,
           padding: '3px 12px', borderRadius: 20, whiteSpace: 'nowrap',
         }}>{badge}</div>
       )}
       {isActive && (
         <div style={{
           position: 'absolute', top: 12, right: 12,
-          background: accent + '22', color: accent, fontSize: 10, fontWeight: 700,
+          background: accent + '22', color: accent, fontSize: 'var(--fs-micro)', fontWeight: 700,
           padding: '2px 8px', borderRadius: 10, border: '1px solid ' + accent + '44',
         }}>CURRENT</div>
       )}
-      <div style={{ fontSize: 11, fontWeight: 700, color: accent,
+      <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: accent,
         textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
         {plan.name}
       </div>
       {plan.tagline && (
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.4 }}>
           {plan.tagline}
         </div>
       )}
@@ -152,7 +152,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
         {!isFree && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginLeft: 4 }}>/mo</span>}
       </div>
       {!isFree && annual && plan.price_usd_annual > 0 && (
-        <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 4 }}>
+        <div style={{ fontSize: 'var(--fs-label)', color: '#22c55e', marginBottom: 4 }}>
           {/* The saving comes from the catalogue (audit #70). `annual_savings_pct`
               was declared on PlanData and never read, while this line asserted
               "2 months free" — a commercial claim hardcoded in the UI that is
@@ -162,7 +162,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
           {plan.annual_savings_pct != null && ` — save ${plan.annual_savings_pct}%`}
         </div>
       )}
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 20 }}>
+      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 20 }}>
         {fmtPctRaw((plan.commission_rate ?? 0) * 100, 1)} commission per trade
       </div>
       <button onClick={onSelect} style={{
@@ -181,7 +181,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
           ['Strategies',        fmtLimit(plan.limits?.max_strategies)],
           ['Brokers',           fmtLimit(plan.limits?.max_brokers)],
         ] as [string, string][]).map(([label, val]) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-body)'}}>
             <span style={{ color: 'var(--text-muted)' }}>{label}</span>
             <span style={{ color: 'var(--text)', fontWeight: 600 }}>{val}</span>
           </div>
@@ -190,7 +190,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {plan.highlights && plan.highlights.length > 0
           ? plan.highlights.map(h => (
-              <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+              <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)'}}>
                 <span style={{ color: '#22c55e', fontSize: 14, flexShrink: 0 }}>✓</span>
                 <span style={{ color: 'var(--text-dim)' }}>{h}</span>
               </div>
@@ -198,7 +198,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
           : ALL_FEATURES.map(f => {
               const included = hasFeature(plan, f);
               return (
-                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)'}}>
                   <span style={{ color: included ? '#22c55e' : 'var(--text-faint)', fontSize: 14, flexShrink: 0 }}>
                     {included ? '✓' : '✕'}
                   </span>
@@ -239,7 +239,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
               return (
                 <th key={p.id} style={{ textAlign: 'center', padding: '12px 8px',
                   color: accent, fontWeight: 700, borderBottom: '1px solid var(--border-strong)',
-                  textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.06em' }}>
+                  textTransform: 'uppercase', fontSize: 'var(--fs-label)', letterSpacing: '0.06em' }}>
                   {p.name}
                 </th>
               );
@@ -249,7 +249,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
         <tbody>
           <tr>
             <td colSpan={plans.length + 1} style={{ padding: '10px 16px 4px',
-              fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+              fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
               letterSpacing: '0.08em', background: 'var(--surface)' }}>
               Limits
             </td>
@@ -269,7 +269,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
           ))}
           <tr>
             <td colSpan={plans.length + 1} style={{ padding: '10px 16px 4px',
-              fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+              fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
               letterSpacing: '0.08em', background: 'var(--surface)' }}>
               Features
             </td>
@@ -294,7 +294,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
           ))}
           <tr>
             <td colSpan={plans.length + 1} style={{ padding: '10px 16px 4px',
-              fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+              fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
               letterSpacing: '0.08em', background: 'var(--surface)' }}>
               Pricing
             </td>
@@ -440,7 +440,7 @@ const PricingPage: React.FC = () => {
             color: annual ? 'var(--text)' : 'var(--text-muted)',
           }}>
             Annual
-            <span style={{ marginLeft: 6, fontSize: 10, color: '#22c55e', fontWeight: 700 }}>−17%</span>
+            <span style={{ marginLeft: 6, fontSize: 'var(--fs-micro)', color: '#22c55e', fontWeight: 700 }}>−17%</span>
           </button>
         </div>
       </div>
@@ -500,12 +500,12 @@ const PricingPage: React.FC = () => {
                     background: i % 2 === 0 ? 'var(--surface)' : 'var(--raised)',
                     borderRight: i < plans.length - 1 ? '1px solid var(--border-strong)' : 'none',
                   }}>
-                    <div style={{ fontSize: 11, color: accent, fontWeight: 700,
+                    <div style={{ fontSize: 'var(--fs-label)', color: accent, fontWeight: 700,
                       marginBottom: 6, textTransform: 'uppercase' }}>{plan.name}</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-strong)' }}>
                       {(plan.commission_rate * 100).toFixed(1)}%
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>per trade</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 4 }}>per trade</div>
                   </div>
                 );
               })}

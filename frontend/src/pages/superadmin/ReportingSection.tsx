@@ -181,11 +181,11 @@ const ReportingSection: React.FC = () => {
                 <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 16px' }}>
                     <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)', fontFamily: 'monospace', color: 'var(--text-strong)' }}>{r.report_id}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{r.period}</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>{r.period}</div>
                   </td>
                   <td style={{ padding: '10px 16px' }}>
                     <span style={{
-                      fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                      fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px', borderRadius: 4,
                       background: `${TYPE_COLORS[r.type] ?? 'var(--text-dim)'}22`,
                       color: TYPE_COLORS[r.type] ?? 'var(--text-dim)',
                       border: `1px solid ${TYPE_COLORS[r.type] ?? 'var(--text-dim)'}44`,
@@ -194,8 +194,8 @@ const ReportingSection: React.FC = () => {
                     </span>
                   </td>
                   <td style={{ padding: '10px 16px' }}><StatusBadge status={r.status} /></td>
-                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(r.generated_at)}</td>
-                  <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(r.generated_at)}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>
                     {r.size_kb ? `${r.size_kb.toFixed(1)} KB` : '—'}
                   </td>
                   <td style={{ padding: '10px 16px' }}>

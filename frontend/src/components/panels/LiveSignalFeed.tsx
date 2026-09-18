@@ -67,7 +67,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
               <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'monospace' }}>
                 {signal.symbol.replace('_', '/')}
               </div>
-              <div style={{ fontSize: 11, color: accentColor, fontWeight: 700, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: accentColor, fontWeight: 700, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
                 {/* Built and never rendered, so direction was carried by the
                     word alone — and by a colour, which is not a channel a
                     red-green-deficient reader has. The glyph is the second
@@ -87,7 +87,7 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Confidence */}
           <div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1.5, marginBottom: 6 }}>CONFIDENCE</div>
+            <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', letterSpacing: 1.5, marginBottom: 6 }}>CONFIDENCE</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <ConfidenceBar value={signal.confidence} height="sm" className="flex-1" />
               <span style={{ fontSize: 14, fontWeight: 800, color: confColor(signal.confidence), fontFamily: 'monospace' }}>
@@ -134,14 +134,14 @@ function SignalDetailModal({ signal, onClose }: { signal: Signal; onClose: () =>
               borderRadius: 8, padding: '10px 12px',
             }}>
               <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, marginBottom: 4 }}>MODEL</div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
                 {signal.model || '—'}
               </div>
             </div>
           </div>
 
           {/* Timestamp */}
-          <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'right' }}>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', textAlign: 'right' }}>
             Generated {fmtRelative(signal.generated_at)}
           </div>
 
@@ -207,7 +207,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 'var(--fs-body)', color: accentColor }}>{isLong ? '▲' : '▼'}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace', letterSpacing: 0.5 }}>
+          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace', letterSpacing: 0.5 }}>
             {signal.symbol.replace('_', '/')}
           </span>
           <span style={{
@@ -241,7 +241,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
       {/* Confidence bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <ConfidenceBar value={signal.confidence} height="sm" className="flex-1" />
-        <span style={{ fontSize: 11, fontWeight: 700, color: confColor(signal.confidence), fontFamily: 'monospace', minWidth: 32, textAlign: 'right' }}>
+        <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: confColor(signal.confidence), fontFamily: 'monospace', minWidth: 32, textAlign: 'right' }}>
           {(signal.confidence * 100).toFixed(0)}%
         </span>
       </div>
@@ -250,15 +250,15 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
         <div>
           <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1 }}>ENTRY</div>
-          <div style={{ fontSize: 11, color: 'var(--text)', fontFamily: 'monospace' }}>{fmtPrice(signal.entry_price)}</div>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text)', fontFamily: 'monospace' }}>{fmtPrice(signal.entry_price)}</div>
         </div>
         <div>
           <div style={{ fontSize: 9, color: '#ff174490', letterSpacing: 1 }}>SL</div>
-          <div style={{ fontSize: 11, color: 'var(--bear)', fontFamily: 'monospace' }}>{fmtPrice(signal.stop_loss)}</div>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--bear)', fontFamily: 'monospace' }}>{fmtPrice(signal.stop_loss)}</div>
         </div>
         <div>
           <div style={{ fontSize: 9, color: '#00e67690', letterSpacing: 1 }}>TP</div>
-          <div style={{ fontSize: 11, color: 'var(--bull)', fontFamily: 'monospace' }}>{fmtPrice(signal.take_profit)}</div>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--bull)', fontFamily: 'monospace' }}>{fmtPrice(signal.take_profit)}</div>
         </div>
       </div>
 
@@ -270,7 +270,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {rr != null && (
             <span style={{
-              fontSize: 10, fontWeight: 700, fontFamily: 'monospace',
+              fontSize: 'var(--fs-micro)', fontWeight: 700, fontFamily: 'monospace',
               color: rr >= 2 ? 'var(--bull)' : rr >= 1 ? '#ffb800' : '#ff3b5c',
             }}>
               R:R {rr.toFixed(1)}
@@ -294,13 +294,13 @@ function PositionRow({ pos }: { pos: import('../../types').Position }) {
       borderLeft: `3px solid ${isLong ? 'var(--bull)' : 'var(--bear)'}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ color: isLong ? 'var(--bull)' : 'var(--bear)', fontSize: 12 }}>{isLong ? '▲' : '▼'}</span>
-        <span style={{ fontSize: 11, color: 'var(--text)', fontFamily: 'monospace' }}>{pos.symbol.replace('_', '/')}</span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>×{pos.size}</span>
+        <span style={{ color: isLong ? 'var(--bull)' : 'var(--bear)', fontSize: 'var(--fs-body)'}}>{isLong ? '▲' : '▼'}</span>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text)', fontFamily: 'monospace' }}>{pos.symbol.replace('_', '/')}</span>
+        <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', fontFamily: 'monospace' }}>×{pos.size}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'monospace' }}>@ {fmtPrice(pos.entry_price)}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: pnlColor, fontFamily: 'monospace' }}>
+        <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>@ {fmtPrice(pos.entry_price)}</span>
+        <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: pnlColor, fontFamily: 'monospace' }}>
           {(pos.unrealized_pnl ?? 0) >= 0 ? '+' : ''}${(pos.unrealized_pnl ?? 0).toFixed(2)}
         </span>
       </div>
@@ -356,11 +356,11 @@ export function LiveSignalFeed() {
 
   const headerRight = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--bull)', fontWeight: 700 }}>
+      <span style={{ fontSize: 'var(--fs-micro)', fontFamily: 'monospace', color: 'var(--bull)', fontWeight: 700 }}>
         {activeCount} active
       </span>
-      <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>|</span>
-      <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+      <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>|</span>
+      <span style={{ fontSize: 'var(--fs-micro)', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
         {openPositions.length} pos
       </span>
     </div>
@@ -432,7 +432,7 @@ export function LiveSignalFeed() {
               justifyContent: 'center', padding: '32px 16px', gap: 8,
             }}>
               <span style={{ fontSize: 24, opacity: 0.3 }}>📡</span>
-              <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
                 {signals.length === 0 ? 'Awaiting signals from inference engine…' : `No ${filter} signals`}
               </span>
             </div>

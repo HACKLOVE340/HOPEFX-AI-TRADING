@@ -81,7 +81,7 @@ function buildAccCols(
     {
       key: 'broker',
       header: 'Broker',
-      render: (r) => <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{r.broker}</span>,
+      render: (r) => <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{r.broker}</span>,
     },
     {
       key: 'balance',
@@ -147,7 +147,7 @@ function buildMemberCols(
     {
       key: 'email',
       header: 'Email',
-      render: (r) => <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{r.email}</span>,
+      render: (r) => <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{r.email}</span>,
     },
     {
       key: 'role',
@@ -158,7 +158,7 @@ function buildMemberCols(
       key: 'joined_at',
       header: 'Joined',
       render: (r) => (
-        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
           {new Date(r.joined_at).toLocaleDateString()}
         </span>
       ),
@@ -362,7 +362,7 @@ const SubAccounts: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/trade')}
-              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
               ⚡ Trade
             </button>
             <button onClick={() => setShowCreateAcc(true)} style={s.primaryBtn}>+ Sub-Account</button>
@@ -595,7 +595,7 @@ const btnStyle: React.CSSProperties = {
   borderRadius: 5,
   color: 'var(--text-dim)',
   cursor: 'pointer',
-  fontSize: 11,
+  fontSize: 'var(--fs-label)',
   padding: '3px 8px',
 };
 
@@ -618,7 +618,7 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--text-muted, var(--text-dim))', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '7px 14px',
   },
   formGrid: { display: 'flex', flexDirection: 'column', gap: 10 },
-  label:    { color: 'var(--text-muted, var(--text-dim))', fontSize: 12, fontWeight: 600 },
+  label:    { color: 'var(--text-muted, var(--text-dim))', fontSize: 'var(--fs-body)', fontWeight: 600 },
   input: {
     background: 'var(--surface-raised, #243044)', border: '1px solid var(--border, var(--border-strong))',
     borderRadius: 6, color: 'var(--text, var(--text-strong))', fontSize: 'var(--fs-body)', outline: 'none', padding: '8px 12px',

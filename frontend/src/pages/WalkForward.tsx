@@ -139,11 +139,11 @@ const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
         alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: 20, fontWeight: 800, color }}>{nf(score, 0)}</span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>/ 100</span>
+        <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)' }}>/ 100</span>
       </div>
       <div>
         <div style={{ fontSize: 16, fontWeight: 700, color }}>{label}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 180 }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', maxWidth: 180 }}>
           Consistency of returns across all folds
         </div>
       </div>
@@ -278,7 +278,7 @@ const WalkForward: React.FC = () => {
             style={{
               padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
               background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-              color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, fontFamily: 'inherit',
             }}
           >
             🤖 Generate Strategy
@@ -402,7 +402,7 @@ const MetricCard: React.FC<{ label: string; value: string; color: string }> = ({
 
 const MCCard: React.FC<{ label: string; value: string; color: string }> = ({ label, value, color }) => (
   <div style={s.mcCard}>
-    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
   </div>
 );

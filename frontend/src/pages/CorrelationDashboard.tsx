@@ -98,7 +98,7 @@ const CorrelationDashboard: React.FC = () => {
           <div style={{ width:1, height:24, background:'var(--surface-hover)', margin:'0 4px' }} />
           <button
             onClick={() => navigate('/ai-strategy')}
-            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize:12, fontWeight:700, padding:'5px 12px', cursor:'pointer' }}
+            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight:700, padding:'5px 12px', cursor:'pointer' }}
           >
             🤖 Generate Strategy
           </button>
@@ -145,7 +145,7 @@ const CorrelationDashboard: React.FC = () => {
                     <div style={{ fontSize:12.5, color:'var(--text-muted)', lineHeight:1.55 }}>{corr.note}</div>
                   )}
                   {(corr.symbols_missing_data ?? []).length > 0 && (
-                    <div style={{ fontSize:12, color:'var(--text-muted)' }}>
+                    <div style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)' }}>
                       Missing history for:{' '}
                       <span style={{ color:'var(--text-dim)', fontFamily:'ui-monospace, monospace' }}>
                         {(corr.symbols_missing_data ?? []).join(', ')}
@@ -163,7 +163,7 @@ const CorrelationDashboard: React.FC = () => {
                 </div>
               ) : (
               <div style={{ overflowX:'auto' }}>
-                <table style={{ borderCollapse:'collapse', fontSize:12 }}>
+                <table style={{ borderCollapse:'collapse', fontSize: 'var(--fs-body)'}}>
                   <thead>
                     <tr>
                       <th style={s.mth} scope="col"><span className="sr-only">Symbol</span></th>
@@ -194,7 +194,7 @@ const CorrelationDashboard: React.FC = () => {
                   <div style={s.cardTitle}>Key Insights</div>
                   <button
                     onClick={() => navigate('/ai-strategy')}
-                    style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize:11, fontWeight:700, padding:'4px 10px', cursor:'pointer' }}
+                    style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize: 'var(--fs-label)', fontWeight:700, padding:'4px 10px', cursor:'pointer' }}
                   >
                     🤖 Build Strategy from Insights
                   </button>
@@ -208,7 +208,7 @@ const CorrelationDashboard: React.FC = () => {
               <div style={{ display:'flex', gap:16, marginTop:12, flexWrap:'wrap' }}>
                 {[['≥ 0.7','Strong positive','#4ade80'],['0.3–0.7','Moderate positive','#86efac'],
                   ['-0.3–0.3','Weak / none','#94a3b8'],['-0.7–-0.3','Moderate negative','#fca5a5'],['≤ -0.7','Strong negative','#f87171']].map(([range,label,color]) => (
-                  <div key={range} style={{ display:'flex', alignItems:'center', gap:6, fontSize:11 }}>
+                  <div key={range} style={{ display:'flex', alignItems:'center', gap:6, fontSize: 'var(--fs-label)'}}>
                     <div style={{ width:12, height:12, borderRadius:2, background: color as string }} />
                     <span style={{ color:'var(--text-muted)' }}>{range} {label}</span>
                   </div>
@@ -267,8 +267,8 @@ const CorrelationDashboard: React.FC = () => {
                 <span style={s.cotLabel}>Report Date</span>
                 <span style={{ color:'var(--text-dim)' }}>{cot.report_date}</span>
               </div>
-              <div style={{ fontSize:12, color:'var(--text-faint)', marginTop:12, lineHeight:1.5 }}>{cot.note}</div>
-              <div style={{ fontSize:11, color:'var(--text-faint)', marginTop:8 }}>Source: {cot.source}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color:'var(--text-faint)', marginTop:12, lineHeight:1.5 }}>{cot.note}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color:'var(--text-faint)', marginTop:8 }}>Source: {cot.source}</div>
               <button
                 onClick={() => navigate('/trade', {
                   state: { signal: { symbol: 'XAU/USD', direction: cot.sentiment === 'BULLISH' ? 'BUY' : 'SELL' } }
@@ -302,7 +302,7 @@ const s: Record<string, React.CSSProperties> = {
   mtd: { padding:'8px 12px', textAlign:'center', borderBottom:'1px solid var(--hairline)' },
   cotRow: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid var(--hairline)', fontSize:14 },
   cotLabel: { color:'var(--text-muted)', fontSize: 'var(--fs-body)'},
-  wBtn: { background:'var(--raised)', border:'1px solid var(--border-strong)', borderRadius:6, color:'var(--text-muted)', padding:'5px 10px', fontSize:12, cursor:'pointer' },
+  wBtn: { background:'var(--raised)', border:'1px solid var(--border-strong)', borderRadius:6, color:'var(--text-muted)', padding:'5px 10px', fontSize: 'var(--fs-body)', cursor:'pointer' },
   wBtnActive: { background:'#3b82f6', border:'1px solid #3b82f6', color:'#fff' },
   dim: { color:'var(--text-faint)', textAlign:'center', padding:48 },
 };

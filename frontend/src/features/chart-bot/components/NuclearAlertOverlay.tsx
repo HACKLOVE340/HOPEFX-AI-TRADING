@@ -224,7 +224,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
   },
   alertSubtitle: {
-    fontSize: 12, fontWeight: 700, letterSpacing: 1.5, marginTop: 2,
+    fontSize: 'var(--fs-body)', fontWeight: 700, letterSpacing: 1.5, marginTop: 2,
     fontFamily: 'monospace',
   },
   dismissBtn: {
@@ -252,7 +252,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--warn)', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
   },
   analogText: {
-    fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6,
+    fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6,
   },
   lockNotice: {
     display: 'flex', alignItems: 'center', gap: 8,
@@ -262,7 +262,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   lockIcon: { fontSize: 16 },
   lockText: {
-    fontSize: 11, color: '#fca5a5', fontFamily: 'monospace', lineHeight: 1.5,
+    fontSize: 'var(--fs-label)', color: '#fca5a5', fontFamily: 'monospace', lineHeight: 1.5,
   },
   countdownTrack: {
     height: 3, background: '#1a2e4a', borderRadius: 2, overflow: 'hidden',

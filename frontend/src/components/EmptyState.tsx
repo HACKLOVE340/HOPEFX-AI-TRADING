@@ -112,7 +112,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
                        focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              minHeight: 44, fontSize: 12, color: 'var(--text-faint)',
+              minHeight: 44, fontSize: 'var(--fs-body)', color: 'var(--text-faint)',
               padding: '0 14px', borderRadius: 8,
               border: '1px solid var(--border)',
               background: 'rgba(30,41,59,0.5)',

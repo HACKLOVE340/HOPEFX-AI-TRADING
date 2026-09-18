@@ -38,7 +38,7 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
   >
     {title && (
       <div style={{
-        fontSize: 10, fontWeight: 700, color: 'var(--text-faint)',
+        fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)',
         textTransform: 'uppercase', letterSpacing: '0.08em',
         marginBottom: 10,
       }}>
@@ -73,7 +73,7 @@ export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style,
             border: `1px solid ${link.color ? `${link.color}30` : '#1e293b'}`,
             borderRadius: 8,
             color: link.color ?? 'var(--text-faint)',
-            fontSize: 12,
+            fontSize: 'var(--fs-body)',
             fontWeight: 500,
             textDecoration: 'none',
             transition: 'border-color 0.15s, color 0.15s, background 0.15s',

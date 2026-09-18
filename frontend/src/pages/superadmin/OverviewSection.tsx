@@ -80,8 +80,8 @@ const GaugeBar: React.FC<GaugeBarProps> = ({ label, value, max = 100, color = '#
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: barColor }}>{value}{unit}</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{label}</span>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: barColor }}>{value}{unit}</span>
       </div>
       <div style={{ height: 6, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{
@@ -107,7 +107,7 @@ const AlertRow: React.FC<AlertRowProps> = ({ level, message }) => {
       borderRadius: 8, padding: '10px 14px', marginBottom: 8,
     }}>
       <span style={{ fontSize: 14 }}>{colors.icon}</span>
-      <span style={{ fontSize: 12, color: colors.color }}>{message}</span>
+      <span style={{ fontSize: 'var(--fs-body)', color: colors.color }}>{message}</span>
     </div>
   );
 };
@@ -250,7 +250,7 @@ const OverviewSection: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <StatusBadge status={data.system_health} />
-          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
             Uptime {fmtPct(data.uptime_pct ?? 0)} · Engine: <span style={{ color: data.engine_status === 'running' ? 'var(--gain)' : 'var(--loss)' }}>{data.engine_status}</span>
           </span>
         </div>
@@ -305,7 +305,7 @@ const OverviewSection: React.FC = () => {
                 background: 'var(--raised)', borderRadius: 8, padding: '12px 14px',
                 border: `1px solid ${m.ok ? '#16a34a33' : '#dc262633'}`,
               }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: m.ok ? 'var(--gain)' : 'var(--loss)' }}>{m.value}</div>
               </div>
             ))}
@@ -351,7 +351,7 @@ const OverviewSection: React.FC = () => {
             {infra.health && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Server Resources</div>
+                  <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Server Resources</div>
                   <GaugeBar label="CPU"          value={infra.health.cpu_pct}         color="#3b82f6" />
                   <GaugeBar label="Memory"       value={infra.health.mem_pct}         color="#8b5cf6" />
                   <GaugeBar label="Disk"         value={infra.health.disk_pct}        color="#f59e0b" />
@@ -364,7 +364,7 @@ const OverviewSection: React.FC = () => {
                       { label: 'Load 15m', v: (infra.health.load_avg_15m ?? 0).toFixed(2) },
                     ].map(l => (
                       <div key={l.label} style={{ background: 'var(--raised)', borderRadius: 6, padding: '6px 10px', flex: 1 }}>
-                        <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{l.label}</div>
+                        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{l.label}</div>
                         <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)' }}>{l.v}</div>
                       </div>
                     ))}
@@ -375,7 +375,7 @@ const OverviewSection: React.FC = () => {
                 <div>
                   {infra.cache && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Redis Cache</div>
+                      <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Redis Cache</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
                         {[
                           { label: 'Hit Rate',     value: `${(infra.cache.hit_rate_pct ?? 0).toFixed(1)}%`, color: (infra.cache.hit_rate_pct ?? 0) > 80 ? '#4ade80' : '#fbbf24' },
@@ -386,7 +386,7 @@ const OverviewSection: React.FC = () => {
                           { label: 'Ops/sec',      value: (infra.cache.ops_per_sec  ?? 0).toLocaleString(), color: '#a78bfa' },
                         ].map(m => (
                           <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '8px 10px' }}>
-                            <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
+                            <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{m.label}</div>
                             <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: m.color }}>{m.value}</div>
                           </div>
                         ))}
@@ -395,7 +395,7 @@ const OverviewSection: React.FC = () => {
                   )}
                   {infra.db && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Database</div>
+                      <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Database</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         {[
                           { label: 'Connections',  value: `${infra.db.active_connections ?? 0}/${infra.db.max_connections ?? 0}`, color: ((infra.db.active_connections ?? 0) / (infra.db.max_connections || 1)) > 0.8 ? '#f87171' : '#4ade80' },
@@ -405,7 +405,7 @@ const OverviewSection: React.FC = () => {
                           { label: 'Deadlocks',    value: infra.db.deadlocks ?? 0,                                           color: (infra.db.deadlocks ?? 0) > 0 ? '#f87171' : '#4ade80' },
                         ].map(m => (
                           <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '8px 10px' }}>
-                            <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
+                            <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{m.label}</div>
                             <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: m.color }}>{m.value}</div>
                           </div>
                         ))}
@@ -419,13 +419,13 @@ const OverviewSection: React.FC = () => {
             {/* Task Queues */}
             {infra.queues.length > 0 && (
               <>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Task Queues</div>
+                <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Task Queues</div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         {['Queue', 'Pending', 'Processing', 'Failed', 'Workers'].map(h => (
-                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>

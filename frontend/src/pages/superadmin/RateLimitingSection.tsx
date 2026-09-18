@@ -237,7 +237,7 @@ const RateLimitingSection: React.FC = () => {
                   const draft = editing[rule.rule_id];
                   return (
                     <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
-                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: 'var(--link)' }}>{rule.endpoint}</td>
+                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 'var(--fs-body)', color: 'var(--link)' }}>{rule.endpoint}</td>
                       <td style={{ padding: '10px 16px' }}>
                         {draft ? (
                           <div style={{ display: 'flex', gap: 6 }}>
@@ -246,7 +246,7 @@ const RateLimitingSection: React.FC = () => {
                               aria-label={`Request limit for ${rule.endpoint}`}
                               value={draft.limit}
                               onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, limit: e.target.value } }))}
-                              style={{ width: 70, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 12 }}
+                              style={{ width: 70, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 'var(--fs-body)'}}
                             />
                             <span style={{ color: 'var(--text-faint)', alignSelf: 'center' }}>/</span>
                             <input
@@ -254,9 +254,9 @@ const RateLimitingSection: React.FC = () => {
                               aria-label={`Window in seconds for ${rule.endpoint}`}
                               value={draft.window_seconds}
                               onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, window_seconds: e.target.value } }))}
-                              style={{ width: 70, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 12 }}
+                              style={{ width: 70, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 'var(--fs-body)'}}
                             />
-                            <span style={{ color: 'var(--text-faint)', alignSelf: 'center', fontSize: 11 }}>s</span>
+                            <span style={{ color: 'var(--text-faint)', alignSelf: 'center', fontSize: 'var(--fs-label)'}}>s</span>
                           </div>
                         ) : (
                           <span style={{ color: 'var(--text-strong)' }}>
@@ -266,7 +266,7 @@ const RateLimitingSection: React.FC = () => {
                       </td>
                       <td style={{ padding: '10px 16px' }}>
                         <span style={{
-                          fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                          fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 7px', borderRadius: 4,
                           background: `${SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)'}22`,
                           color: SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)',
                           border: `1px solid ${SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)'}44`,
@@ -274,7 +274,7 @@ const RateLimitingSection: React.FC = () => {
                           {rule.scope.replace('_', ' ').toUpperCase()}
                         </span>
                       </td>
-                      <td style={{ padding: '10px 16px', color: rule.current_hits > rule.limit * 0.8 ? 'var(--loss)' : 'var(--text-dim)', fontSize: 12 }}>
+                      <td style={{ padding: '10px 16px', color: rule.current_hits > rule.limit * 0.8 ? 'var(--loss)' : 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>
                         {rule.current_hits.toLocaleString()}
                       </td>
                       <td style={{ padding: '10px 16px' }}>
@@ -320,10 +320,10 @@ const RateLimitingSection: React.FC = () => {
               <tbody>
                 {violations.slice(0, 100).map((v, i) => (
                   <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: 'var(--loss)' }}>{v.endpoint}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{v.ip ?? v.user_id ?? '—'}</td>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>{v.endpoint}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{v.ip ?? v.user_id ?? '—'}</td>
                     <td style={{ padding: '10px 16px', color: 'var(--warn)', fontWeight: 700 }}>{v.count}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(v.timestamp)}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(v.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>

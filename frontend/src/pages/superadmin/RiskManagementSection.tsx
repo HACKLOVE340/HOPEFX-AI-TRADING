@@ -216,7 +216,7 @@ const RiskManagementSection: React.FC = () => {
               { label: 'Calmar Ratio',       value: varMetrics.calmar_ratio.toFixed(2),                        color: '#06b6d4' },
             ].map(m => (
               <div key={m.label} style={{ background: 'var(--raised)', borderRadius: 8, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: m.color }}>{m.value}</div>
               </div>
             ))}
@@ -242,7 +242,7 @@ const RiskManagementSection: React.FC = () => {
                 <div key={b.name} style={{ background: 'var(--raised)', borderRadius: 10, padding: '14px 16px', border: `1px solid ${sc.color}33` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{b.name}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: sc.color, background: sc.bg, border: `1px solid ${sc.color}44`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: sc.color, background: sc.bg, border: `1px solid ${sc.color}44`, borderRadius: 4, padding: '2px 8px' }}>
                       {b.state.replace('_', ' ').toUpperCase()}
                     </span>
                   </div>
@@ -254,8 +254,8 @@ const RiskManagementSection: React.FC = () => {
                       { label: 'Last Success', value: fmtDate(b.last_success) },
                     ].map(m => (
                       <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 6, padding: '6px 8px' }}>
-                        <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{m.label}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 600 }}>{m.value}</div>
+                        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{m.label}</div>
+                        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontWeight: 600 }}>{m.value}</div>
                       </div>
                     ))}
                   </div>
@@ -295,7 +295,7 @@ const RiskManagementSection: React.FC = () => {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['Scenario', 'P&L Impact', 'P&L %', 'Max Loss', 'Probability', 'Run At'].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -311,7 +311,7 @@ const RiskManagementSection: React.FC = () => {
                       <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>
                         {t.probability != null ? fmtPct(t.probability * 100) : '—'}
                       </td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{t.run_at ? fmtDate(t.run_at) : '—'}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{t.run_at ? fmtDate(t.run_at) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -345,7 +345,7 @@ const RiskManagementSection: React.FC = () => {
                 background: breachFilter === f.value ? 'var(--raised)' : 'transparent',
                 border: `1px solid ${breachFilter === f.value ? '#475569' : '#1e293b'}`,
                 borderRadius: 6, color: breachFilter === f.value ? 'var(--text-strong)' : 'var(--text-muted)',
-                padding: '5px 12px', fontSize: 12, cursor: 'pointer',
+                padding: '5px 12px', fontSize: 'var(--fs-body)', cursor: 'pointer',
               }}>
                 {f.label}
               </button>
@@ -360,7 +360,7 @@ const RiskManagementSection: React.FC = () => {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['User', 'Account', 'Breach Type', 'Threshold', 'Actual', 'Severity', 'Status', 'Detected'].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -371,27 +371,27 @@ const RiskManagementSection: React.FC = () => {
                       <tr key={b.breach_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{b.username}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{b.user_id}</div>
+                          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{b.user_id}</div>
                         </td>
-                        <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12, fontFamily: 'monospace' }}>{b.account_id}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)', fontFamily: 'monospace' }}>{b.account_id}</td>
                         <td style={{ padding: '10px 12px' }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-dim)', background: 'var(--raised)', borderRadius: 4, padding: '2px 7px' }}>
+                          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', background: 'var(--raised)', borderRadius: 4, padding: '2px 7px' }}>
                             {b.breach_type.replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{b.threshold}%</td>
                         <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--loss)' }}>{b.actual_value.toFixed(2)}%</td>
                         <td style={{ padding: '10px 12px' }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: sev.color, background: sev.bg, border: `1px solid ${sev.color}44`, borderRadius: 4, padding: '2px 8px' }}>
+                          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: sev.color, background: sev.bg, border: `1px solid ${sev.color}44`, borderRadius: 4, padding: '2px 8px' }}>
                             {b.severity.toUpperCase()}
                           </span>
                         </td>
                         <td style={{ padding: '10px 12px' }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: BREACH_STATUS_COLORS[b.status] ?? 'var(--text-dim)' }}>
+                          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: BREACH_STATUS_COLORS[b.status] ?? 'var(--text-dim)' }}>
                             {b.status}
                           </span>
                         </td>
-                        <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(b.detected_at)}</td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(b.detected_at)}</td>
                       </tr>
                     );
                   })}
@@ -421,7 +421,7 @@ const RiskManagementSection: React.FC = () => {
               {/* Drawdown distribution */}
               {drawdown.drawdown_distribution && drawdown.drawdown_distribution.length > 0 && (
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 12 }}>Drawdown Distribution</div>
+                  <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 12 }}>Drawdown Distribution</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {drawdown.drawdown_distribution.map(d => {
                       const maxCount = Math.max(...drawdown.drawdown_distribution.map(x => x.count), 1);
@@ -429,11 +429,11 @@ const RiskManagementSection: React.FC = () => {
                       const color = d.bucket.includes('>10') ? '#ef4444' : d.bucket.includes('5-10') ? '#f59e0b' : '#22c55e';
                       return (
                         <div key={d.bucket} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 80, fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{d.bucket}</div>
+                          <div style={{ width: 80, fontSize: 'var(--fs-label)', color: 'var(--text-muted)', flexShrink: 0 }}>{d.bucket}</div>
                           <div style={{ flex: 1, background: 'var(--raised)', borderRadius: 4, height: 16, overflow: 'hidden' }}>
                             <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s' }} />
                           </div>
-                          <div style={{ width: 32, fontSize: 11, color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>{d.count}</div>
+                          <div style={{ width: 32, fontSize: 'var(--fs-label)', color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>{d.count}</div>
                         </div>
                       );
                     })}

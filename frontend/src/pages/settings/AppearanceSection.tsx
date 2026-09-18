@@ -136,7 +136,7 @@ const AppearanceSection: React.FC = () => {
           <h3 id="density-label" style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>
             Density
           </h3>
-          <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: '0 0 12px' }}>
+          <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: '0 0 12px' }}>
             How tightly the interface packs. Trading surfaces — positions, P&amp;L, the
             order ticket — stay at Ultra whatever you choose here, because how many
             rows of open risk you can see at once is not a preference.
@@ -160,7 +160,7 @@ const AppearanceSection: React.FC = () => {
                   }}
                 >
                   {option.label}
-                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-dim)' }}>
+                  <span style={{ fontSize: 'var(--fs-label)', fontWeight: 500, color: 'var(--text-dim)' }}>
                     {option.hint}
                   </span>
                 </button>

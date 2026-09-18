@@ -642,7 +642,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
       {/* Beside the chart, not over it: these bars are still worth looking at,
           and an overlay would hide the thing it describes. */}
       {barNotice && !noData && (
-        <div role="status" style={{ padding: '2px 10px 6px', fontSize: 10, lineHeight: 1.4, color: 'var(--warn)' }}>
+        <div role="status" style={{ padding: '2px 10px 6px', fontSize: 'var(--fs-micro)', lineHeight: 1.4, color: 'var(--warn)' }}>
           {barNotice}
         </div>
       )}

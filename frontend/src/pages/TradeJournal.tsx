@@ -359,7 +359,7 @@ const TradeJournal: React.FC = () => {
                   {entry.closed_at && (
                     <button
                       onClick={() => navigate('/trade', { state: { signal: { symbol: entry.symbol, direction: entry.side === 'long' ? 'BUY' : 'SELL' } } })}
-                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
+                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                       title="Open a new trade with the same symbol and direction"
                     >
                       🔁 Re-trade
@@ -471,13 +471,13 @@ const TradeJournal: React.FC = () => {
                   const color = pct >= 50 ? '#4ade80' : '#f87171';
                   return (
                     <div key={e.tag} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 110, fontSize: 11, color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>
+                      <span style={{ width: 110, fontSize: 'var(--fs-label)', color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>
                         {EMOTION_EMOJI[e.tag] ?? ''} {e.tag}
                       </span>
                       <div style={{ flex: 1, height: 14, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.4s ease' }} />
                       </div>
-                      <span style={{ width: 42, fontSize: 11, color, fontFamily: 'monospace', textAlign: 'right', flexShrink: 0 }}>
+                      <span style={{ width: 42, fontSize: 'var(--fs-label)', color, fontFamily: 'monospace', textAlign: 'right', flexShrink: 0 }}>
                         {pct.toFixed(1)}%
                       </span>
                     </div>
@@ -500,17 +500,17 @@ const TradeJournal: React.FC = () => {
                 {/* Summary banner */}
                 <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 24 }}>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--loss)', marginBottom: 2 }}>TOTAL DEVIATIONS</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)', marginBottom: 2 }}>TOTAL DEVIATIONS</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>{mistakes.length}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--loss)', marginBottom: 2 }}>COST OF MISTAKES</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)', marginBottom: 2 }}>COST OF MISTAKES</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>
                       ${Math.abs(mistakes.reduce((sum, m) => sum + (m.pnl ?? 0), 0)).toFixed(2)}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--loss)', marginBottom: 2 }}>WIN RATE ON MISTAKES</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)', marginBottom: 2 }}>WIN RATE ON MISTAKES</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>
                       {mistakes.length > 0
                         ? `${((mistakes.filter(m => (m.pnl ?? 0) > 0).length / mistakes.length) * 100).toFixed(0)}%`
@@ -528,7 +528,7 @@ const TradeJournal: React.FC = () => {
                         {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(entry.opened_at).toLocaleDateString()}</span>
+                        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{new Date(entry.opened_at).toLocaleDateString()}</span>
                         <span style={{ fontSize: 16, fontWeight: 700, color: pnlColor(entry.pnl) }}>
                           {entry.pnl !== null ? `${entry.pnl >= 0 ? '+' : ''}$${fmt(entry.pnl)}` : 'Open'}
                         </span>
@@ -563,7 +563,7 @@ const TradeJournal: React.FC = () => {
 
 const StatCard: React.FC<{ label: string; value: string; positive?: boolean }> = ({ label, value, positive }) => (
   <div style={s.statCard}>
-    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 20, fontWeight: 700, color: positive === undefined ? 'var(--text-strong)' : positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
   </div>
 );
@@ -571,7 +571,7 @@ const StatCard: React.FC<{ label: string; value: string; positive?: boolean }> =
 const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) => (
   <div style={s.tagStatRow}>
     <span style={{ width: 120, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{emoji ? `${emoji} ` : ''}{stat.tag}</span>
-    <span style={{ width: 50, color: 'var(--text-muted)', fontSize: 12 }}>{stat.count}×</span>
+    <span style={{ width: 50, color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{stat.count}×</span>
     <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
       <div style={{ width: `${stat.win_rate}%`, height: '100%', background: stat.win_rate >= 50 ? 'var(--gain)' : 'var(--loss)', borderRadius: 4 }} />
     </div>
@@ -594,23 +594,23 @@ const s: Record<string, React.CSSProperties> = {
   select:          { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
   tradeCard:       { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px', marginBottom: 10 },
   tradeHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  sideBadge:       { borderRadius: 4, fontSize: 11, fontWeight: 700, padding: '2px 8px' },
-  deviationBadge:  { background: '#450a0a', color: 'var(--loss)', fontSize: 11, padding: '2px 8px', borderRadius: 4 },
+  sideBadge:       { borderRadius: 4, fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px' },
+  deviationBadge:  { background: '#450a0a', color: 'var(--loss)', fontSize: 'var(--fs-label)', padding: '2px 8px', borderRadius: 4 },
   priceRow:        { display: 'flex', gap: 16, marginBottom: 8 },
   priceItem:       { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
   tagRow:          { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
-  tag:             { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '2px 8px' },
+  tag:             { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 'var(--fs-label)', padding: '2px 8px' },
   notes:           { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: '4px 0 0', lineHeight: 1.5 },
-  editBtn:         { background: 'var(--surface-hover)', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
+  editBtn:         { background: 'var(--surface-hover)', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 10px' },
   editForm:        { borderTop: '1px solid var(--border-strong)', marginTop: 12, paddingTop: 12 },
   label:           { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
   textarea:        { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 'var(--fs-body)', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
   input:           { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 'var(--fs-body)', boxSizing: 'border-box' },
   tagPicker:       { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
-  tagPickerBtn:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
+  tagPickerBtn:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 10px' },
   tagPickerBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
-  saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: 'var(--loss)', marginTop: 8 },
+  saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '6px 10px', fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 8 },
   statsGrid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 },
   statCard:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px' },
   sectionTitle:    { fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: '20px 0 10px' },

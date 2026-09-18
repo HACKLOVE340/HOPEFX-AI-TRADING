@@ -261,15 +261,15 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, textAlign: 'center' }}>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.return_pct.toFixed(1)}%</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Return</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Return</div>
             </div>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.trades}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Trades</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Trades</div>
             </div>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.win_rate.toFixed(0)}%</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Win Rate</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Win Rate</div>
             </div>
           </div>
         </div>
@@ -452,7 +452,7 @@ const s: Record<string, React.CSSProperties> = {
   stepSub:    { fontSize: 14, color: 'var(--text-muted)', margin: '0 0 20px' },
   optionBtn:  { width: '100%', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.15s' },
   infoBox:    { background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 14px', fontSize: 'var(--fs-body)', color: '#93c5fd', marginTop: 12 },
-  code:       { background: 'var(--raised)', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 12 },
+  code:       { background: 'var(--raised)', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 'var(--fs-body)'},
   primaryBtn: { width: '100%', background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 'var(--fs-value)', fontWeight: 700, cursor: 'pointer', padding: '14px 0' },
   resultBox:  { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 16 },
   errorBox:   { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: 12 },

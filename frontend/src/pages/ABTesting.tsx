@@ -46,7 +46,7 @@ const MetricRow: React.FC<{ label: string; a: string; b: string; winner: string;
   label, a, b, winner, stratA, stratB,
 }) => (
   <div style={{ display:'flex', gap:8, padding:'8px 0', borderBottom:'1px solid var(--hairline)', alignItems:'center' }}>
-    <div style={{ width:140, fontSize:12, color:'var(--text-muted)' }}>{label}</div>
+    <div style={{ width:140, fontSize: 'var(--fs-body)', color:'var(--text-muted)' }}>{label}</div>
     <div style={{ flex:1, textAlign:'center', fontSize:14, fontWeight:600,
       color: winner === stratA ? 'var(--gain)' : 'var(--text-strong)' }}>{a}</div>
     <div style={{ flex:1, textAlign:'center', fontSize:14, fontWeight:600,
@@ -108,11 +108,11 @@ const ABTesting: React.FC = () => {
       subtitle="Run two strategies in parallel on paper. Auto-select winner after N days."
       actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/ai-strategy')}
-            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             🤖 AI Strategy
           </button>
           <button onClick={() => navigate('/walk-forward')}
-            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             📈 Walk-Forward
           </button>
         </div></>}
@@ -150,19 +150,19 @@ const ABTesting: React.FC = () => {
           <div style={s.card}>
             <div style={s.cardTitle}>Results — {sel.symbol}</div>
             <div style={{ ...s.winnerBanner, border: `1px solid ${sel.significant ? 'var(--gain)' : '#facc15'}` }}>
-              <div style={{ fontSize:12, color:'var(--text-dim)' }}>Winner</div>
+              <div style={{ fontSize: 'var(--fs-body)', color:'var(--text-dim)' }}>Winner</div>
               <div style={{ fontSize:20, fontWeight:800, color: sel.significant ? 'var(--gain)' : '#facc15' }}>
                 {sel.winner}
               </div>
-              <div style={{ fontSize:12, color:'var(--text-muted)' }}>
+              <div style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)' }}>
                 p={Number.isFinite(sel.p_value) ? sel.p_value.toFixed(4) : '—'} · {sel.significant ? 'Statistically significant' : 'Not significant yet'}
               </div>
             </div>
-            <div style={{ fontSize:12, color:'var(--text-dim)', margin:'12px 0 4px' }}>{sel.recommendation}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color:'var(--text-dim)', margin:'12px 0 4px' }}>{sel.recommendation}</div>
             <div style={{ display:'flex', gap:8, marginBottom:8 }}>
-              <div style={{ flex:1, textAlign:'center', fontSize:12, fontWeight:700, color:'var(--link)' }}>{sel.strategy_a.strategy}</div>
+              <div style={{ flex:1, textAlign:'center', fontSize: 'var(--fs-body)', fontWeight:700, color:'var(--link)' }}>{sel.strategy_a.strategy}</div>
               <div style={{ width:140 }} />
-              <div style={{ flex:1, textAlign:'center', fontSize:12, fontWeight:700, color:'var(--ai-model)' }}>{sel.strategy_b.strategy}</div>
+              <div style={{ flex:1, textAlign:'center', fontSize: 'var(--fs-body)', fontWeight:700, color:'var(--ai-model)' }}>{sel.strategy_b.strategy}</div>
             </div>
             <MetricRow label="Total Return" a={`${sel.strategy_a.total_return}%`} b={`${sel.strategy_b.total_return}%`}
               winner={sel.winner} stratA={sel.strategy_a.strategy} stratB={sel.strategy_b.strategy} />
@@ -196,8 +196,8 @@ const ABTesting: React.FC = () => {
             <div key={t.test_id} style={{ ...s.histRow, background: sel?.test_id === t.test_id ? 'var(--surface)' : 'transparent' }}
               onClick={() => setSelected(t)}>
               <span style={{ fontSize: 'var(--fs-body)'}}>{t.strategy_a.strategy} vs {t.strategy_b.strategy}</span>
-              <span style={{ fontSize:12, color:'var(--text-muted)' }}>{t.symbol}</span>
-              <span style={{ fontSize:12, color:'var(--gain)' }}>Winner: {t.winner}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)' }}>{t.symbol}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color:'var(--gain)' }}>Winner: {t.winner}</span>
             </div>
           ))}
         </div>
@@ -223,7 +223,7 @@ const s: Record<string, React.CSSProperties> = {
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20, marginBottom:20 },
   card: { background:'var(--raised)', borderRadius:12, padding:24, border:'1px solid var(--border-strong)', marginBottom:20 },
   cardTitle: { fontSize: 'var(--fs-body)', fontWeight:600, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },
-  label: { fontSize:12, color:'var(--text-dim)', display:'block', marginBottom:6, marginTop:12 },
+  label: { fontSize: 'var(--fs-body)', color:'var(--text-dim)', display:'block', marginBottom:6, marginTop:12 },
   select: { width:'100%', background:'var(--surface)', border:'1px solid var(--border-strong)', borderRadius:8, color:'var(--text-strong)', padding:'9px 12px', fontSize:14, outline:'none' },
   input: { width:'100%', background:'var(--surface)', border:'1px solid var(--border-strong)', borderRadius:8, color:'var(--text-strong)', padding:'9px 12px', fontSize:14, outline:'none', boxSizing:'border-box' },
   btn: { width:'100%', background:'#3b82f6', border:'none', borderRadius:8, color:'#fff', padding:'10px', fontSize:14, cursor:'pointer', fontWeight:600 },

@@ -66,7 +66,7 @@ const TrialBanner: React.FC = () => {
             borderRadius: 6,
             color: '#fff',
             cursor: 'pointer',
-            fontSize: 12,
+            fontSize: 'var(--fs-body)',
             fontWeight: 600,
             padding: '5px 14px',
           }}

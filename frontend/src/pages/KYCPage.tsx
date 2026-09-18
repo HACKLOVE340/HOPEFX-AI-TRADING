@@ -108,7 +108,7 @@ const StepIndicator: React.FC<{ status: KYCStatus }> = ({ status }) => {
               }}>
                 {done ? '✓' : step.id}
               </div>
-              <span style={{ fontSize: 11, color: active ? '#93c5fd' : done ? 'var(--gain)' : 'var(--text-faint)', fontWeight: active ? 600 : 400, textAlign: 'center' }}>
+              <span style={{ fontSize: 'var(--fs-label)', color: active ? '#93c5fd' : done ? 'var(--gain)' : 'var(--text-faint)', fontWeight: active ? 600 : 400, textAlign: 'center' }}>
                 {step.label}
               </span>
             </div>
@@ -236,7 +236,7 @@ const KYCPage: React.FC = () => {
           { label: 'KYC Verification' },
         ]}
         badge={
-          <Badge variant={cfg.badgeVariant} style={{ fontSize: 11 }}>
+          <Badge variant={cfg.badgeVariant} style={{ fontSize: 'var(--fs-label)'}}>
             {cfg.icon} {cfg.label}
           </Badge>
         }
@@ -247,7 +247,7 @@ const KYCPage: React.FC = () => {
             style={{
               background: 'transparent', border: '1px solid var(--border-strong)',
               borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
-              fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 'var(--fs-body)', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
             {loading ? <Spinner size="sm" /> : '↻'} Refresh
@@ -280,12 +280,12 @@ const KYCPage: React.FC = () => {
                 <div style={{ fontSize: 18, fontWeight: 700, color: cfg.color }}>{cfg.label}</div>
                 <div style={{ display: 'flex', gap: 20, marginTop: 6, flexWrap: 'wrap' }}>
                   {kycState?.submitted_at && (
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                       Submitted: <strong style={{ color: 'var(--text-dim)' }}>{new Date(kycState.submitted_at).toLocaleDateString()}</strong>
                     </span>
                   )}
                   {kycState?.reviewed_at && (
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                       Reviewed: <strong style={{ color: 'var(--text-dim)' }}>{new Date(kycState.reviewed_at).toLocaleDateString()}</strong>
                     </span>
                   )}
@@ -316,9 +316,9 @@ const KYCPage: React.FC = () => {
             </div>
             {status === 'rejected' && kycState?.rejection_reason && (
               <div style={{ marginTop: 16, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
-                <div style={{ fontSize: 12, color: 'var(--loss)', fontWeight: 700, marginBottom: 4 }}>Rejection Reason</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 700, marginBottom: 4 }}>Rejection Reason</div>
                 <div style={{ fontSize: 'var(--fs-body)', color: '#fca5a5', lineHeight: 1.5 }}>{kycState.rejection_reason}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Please re-upload corrected documents and resubmit.</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 8 }}>Please re-upload corrected documents and resubmit.</div>
               </div>
             )}
           </div>
@@ -341,12 +341,12 @@ const KYCPage: React.FC = () => {
                     <div>
                       <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-strong)', fontWeight: 500 }}>{docLabel}</span>
                       {doc.uploaded_at && (
-                        <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 10 }}>
+                        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginLeft: 10 }}>
                           {new Date(doc.uploaded_at).toLocaleDateString()}
                         </span>
                       )}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: sc, background: `${sc}18`, border: `1px solid ${sc}44`, borderRadius: 6, padding: '2px 8px', textTransform: 'capitalize' }}>
+                    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: sc, background: `${sc}18`, border: `1px solid ${sc}44`, borderRadius: 6, padding: '2px 8px', textTransform: 'capitalize' }}>
                       {doc.status}
                     </span>
                   </div>
@@ -378,10 +378,10 @@ const KYCPage: React.FC = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div>
                           <label id={`kyc-doc-${doc.id}-label`} style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{doc.label}</label>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{doc.desc}</div>
+                          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>{doc.desc}</div>
                         </div>
                         {isUploaded && (
-                          <span style={{ fontSize: 11, color: 'var(--gain)', fontWeight: 700, background: '#14532d', border: '1px solid #166534', borderRadius: 6, padding: '2px 8px', flexShrink: 0 }}>
+                          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gain)', fontWeight: 700, background: '#14532d', border: '1px solid #166534', borderRadius: 6, padding: '2px 8px', flexShrink: 0 }}>
                             ✓ Uploaded
                           </span>
                         )}
@@ -403,7 +403,7 @@ const KYCPage: React.FC = () => {
                           style={{
                             background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8,
                             color: hasFile ? 'var(--text-strong)' : 'var(--text-muted)', cursor: 'pointer',
-                            fontSize: 12, padding: '8px 14px', flex: 1, textAlign: 'left',
+                            fontSize: 'var(--fs-body)', padding: '8px 14px', flex: 1, textAlign: 'left',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}
                         >
@@ -417,14 +417,14 @@ const KYCPage: React.FC = () => {
                             border: `1px solid ${hasFile ? '#3b82f6' : '#334155'}`,
                             borderRadius: 8, color: hasFile ? '#93c5fd' : 'var(--text-faint)',
                             cursor: hasFile ? 'pointer' : 'not-allowed',
-                            fontSize: 12, fontWeight: 600, padding: '8px 16px',
+                            fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px',
                             display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
                           }}
                         >
                           {uploading === doc.id ? <Spinner size="sm" /> : '↑'} Upload
                         </button>
                       </div>
-                      {err && <div style={{ fontSize: 11, color: 'var(--loss)', marginTop: 6 }}>{err}</div>}
+                      {err && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)', marginTop: 6 }}>{err}</div>}
                     </div>
                   );
                 })}
@@ -479,7 +479,7 @@ const KYCPage: React.FC = () => {
               <div key={title} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
                 <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
                 <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>{title}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{body}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', lineHeight: 1.5 }}>{body}</div>
               </div>
             ))}
           </div>

@@ -235,17 +235,17 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     color: 'var(--text)',
     fontFamily: 'monospace',
-    fontSize: 12,
+    fontSize: 'var(--fs-body)',
     minWidth: 240,
   },
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
   },
   title: {
-    fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)',
+    fontSize: 'var(--fs-label)', fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)',
   },
   timestamp: {
-    fontSize: 10, color: 'var(--text-faint)',
+    fontSize: 'var(--fs-micro)', color: 'var(--text-faint)',
   },
   loading: { color: 'var(--text-faint)', textAlign: 'center', padding: 16 },
   error:   { color: '#ff6600', textAlign: 'center', padding: 16 },
@@ -253,8 +253,8 @@ const s: Record<string, React.CSSProperties> = {
   // Gauge
   gaugeWrap: { display: 'flex', flexDirection: 'column', gap: 4 },
   gaugeHeader: { display: 'flex', justifyContent: 'space-between' },
-  gaugeLabel: { fontSize: 10, color: 'var(--text-faint)', letterSpacing: 1.5, fontWeight: 700 },
-  gaugeScore: { fontSize: 12, fontWeight: 700 },
+  gaugeLabel: { fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', letterSpacing: 1.5, fontWeight: 700 },
+  gaugeScore: { fontSize: 'var(--fs-body)', fontWeight: 700 },
   gaugeTrack: {
     position: 'relative', height: 6, background: '#1a2e4a', borderRadius: 3,
   },
@@ -271,13 +271,13 @@ const s: Record<string, React.CSSProperties> = {
   outlookRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   outlookBadge: {
     padding: '3px 10px', border: '1px solid', borderRadius: 4,
-    fontSize: 11, fontWeight: 800, letterSpacing: 1,
+    fontSize: 'var(--fs-label)', fontWeight: 800, letterSpacing: 1,
   },
   signalRow: { display: 'flex', alignItems: 'center', gap: 6 },
   dirBadge: {
-    padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800,
+    padding: '2px 8px', borderRadius: 4, fontSize: 'var(--fs-label)', fontWeight: 800,
   },
-  signalMeta: { fontSize: 10, color: 'var(--text-muted)' },
+  signalMeta: { fontSize: 'var(--fs-micro)', color: 'var(--text-muted)' },
 
   // Counts
   countsGrid: { display: 'flex', gap: 12 },
@@ -290,7 +290,7 @@ const s: Record<string, React.CSSProperties> = {
   regionPill: {
     padding: '2px 8px', borderRadius: 10,
     background: 'rgba(255,255,255,0.04)', border: '1px solid #1e3a5f',
-    fontSize: 10, color: 'var(--text-dim)',
+    fontSize: 'var(--fs-micro)', color: 'var(--text-dim)',
   },
 
   // Events
@@ -299,10 +299,10 @@ const s: Record<string, React.CSSProperties> = {
   eventItem: { display: 'flex', alignItems: 'flex-start', gap: 8 },
   severityDot: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 3 },
   eventContent: { display: 'flex', flexDirection: 'column', gap: 1 },
-  eventTitle: { fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.3 },
+  eventTitle: { fontSize: 'var(--fs-label)', color: 'var(--text-dim)', lineHeight: 1.3 },
   eventMeta: { fontSize: 9, color: 'var(--text-faint)' },
 
   // Recommendations
   recsSection: { display: 'flex', flexDirection: 'column', gap: 4 },
-  recItem: { fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.4 },
+  recItem: { fontSize: 'var(--fs-micro)', color: 'var(--text-dim)', lineHeight: 1.4 },
 };

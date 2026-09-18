@@ -80,14 +80,14 @@ const QuickActionBar: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginRight: 4 }}>
         <Link
           to="/dashboard"
-          style={{ fontSize: 10, color: 'var(--text-faint)', textDecoration: 'none', fontWeight: 600, letterSpacing: 0.5 }}
+          style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textDecoration: 'none', fontWeight: 600, letterSpacing: 0.5 }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#64748b'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
         >
           HOME
         </Link>
-        <span style={{ fontSize: 10, color: '#1e293b' }}>›</span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
+        <span style={{ fontSize: 'var(--fs-micro)', color: '#1e293b' }}>›</span>
+        <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
       </div>
 
       <div style={{ width: 1, height: 20, background: 'var(--raised)', flexShrink: 0 }} />
@@ -100,12 +100,12 @@ const QuickActionBar: React.FC = () => {
         border: `1px solid ${pnlColor}30`,
         borderRadius: 6, flexShrink: 0,
       }}>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 1 }}>OPEN P&L</span>
+        <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 1 }}>OPEN P&L</span>
         <span style={{ fontSize: 'var(--fs-body)', fontWeight: 800, color: pnlColor, fontFamily: 'monospace' }}>
           {unrealisedPnl >= 0 ? '+' : ''}{Number(unrealisedPnl).toFixed(2)}
         </span>
         {positions.length > 0 && (
-          <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{positions.length} pos</span>
+          <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{positions.length} pos</span>
         )}
       </div>
 
@@ -121,7 +121,7 @@ const QuickActionBar: React.FC = () => {
             border: `1px solid ${color}30`,
             borderRadius: 6,
             color: 'var(--text-dim)',
-            fontSize: 11,
+            fontSize: 'var(--fs-label)',
             fontFamily: 'inherit',
             cursor: 'pointer',
             padding: '4px 10px',

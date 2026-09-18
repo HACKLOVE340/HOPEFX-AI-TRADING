@@ -73,7 +73,7 @@ const Transparency: React.FC = () => {
       subtitle="Decisions the platform made, and the ones it refused."
       icon={ScanSearch}
       width="standard"
-      actions={<button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Refresh</button>}
+      actions={<button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>↻ Refresh</button>}
     >
 
       {loading && <div style={{ color: 'var(--text-muted)', padding: 20 }}>Loading decisions…</div>}
@@ -86,7 +86,7 @@ const Transparency: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
             {tiles.map((t) => (
               <div key={t.label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
                 <div style={{ fontSize: 22, fontWeight: 700 }}>{t.value}</div>
               </div>
             ))}
@@ -102,12 +102,12 @@ const Transparency: React.FC = () => {
                   <div key={d.trade_id ?? i} style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                       <span style={{ fontWeight: 700 }}>{d.symbol ?? '—'}</span>
-                      <span style={{ fontSize: 12, color: d.direction === 'short' || d.direction === 'sell' ? 'var(--loss)' : 'var(--gain)', fontWeight: 600 }}>{(d.direction ?? '').toUpperCase()}</span>
-                      {Number.isFinite(d.confidence) && <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{(d.confidence! <= 1 ? d.confidence! * 100 : d.confidence!).toFixed(0)}% conf</span>}
-                      {d.outcome && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: OUTCOME_COLOR[d.outcome.toLowerCase()] ?? 'var(--text-dim)' }}>{d.outcome}</span>}
+                      <span style={{ fontSize: 'var(--fs-body)', color: d.direction === 'short' || d.direction === 'sell' ? 'var(--loss)' : 'var(--gain)', fontWeight: 600 }}>{(d.direction ?? '').toUpperCase()}</span>
+                      {Number.isFinite(d.confidence) && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{(d.confidence! <= 1 ? d.confidence! * 100 : d.confidence!).toFixed(0)}% conf</span>}
+                      {d.outcome && <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase', color: OUTCOME_COLOR[d.outcome.toLowerCase()] ?? 'var(--text-dim)' }}>{d.outcome}</span>}
                     </div>
-                    {d.reasoning && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{d.reasoning}</div>}
-                    {d.timestamp && <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{d.timestamp}</div>}
+                    {d.reasoning && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4 }}>{d.reasoning}</div>}
+                    {d.timestamp && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>{d.timestamp}</div>}
                   </div>
                 ))}
               </div>
@@ -121,7 +121,7 @@ const Transparency: React.FC = () => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {audit.map((e, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 12 }}>
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 'var(--fs-body)'}}>
                     <span style={{ fontWeight: 600 }}>{e.action_type ?? 'event'}</span>
                     <span style={{ color: 'var(--text-faint)' }}>{e.timestamp ?? ''}</span>
                   </div>

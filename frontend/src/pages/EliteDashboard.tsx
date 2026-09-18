@@ -31,12 +31,12 @@ import { extractApiError } from '../lib/utils';
 
 const s = {
   page:    { padding: '32px 40px', maxWidth: 1100, margin: '0 auto' } as React.CSSProperties,
-  heading: { fontSize: 26, fontWeight: 800, color: '#f59e0b', marginBottom: 4 } as React.CSSProperties,
+  heading: { fontSize: 'var(--fs-hero)', fontWeight: 800, color: '#f59e0b', marginBottom: 4 } as React.CSSProperties,
   sub:     { fontSize: 14, color: 'var(--text-dim)', marginBottom: 32 } as React.CSSProperties,
   grid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 } as React.CSSProperties,
   card:    { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24 } as React.CSSProperties,
   cardH:   { fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 } as React.CSSProperties,
-  label:   { fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block' } as React.CSSProperties,
+  label:   { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 4, display: 'block' } as React.CSSProperties,
   input:   { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
   textarea:{ width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none', resize: 'vertical', minHeight: 100, boxSizing: 'border-box' } as React.CSSProperties,
   select:  { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none' } as React.CSSProperties,
@@ -140,15 +140,15 @@ function AccountManagerCard() {
             </div>
           )}
           <div style={{ marginTop: 16, padding: '12px', background: 'var(--raised)', borderRadius: 8 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>RESPONSE SLA</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>RESPONSE SLA</div>
             {Object.entries(am.response_sla ?? {}).map(([priority, time]) => (
-              <div key={priority} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+              <div key={priority} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-body)', marginBottom: 4 }}>
                 <span style={badgeStyle(PRIORITY_COLORS[priority] ?? 'var(--text-muted)')}>{priority}</span>
                 <span style={{ color: 'var(--text-dim)' }}>{time}</span>
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             Support hours: <span style={{ color: 'var(--text)' }}>{am.support_hours}</span>
           </div>
         </>
@@ -286,12 +286,12 @@ function TicketList({ refresh }: { refresh: number }) {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={badgeStyle(PRIORITY_COLORS[t.priority] ?? 'var(--text-muted)')}>{t.priority}</span>
                 <span style={badgeStyle(STATUS_COLORS[t.status] ?? 'var(--text-muted)')}>{t.status}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{t.category}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{t.category}</span>
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{t.ticket_id}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>{t.ticket_id}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>
                 {new Date(t.created_at).toLocaleDateString()}
               </div>
             </div>
@@ -348,7 +348,7 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
   return (
     <div style={s.card}>
       <div style={s.cardH}>🛠️ Custom Development Request</div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
         Request bespoke strategies, indicators, broker integrations, or API extensions.
         Our team will provide a scoping estimate within 2 business days.
       </div>
@@ -421,7 +421,7 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
             placeholder="Describe your requirements in detail: entry/exit logic, risk parameters, data sources, expected outputs…"
             required
           />
-          <div style={{ fontSize: 11, color: form.description.length < 50 ? '#ef4444' : 'var(--text-muted)', marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--fs-label)', color: form.description.length < 50 ? '#ef4444' : 'var(--text-muted)', marginTop: 4 }}>
             {form.description.length}/50 minimum characters
           </div>
         </div>
@@ -474,13 +474,13 @@ function CustomDevList({ refresh }: { refresh: number }) {
                 <span style={badgeStyle('#8b5cf6')}>{r.request_type}</span>
                 <span style={badgeStyle(STATUS_COLORS[r.status] ?? 'var(--text-muted)')}>{r.status}</span>
                 {r.budget_usd != null && (
-                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>${r.budget_usd.toLocaleString()}</span>
+                  <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>${r.budget_usd.toLocaleString()}</span>
                 )}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{r.request_id}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>{r.request_id}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>
                 {new Date(r.created_at).toLocaleDateString()}
               </div>
             </div>
@@ -531,15 +531,15 @@ const EliteDashboard: React.FC = () => {
         <div style={s.heading}>⭐ Elite Dashboard</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => navigate('/walk-forward')}
-            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             📈 Walk-Forward
           </button>
           <button onClick={() => navigate('/ai-strategy')}
-            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             🤖 AI Strategy
           </button>
           <button onClick={() => navigate('/leaderboard')}
-            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             🏆 Leaderboard
           </button>
         </div>

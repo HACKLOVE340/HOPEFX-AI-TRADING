@@ -237,16 +237,16 @@ const GDPRSection: React.FC = () => {
                     <tr key={r.request_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                       <td style={{ padding: '10px 16px' }}>
                         <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)'}}>{r.username || r.user_id}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.email}</div>
+                        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{r.email}</div>
                       </td>
                       <td style={{ padding: '10px 16px' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)'}22`, color: REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)', border: `1px solid ${REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)'}44` }}>
+                        <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)'}22`, color: REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)', border: `1px solid ${REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)'}44` }}>
                           {r.request_type.toUpperCase()}
                         </span>
                       </td>
                       <td style={{ padding: '10px 16px' }}><StatusBadge status={r.status} /></td>
-                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(r.submitted_at)}</td>
-                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(r.completed_at)}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(r.submitted_at)}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(r.completed_at)}</td>
                       <td style={{ padding: '10px 16px' }}>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {r.request_type === 'export' && (
@@ -293,13 +293,13 @@ const GDPRSection: React.FC = () => {
                       onChange={e => setPolicyEdits(prev => ({ ...prev, [p.data_type]: Number(e.target.value) }))}
                       style={{ width: 80, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 'var(--fs-body)'}}
                     />
-                    <span style={{ marginLeft: 8, color: 'var(--text-faint)', fontSize: 11 }}>
+                    <span style={{ marginLeft: 8, color: 'var(--text-faint)', fontSize: 'var(--fs-label)'}}>
                       {(policyEdits[p.data_type] ?? p.retention_days) >= 365
                         ? `(${((policyEdits[p.data_type] ?? p.retention_days) / 365).toFixed(1)} yrs)`
                         : 'days'}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{p.legal_basis ?? '—'}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{p.legal_basis ?? '—'}</td>
                   <td style={{ padding: '10px 16px' }}>
                     <ActionBtn
                       label="Save"
@@ -349,11 +349,11 @@ const GDPRSection: React.FC = () => {
               <tbody>
                 {consentLog.map((c, i) => (
                   <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
-                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--ai-model)' }}>{c.user_id}</td>
+                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 'var(--fs-label)', color: 'var(--ai-model)' }}>{c.user_id}</td>
                     <td style={{ padding: '8px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{c.event}</td>
-                    <td style={{ padding: '8px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{c.details}</td>
-                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', color: 'var(--text-faint)', fontSize: 11 }}>{c.ip ?? '—'}</td>
-                    <td style={{ padding: '8px 16px', color: 'var(--text-faint)', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(c.timestamp)}</td>
+                    <td style={{ padding: '8px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{c.details}</td>
+                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', color: 'var(--text-faint)', fontSize: 'var(--fs-label)'}}>{c.ip ?? '—'}</td>
+                    <td style={{ padding: '8px 16px', color: 'var(--text-faint)', fontSize: 'var(--fs-body)', whiteSpace: 'nowrap' }}>{fmtDate(c.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>

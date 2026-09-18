@@ -169,13 +169,13 @@ const NotificationsPage: React.FC = () => {
                 padding: '6px 13px',
                 background: voiceAlerts ? 'rgba(96,165,250,0.14)' : 'rgba(100,116,139,0.12)',
                 border: `1px solid ${voiceAlerts ? 'rgba(96,165,250,0.5)' : 'rgba(100,116,139,0.35)'}`,
-                borderRadius: 7, color: voiceAlerts ? 'var(--link)' : 'var(--text-dim)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                borderRadius: 7, color: voiceAlerts ? 'var(--link)' : 'var(--text-dim)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer',
               }}>
               {voiceAlerts ? '🔊 Spoken alerts on' : '🔈 Spoken alerts off'}
             </button>
           )}
           <button onClick={() => navigate('/settings')}
-            style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: 'var(--text-dim)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: 'var(--text-dim)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             ⚙️ Settings
           </button>
           {(['all', 'unread'] as const).map(f => (
@@ -231,7 +231,7 @@ const NotificationsPage: React.FC = () => {
               <div style={{ fontWeight: n.read ? 500 : 700, color: 'var(--text-strong)', fontSize: 14 }}>{n.title}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 {!n.read && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />}
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtDateTime(n.created_at)}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{fmtDateTime(n.created_at)}</span>
                 <button
                   onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}
@@ -242,14 +242,14 @@ const NotificationsPage: React.FC = () => {
             <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
               {n.link && (
-                <a href={n.link} style={{ fontSize: 12, color: '#3b82f6', display: 'inline-block' }}>
+                <a href={n.link} style={{ fontSize: 'var(--fs-body)', color: '#3b82f6', display: 'inline-block' }}>
                   View details →
                 </a>
               )}
               {(n.type === 'trade' || n.type === 'alert' || n.type === 'ai') && (
                 <button
                   onClick={e => { e.stopPropagation(); navigate('/trade'); }}
-                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
+                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                 >
                   ⚡ Trade
                 </button>

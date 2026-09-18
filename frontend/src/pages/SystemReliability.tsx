@@ -54,15 +54,15 @@ const SystemReliability: React.FC = () => (
             { label: 'Super Admin', href: '/superadmin' },
             { label: 'System Reliability' },
           ]}
-          badge={<Badge variant="info" style={{ fontSize: 11 }}>🔬 Live</Badge>}
+          badge={<Badge variant="info" style={{ fontSize: 'var(--fs-label)'}}>🔬 Live</Badge>}
           actions={
             <div style={{ display: 'flex', gap: 8 }}>
               <Link to="/superadmin"
-                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 ⚡ Super Admin
               </Link>
               <Link to="/status"
-                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 🟢 Status
               </Link>
             </div>

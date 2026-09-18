@@ -69,7 +69,7 @@ const SuperAdminGuard: React.FC<Props> = ({ children }) => {
           borderRadius: 20, padding: '4px 12px', marginBottom: 16,
         }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#fca5a5', letterSpacing: '0.06em' }}>
+          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: '#fca5a5', letterSpacing: '0.06em' }}>
             SUPERADMIN ONLY
           </span>
         </div>

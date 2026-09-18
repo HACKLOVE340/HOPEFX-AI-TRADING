@@ -65,10 +65,10 @@ const OFIBar = memo(({ imbalance }: { imbalance: number }) => {
         <div style={{ ...s.ofiSell, width: `${sellPct}%` }} />
       </div>
       <div style={s.ofiLegend}>
-        <span style={{ color: COLORS.profit.base, fontFamily: '"JetBrains Mono", monospace', fontSize: 10 }}>
+        <span style={{ color: COLORS.profit.base, fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)'}}>
           BUY {buyPct.toFixed(1)}%
         </span>
-        <span style={{ color: COLORS.loss.base, fontFamily: '"JetBrains Mono", monospace', fontSize: 10 }}>
+        <span style={{ color: COLORS.loss.base, fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)'}}>
           SELL {sellPct.toFixed(1)}%
         </span>
       </div>
@@ -172,7 +172,7 @@ const VolumeDeltaHeatmap = memo(({ bars }: { bars: VolumeDeltaBar[] }) => {
           <span style={s.gaugeTitle}>CUM Δ</span>
           <span style={{
             fontFamily: '"JetBrains Mono", monospace',
-            fontSize: 12,
+            fontSize: 'var(--fs-body)',
             fontWeight: 700,
             color: latestCumDelta >= 0 ? COLORS.profit.base : COLORS.loss.base,
           }}>
@@ -194,19 +194,19 @@ const VWAPRow = memo(({ vwap, twap, mid }: { vwap: number; twap: number; mid: nu
     <div style={s.vwapCard}>
       <div style={s.vwapRow}>
         <span style={s.gaugeTitle}>VWAP</span>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12, fontWeight: 700, color: COLORS.neon.cyan }}>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-body)', fontWeight: 700, color: COLORS.neon.cyan }}>
           {formatPrice(vwap)}
         </span>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: vwapDiff >= 0 ? COLORS.profit.base : COLORS.loss.base }}>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', color: vwapDiff >= 0 ? COLORS.profit.base : COLORS.loss.base }}>
           {vwapDiff >= 0 ? '+' : ''}{formatPrice(vwapDiff)}
         </span>
       </div>
       <div style={s.vwapRow}>
         <span style={s.gaugeTitle}>TWAP</span>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12, fontWeight: 700, color: COLORS.neon.purple }}>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-body)', fontWeight: 700, color: COLORS.neon.purple }}>
           {formatPrice(twap)}
         </span>
-        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: twapDiff >= 0 ? COLORS.profit.base : COLORS.loss.base }}>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', color: twapDiff >= 0 ? COLORS.profit.base : COLORS.loss.base }}>
           {twapDiff >= 0 ? '+' : ''}{formatPrice(twapDiff)}
         </span>
       </div>
@@ -280,7 +280,7 @@ const MicrostructurePanel: React.FC = () => {
         {micro && (
           <div style={{ gridColumn: '1 / -1', ...s.impactRow }}>
             <span style={s.gaugeTitle}>MARKET IMPACT</span>
-            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, color: COLORS.neon.amber }}>
+            <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-label)', color: COLORS.neon.amber }}>
               {(micro.marketImpact * 100).toFixed(3)}%
             </span>
           </div>
@@ -308,7 +308,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   title: {
     fontFamily: '"JetBrains Mono", monospace',
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     fontWeight: 700,
     color: COLORS.text.muted,
     letterSpacing: '0.12em',
@@ -320,7 +320,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   tickLabel: {
     fontFamily: '"JetBrains Mono", monospace',
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     color: COLORS.text.muted,
     letterSpacing: '0.08em',
   },
@@ -351,7 +351,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   gaugePct: {
     fontFamily: '"JetBrains Mono", monospace',
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     color: COLORS.text.muted,
     marginTop: 2,
   },
@@ -361,7 +361,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   ofiLabel: {
     fontFamily: '"JetBrains Mono", monospace',
-    fontSize: 11,
+    fontSize: 'var(--fs-label)',
     fontWeight: 700,
     letterSpacing: '0.08em',
     marginBottom: 6,
@@ -430,7 +430,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   noData: {
     fontFamily: '"JetBrains Mono", monospace',
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     color: COLORS.text.muted,
     padding: '12px 0',
     textAlign: 'center' as const,

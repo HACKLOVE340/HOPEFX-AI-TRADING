@@ -277,7 +277,7 @@ const SecuritySection: React.FC = () => {
                   </span>
                   {session.current && <StatusBadge status="ok" label="This device" />}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                   {session.ip_address} · Last active {new Date(session.last_active).toLocaleDateString()}
                 </div>
               </div>

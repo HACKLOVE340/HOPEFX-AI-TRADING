@@ -435,7 +435,7 @@ const TCADashboard: React.FC = () => {
         subtitle="Signal-price vs fill-price slippage across all brokers and sessions"
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {loading && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Updating…</span>}
+            {loading && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)'}}>Updating…</span>}
             <button
               onClick={() => navigate('/pnl')}
               style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: 'var(--ai-model)' }}
@@ -451,7 +451,7 @@ const TCADashboard: React.FC = () => {
             )}
             {isAdmin && flushConfirm && (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <span style={{ color: 'var(--loss)', fontSize: 11 }}>Confirm flush?</span>
+                <span style={{ color: 'var(--loss)', fontSize: 'var(--fs-label)'}}>Confirm flush?</span>
                 <button
                   style={{ ...pg.btnDanger, opacity: flushMutation.isPending ? 0.6 : 1 }}
                   onClick={() => flushMutation.mutate()}
@@ -472,7 +472,7 @@ const TCADashboard: React.FC = () => {
           <span style={{ fontWeight: 700 }}>
             ⚠ {alerts.length} broker{alerts.length > 1 ? 's' : ''} above slippage threshold
           </span>
-          <span style={{ fontSize: 12, color: '#fca5a5' }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: '#fca5a5' }}>
             {alerts.map(a => a.broker).join(', ')}
           </span>
         </div>
@@ -600,13 +600,13 @@ const TCADashboard: React.FC = () => {
                     <span style={{ color: '#f1f5f9', fontSize: 'var(--fs-body)', fontWeight: 600, textTransform: 'capitalize' }}>
                       {session.replace('_', ' ')}
                     </span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{s.n_trades} trades</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)'}}>{s.n_trades} trades</span>
                   </div>
                   <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                     <span style={{ color: slippageColor(s.mean_slippage_bps), fontSize: 'var(--fs-body)', fontWeight: 600 }}>
                       {Number.isFinite(s.mean_slippage_bps) ? s.mean_slippage_bps.toFixed(2) : '—'} bps
                     </span>
-                    <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>
+                    <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>
                       {Number.isFinite(s.adverse_rate) ? (s.adverse_rate * 100).toFixed(0) : '—'}% adverse
                     </span>
                   </div>
@@ -627,8 +627,8 @@ const TCADashboard: React.FC = () => {
                 <div key={i} style={pg.alertRow}>
                   <div>
                     <span style={pg.brokerBadge}>{a.broker}</span>
-                    {a.symbol && <span style={{ color: 'var(--text-dim)', fontSize: 11, marginLeft: 6 }}>{a.symbol}</span>}
-                    <div style={{ color: 'var(--text-muted)', fontSize: 10, marginTop: 2 }}>
+                    {a.symbol && <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-label)', marginLeft: 6 }}>{a.symbol}</span>}
+                    <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-micro)', marginTop: 2 }}>
                       {new Date(a.generated_at).toLocaleTimeString()} · {a.n_trades} trades
                     </div>
                   </div>
@@ -636,7 +636,7 @@ const TCADashboard: React.FC = () => {
                     <div style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700 }}>
                       {a.mean_slippage_bps.toFixed(2)} bps
                     </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)'}}>
                       threshold: {a.threshold_bps} bps
                     </div>
                   </div>
@@ -669,7 +669,7 @@ const TCADashboard: React.FC = () => {
             {/* Pagination */}
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               <button style={pg.pageBtn} onClick={() => setRecordsPage(p => Math.max(0, p - 1))} disabled={recordsPage === 0}>‹</button>
-              <span style={{ color: 'var(--text-dim)', fontSize: 12, padding: '0 4px' }}>
+              <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)', padding: '0 4px' }}>
                 {recordsPage + 1}/{totalPages}
               </span>
               <button style={pg.pageBtn} onClick={() => setRecordsPage(p => Math.min(totalPages - 1, p + 1))} disabled={recordsPage >= totalPages - 1}>›</button>
@@ -709,15 +709,15 @@ const TCADashboard: React.FC = () => {
                 {pagedRecords.map((r, i) => (
                   <tr key={r.request_id} style={i % 2 === 0 ? pg.rowEven : pg.rowOdd}>
                     <td style={pg.td}>
-                      <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>
+                      <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-label)'}}>
                         {new Date(r.fill_time).toLocaleTimeString()}
                       </span>
                     </td>
                     <td style={pg.td}>
-                      <span style={{ color: '#f1f5f9', fontFamily: 'monospace', fontSize: 12 }}>{r.symbol}</span>
+                      <span style={{ color: '#f1f5f9', fontFamily: 'monospace', fontSize: 'var(--fs-body)'}}>{r.symbol}</span>
                     </td>
                     <td style={pg.td}>
-                      <span style={{ color: r.side === 'BUY' ? 'var(--gain)' : 'var(--loss)', fontSize: 12, fontWeight: 700 }}>
+                      <span style={{ color: r.side === 'BUY' ? 'var(--gain)' : 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700 }}>
                         {r.side}
                       </span>
                     </td>
@@ -734,7 +734,7 @@ const TCADashboard: React.FC = () => {
                     <td style={pg.td}><span style={pg.brokerBadge}>{r.broker}</span></td>
                     <td style={pg.td}><span style={sessionChip(r.session)}>{r.session}</span></td>
                     <td style={pg.td}>
-                      <span style={{ color: 'var(--text-muted)', fontSize: 10, fontFamily: 'monospace' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-micro)', fontFamily: 'monospace' }}>
                         {r.model_version}
                       </span>
                     </td>

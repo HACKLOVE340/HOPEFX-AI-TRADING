@@ -44,12 +44,12 @@ const StrategyCard: React.FC<{strategy:Strategy;onSelect:(s:Strategy)=>void}> = 
     <div style={st.card} onClick={()=>onSelect(strategy)}>
       <div style={st.cardTop}>
         <div style={st.cardMeta}><span style={st.categoryTag}>{strategy.category.replace('_',' ')}</span>{strategy.tags.slice(0,2).map(t=><span key={t} style={st.tag}>{t}</span>)}</div>
-        <div style={st.priceTag}>{strategy.price===0?<span style={{color:'var(--gain)',fontWeight:700}}>Free</span>:<span style={{color:'var(--text-strong)',fontWeight:700}}>${strategy.price}<span style={{color:'var(--text-muted)',fontWeight:400,fontSize:12}}>/mo</span></span>}</div>
+        <div style={st.priceTag}>{strategy.price===0?<span style={{color:'var(--gain)',fontWeight:700}}>Free</span>:<span style={{color:'var(--text-strong)',fontWeight:700}}>${strategy.price}<span style={{color:'var(--text-muted)',fontWeight:400,fontSize: 'var(--fs-body)'}}>/mo</span></span>}</div>
       </div>
       <h3 style={st.cardTitle}>{strategy.name}</h3>
       <p style={st.cardDesc}>{strategy.description}</p>
       {p&&<div style={st.perfRow}>{p.total_return_pct!=null&&<PerfBadge label="Return" value={fmtPctRaw(p.total_return_pct, 1)} positive={p.total_return_pct>=0}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe" value={fmt(p.sharpe_ratio)} positive={p.sharpe_ratio>=0}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max DD" value={`-${fmt(Math.abs(p.max_drawdown_pct))}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
-      <div style={st.cardFooter}><div style={{display:'flex',alignItems:'center',gap:6}}><Stars rating={strategy.rating}/><span style={{fontSize: 'var(--fs-body)',color:'var(--text-dim)'}}>{fmt(strategy.rating)} ({strategy.review_count})</span></div><span style={{fontSize:12,color:'var(--text-muted)'}}>{strategy.subscriber_count} subscribers</span></div>
+      <div style={st.cardFooter}><div style={{display:'flex',alignItems:'center',gap:6}}><Stars rating={strategy.rating}/><span style={{fontSize: 'var(--fs-body)',color:'var(--text-dim)'}}>{fmt(strategy.rating)} ({strategy.review_count})</span></div><span style={{fontSize: 'var(--fs-body)',color:'var(--text-muted)'}}>{strategy.subscriber_count} subscribers</span></div>
     </div>
   );
 };
@@ -99,7 +99,7 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
         </div>
         {purchaseError&&<div style={st.purchaseError}>{purchaseError}</div>}
         {reviewsErr&&<div style={{...st.purchaseError,marginTop:12}}>{reviewsErr}</div>}
-        {reviews.length>0&&<div style={{marginTop:28}}><h3 style={st.reviewsTitle}>Reviews</h3>{reviews.map(r=><div key={r.review_id} style={st.reviewCard}><div style={st.reviewHeader}><Stars rating={r.rating}/><strong style={{color:'var(--text)',marginLeft:8}}>{r.title}</strong><span style={{color:'var(--text-faint)',fontSize:12,marginLeft:'auto'}}>{new Date(r.created_at).toLocaleDateString()}</span></div><p style={{color:'var(--text-dim)',fontSize:14,margin:'6px 0 0'}}>{r.content}</p></div>)}</div>}
+        {reviews.length>0&&<div style={{marginTop:28}}><h3 style={st.reviewsTitle}>Reviews</h3>{reviews.map(r=><div key={r.review_id} style={st.reviewCard}><div style={st.reviewHeader}><Stars rating={r.rating}/><strong style={{color:'var(--text)',marginLeft:8}}>{r.title}</strong><span style={{color:'var(--text-faint)',fontSize: 'var(--fs-body)',marginLeft:'auto'}}>{new Date(r.created_at).toLocaleDateString()}</span></div><p style={{color:'var(--text-dim)',fontSize:14,margin:'6px 0 0'}}>{r.content}</p></div>)}</div>}
       </div>
     </div>
   );
@@ -292,14 +292,14 @@ const st: Record<string,React.CSSProperties> = {
   card:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:12,padding:20,cursor:'pointer'},
   cardTop:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10},
   cardMeta:{display:'flex',gap:6,flexWrap:'wrap'},
-  categoryTag:{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,background:'#1e3a5f',color:'var(--link)',textTransform:'capitalize'},
-  tag:{fontSize:11,padding:'2px 8px',borderRadius:4,background:'var(--raised)',color:'var(--text-muted)',border:'1px solid var(--border-strong)'},
+  categoryTag:{fontSize: 'var(--fs-label)',fontWeight:600,padding:'2px 8px',borderRadius:4,background:'#1e3a5f',color:'var(--link)',textTransform:'capitalize'},
+  tag:{fontSize: 'var(--fs-label)',padding:'2px 8px',borderRadius:4,background:'var(--raised)',color:'var(--text-muted)',border:'1px solid var(--border-strong)'},
   priceTag:{fontSize: 'var(--fs-value)',whiteSpace:'nowrap'},
   cardTitle:{fontSize:16,fontWeight:700,color:'var(--text-strong)',margin:'0 0 8px'},
   cardDesc:{fontSize: 'var(--fs-body)',color:'var(--text-dim)',lineHeight:1.6,margin:'0 0 14px',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'},
   perfRow:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:14},
   perfBadge:{background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:6,padding:'6px 10px',textAlign:'center',minWidth:64},
-  perfValue:{fontSize:14,fontWeight:700},perfLabel:{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.3},
+  perfValue:{fontSize:14,fontWeight:700},perfLabel:{fontSize: 'var(--fs-micro)',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.3},
   cardFooter:{display:'flex',justifyContent:'space-between',alignItems:'center'},
   overlay:{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16},
   modal:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:14,padding:'28px',maxWidth:680,width:'100%',maxHeight:'90vh',overflowY:'auto',position:'relative'},

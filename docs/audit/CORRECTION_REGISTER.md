@@ -116,7 +116,7 @@ and every step of it has caught something here at least once.
 #### DENSITY-CANNOT-REACH · The density control is stamped on every route and can reach almost nothing
 
 - **Priority** P2 · **Area** Frontend
-- **Measured now** 33 token-reading utilities against 2107 inline fontSize and 1091 numeric spacing utilities — 3198 sizes the density control cannot reach
+- **Measured now** 33 token-reading utilities against 740 inline fontSize and 1091 numeric spacing utilities — 1831 sizes the density control cannot reach
 - **Fix** `PageSurface` stamps `data-density` on every route, `index.css` fully specifies three tiers across eleven tokens each, and CLAUDE.md documents it as "one table, stamped on every route". Every part of that is true and none of it reaches a pixel on most pages: the tokens the tiers redefine are consumed by 29 class usages in the whole application, against 2,871 inline `fontSize: <number>` and 1,089 numeric Tailwind spacing utilities. A literal pixel is not in the cascade, so no tier can change it. That is why the interface does not feel dense at any setting, and it is the dead-control shape: a control that exists, is documented accurately, and never runs. It is the same defect as the 3,555 colour literals, in the size dimension — and the colour side already has a codemod and a ratchet, which is the precedent for closing this one. NOT fixed by making density a user preference: that made the control settable, which is a different thing from making it effective, and shipping the control without recording this would have been shipping a second dead control on top of the first.
 - **Write this test first** frontend/src/test/density_is_not_a_dead_control.test.ts proves the three tiers are specified, monotonic and separated by a real margin rather than a rounding one — parsed from index.css, because the tiers live inside `@layer base`, which jsdom's CSSOM drops entirely, so a `getComputedStyle` assertion here would have been a test of jsdom's coverage rather than of the cascade. The live cascade is proved in a browser. This entry stays OPEN until the literal sizes reach the token layer; the probe counts both sides from the tree, so it closes itself and cannot be closed by assertion.
 - **Verify** `python scripts/correction_register.py --id DENSITY-CANNOT-REACH`
@@ -974,7 +974,7 @@ The practical consequence is worth stating plainly, because 68 red checks read a
 #### F108 · Test files that define tests and assert nothing
 
 - **Priority** P2 · **Area** Tests
-- **Measured now** all 916 unit-test files that define a test also assert
+- **Measured now** all 917 unit-test files that define a test also assert
 - **Fix** Two files remain. A test that cannot fail is a measurement that cannot fail — the defining defect of this codebase, in the suite that is supposed to catch it. Give each an assertion or delete it.
 - **Write this test first** The probe is the test: assert no unit-test file defines a test without asserting.
 - **Verify** `python scripts/correction_register.py --id F108`

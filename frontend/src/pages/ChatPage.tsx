@@ -184,13 +184,13 @@ const ChatPage: React.FC = () => {
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{room.name}</span>
                 </div>
                 {room.unread_count > 0 && (
-                  <span style={{ background: '#3b82f6', color: '#fff', borderRadius: 10, fontSize: 11, fontWeight: 700, padding: '1px 6px' }}>
+                  <span style={{ background: '#3b82f6', color: '#fff', borderRadius: 10, fontSize: 'var(--fs-label)', fontWeight: 700, padding: '1px 6px' }}>
                     {room.unread_count}
                   </span>
                 )}
               </div>
               {room.last_message && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {room.last_message}
                 </div>
               )}
@@ -208,16 +208,16 @@ const ChatPage: React.FC = () => {
             <div>
               <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' }}>{activeRoom.name}</div>
               {activeRoom.description && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{activeRoom.description}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{activeRoom.description}</div>
               )}
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
-                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
                 ⚡ Trade
               </button>
               <button onClick={() => navigate('/signals')}
-                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
                 📡 Signals
               </button>
             </div>
@@ -240,7 +240,7 @@ const ChatPage: React.FC = () => {
               </div>
               <div style={{ maxWidth: '70%' }}>
                 {!isOwn(msg) && (
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>{msg.username}</div>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 3 }}>{msg.username}</div>
                 )}
                 <div style={{
                   background: isOwn(msg) ? '#1e3a5f' : 'var(--raised)',
@@ -250,7 +250,7 @@ const ChatPage: React.FC = () => {
                 }}>
                   {msg.content}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 3, textAlign: isOwn(msg) ? 'right' : 'left' }}>
+                <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginTop: 3, textAlign: isOwn(msg) ? 'right' : 'left' }}>
                   {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   {msg.edited && ' (edited)'}
                 </div>

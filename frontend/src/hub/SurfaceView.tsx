@@ -135,7 +135,7 @@ const RENDERERS: Record<string, React.FC<RendererProps>> = {
     <pre
       style={{
         margin: 0,
-        fontSize: 11,
+        fontSize: 'var(--fs-label)',
         lineHeight: 1.6,
         color: C.dim,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -324,7 +324,7 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
           <h3
             style={{
               margin: '3px 0 0',
-              fontSize: 13.5,
+              fontSize: 'var(--fs-value)',
               fontWeight: 600,
               color: C.text,
               overflow: 'hidden',
@@ -366,7 +366,7 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
         {!Renderer ? (
           // Stated, not blank. A missing renderer that draws nothing is
           // indistinguishable from data that has not arrived.
-          <p style={{ margin: 0, fontSize: 12, color: C.warn, lineHeight: 1.6 }}>
+          <p style={{ margin: 0, fontSize: 'var(--fs-body)', color: C.warn, lineHeight: 1.6 }}>
             This deployment cannot draw a <strong>{surface.kind}</strong> yet. The surface is registered and
             the request was understood — only the renderer is missing.
           </p>
@@ -374,7 +374,7 @@ export const SurfaceView: React.FC<SurfaceViewProps> = ({
           // Why it is empty, which is a different fact from being empty. A flat
           // book and a dead feed both render as nothing unless somebody says
           // which one this is.
-          <p style={{ margin: 0, fontSize: 12, color: C.quiet, lineHeight: 1.6 }}>{data.note}</p>
+          <p style={{ margin: 0, fontSize: 'var(--fs-body)', color: C.quiet, lineHeight: 1.6 }}>{data.note}</p>
         ) : asTable && Table ? (
           <Table data={data} />
         ) : (
@@ -450,7 +450,7 @@ const Rows: React.FC<{ rows: [string, string][] }> = ({ rows }) => {
   if (rows.length === 0) return <Empty>Nothing to show.</Empty>;
   if (rows.length <= VIRTUALIZE_ABOVE) {
     return (
-      <dl style={{ margin: 0, display: 'grid', gap: 5, fontSize: 12 }}>
+      <dl style={{ margin: 0, display: 'grid', gap: 5, fontSize: 'var(--fs-body)'}}>
         {rows.map(([k, v]) => (
           <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
             <dt style={{ color: C.quiet }}>{k}</dt>
@@ -461,7 +461,7 @@ const Rows: React.FC<{ rows: [string, string][] }> = ({ rows }) => {
     );
   }
   return (
-    <div style={{ fontSize: 12 }}>
+    <div style={{ fontSize: 'var(--fs-body)'}}>
       <VirtualList
         items={rows}
         itemHeight={ROW_HEIGHT}
@@ -479,7 +479,7 @@ const Headlines: React.FC<{ items: string[] }> = ({ items }) => {
   if (items.length === 0) return <Empty>No headlines.</Empty>;
   if (items.length <= VIRTUALIZE_ABOVE) {
     return (
-      <ul style={{ margin: 0, paddingLeft: 15, display: 'grid', gap: 5, fontSize: 12, color: C.dim }}>
+      <ul style={{ margin: 0, paddingLeft: 15, display: 'grid', gap: 5, fontSize: 'var(--fs-body)', color: C.dim }}>
         {items.map((t) => (
           <li key={t}>{t}</li>
         ))}
@@ -487,7 +487,7 @@ const Headlines: React.FC<{ items: string[] }> = ({ items }) => {
     );
   }
   return (
-    <div style={{ fontSize: 12, color: C.dim }}>
+    <div style={{ fontSize: 'var(--fs-body)', color: C.dim }}>
       <VirtualList
         items={items}
         itemHeight={ROW_HEIGHT}
@@ -562,7 +562,7 @@ const Code: React.FC<{ body: string }> = ({ body }) =>
  */
 const CameraConsent: React.FC = () => (
   <div style={{ display: 'grid', gap: 6 }}>
-    <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: C.dim }}>
+    <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 1.6, color: C.dim }}>
       The camera is off. Nothing is captured, streamed or stored until you grant camera consent, and
       granting it is an action you take — opening this panel is not one.
     </p>
@@ -574,5 +574,5 @@ const CameraConsent: React.FC = () => (
 );
 
 const Empty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p style={{ margin: 0, fontSize: 12, color: C.quiet }}>{children}</p>
+  <p style={{ margin: 0, fontSize: 'var(--fs-body)', color: C.quiet }}>{children}</p>
 );

@@ -141,7 +141,7 @@ const s: Record<string, React.CSSProperties> = {
   subtext:     { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
   form:        { display: 'flex', flexDirection: 'column', gap: 16 },
   field:       { display: 'flex', flexDirection: 'column' },
-  label:       { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  label:       { fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   input: {
     background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     padding: '12px 14px', fontSize: 16, /* prevents iOS zoom */

@@ -186,7 +186,7 @@ const TickerItem: React.FC<{ sym: string }> = ({ sym }) => {
         {tick ? fmtPct(tick.change_pct) : '—'}
       </span>
       {tick && (
-        <span style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>
+        <span style={{ fontSize: 'var(--fs-micro)', color: '#475569', marginTop: 1 }}>
           {fmt(tick.bid, decimals)} / {fmt(tick.ask, decimals)}
         </span>
       )}
@@ -375,7 +375,7 @@ const PositionsTable: React.FC = () => {
               <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
                 {fmtUSD(p.unrealized_pnl)}
               </td>
-              <td style={{ ...s.td, color: 'var(--text-muted)', fontSize: 12 }}>
+              <td style={{ ...s.td, color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
                 {new Date(p.opened_at).toLocaleString()}
               </td>
             </tr>
@@ -532,12 +532,12 @@ const MlAccuracyCard: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)' }}>{data.model_id ?? 'Model'}</div>
-          <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+          <div style={{ fontSize: 'var(--fs-label)', color: '#475569', marginTop: 2 }}>
             {safeTotalSigs.toLocaleString()} signals · evaluated {evaluatedLabel}
           </div>
         </div>
         <div style={{
-          fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
+          fontSize: 'var(--fs-label)', fontWeight: 700, padding: '3px 10px', borderRadius: 6,
           background: safeAccuracy >= 0.60 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.12)',
           color: safeAccuracy >= 0.60 ? 'var(--gain)' : 'var(--warn)',
           border: `1px solid ${safeAccuracy >= 0.60 ? '#4ade8044' : '#fbbf2444'}`,
@@ -556,7 +556,7 @@ const MlAccuracyCard: React.FC = () => {
         ))}
       </div>
       {data.note && (
-        <div style={{ fontSize: 11, color: '#475569', marginTop: 10, fontStyle: 'italic' }}>{data.note}</div>
+        <div style={{ fontSize: 'var(--fs-label)', color: '#475569', marginTop: 10, fontStyle: 'italic' }}>{data.note}</div>
       )}
       <div style={{ background: '#0f172a', borderRadius: 4, height: 6, marginTop: 12 }}>
         <div style={{
@@ -617,24 +617,24 @@ const MarketRegimePanel: React.FC = () => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 16 }}>
       <div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
+        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: regimeColor }}>
           {regime.regime.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
         </div>
-        {regime.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{regime.description}</div>}
+        {regime.description && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>{regime.description}</div>}
       </div>
       <div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Confidence</div>
+        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Confidence</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>{regime.confidence != null ? `${(regime.confidence * 100).toFixed(1)}%` : '—'}</div>
       </div>
       <div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Volatility</div>
+        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Volatility</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: regime.volatility === 'high' ? 'var(--loss)' : regime.volatility === 'medium' ? 'var(--warn)' : 'var(--gain)' }}>
           {regime.volatility ? regime.volatility.charAt(0).toUpperCase() + regime.volatility.slice(1) : '—'}
         </div>
       </div>
       <div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Trend</div>
+        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Trend</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: regime.trend === 'up' ? 'var(--gain)' : regime.trend === 'down' ? 'var(--loss)' : 'var(--text-dim)' }}>
           {regime.trend === 'up' ? '↑ Bullish' : regime.trend === 'down' ? '↓ Bearish' : '→ Neutral'}
         </div>
@@ -694,7 +694,7 @@ const RiskSnapshotPanel: React.FC = () => {
           border: `1px solid ${warn ? 'var(--loss)' : '#1e293b'}`,
           borderRadius: 8, padding: '10px 14px',
         }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+          <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: warn ? 'var(--loss)' : 'var(--text-strong)' }}>{value}</div>
         </div>
       ))}
@@ -730,7 +730,7 @@ const QuickNav: React.FC = () => (
         style={{
           background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
           minHeight: 44, padding: '0 14px', color: 'var(--text-dim)',
-          fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+          fontSize: 'var(--fs-body)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
           textDecoration: 'none', cursor: 'pointer',
           transition: 'border-color 0.15s, color 0.15s',
         }}
@@ -771,7 +771,7 @@ const WsBadge: React.FC = () => {
   const dot = stalled ? '#ffb800' : (colors[status] ?? '#64748b');
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
       <span style={{
         width: 8, height: 8, borderRadius: '50%',
         background: dot,

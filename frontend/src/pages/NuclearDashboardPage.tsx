@@ -47,7 +47,7 @@ const NuclearDashboardPage: React.FC = () => (
     ]}
     badge={
       <span style={{
-        fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10,
+        fontSize: 'var(--fs-micro)', fontWeight: 800, padding: '2px 8px', borderRadius: 10,
         background: 'rgba(239,68,68,0.15)', color: '#ef4444',
         border: '1px solid rgba(239,68,68,0.35)', letterSpacing: 1,
       }}>
@@ -66,7 +66,7 @@ const NuclearDashboardPage: React.FC = () => (
               border: `1px solid ${color}35`,
               borderRadius: 6,
               color,
-              fontSize: 11,
+              fontSize: 'var(--fs-label)',
               fontWeight: 600,
               textDecoration: 'none',
               transition: 'background 0.15s',

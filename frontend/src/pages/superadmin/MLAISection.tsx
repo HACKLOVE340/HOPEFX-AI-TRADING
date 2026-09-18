@@ -21,7 +21,7 @@ const AccuracyBar: React.FC<{ value: number }> = ({ value }) => {
       <div style={{ flex: 1, height: 6, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${value}%`, background: color, borderRadius: 3, transition: 'width 0.5s' }} />
       </div>
-      <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 40 }}>{value.toFixed(1)}%</span>
+      <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color, minWidth: 40 }}>{value.toFixed(1)}%</span>
     </div>
   );
 };
@@ -40,7 +40,7 @@ const DriftBar: React.FC<{ value: number | null; state?: string }> = ({ value, s
       ? 'This version is not serving inference, so no drift is measured for it.'
       : 'The drift monitor could not be read — this is not a reading of zero drift.';
     return (
-      <span title={title} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+      <span title={title} style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-muted)', fontStyle: 'italic' }}>
         — {label}
       </span>
     );
@@ -51,7 +51,7 @@ const DriftBar: React.FC<{ value: number | null; state?: string }> = ({ value, s
       <div style={{ flex: 1, height: 6, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${Math.min(value * 100, 100)}%`, background: color, borderRadius: 3 }} />
       </div>
-      <span style={{ fontSize: 12, fontWeight: 700, color, minWidth: 40 }}>{value.toFixed(3)}</span>
+      <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color, minWidth: 40 }}>{value.toFixed(3)}</span>
     </div>
   );
 };
@@ -175,7 +175,7 @@ const MLAISection: React.FC = () => {
           onConfirm={() => doAction(deployTarget.model, 'deploy', deployTarget.version.trim())}
           onCancel={() => setDeployTarget(null)}
         >
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-dim)' }}>
+          <label style={{ display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
             Version to serve
             <Input
               aria-label={`Version of ${deployTarget.model} to deploy`}
@@ -202,7 +202,7 @@ const MLAISection: React.FC = () => {
             { label: 'Drift Score',      value: mlStatus.drift_score === null || mlStatus.drift_score === undefined ? 'not measured' : mlStatus.drift_score.toFixed(3), color: mlStatus.drift_score === null || mlStatus.drift_score === undefined ? '#64748b' : mlStatus.drift_score < 0.1 ? '#4ade80' : mlStatus.drift_score < 0.3 ? '#fbbf24' : '#f87171', icon: <TrendingUp size={16} aria-hidden /> },
           ].map(m => (
             <div key={m.label}>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 3 }}>{m.icon} {m.label}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginBottom: 3 }}>{m.icon} {m.label}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: m.color }}>{m.value}</div>
             </div>
           ))}
@@ -231,7 +231,7 @@ const MLAISection: React.FC = () => {
               { label: 'Win Rate',     value: `${((rlStatus.win_rate ?? 0) * 100).toFixed(1)}%` },
             ].map(m => (
               <div key={m.label} style={{ background: 'var(--raised)', borderRadius: 8, padding: '10px 12px' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginBottom: 4 }}>{m.label}</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{m.value}</div>
               </div>
             ))}
@@ -254,7 +254,7 @@ const MLAISection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Model', 'Version', 'Status', 'Accuracy', 'Drift', 'Predictions Today', 'Last Trained', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -264,7 +264,7 @@ const MLAISection: React.FC = () => {
               {models.map(m => (
                 <tr key={m.name} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '12px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{m.name}</td>
-                  <td style={{ padding: '12px 12px', color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '12px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', whiteSpace: 'nowrap' }}>
                     v{m.version}
                     {/* sha256[:8] identifies the artifact, not the row. Four
                         entries here share one file, so without this the table
@@ -290,7 +290,7 @@ const MLAISection: React.FC = () => {
                   <td style={{ padding: '12px 12px', minWidth: 120 }}><AccuracyBar value={m.accuracy} /></td>
                   <td style={{ padding: '12px 12px', minWidth: 120 }}><DriftBar value={m.drift_score} state={m.drift_state} /></td>
                   <td style={{ padding: '12px 12px', color: 'var(--text-dim)' }}>{m.predictions_today.toLocaleString()}</td>
-                  <td style={{ padding: '12px 12px', color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(m.last_trained)}</td>
+                  <td style={{ padding: '12px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', whiteSpace: 'nowrap' }}>{fmtDate(m.last_trained)}</td>
                   <td style={{ padding: '12px 12px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <ActionBtn
@@ -388,13 +388,13 @@ const MLSubsystemsPanel: React.FC = () => {
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {STABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12,
+            padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)',
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#2e1065' : 'var(--raised)',
             color: tab === t.id ? '#c084fc' : 'var(--text-dim)',
           }}>{t.label}</button>
         ))}
-        <button onClick={load} disabled={loading} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
+        <button onClick={load} disabled={loading} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)'}}>
           {loading ? '…' : '↻'}
         </button>
       </div>
@@ -405,7 +405,7 @@ const MLSubsystemsPanel: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
           {Object.entries(filterStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
             <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#c084fc' }}>{String(val)}</div>
             </div>
           ))}
@@ -419,7 +419,7 @@ const MLSubsystemsPanel: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
           {Object.entries(onlineStatus as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
             <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--link)' }}>{String(val)}</div>
             </div>
           ))}
@@ -433,17 +433,17 @@ const MLSubsystemsPanel: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
           {driftStatus && Object.entries(driftStatus).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
             <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
               <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--warn)' }}>{String(val)}</div>
             </div>
           ))}
           {sharpeStatus && (
             <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>Sharpe Circuit Breaker</div>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>Sharpe Circuit Breaker</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
                 {Object.entries(sharpeStatus).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
                   <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
                     <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: (val as boolean) === true ? 'var(--loss)' : 'var(--gain)' }}>{String(val)}</div>
                   </div>
                 ))}
@@ -468,13 +468,13 @@ const MLSubsystemsPanel: React.FC = () => {
               'Regime Detection Features', 'Geopolitical Risk Score', 'Order Flow Imbalance',
               'GARCH Volatility Estimate', 'Correlation Features', 'COT Positioning',
             ].map(f => (
-              <div key={f} style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-dim)' }}>
+              <div key={f} style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
                 ✓ {f}
               </div>
             ))}
           </div>
           <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>Model Ensemble Architecture</div>
+            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>Model Ensemble Architecture</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {[
                 { name: 'XGBoost', role: 'Primary signal classifier', weight: '40%' },
@@ -485,9 +485,9 @@ const MLSubsystemsPanel: React.FC = () => {
                 { name: 'RL Agent (PPO/SAC)', role: 'Position sizing', weight: 'overlay' },
               ].map(m => (
                 <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'var(--raised)' }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-strong)' }}>{m.name}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.role}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ai-model)' }}>{m.weight}</span>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{m.name}</span>
+                  <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{m.role}</span>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--ai-model)' }}>{m.weight}</span>
                 </div>
               ))}
             </div>

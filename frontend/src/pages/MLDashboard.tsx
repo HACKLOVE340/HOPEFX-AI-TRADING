@@ -176,7 +176,7 @@ const MLDashboard: React.FC = () => {
             <RefreshCw size={13} strokeWidth={2} aria-hidden /> Refresh
           </button>
           <button onClick={retrain} disabled={busy === 'retrain' || health?.can_retrain === false}
-            style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, cursor: busy === 'retrain' ? 'default' : 'pointer', opacity: health?.can_retrain === false ? 0.5 : 1 }}>
+            style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 7, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: busy === 'retrain' ? 'default' : 'pointer', opacity: health?.can_retrain === false ? 0.5 : 1 }}>
             {busy === 'retrain' ? 'Retraining…' : 'Trigger Retrain'}
           </button>
         </div>
@@ -190,7 +190,7 @@ const MLDashboard: React.FC = () => {
           {/* Name the parts. A partial outage used to render no banner at all,
               and the tiles it fed simply went blank with no explanation. */}
           {failedParts.length > 0 && (
-            <div style={{ fontSize: 12, opacity: 0.85 }}>
+            <div style={{ fontSize: 'var(--fs-body)', opacity: 0.85 }}>
               Could not load: {failedParts.join(', ')}. Tiles below show “—” for anything unavailable.
             </div>
           )}
@@ -202,7 +202,7 @@ const MLDashboard: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
             {tiles.map((t) => (
               <div key={t.label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>{t.value}</div>
               </div>
             ))}
@@ -216,9 +216,9 @@ const MLDashboard: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {Object.entries(shadows).map(([id]) => (
                   <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: 'var(--surface)', borderRadius: 8 }}>
-                    <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 12 }}>{id}</span>
+                    <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 'var(--fs-body)'}}>{id}</span>
                     <button onClick={() => promote(id)} disabled={busy === `promote:${id}`}
-                      style={{ padding: '4px 12px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, color: 'var(--gain)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                      style={{ padding: '4px 12px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, color: 'var(--gain)', fontSize: 'var(--fs-label)', fontWeight: 700, cursor: 'pointer' }}>
                       {busy === `promote:${id}` ? 'Promoting…' : 'Promote'}
                     </button>
                   </div>
@@ -234,7 +234,7 @@ const MLDashboard: React.FC = () => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {history.map((h, i) => (
-                  <div key={i} style={{ padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', color: 'var(--text-dim)', wordBreak: 'break-all' }}>
+                  <div key={i} style={{ padding: '6px 10px', background: 'var(--surface)', borderRadius: 6, fontSize: 'var(--fs-body)', fontFamily: 'monospace', color: 'var(--text-dim)', wordBreak: 'break-all' }}>
                     {typeof h === 'string' ? h : JSON.stringify(h)}
                   </div>
                 ))}

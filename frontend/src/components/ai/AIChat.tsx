@@ -264,7 +264,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
           </button>
         </div>
         {!empty && (
-          <button onClick={() => void clear()} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: 11, cursor: 'pointer', padding: 0 }}>
+          <button onClick={() => void clear()} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: 'var(--fs-label)', cursor: 'pointer', padding: 0 }}>
             Clear conversation
           </button>
         )}

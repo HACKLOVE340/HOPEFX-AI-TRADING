@@ -317,7 +317,7 @@ const LiveEquityBadge: React.FC<{ equity: number | undefined }> = ({ equity }) =
     <span
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
-        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+        padding: '2px 8px', borderRadius: 6, fontSize: 'var(--fs-label)', fontWeight: 700,
         background: flash !== 'transparent' ? flash : 'rgba(0,230,118,0.08)',
         color: 'var(--bull)', border: '1px solid rgba(0,230,118,0.2)',
         transition: 'background 0.4s ease',

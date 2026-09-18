@@ -93,8 +93,8 @@ export function NewsTicker() {
               const color = sentimentColor(item.sentiment);
               return (
                 <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 24px' }}>
-                  <span style={{ fontSize: 10, color, fontWeight: 700 }}>{sentimentLabel(item.sentiment)}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{text}</span>
+                  <span style={{ fontSize: 'var(--fs-micro)', color, fontWeight: 700 }}>{sentimentLabel(item.sentiment)}</span>
+                  <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)' }}>{text}</span>
                   {item.source && (
                     <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>— {item.source}</span>
                   )}
@@ -116,15 +116,15 @@ export function NewsTicker() {
                 display: 'flex', alignItems: 'flex-start', gap: 8,
                 padding: '5px 12px', borderBottom: '1px solid var(--surface)',
               }}>
-                <span style={{ fontSize: 11, color, flexShrink: 0, marginTop: 1 }}>{sentimentLabel(item.sentiment)}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color, flexShrink: 0, marginTop: 1 }}>{sentimentLabel(item.sentiment)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {item.url ? (
                     <a href={item.url} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: 11, color: 'var(--text-dim)', textDecoration: 'none', lineHeight: 1.4 }}>
+                      style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', textDecoration: 'none', lineHeight: 1.4 }}>
                       {text}
                     </a>
                   ) : (
-                    <span style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.4 }}>{text}</span>
+                    <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', lineHeight: 1.4 }}>{text}</span>
                   )}
                   <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
                     {item.source && <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>{item.source}</span>}
@@ -144,7 +144,7 @@ export function NewsTicker() {
           padding: '0 10px', height: '100%',
           background: 'transparent', border: 'none',
           borderLeft: '1px solid #1a2e4a',
-          color: 'var(--text-faint)', cursor: 'pointer', fontSize: 12,
+          color: 'var(--text-faint)', cursor: 'pointer', fontSize: 'var(--fs-body)',
           flexShrink: 0,
         }}
         title={expanded ? 'Collapse news' : 'Expand news'}

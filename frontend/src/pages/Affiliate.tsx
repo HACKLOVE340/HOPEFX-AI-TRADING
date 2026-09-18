@@ -150,7 +150,7 @@ const Affiliate:React.FC=()=>{
       <div style={st.enrollCard}>
         <h2 style={{fontSize:22,marginBottom:12,color:'var(--text-strong)'}}>Earn by referring traders</h2>
         <p style={{color:'var(--text-dim)',marginBottom:24,lineHeight:1.6}}>Share your referral link and earn recurring commissions. Commissions range from <strong style={{color:'var(--text-strong)'}}>10% (Bronze)</strong> to <strong style={{color:'var(--ai-model)'}}>25% (Platinum)</strong>.</p>
-        <div style={st.tierGrid}>{Object.entries(LEVEL_RATES).map(([level,rate])=>(<div key={level} style={{...st.tierCard,border:`1px solid ${LEVEL_COLORS[level]}`}}><div style={{color:LEVEL_COLORS[level],fontWeight:700,textTransform:'capitalize',marginBottom:4}}>{level}</div><div style={{fontSize:24,fontWeight:800,color:'var(--text-strong)'}}>{rate}</div><div style={{fontSize:12,color:'var(--text-muted)'}}>commission</div></div>))}</div>
+        <div style={st.tierGrid}>{Object.entries(LEVEL_RATES).map(([level,rate])=>(<div key={level} style={{...st.tierCard,border:`1px solid ${LEVEL_COLORS[level]}`}}><div style={{color:LEVEL_COLORS[level],fontWeight:700,textTransform:'capitalize',marginBottom:4}}>{level}</div><div style={{fontSize:24,fontWeight:800,color:'var(--text-strong)'}}>{rate}</div><div style={{fontSize: 'var(--fs-body)',color:'var(--text-muted)'}}>commission</div></div>))}</div>
         <button onClick={handleSignup} disabled={signupLoading} style={{...st.primaryBtn,marginTop:24,opacity:signupLoading?0.6:1}}>{signupLoading?'Joining…':'Join the affiliate program'}</button>
       </div>
     </PageShell>
@@ -179,7 +179,7 @@ const Affiliate:React.FC=()=>{
       <div style={st.linkCard}>
         <div style={st.linkLabel}>Your referral link</div>
         <div style={st.linkRow}><code style={st.linkCode}>{referralLink}</code><button onClick={copyLink} style={st.copyBtn}>{copied?'✅ Copied':'Copy link'}</button></div>
-        <div style={{fontSize:12,color:'var(--text-muted)',marginTop:8}}>Code: <strong style={{color:'var(--text-dim)'}}>{account.code}</strong></div>
+        <div style={{fontSize: 'var(--fs-body)',color:'var(--text-muted)',marginTop:8}}>Code: <strong style={{color:'var(--text-dim)'}}>{account.code}</strong></div>
       </div>
 
       <div style={st.tabs}>
@@ -223,7 +223,7 @@ const Affiliate:React.FC=()=>{
           {subErrors.referrals&&<div style={st.subError}>{subErrors.referrals}</div>}
           {referrals.length===0&&!subErrors.referrals?(<p style={{color:'var(--text-muted)',fontSize:14}}>No referrals yet. Share your link to get started.</p>):(
             <table style={st.table}><thead><tr><th style={st.th}>User ID</th><th style={st.th}>Status</th><th style={st.th}>Referred</th><th style={st.th}>Converted</th><th style={st.th}>Commission</th></tr></thead>
-            <tbody>{referrals.map(r=>(<tr key={r.referral_id} style={st.tr}><td style={{...st.td,fontFamily:'monospace',fontSize:12}}>{r.referred_user_id}</td><td style={st.td}>{statusBadge(r.status)}</td><td style={st.td}>{new Date(r.created_at).toLocaleDateString()}</td><td style={st.td}>{r.converted_at?new Date(r.converted_at).toLocaleDateString():'—'}</td><td style={st.td}>{r.commission_amount!=null?fmtUSD(r.commission_amount):'—'}</td></tr>))}</tbody></table>
+            <tbody>{referrals.map(r=>(<tr key={r.referral_id} style={st.tr}><td style={{...st.td,fontFamily:'monospace',fontSize: 'var(--fs-body)'}}>{r.referred_user_id}</td><td style={st.td}>{statusBadge(r.status)}</td><td style={st.td}>{new Date(r.created_at).toLocaleDateString()}</td><td style={st.td}>{r.converted_at?new Date(r.converted_at).toLocaleDateString():'—'}</td><td style={st.td}>{r.commission_amount!=null?fmtUSD(r.commission_amount):'—'}</td></tr>))}</tbody></table>
           )}
         </div>
       )}
@@ -243,7 +243,7 @@ const Affiliate:React.FC=()=>{
         <div style={st.card}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
             <h3 style={{...st.cardTitle,marginBottom:0}}>Top affiliates</h3>
-            <button onClick={()=>navigate('/leaderboard')} style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:6,color:'var(--link)',fontSize:12,fontWeight:600,padding:'4px 12px',cursor:'pointer'}}>View full leaderboard →</button>
+            <button onClick={()=>navigate('/leaderboard')} style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:6,color:'var(--link)',fontSize: 'var(--fs-body)',fontWeight:600,padding:'4px 12px',cursor:'pointer'}}>View full leaderboard →</button>
           </div>
           {subErrors.leaderboard&&<div style={st.subError}>{subErrors.leaderboard}</div>}
           {!subErrors.leaderboard&&(
@@ -260,14 +260,14 @@ const st:Record<string,React.CSSProperties>={
   page:{maxWidth:900,margin:'0 auto',padding:'32px 16px',fontFamily:'system-ui,-apple-system,sans-serif',color:'var(--text-strong)',background:'var(--surface)',minHeight:'100vh'},
   pageHeader:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:28},
   heading:{fontSize: 'var(--fs-hero)',fontWeight:700,marginBottom:6,color:'var(--text-strong)'},
-  levelBadge:{fontSize:11,fontWeight:700,padding:'2px 10px',borderRadius:20,letterSpacing:1},
+  levelBadge:{fontSize: 'var(--fs-label)',fontWeight:700,padding:'2px 10px',borderRadius:20,letterSpacing:1},
   refreshBtn:{background:'transparent',border:'1px solid var(--border-strong)',borderRadius:6,color:'var(--text-dim)',cursor:'pointer',fontSize: 'var(--fs-body)',padding:'6px 12px'},
   enrollCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:12,padding:'32px 28px',maxWidth:600},
   tierGrid:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12},
   tierCard:{background:'var(--surface)',borderRadius:8,padding:'14px 10px',textAlign:'center'},
   primaryBtn:{padding:'10px 24px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:600,cursor:'pointer'},
   linkCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'16px 20px',marginBottom:24},
-  linkLabel:{fontSize:12,color:'var(--text-muted)',marginBottom:8,textTransform:'uppercase',letterSpacing:0.5},
+  linkLabel:{fontSize: 'var(--fs-body)',color:'var(--text-muted)',marginBottom:8,textTransform:'uppercase',letterSpacing:0.5},
   linkRow:{display:'flex',alignItems:'center',gap:12},
   linkCode:{flex:1,background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:6,padding:'8px 12px',fontSize: 'var(--fs-body)',color:'#93c5fd',wordBreak:'break-all'},
   copyBtn:{padding:'8px 16px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:6,fontSize: 'var(--fs-body)',cursor:'pointer',whiteSpace:'nowrap'},
@@ -276,9 +276,9 @@ const st:Record<string,React.CSSProperties>={
   tabActive:{color:'#3b82f6',borderBottom:'2px solid #3b82f6'},
   metricsGrid:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:20},
   metricCard:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'16px 18px'},
-  metricValue:{fontSize:26,fontWeight:700,color:'var(--text-strong)',marginBottom:4},
-  metricLabel:{fontSize:12,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5},
-  metricSub:{fontSize:12,color:'var(--gain)',marginTop:4},
+  metricValue:{fontSize: 'var(--fs-hero)',fontWeight:700,color:'var(--text-strong)',marginBottom:4},
+  metricLabel:{fontSize: 'var(--fs-body)',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5},
+  metricSub:{fontSize: 'var(--fs-body)',color:'var(--gain)',marginTop:4},
   card:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'20px 24px',marginBottom:16},
   cardTitle:{fontSize:16,fontWeight:600,color:'var(--text)',marginBottom:16,marginTop:0},
   input:{background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,width:180,outline:'none'},
@@ -287,10 +287,10 @@ const st:Record<string,React.CSSProperties>={
   retryBtn:{marginLeft:16,background:'transparent',border:'1px solid #dc2626',color:'#fca5a5',borderRadius:6,padding:'4px 12px',cursor:'pointer'},
   howList:{color:'var(--text-dim)',fontSize:14,lineHeight:2,paddingLeft:20,margin:0},
   table:{width:'100%',borderCollapse:'collapse'},
-  th:{textAlign:'left',fontSize:12,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid var(--border-strong)'},
+  th:{textAlign:'left',fontSize: 'var(--fs-body)',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid var(--border-strong)'},
   tr:{borderBottom:'1px solid var(--border)'},
   td:{padding:'10px 12px',fontSize:14,color:'var(--text-dim)'},
-  badge:{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:20,textTransform:'capitalize'},
+  badge:{fontSize: 'var(--fs-label)',fontWeight:600,padding:'2px 8px',borderRadius:20,textTransform:'capitalize'},
 };
 
 export default Affiliate;

@@ -149,7 +149,7 @@ const NotificationsSection: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: settings.discord_enabled ? 16 : 0 }}>
           <div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Discord</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Receive alerts in a Discord channel via webhook.</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>Receive alerts in a Discord channel via webhook.</div>
           </div>
           <Toggle id="discord-toggle" label="" checked={settings.discord_enabled} onChange={(v) => update({ discord_enabled: v })} />
         </div>
@@ -174,7 +174,7 @@ const NotificationsSection: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: settings.slack_enabled ? 16 : 0 }}>
           <div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Slack</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Post alerts to a Slack channel via incoming webhook.</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>Post alerts to a Slack channel via incoming webhook.</div>
           </div>
           <Toggle id="slack-toggle" label="" checked={settings.slack_enabled} onChange={(v) => update({ slack_enabled: v })} />
         </div>
@@ -199,7 +199,7 @@ const NotificationsSection: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: settings.telegram_enabled ? 16 : 0 }}>
           <div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Telegram</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Send messages via a Telegram bot.</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>Send messages via a Telegram bot.</div>
           </div>
           <Toggle id="telegram-toggle" label="" checked={settings.telegram_enabled} onChange={(v) => update({ telegram_enabled: v })} />
         </div>
@@ -231,7 +231,7 @@ const NotificationsSection: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: settings.email_enabled ? 16 : 0 }}>
           <div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Email</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Receive alerts and daily summaries by email.</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>Receive alerts and daily summaries by email.</div>
           </div>
           <Toggle id="email-toggle" label="" checked={settings.email_enabled} onChange={(v) => update({ email_enabled: v })} />
         </div>

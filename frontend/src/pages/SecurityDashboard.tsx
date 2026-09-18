@@ -195,11 +195,11 @@ const SecurityDashboard: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/')}
-              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
               📊 Dashboard
             </button>
             <button onClick={() => navigate('/audit-log')}
-              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
               📋 Audit Log
             </button>
           </div>
@@ -308,7 +308,7 @@ const SecurityDashboard: React.FC = () => {
             <span style={panelCountStyle}>{blockedIPs.length}</span>
           </div>
           {unblockErr && (
-            <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', fontSize: 12, padding: '6px 10px', margin: '0 0 8px' }}>
+            <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', fontSize: 'var(--fs-body)', padding: '6px 10px', margin: '0 0 8px' }}>
               {unblockErr}
             </div>
           )}
@@ -328,7 +328,7 @@ const SecurityDashboard: React.FC = () => {
                     style={{
                       background: 'transparent', border: '1px solid var(--border-strong)',
                       borderRadius: 5, color: 'var(--text-dim)', cursor: 'pointer',
-                      fontSize: 11, padding: '2px 8px',
+                      fontSize: 'var(--fs-label)', padding: '2px 8px',
                     }}
                   >
                     {unblockingIp === ip ? '…' : 'Unblock'}
@@ -352,9 +352,9 @@ const SecurityDashboard: React.FC = () => {
               {alerts.slice(0, 20).map((alert, i) => (
                 <div key={i} style={alertRowStyle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ color: '#ef4444', fontSize: 10 }}>⬤</span>
+                    <span style={{ color: '#ef4444', fontSize: 'var(--fs-micro)'}}>⬤</span>
                     <span style={ipTextStyle}>{(alert.type ?? 'unknown').toUpperCase()}</span>
-                    <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>{alert.ip}</span>
+                    <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-label)'}}>{alert.ip}</span>
                   </div>
                   <span style={timeStyle}>
                     {alert.ts ? new Date(alert.ts).toLocaleTimeString() : '—'}
@@ -413,7 +413,7 @@ const clearBtnStyle: React.CSSProperties = {
   borderRadius: 6,
   color: '#fff',
   cursor: 'pointer',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   fontWeight: 700,
   padding: '6px 14px',
   flexShrink: 0,
@@ -424,7 +424,7 @@ const errorBannerStyle: React.CSSProperties = {
   border: '1px solid #f97316',
   borderRadius: 8,
   color: '#fdba74',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   padding: '10px 16px',
 };
 
@@ -479,14 +479,14 @@ const panelCountStyle: React.CSSProperties = {
   background: 'var(--surface-hover)',
   borderRadius: 10,
   color: 'var(--text-dim)',
-  fontSize: 11,
+  fontSize: 'var(--fs-label)',
   fontWeight: 700,
   padding: '2px 8px',
 };
 
 const emptyStyle: React.CSSProperties = {
   color: 'var(--text-muted)',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   padding: '20px 16px',
   textAlign: 'center',
 };
@@ -517,7 +517,7 @@ const alertRowStyle: React.CSSProperties = {
 const ipTextStyle: React.CSSProperties = {
   color: 'var(--text, var(--text-strong))',
   fontFamily: 'monospace',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
 };
 
 const blockedBadgeStyle: React.CSSProperties = {
@@ -525,14 +525,14 @@ const blockedBadgeStyle: React.CSSProperties = {
   border: '1px solid #ef4444',
   borderRadius: 10,
   color: 'var(--loss)',
-  fontSize: 10,
+  fontSize: 'var(--fs-micro)',
   fontWeight: 700,
   padding: '2px 7px',
 };
 
 const timeStyle: React.CSSProperties = {
   color: 'var(--text-muted)',
-  fontSize: 11,
+  fontSize: 'var(--fs-label)',
   flexShrink: 0,
 };
 

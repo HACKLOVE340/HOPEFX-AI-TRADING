@@ -30,7 +30,7 @@ export const Badge: React.FC<BadgeProps> = ({ variant = 'neutral', children, sty
       display: 'inline-flex',
       alignItems: 'center',
       borderRadius: 4,
-      fontSize: 11,
+      fontSize: 'var(--fs-label)',
       fontWeight: 600,
       letterSpacing: 0.3,
       padding: '2px 7px',

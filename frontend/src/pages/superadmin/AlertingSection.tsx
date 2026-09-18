@@ -155,7 +155,7 @@ const AlertingSection: React.FC = () => {
           {/* The duration was hardcoded to 60 and the state that was meant to
               change it had no control, so an operator could silence an alert
               for exactly one length of time. */}
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-dim)' }}>
+          <label style={{ display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
             How long
             <Select
               value={silenceDuration}
@@ -254,10 +254,10 @@ const AlertingSection: React.FC = () => {
                 {rules.map(rule => (
                   <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 600 }}>{rule.name}</td>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-dim)' }}>{rule.condition}</td>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 'var(--fs-label)', color: 'var(--text-dim)' }}>{rule.condition}</td>
                     <td style={{ padding: '10px 16px' }}><SeverityBadge severity={rule.severity} /></td>
-                    <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{rule.channels.join(', ')}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{fmtDate(rule.last_fired)}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{rule.channels.join(', ')}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{fmtDate(rule.last_fired)}</td>
                     <td style={{ padding: '10px 16px', color: rule.fire_count > 0 ? 'var(--warn)' : 'var(--text-faint)' }}>{rule.fire_count}</td>
                     <td style={{ padding: '10px 16px' }}>
                       <Toggle checked={rule.enabled} onChange={() => toggleRule(rule)} disabled={busy === rule.rule_id} />
@@ -294,8 +294,8 @@ const AlertingSection: React.FC = () => {
                   <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 600 }}>{a.name}</td>
                     <td style={{ padding: '10px 16px' }}><SeverityBadge severity={a.severity} /></td>
-                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{a.message ?? a.value ?? '—'}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(a.fired_at)}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{a.message ?? a.value ?? '—'}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(a.fired_at)}</td>
                   </tr>
                 ))}
               </tbody>

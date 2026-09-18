@@ -275,13 +275,13 @@ const PropFirmTracker: React.FC = () => {
         <>
           <button
             onClick={() => navigate('/risk-calculator')}
-            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: 'var(--warn)', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
           >
             Risk Calc
           </button>
           <button
             onClick={() => navigate('/trade')}
-            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
           >
             Trade
           </button>
@@ -298,9 +298,9 @@ const PropFirmTracker: React.FC = () => {
             <div style={{ textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
               <div style={{ fontSize: 32 }}>🏆</div>
               <div style={{ color: 'var(--text-dim)', fontSize: 14, fontWeight: 600 }}>No challenge history yet</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Complete a challenge phase to see your history here.</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Complete a challenge phase to see your history here.</div>
               <button onClick={() => navigate('/trade')}
-                style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
                 ⚡ Start Trading
               </button>
             </div>
@@ -309,13 +309,13 @@ const PropFirmTracker: React.FC = () => {
             <div key={ch.challenge_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e293b' }}>
               <div>
                 <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 14 }}>Phase {ch.phase} — ${fmtPrice(ch.account_size, 0)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{new Date(ch.started_at).toLocaleDateString()} {ch.ended_at ? `→ ${new Date(ch.ended_at).toLocaleDateString()}` : '(active)'}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>{new Date(ch.started_at).toLocaleDateString()} {ch.ended_at ? `→ ${new Date(ch.ended_at).toLocaleDateString()}` : '(active)'}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: ch.result === 'passed' ? 'var(--gain)' : ch.result === 'failed' ? 'var(--loss)' : '#f59e0b' }}>
                   {ch.result.toUpperCase()}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>P&L: {fmtPctRaw(ch.profit_pct)} · DD: {fmtPctRaw(ch.max_drawdown_pct)}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>P&L: {fmtPctRaw(ch.profit_pct)} · DD: {fmtPctRaw(ch.max_drawdown_pct)}</div>
               </div>
             </div>
           ))}
@@ -337,15 +337,15 @@ const PropFirmTracker: React.FC = () => {
                   {alert.severity === 'critical' ? '🚨' : '⚠️'} {alert.alert_type}
                 </div>
                 <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{alert.message}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{new Date(alert.created_at).toLocaleString()}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>{new Date(alert.created_at).toLocaleString()}</div>
               </div>
               {!alert.acknowledged && (
                 <button onClick={() => handleAcknowledge(alert.alert_id)} disabled={ackingId === alert.alert_id}
-                  style={{ background: '#334155', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '4px 10px', flexShrink: 0, marginLeft: 12 }}>
+                  style={{ background: '#334155', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 10px', flexShrink: 0, marginLeft: 12 }}>
                   {ackingId === alert.alert_id ? '…' : 'Acknowledge'}
                 </button>
               )}
-              {alert.acknowledged && <span style={{ fontSize: 11, color: 'var(--gain)', flexShrink: 0, marginLeft: 12 }}>✓ Ack</span>}
+              {alert.acknowledged && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gain)', flexShrink: 0, marginLeft: 12 }}>✓ Ack</span>}
             </div>
           ))}
         </div>
@@ -360,9 +360,9 @@ const PropFirmTracker: React.FC = () => {
             <div style={{ textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
               <div style={{ fontSize: 32 }}>📈</div>
               <div style={{ color: 'var(--text-dim)', fontSize: 14, fontWeight: 600 }}>No daily stats yet</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Trade to start building your daily P&amp;L record.</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Trade to start building your daily P&amp;L record.</div>
               <button onClick={() => navigate('/trade')}
-                style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
                 ⚡ Start Trading
               </button>
             </div>

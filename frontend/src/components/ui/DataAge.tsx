@@ -44,7 +44,7 @@ export function DataAge({
       title={at == null ? 'No data received yet' : new Date(at).toLocaleTimeString()}
       className={className}
       style={{
-        fontSize: 11,
+        fontSize: 'var(--fs-label)',
         fontFamily: 'monospace',
         color: stale ? '#ffb800' : 'var(--text-muted)',
       }}

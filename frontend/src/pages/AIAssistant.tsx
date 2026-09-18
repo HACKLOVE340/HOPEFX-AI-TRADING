@@ -36,7 +36,7 @@ const AIAssistant: React.FC = () => {
         <Brain size={20} strokeWidth={1.75} aria-hidden />
         <div>
           <h2 style={{ fontSize: 'var(--fs-title)', fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>AI Assistant</h2>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Your trading copilot — powered by HOPEFX AI</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Your trading copilot — powered by HOPEFX AI</div>
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>

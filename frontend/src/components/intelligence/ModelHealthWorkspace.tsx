@@ -60,9 +60,9 @@ const Stat: React.FC<{ label: string; value: string; sub?: string; color?: strin
     background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
     padding: '12px 14px', flex: 1, minWidth: 130,
   }}>
-    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+    <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
     <div style={{ fontSize: 20, fontWeight: 800, color: color ?? 'var(--text-strong)', marginTop: 2 }}>{value}</div>
-    {sub && <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>{sub}</div>}
+    {sub && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 1 }}>{sub}</div>}
   </div>
 );
 
@@ -170,7 +170,7 @@ export const ModelHealthWorkspace: React.FC = () => {
                   { k: 'Last trained',    v: (engine.model_provenance_at ?? engine.last_trained_at) ? new Date((engine.model_provenance_at ?? engine.last_trained_at) as string).toLocaleDateString() : '—' },
                 ].map(({ k, v }) => (
                   <div key={k} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>{k}</div>
+                    <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>{k}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', fontFamily: 'ui-monospace, monospace', marginTop: 3 }}>{v}</div>
                   </div>
                 ))}
@@ -181,7 +181,7 @@ export const ModelHealthWorkspace: React.FC = () => {
                   drawing the bars anyway would present a flat placeholder as
                   insight (F232). Say so instead. */}
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)', marginBottom: 8 }}>
+                <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)', marginBottom: 8 }}>
                   Feature attribution
                 </div>
                 {impQuery.isLoading ? (
@@ -215,7 +215,7 @@ export const ModelHealthWorkspace: React.FC = () => {
                             <span style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                               <span style={{ display: 'block', height: '100%', width: `${(f.importance / max) * 100}%`, background: 'var(--accent)' }} />
                             </span>
-                            <span style={{ width: 52, textAlign: 'right', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'ui-monospace, monospace' }}>
+                            <span style={{ width: 52, textAlign: 'right', fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontFamily: 'ui-monospace, monospace' }}>
                               {f.importance.toFixed(4)}
                             </span>
                           </li>
@@ -230,7 +230,7 @@ export const ModelHealthWorkspace: React.FC = () => {
 
               {/* Drift — the endpoint explains itself when it has no data. */}
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)', marginBottom: 8 }}>
+                <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)', marginBottom: 8 }}>
                   Feature drift
                 </div>
                 {drift?.overall_status && drift.overall_status !== 'unknown' ? (
@@ -263,7 +263,7 @@ export const ModelHealthWorkspace: React.FC = () => {
       <div style={{ marginBottom: 22 }}>
         <SectionTitle right={
           a && totalOutcomes === 0
-            ? <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>awaiting resolved outcomes</span>
+            ? <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>awaiting resolved outcomes</span>
             : undefined
         }>
           Signal Quality
@@ -305,7 +305,7 @@ export const ModelHealthWorkspace: React.FC = () => {
       {/* Live engine signals */}
       <div>
         <SectionTitle right={
-          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
             {signals.length} active · refreshes every 20s
           </span>
         }>
@@ -340,7 +340,7 @@ export const ModelHealthWorkspace: React.FC = () => {
         )}
       </div>
 
-      <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 24, lineHeight: 1.6 }}>
+      <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 24, lineHeight: 1.6 }}>
         Signals are model output, not financial advice. Confidence and strength reflect the model's
         internal state and historical calibration; they do not guarantee outcomes.
       </p>

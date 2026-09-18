@@ -150,7 +150,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{user.username}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{user.email}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{user.email}</div>
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20 }}>×</button>
@@ -159,7 +159,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 18 }}>
           {(['overview', 'edit', 'activity'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '6px 14px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
               {{ overview: 'Overview', edit: 'Edit', activity: 'Activity' }[t]}
             </button>
           ))}
@@ -171,24 +171,24 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
               {[
                 { label: 'Status',     value: <StatusBadge status={user.status} size="sm" /> },
-                { label: 'Role',       value: <span style={{ fontSize: 11, fontWeight: 700, color: roleStyle.color }}>{ROLE_LABELS[user.role as UserRole] ?? user.role}</span> },
-                { label: 'Plan',       value: <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[user.plan as Plan] ?? 'var(--text-dim)' }}>{PLAN_LABELS[user.plan as Plan] ?? user.plan}</span> },
-                { label: '2FA',        value: <span style={{ color: user.two_fa_enabled ? 'var(--gain)' : 'var(--loss)', fontSize: 11 }}>{user.two_fa_enabled ? 'Enabled' : 'Disabled'}</span> },
+                { label: 'Role',       value: <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: roleStyle.color }}>{ROLE_LABELS[user.role as UserRole] ?? user.role}</span> },
+                { label: 'Plan',       value: <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: PLAN_COLORS[user.plan as Plan] ?? 'var(--text-dim)' }}>{PLAN_LABELS[user.plan as Plan] ?? user.plan}</span> },
+                { label: '2FA',        value: <span style={{ color: user.two_fa_enabled ? 'var(--gain)' : 'var(--loss)', fontSize: 'var(--fs-label)'}}>{user.two_fa_enabled ? 'Enabled' : 'Disabled'}</span> },
                 { label: 'Joined',     value: fmtDate(user.created_at) },
                 { label: 'Last Login', value: timeAgo(user.last_login) },
                 { label: 'Trades',     value: user.total_trades.toLocaleString() },
                 { label: 'Revenue',    value: `$${user.revenue_generated.toFixed(2)}` },
               ].map(r => (
                 <div key={r.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 3 }}>{r.label}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text)' }}>{r.value}</div>
+                  <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginBottom: 3 }}>{r.label}</div>
+                  <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text)' }}>{r.value}</div>
                 </div>
               ))}
             </div>
 
             {/* Role + Plan pickers */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Change Role</div>
+              <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Change Role</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Select value={role} onChange={e => setRole(e.target.value)} options={[
                   { value: 'user', label: 'User' }, { value: 'trader', label: 'Trader' },
@@ -199,7 +199,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
             </div>
 
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Change Plan</div>
+              <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Change Plan</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Select value={plan} onChange={e => setPlan(e.target.value)} options={[
                   { value: 'free',         label: 'Free' },
@@ -230,7 +230,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         {tab === 'edit' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 12 }}>Edit Profile</div>
+              <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 12 }}>Edit Profile</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <Input label="Username" value={editFields.username} onChange={e => setEditFields(f => ({ ...f, username: e.target.value }))} />
                 <Input label="Email"    value={editFields.email}    onChange={e => setEditFields(f => ({ ...f, email:    e.target.value }))} />
@@ -252,11 +252,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--hairline)', alignItems: 'flex-start' }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#3b82f6', marginTop: 5, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-strong)' }}>{a.action}</div>
-                    {a.details && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{a.details}</div>}
-                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>IP: {a.ip}</div>
+                    <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{a.action}</div>
+                    {a.details && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>{a.details}</div>}
+                    <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginTop: 2 }}>IP: {a.ip}</div>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {new Date(a.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
@@ -266,7 +266,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         )}
 
         {msg && (
-          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: msg === 'Done' ? '#052e16' : '#450a0a', color: msg === 'Done' ? 'var(--gain)' : 'var(--loss)', fontSize: 12, fontWeight: 600 }}>
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: msg === 'Done' ? '#052e16' : '#450a0a', color: msg === 'Done' ? 'var(--gain)' : 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
             {msg === 'Done' ? '✅ Action completed successfully' : `❌ ${msg}`}
           </div>
         )}
@@ -288,12 +288,12 @@ const BulkResultToast: React.FC<{ result: BulkUserResult; onClose: () => void }>
       <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>Bulk Operation Complete</span>
       <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>x</button>
     </div>
-    <div style={{ fontSize: 12, color: 'var(--gain)' }}>✅ {result.succeeded.length} succeeded</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gain)' }}>✅ {result.succeeded.length} succeeded</div>
     {result.failed.length > 0 && (
-      <div style={{ fontSize: 12, color: 'var(--loss)', marginTop: 4 }}>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 4 }}>
         ❌ {result.failed.length} failed
         {result.failed.slice(0, 3).map(f => (
-          <div key={f.user_id} style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
+          <div key={f.user_id} style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', marginTop: 2 }}>
             {f.user_id}: {f.reason}
           </div>
         ))}
@@ -460,7 +460,7 @@ const UsersSection: React.FC = () => {
             background: '#0f1f35', border: '1px solid #1e3a5f',
             borderRadius: 8, padding: '10px 14px', marginBottom: 12,
           }}>
-            <span style={{ fontSize: 12, color: '#93c5fd', fontWeight: 600 }}>
+            <span style={{ fontSize: 'var(--fs-body)', color: '#93c5fd', fontWeight: 600 }}>
               {checkedIds.size} selected
             </span>
             <div style={{ flex: 1 }} />
@@ -488,7 +488,7 @@ const UsersSection: React.FC = () => {
                     />
                   </th>
                   {['User', 'Role', 'Plan', 'Status', 'Trades', 'Last Login', 'Joined', ''].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                       {h}
                     </th>
                   ))}
@@ -521,30 +521,30 @@ const UsersSection: React.FC = () => {
                                    background: 'none', border: 0, padding: 0, textAlign: 'left',
                                    font: 'inherit', color: 'inherit', cursor: 'pointer' }}
                         >
-                          <span style={{ width: 28, height: 28, borderRadius: '50%', background: rs.bg, border: `1px solid ${rs.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: rs.color, flexShrink: 0 }}>
+                          <span style={{ width: 28, height: 28, borderRadius: '50%', background: rs.bg, border: `1px solid ${rs.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-body)', fontWeight: 700, color: rs.color, flexShrink: 0 }}>
                             {u.username?.[0]?.toUpperCase() ?? '?'}
                           </span>
                           <span>
                             <span style={{ display: 'block', fontWeight: 600, color: 'var(--text-strong)' }}>{u.username}</span>
-                            <span style={{ display: 'block', fontSize: 11, color: 'var(--text-faint)' }}>{u.email}</span>
+                            <span style={{ display: 'block', fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{u.email}</span>
                           </span>
                         </button>
                       </td>
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: rs.color, background: rs.bg, border: `1px solid ${rs.border}`, borderRadius: 4, padding: '2px 7px' }}>
+                        <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: rs.color, background: rs.bg, border: `1px solid ${rs.border}`, borderRadius: 4, padding: '2px 7px' }}>
                           {ROLE_LABELS[u.role as UserRole] ?? u.role}
                         </span>
                       </td>
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[u.plan as Plan] ?? 'var(--text-dim)' }}>
+                        <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: PLAN_COLORS[u.plan as Plan] ?? 'var(--text-dim)' }}>
                           {PLAN_LABELS[u.plan as Plan] ?? u.plan}
                         </span>
                       </td>
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}><StatusBadge status={u.status} size="sm" /></td>
                       <td style={{ padding: '10px 12px', color: 'var(--text-dim)', cursor: 'pointer' }} onClick={() => setSelected(u)}>{u.total_trades.toLocaleString()}</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelected(u)}>{timeAgo(u.last_login)}</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelected(u)}>{fmtDate(u.created_at)}</td>
-                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}><span style={{ fontSize: 11, color: '#3b82f6' }}>View →</span></td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', cursor: 'pointer' }} onClick={() => setSelected(u)}>{timeAgo(u.last_login)}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', cursor: 'pointer' }} onClick={() => setSelected(u)}>{fmtDate(u.created_at)}</td>
+                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}><span style={{ fontSize: 'var(--fs-label)', color: '#3b82f6' }}>View →</span></td>
                     </tr>
                   );
                 })}
@@ -562,7 +562,7 @@ const UsersSection: React.FC = () => {
         {!loading && users.length > 0 && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
             <ActionBtn label="← Prev" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} size="sm" />
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>Page {page}</span>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', alignSelf: 'center' }}>Page {page}</span>
             <ActionBtn label="Next →" onClick={() => setPage(p => p + 1)} disabled={users.length < PAGE_SIZE} size="sm" />
           </div>
         )}

@@ -268,7 +268,7 @@ const SocialFeed: React.FC = () => {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>by <strong style={{ color: 'var(--text-dim)' }}>{item.username}</strong></span>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fmtTime(item.created_at)}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{fmtTime(item.created_at)}</span>
               </div>
             </div>
 
@@ -336,8 +336,8 @@ const SocialFeed: React.FC = () => {
               <div style={s.commentsSection}>
                 {(comments[item.signal_id] ?? []).map(c => (
                   <div key={c.comment_id} style={s.comment}>
-                    <strong style={{ color: 'var(--text-dim)', fontSize: 12 }}>{c.username}</strong>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 8 }}>{fmtTime(c.created_at)}</span>
+                    <strong style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{c.username}</strong>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)', marginLeft: 8 }}>{fmtTime(c.created_at)}</span>
                     <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{c.text}</p>
                   </div>
                 ))}
@@ -403,9 +403,9 @@ const s: Record<string, React.CSSProperties> = {
   feed:           { display: 'flex', flexDirection: 'column', gap: 12 },
   card:           { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' },
   cardTop:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  dirBadge:       { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 },
+  dirBadge:       { fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px', borderRadius: 4 },
   symbol:         { fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' },
-  confidence:     { fontSize: 11, background: '#1e3a5f', color: 'var(--link)', padding: '2px 8px', borderRadius: 10 },
+  confidence:     { fontSize: 'var(--fs-label)', background: '#1e3a5f', color: 'var(--link)', padding: '2px 8px', borderRadius: 10 },
   metrics:        { display: 'flex', gap: 20, marginBottom: 10 },
   metric:         { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
   actions:        { display: 'flex', gap: 8 },

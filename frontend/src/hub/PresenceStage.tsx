@@ -493,7 +493,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           <button
             type="button"
             onClick={onExit}
-            style={{ ...control, minHeight: 34, padding: '0 11px', fontSize: 11 }}
+            style={{ ...control, minHeight: 34, padding: '0 11px', fontSize: 'var(--fs-label)'}}
           >
             <Minimize2 size={12} aria-hidden /> Exit <kbd style={{ ...label, marginLeft: 2 }}>esc</kbd>
           </button>
@@ -566,7 +566,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
               style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4, maxWidth: '46ch' }}
             >
               {lastFew.map((line, i) => (
-                <li key={`${line.at}-${i}`} style={{ fontSize: 12, color: C.dim, textAlign: 'center' }}>
+                <li key={`${line.at}-${i}`} style={{ fontSize: 'var(--fs-body)', color: C.dim, textAlign: 'center' }}>
                   <span style={{ color: line.who === 'ai' ? C.core : C.quiet, fontWeight: 700 }}>
                     {line.who === 'ai' ? '' : 'You: '}
                   </span>

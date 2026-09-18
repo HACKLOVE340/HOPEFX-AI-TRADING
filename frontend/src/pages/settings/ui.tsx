@@ -40,7 +40,7 @@ export const Toggle: React.FC<ToggleProps> = ({ id, label, description, checked,
     <div>
       <div id={`${id}-label`} style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{label}</div>
       {description && (
-        <div id={`${id}-desc`} style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>
+        <div id={`${id}-desc`} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>
       )}
     </div>
     <div
@@ -111,7 +111,7 @@ export const Field: React.FC<FieldProps> = ({ label, description, children }) =>
     <span style={{ display: 'block', fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
       {label}
     </span>
-    {description && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, marginTop: 0 }}>{description}</span>}
+    {description && <span style={{ display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8, marginTop: 0 }}>{description}</span>}
     {children}
   </label>
 );
@@ -283,7 +283,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, label }) => {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+      padding: '3px 10px', borderRadius: 20, fontSize: 'var(--fs-body)', fontWeight: 600,
       background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text,
     }}>
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.text }} />

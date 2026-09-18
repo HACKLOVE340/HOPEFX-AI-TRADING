@@ -80,7 +80,7 @@ const Observability: React.FC = () => {
     <PageShell title="Observability" width="standard">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
 
-        <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+        <button onClick={load} style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
           ↻ Refresh
         </button>
       </div>
@@ -96,7 +96,7 @@ const Observability: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
             {tiles.map((t) => (
               <div key={t.label} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.label}</div>
                 <div style={{ fontSize: 22, fontWeight: 700 }}>{t.value}</div>
               </div>
             ))}
@@ -112,10 +112,10 @@ const Observability: React.FC = () => {
                 {services.map((s) => (
                   <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '8px 10px', background: 'var(--surface)', borderRadius: 8 }}>
                     <span style={{ fontWeight: 600 }}>{s.name}</span>
-                    <span style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: 'var(--text-dim)' }}>
+                    <span style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
                       <span>up {fmtUptime(s.uptime_seconds)}</span>
                       <span>v{s.version ?? '—'}</span>
-                      <span style={{ color: (s.status === 'active' || s.status === 'healthy' || s.status === 'ok') ? 'var(--gain)' : 'var(--warn)', fontWeight: 700, textTransform: 'uppercase', fontSize: 11 }}>{s.status}</span>
+                      <span style={{ color: (s.status === 'active' || s.status === 'healthy' || s.status === 'ok') ? 'var(--gain)' : 'var(--warn)', fontWeight: 700, textTransform: 'uppercase', fontSize: 'var(--fs-label)'}}>{s.status}</span>
                     </span>
                   </div>
                 ))}
@@ -135,7 +135,7 @@ const Observability: React.FC = () => {
                     <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 6, flexShrink: 0, background: SEV_COLOR[(a.severity ?? 'info').toLowerCase()] ?? 'var(--link)' }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 'var(--fs-body)'}}>{a.message ?? '(no message)'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.service ?? ''}{a.timestamp ? ` · ${a.timestamp}` : ''}</div>
+                      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{a.service ?? ''}{a.timestamp ? ` · ${a.timestamp}` : ''}</div>
                     </div>
                   </div>
                 ))}

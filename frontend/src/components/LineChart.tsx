@@ -147,7 +147,7 @@ export const LineChart: React.FC<LineChartProps> = ({
       {legend && series.length > 1 && (
         <div style={legendStyle}>
           {series.map((s, i) => (
-            <span key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+            <span key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-label)'}}>
               <span style={{
                 background: s.color ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length],
                 borderRadius: 2,

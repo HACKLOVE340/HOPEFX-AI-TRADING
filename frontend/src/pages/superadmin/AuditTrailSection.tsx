@@ -209,7 +209,7 @@ const AuditTrailSection: React.FC = () => {
       <div style={{
         background: 'rgba(167,139,250,0.05)', border: '1px solid #4c1d95',
         borderRadius: 10, padding: '12px 16px', marginBottom: 16,
-        display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--ai-model)',
+        display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--fs-body)', color: 'var(--ai-model)',
       }}>
         <span style={{ fontSize: 16 }}>🔒</span>
         <span>
@@ -264,12 +264,12 @@ const AuditTrailSection: React.FC = () => {
                   }}
                 >
                   {/* Sequence */}
-                  <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'monospace', minWidth: 50, flexShrink: 0 }}>
+                  <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', fontFamily: 'monospace', minWidth: 50, flexShrink: 0 }}>
                     #{r.sequence}
                   </span>
                   {/* Level */}
                   <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+                    fontSize: 'var(--fs-micro)', fontWeight: 700, padding: '1px 6px', borderRadius: 3,
                     background: `${LEVEL_COLORS[r.level] ?? 'var(--text-dim)'}22`,
                     color: LEVEL_COLORS[r.level] ?? 'var(--text-dim)',
                     minWidth: 80, textAlign: 'center', flexShrink: 0,
@@ -278,7 +278,7 @@ const AuditTrailSection: React.FC = () => {
                   </span>
                   {/* Category */}
                   <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+                    fontSize: 'var(--fs-micro)', fontWeight: 700, padding: '1px 6px', borderRadius: 3,
                     background: `${CATEGORY_COLORS[r.category] ?? 'var(--text-dim)'}22`,
                     color: CATEGORY_COLORS[r.category] ?? 'var(--text-dim)',
                     minWidth: 70, textAlign: 'center', flexShrink: 0,
@@ -287,36 +287,36 @@ const AuditTrailSection: React.FC = () => {
                   </span>
                   {/* Actor + Action */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.actor}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-faint)', margin: '0 6px' }}>→</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-strong)', fontWeight: 600 }}>{r.action}</span>
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{r.actor}</span>
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', margin: '0 6px' }}>→</span>
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-strong)', fontWeight: 600 }}>{r.action}</span>
                   </div>
                   {/* Hash (truncated) */}
-                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-faint)', flexShrink: 0 }}>
+                  <span style={{ fontSize: 'var(--fs-micro)', fontFamily: 'monospace', color: 'var(--text-faint)', flexShrink: 0 }}>
                     {r.hash_chain?.slice(0, 12)}…
                   </span>
                   {/* Timestamp */}
-                  <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(r.timestamp)}</span>
-                  <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{expanded === r.sequence ? '▲' : '▼'}</span>
+                  <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(r.timestamp)}</span>
+                  <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>{expanded === r.sequence ? '▲' : '▼'}</span>
                 </div>
                 {expanded === r.sequence && (
                   <div style={{ background: '#050d1a', padding: '12px 16px', borderBottom: '1px solid var(--hairline)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
                       <div>
-                        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>FULL HASH CHAIN</div>
-                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--ai-model)', wordBreak: 'break-all' }}>{r.hash_chain}</div>
+                        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>FULL HASH CHAIN</div>
+                        <div style={{ fontSize: 'var(--fs-label)', fontFamily: 'monospace', color: 'var(--ai-model)', wordBreak: 'break-all' }}>{r.hash_chain}</div>
                       </div>
                       {r.signature && (
                         <div>
-                          <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>SIGNATURE</div>
-                          <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--link)', wordBreak: 'break-all' }}>{r.signature}</div>
+                          <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>SIGNATURE</div>
+                          <div style={{ fontSize: 'var(--fs-label)', fontFamily: 'monospace', color: 'var(--link)', wordBreak: 'break-all' }}>{r.signature}</div>
                         </div>
                       )}
                     </div>
                     {Object.keys(r.data ?? {}).length > 0 && (
                       <div>
-                        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>DATA PAYLOAD</div>
-                        <pre style={{ fontSize: 11, color: 'var(--text-dim)', background: 'var(--surface)', padding: '8px 10px', borderRadius: 6, overflow: 'auto', margin: 0 }}>
+                        <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', fontWeight: 600, marginBottom: 4 }}>DATA PAYLOAD</div>
+                        <pre style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', background: 'var(--surface)', padding: '8px 10px', borderRadius: 6, overflow: 'auto', margin: 0 }}>
                           {JSON.stringify(r.data, null, 2)}
                         </pre>
                       </div>
@@ -370,7 +370,7 @@ const AuditTrailSection: React.FC = () => {
                       complete the whole time; only the read was wrong. */}
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['User', 'Action', 'Category', 'IP', 'Level', 'Timestamp'].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -378,23 +378,23 @@ const AuditTrailSection: React.FC = () => {
                   {sysEntries.map((e) => (
                     <tr key={e.event_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                       <td style={{ padding: '8px 12px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-strong)' }}>{e.actor || '—'}</div>
-                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-faint)' }}>{e.user_id}</div>
+                        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{e.actor || '—'}</div>
+                        <div style={{ fontSize: 'var(--fs-micro)', fontFamily: 'monospace', color: 'var(--text-faint)' }}>{e.user_id}</div>
                       </td>
-                      <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--ai-model)', fontSize: 12 }}>
+                      <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--ai-model)', fontSize: 'var(--fs-body)'}}>
                         <div>{e.action || e.event_type || '—'}</div>
-                        {e.detail && <div style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>{e.detail}</div>}
+                        {e.detail && <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 400, color: 'var(--text-muted)' }}>{e.detail}</div>}
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 11 }}>
+                      <td style={{ padding: '8px 12px', fontSize: 'var(--fs-label)'}}>
                         {e.category
-                          ? <span style={{ background: 'var(--raised)', padding: '2px 6px', borderRadius: 3, color: 'var(--text-dim)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.category}</span>
+                          ? <span style={{ background: 'var(--raised)', padding: '2px 6px', borderRadius: 3, color: 'var(--text-dim)', fontSize: 'var(--fs-micro)', fontWeight: 700, textTransform: 'uppercase' }}>{e.category}</span>
                           : <span style={{ color: 'var(--text-faint)' }}>—</span>}
                       </td>
-                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-faint)' }}>{e.ip_address || '—'}</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{e.ip_address || '—'}</td>
                       <td style={{ padding: '8px 12px' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: e.level === 'CRITICAL' ? 'var(--loss)' : e.level === 'COMPLIANCE' ? 'var(--warn)' : 'var(--gain)' }}>{e.level || '—'}</span>
+                        <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: e.level === 'CRITICAL' ? 'var(--loss)' : e.level === 'COMPLIANCE' ? 'var(--warn)' : 'var(--gain)' }}>{e.level || '—'}</span>
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(e.created_at)}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(e.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>

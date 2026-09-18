@@ -206,10 +206,10 @@ const ApiKeysSection: React.FC = () => {
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{key.name}</span>
                   <StatusBadge status="info" label={key.scopes.join(', ')} />
                 </div>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 2 }}>
                   {key.key_prefix}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
                   Created {new Date(key.created_at).toLocaleDateString()}
                   {key.last_used && ` · Last used ${new Date(key.last_used).toLocaleDateString()}`}
                 </div>

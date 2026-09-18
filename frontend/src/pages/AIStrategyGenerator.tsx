@@ -196,11 +196,11 @@ const AIStrategyGenerator: React.FC = () => {
       actions={
         <>
           <button onClick={() => navigate('/pattern-detector')}
-            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             Patterns
           </button>
           <button onClick={() => navigate('/ab-testing')}
-            style={{ padding: '6px 13px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '6px 13px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
             A/B Test
           </button>
         </>
@@ -219,7 +219,7 @@ const AIStrategyGenerator: React.FC = () => {
         </div>
       )}
       {llmStatus === 'ok' && llmBackend && (
-        <div style={{ background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '8px 16px', marginBottom: 16, fontSize: 12, color: '#86efac' }}>
+        <div style={{ background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '8px 16px', marginBottom: 16, fontSize: 'var(--fs-body)', color: '#86efac' }}>
           AI backend: <strong>{llmBackend}</strong> — ready
         </div>
       )}
@@ -242,22 +242,22 @@ const AIStrategyGenerator: React.FC = () => {
             <div key={str.strategy_id} style={{ ...s.histRow }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 14 }}>{str.strategy_name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
                   {str.symbol} · {str.timeframe} · {new Date(str.created_at).toLocaleDateString()}
                 </div>
                 {str.backtest && (
                   <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: (str.backtest.total_return_pct ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
+                    <span style={{ fontSize: 'var(--fs-label)', color: (str.backtest.total_return_pct ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                       {pct(str.backtest.total_return_pct)} return
                     </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Sharpe {fmt(str.backtest.sharpe_ratio)}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>WR {fmt(str.backtest.win_rate, 0)}%</span>
+                    <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)' }}>Sharpe {fmt(str.backtest.sharpe_ratio)}</span>
+                    <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)' }}>WR {fmt(str.backtest.win_rate, 0)}%</span>
                   </div>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{
-                  fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                  fontSize: 'var(--fs-label)', padding: '2px 8px', borderRadius: 4,
                   background: str.status === 'active' ? '#14532d' : 'var(--raised)',
                   color: str.status === 'active' ? 'var(--gain)' : 'var(--text-muted)',
                 }}>
@@ -370,7 +370,7 @@ const AIStrategyGenerator: React.FC = () => {
                       background: copied ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)',
                       border: `1px solid ${copied ? '#22c55e40' : '#3b82f640'}`,
                       borderRadius: 5, color: copied ? '#22c55e' : 'var(--link)',
-                      fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 10px',
+                      fontSize: 'var(--fs-label)', fontWeight: 700, cursor: 'pointer', padding: '3px 10px',
                       fontFamily: 'inherit', transition: 'all 0.2s',
                     }}
                   >
@@ -427,7 +427,7 @@ const AIStrategyGenerator: React.FC = () => {
 
 const MetricCard: React.FC<{ label: string; value: string; positive: boolean }> = ({ label, value, positive }) => (
   <div style={s.metricCard}>
-    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 20, fontWeight: 700, color: positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
 
   </div>
@@ -446,24 +446,24 @@ const s: Record<string, React.CSSProperties> = {
   select:        { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
   textarea:      { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '10px 12px', fontSize: 14, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' },
   examples:      { display: 'flex', flexDirection: 'column', gap: 6, margin: '12px 0 16px' },
-  examplesLabel: { fontSize: 12, color: 'var(--text-faint)', marginBottom: 4 },
-  exampleBtn:    { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', padding: '6px 10px', textAlign: 'left' },
+  examplesLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginBottom: 4 },
+  exampleBtn:    { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', fontSize: 'var(--fs-body)', cursor: 'pointer', padding: '6px 10px', textAlign: 'left' },
   btn:           { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 'var(--fs-value)', fontWeight: 600, cursor: 'pointer', padding: '12px 24px', width: '100%' },
   resultHeader:  { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
   strategyName:  { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' },
-  badge:         { background: '#166534', color: 'var(--gain)', fontSize: 12, padding: '3px 10px', borderRadius: 20 },
+  badge:         { background: '#166534', color: 'var(--gain)', fontSize: 'var(--fs-body)', padding: '3px 10px', borderRadius: 20 },
   metricsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 20 },
   metricCard:    { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' },
   codeDetails:   { marginBottom: 20 },
   codeSummary:   { cursor: 'pointer', color: 'var(--link)', fontSize: 14, padding: '8px 0' },
-  code:          { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8, padding: 16, fontSize: 12, color: 'var(--text-dim)', overflowX: 'auto', marginTop: 8 },
+  code:          { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8, padding: 16, fontSize: 'var(--fs-body)', color: 'var(--text-dim)', overflowX: 'auto', marginTop: 8 },
   deployRow:     { display: 'flex', alignItems: 'center', gap: 16 },
   deployBtn:     { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 20px' },
   errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: 16, color: 'var(--loss)' },
   tabBtn:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px' },
   tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   histRow:       { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--border)' },
-  delBtn:        { background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
+  delBtn:        { background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 10px' },
 };
 
 export default AIStrategyGenerator;

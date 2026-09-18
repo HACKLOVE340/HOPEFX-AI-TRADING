@@ -196,7 +196,7 @@ const BrokerSection: React.FC = () => {
                 autoComplete="off"
               />
               {keyOnFile && !form.api_key && (
-                <div style={{ fontSize: 11, color: 'var(--gain)', marginTop: 4 }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gain)', marginTop: 4 }}>
                   ✓ API key saved — leave blank to keep it, or enter a new key to replace.
                 </div>
               )}

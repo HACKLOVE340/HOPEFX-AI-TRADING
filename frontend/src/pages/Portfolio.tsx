@@ -290,12 +290,12 @@ const TradeHistory: React.FC = () => {
       {/* Date range */}
       <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle}
              title="From date" aria-label="From date" />
-      <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>→</span>
+      <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>→</span>
       <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle}
              title="To date" aria-label="To date" />
       {(dateFrom || dateTo) && (
         <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{
-          background: 'transparent', border: 'none', color: 'var(--text-faint)', fontSize: 10, cursor: 'pointer', padding: '0 2px',
+          background: 'transparent', border: 'none', color: 'var(--text-faint)', fontSize: 'var(--fs-micro)', cursor: 'pointer', padding: '0 2px',
         }} title="Clear date filter">✕</button>
       )}
       <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
@@ -324,7 +324,7 @@ const TradeHistory: React.FC = () => {
         </button>
       ))}
       {filtered.length > 0 && (
-        <span style={{ fontSize: 10, color: totalPnl >= 0 ? 'var(--bull)' : 'var(--bear)', fontFamily: 'monospace', fontWeight: 700 }}>
+        <span style={{ fontSize: 'var(--fs-micro)', color: totalPnl >= 0 ? 'var(--bull)' : 'var(--bear)', fontFamily: 'monospace', fontWeight: 700 }}>
           {Number.isFinite(totalPnl) ? `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}` : '—'} ({wins}/{filtered.length})
         </span>
       )}

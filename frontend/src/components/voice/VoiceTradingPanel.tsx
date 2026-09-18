@@ -127,11 +127,11 @@ const VoiceTradingPanel: React.FC = () => {
     <div style={panelStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
         <span style={{ fontSize: 'var(--fs-body)', fontWeight: 800, color: '#fca5a5' }}>🎙️ Voice Trading</span>
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#fca5a5', background: '#450a0a', border: '1px solid #dc2626', borderRadius: 6, padding: '1px 7px' }}>
+        <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 800, color: '#fca5a5', background: '#450a0a', border: '1px solid #dc2626', borderRadius: 6, padding: '1px 7px' }}>
           SUPER ADMIN
         </span>
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+      <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
         Say e.g. <em>“buy 1 lot gold”</em>, <em>“sell 0.5 XAUUSD”</em>, <em>“what's my P&amp;L”</em>,
         or <em>“kill switch”</em>. Trades and the kill switch always ask for confirmation before anything runs.
       </p>
@@ -173,7 +173,7 @@ const VoiceTradingPanel: React.FC = () => {
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 8 }}>
               {pending.kind === 'kill_switch' ? '⚠️ Confirm kill switch' : 'Confirm trade'}
             </div>
-            {heard && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>Heard: “{heard}”</div>}
+            {heard && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 10 }}>Heard: “{heard}”</div>}
             <div style={{
               fontSize: 16, fontWeight: 800,
               color: pending.kind === 'kill_switch' ? '#fca5a5' : 'var(--link)',

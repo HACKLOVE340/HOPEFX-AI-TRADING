@@ -324,7 +324,7 @@ const TwoFactorSetup: React.FC = () => {
           </div>
         </div>
         {status.enabled && status.backup_codes_remaining > 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'right' }}>
             <div style={{ color: 'var(--text-dim)', fontWeight: 600 }}>{status.backup_codes_remaining}</div>
             <div>backup codes</div>
           </div>
@@ -389,7 +389,7 @@ const TwoFactorSetup: React.FC = () => {
                   alignItems: 'center', justifyContent: 'center', padding: 12, gap: 8,
                 }}>
                   <span style={{ fontSize: 32 }}>📷</span>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'center' }}>
                     QR image unavailable — use manual entry below
                   </div>
                 </div>
@@ -409,7 +409,7 @@ const TwoFactorSetup: React.FC = () => {
           </div>
 
           {/* Issuer info */}
-          <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 20 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginBottom: 20 }}>
             Issuer: <strong style={{ color: 'var(--text-muted)' }}>HOPEFX</strong> ·
             Algorithm: SHA1 · Digits: 6 · Period: 30s
           </div>
@@ -546,18 +546,18 @@ const s: Record<string, React.CSSProperties> = {
   qrContainer:  { display: 'flex', justifyContent: 'center', margin: '16px 0' },
   secretBox:    { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8,
     padding: '10px 14px', marginBottom: 16 },
-  secretLabel:  { fontSize: 12, color: 'var(--text-faint)' },
+  secretLabel:  { fontSize: 'var(--fs-body)', color: 'var(--text-faint)' },
   secretCode:   { fontSize: 'var(--fs-body)', color: 'var(--link)', letterSpacing: 2, wordBreak: 'break-all',
     display: 'block', marginTop: 4 },
   copyBtn:      { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
-    color: 'var(--text-dim)', fontSize: 12, padding: '3px 10px', cursor: 'pointer' },
+    color: 'var(--text-dim)', fontSize: 'var(--fs-body)', padding: '3px 10px', cursor: 'pointer' },
   codesGrid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '16px 0' },
   backupCode:   { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 6,
     padding: '10px 12px', fontSize: 'var(--fs-value)', color: 'var(--text-dim)', textAlign: 'center',
     letterSpacing: 3, fontFamily: 'monospace' },
   errorBox:     { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
     padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
-  appLink:      { fontSize: 12, color: 'var(--link)', textDecoration: 'none',
+  appLink:      { fontSize: 'var(--fs-body)', color: 'var(--link)', textDecoration: 'none',
     padding: '4px 10px', border: '1px solid #1e3a5f', borderRadius: 6,
     background: 'var(--surface)' },
   crossLink:    { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none' },
