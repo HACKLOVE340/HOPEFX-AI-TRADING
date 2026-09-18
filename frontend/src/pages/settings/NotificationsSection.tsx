@@ -117,8 +117,8 @@ const NotificationsSection: React.FC = () => {
       >
         Send test
       </Button>
-      {testStatus[channel] === 'ok' && <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}><CheckCircle2 size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> Delivered</span>}
-      {testStatus[channel] === 'fail' && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}><XCircle size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> Failed — check credentials</span>}
+      {testStatus[channel] === 'ok' && <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}><CheckCircle2 size="1em" aria-hidden style={{ verticalAlign: '-2px' }} /> Delivered</span>}
+      {testStatus[channel] === 'fail' && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}><XCircle size="1em" aria-hidden style={{ verticalAlign: '-2px' }} /> Failed — check credentials</span>}
     </div>
   );
 

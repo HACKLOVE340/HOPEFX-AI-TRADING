@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { copyTradingApi } from '../hooks/useApi';
 import { extractApiError, fmtPrice, fmtPnl, fmtPctRaw } from '../lib/utils';
 import { ActionBanner } from '../components/ActionBanner';
-
+import { AlertTriangle, ClipboardList, Search, Trophy, Users } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Leader {
@@ -90,7 +90,7 @@ const LeaderCard: React.FC<{
       <div>
         <div style={s.leaderName}>{leader.name}</div>
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
-          👥 {leader.followers.toLocaleString()} followers
+          <Users size="1em" aria-hidden /> {leader.followers.toLocaleString()} followers
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
@@ -289,7 +289,7 @@ const CopyTrading: React.FC = () => {
             onClick={() => navigate('/leaderboard')}
             style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
           >
-            🏆 Leaderboard
+            <Trophy size="1em" aria-hidden /> Leaderboard
           </button>
         </div></>}
     >
@@ -308,14 +308,14 @@ const CopyTrading: React.FC = () => {
           {sessionsLoading && <p style={{ color: 'var(--text-muted)' }}>Loading sessions…</p>}
           {!sessionsLoading && sessions.length === 0 && (
             <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 48 }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 32, marginBottom: 12 }}><ClipboardList size="1em" aria-hidden /></div>
               <div style={{ fontSize: 'var(--fs-value)', color: 'var(--text-dim)', marginBottom: 8 }}>No active copy sessions</div>
               <div style={{ fontSize: 'var(--fs-body)', marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
               <button
                 onClick={() => setActiveTab('browse')}
                 style={{ background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: '10px 24px' }}
               >
-                🔍 Browse Traders
+                <Search size="1em" aria-hidden /> Browse Traders
               </button>
             </div>
           )}
@@ -404,7 +404,7 @@ const CopyTrading: React.FC = () => {
       {loading ? (
         <p style={{ color: 'var(--text-muted)', padding: '40px 0' }}>Loading traders…</p>
       ) : loadErr ? (
-        <p style={{ color: 'var(--loss)', padding: '40px 0' }}>⚠️ {loadErr}</p>
+        <p style={{ color: 'var(--loss)', padding: '40px 0' }}><AlertTriangle size="1em" aria-hidden /> {loadErr}</p>
       ) : leaders.length === 0 ? (
         <p style={{ color: 'var(--text-muted)', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
       ) : (

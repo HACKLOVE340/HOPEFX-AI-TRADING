@@ -9,8 +9,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { AlertTriangle, BarChart3, ClipboardList, OctagonAlert, Shield, Zap } from 'lucide-react';
-
+import { AlertTriangle, BarChart3, CheckCircle2, ClipboardList, OctagonAlert, Shield, Zap } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -380,13 +379,13 @@ const PropFirmBreachPanel: React.FC = () => {
           background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 8,
           padding: '10px 14px', marginBottom: 12, fontSize: 'var(--fs-body)', color: 'var(--loss)',
         }} role="alert">
-          ⚠️ {loadErr}
+          <AlertTriangle size="1em" aria-hidden /> {loadErr}
         </div>
       )}
 
       {breaches.length === 0 && !loading && !loadErr && (
         <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
-          ✅ No active prop firm breaches detected
+          <CheckCircle2 size="1em" aria-hidden /> No active prop firm breaches detected
         </div>
       )}
 

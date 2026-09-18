@@ -21,8 +21,7 @@ import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { CircleDot, Search, Shield, Stethoscope, Tag, Zap } from 'lucide-react';
-
+import { AlertTriangle, CircleDot, RadioTower, Search, Settings, Shield, Stethoscope, Tag, Wrench, Zap } from 'lucide-react';
 // ── Maintenance / Broadcast types ─────────────────────────────────────────────
 
 interface MaintenanceStatus {
@@ -213,7 +212,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
       <div style={{ background: 'var(--raised)', border: `1px solid ${maint.maintenance_mode ? '#f59e0b' : '#334155'}`, borderRadius: 10, padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>🔧 Maintenance Mode</div>
+            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}><Wrench size="1em" aria-hidden /> Maintenance Mode</div>
             <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
               {maint.maintenance_mode ? '⚠️ ACTIVE — users see downtime page' : 'Platform is live'}
             </div>
@@ -252,7 +251,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
 
       {/* Broadcast */}
       <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 20 }}>
-        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 14 }}>📡 Broadcast Message</div>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 14 }}><RadioTower size="1em" aria-hidden /> Broadcast Message</div>
         <div style={{ marginBottom: 10 }}>
           <label id="adminpanel-title-label" htmlFor="adminpanel-title" style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Title</label>
           <input id="adminpanel-title" aria-labelledby="adminpanel-title-label" style={inputStyle} value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
@@ -288,7 +287,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
             opacity: (saving || !broadcast.title || !broadcast.body) ? 0.5 : 1,
           }}
         >
-          📡 Send to All Users
+          <RadioTower size="1em" aria-hidden /> Send to All Users
         </button>
       </div>
 
@@ -405,7 +404,7 @@ const AdminPanel: React.FC = () => {
           {activeAlerts.length > 0 && (
             <div style={sectionStyle}>
               <div style={sectionHeader}>
-                <span>⚠️ Active Alerts</span>
+                <span><AlertTriangle size="1em" aria-hidden /> Active Alerts</span>
                 <span style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)' }}>{activeAlerts.length} unresolved</span>
               </div>
               {activeAlerts.map(alert => (
@@ -426,7 +425,7 @@ const AdminPanel: React.FC = () => {
           {/* Recent Audit Events */}
           <div style={sectionStyle}>
             <div style={sectionHeader}>
-              <span>🔍 Recent Audit Events</span>
+              <span><Search size="1em" aria-hidden /> Recent Audit Events</span>
               <button onClick={() => go('/audit')} style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontSize: 'var(--fs-body)', cursor: 'pointer', fontWeight: 600 }}>
                 View all →
               </button>
@@ -447,7 +446,7 @@ const AdminPanel: React.FC = () => {
           {/* Maintenance Mode + Broadcast */}
           <div style={{ margin: '0 24px', marginBottom: 8 }}>
             <div style={{ ...sectionHeader, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: '10px 10px 0 0', padding: '14px 20px' }}>
-              <span>⚙️ Platform Controls</span>
+              <span><Settings size="1em" aria-hidden /> Platform Controls</span>
               <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>Maintenance mode & user broadcasts</span>
             </div>
           </div>

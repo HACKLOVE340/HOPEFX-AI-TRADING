@@ -14,8 +14,7 @@ import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageShell } from '../components/system/PageShell';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
-import { AlertTriangle, Bandage, Bug, Folder, Microscope, Siren, XCircle, Zap } from 'lucide-react';
-
+import { AlertTriangle, Bandage, BarChart3, Bug, Folder, Microscope, Shield, Siren, XCircle, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface HealStatus {
@@ -356,11 +355,11 @@ const AutoHealDashboard: React.FC = () => {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/security')}
               style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-              🛡 Security
+              <Shield size="1em" aria-hidden /> Security
             </button>
             <button onClick={() => navigate('/')}
               style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-              📊 Dashboard
+              <BarChart3 size="1em" aria-hidden /> Dashboard
             </button>
           </div>
         }

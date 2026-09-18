@@ -349,9 +349,11 @@ describe('ReplayPage', () => {
     await waitFor(() => screen.getByText(/XAUUSD/));
     fireEvent.click(screen.getByText(/XAUUSD/));
     await waitFor(() => {
-      // Button labels: "⏭ Step" and "▶ Play" (or "⏸ Pause" when playing)
-      expect(screen.getByText(/⏭ step/i)).toBeInTheDocument();
-      expect(screen.getByText(/▶ play|⏸ pause/i)).toBeInTheDocument();
+      // These read "⏭ Step" and "▶ Play" until the icons became SVGs. Found by
+      // role and accessible name now — which is what a person using the page
+      // has, and does not change again the next time the icon does.
+      expect(screen.getByRole('button', { name: /step/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /play|pause/i })).toBeInTheDocument();
     });
   });
 });

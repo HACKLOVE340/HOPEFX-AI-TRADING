@@ -18,10 +18,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import {
-  Sparkles, Brain, Radar, ScanSearch, Cpu,
-
-} from 'lucide-react';
+import { Bot, Brain, Cpu, Radar, RadioTower, ScanSearch, Search, Sparkles, Zap } from 'lucide-react';
 import { AIChart } from '../components/charts/AIChart';
 import { cn, extractApiError } from '../lib/utils';
 import { useStore, selectWsStatus, selectIsAuth, useHasHydrated } from '../store';
@@ -243,15 +240,15 @@ export default function AIChartDashboard() {
         <div className="flex items-center gap-2 mr-2">
           <button onClick={() => navigate('/pattern-detector')}
             className="px-2.5 py-1 rounded text-[11px] font-bold border border-[#334155] text-slate-400 hover:border-[#475569] hover:text-slate-200 transition-colors bg-transparent cursor-pointer">
-            🔍 Patterns
+            <Search size="1em" aria-hidden /> Patterns
           </button>
           <button onClick={() => navigate('/ai-strategy')}
             className="px-2.5 py-1 rounded text-[11px] font-bold border border-[#334155] text-slate-400 hover:border-[#475569] hover:text-slate-200 transition-colors bg-transparent cursor-pointer">
-            🤖 Strategy
+            <Bot size="1em" aria-hidden /> Strategy
           </button>
           <button onClick={() => navigate('/signals')}
             className="px-2.5 py-1 rounded text-[11px] font-bold border border-[#334155] text-slate-400 hover:border-[#475569] hover:text-slate-200 transition-colors bg-transparent cursor-pointer">
-            📡 Signals
+            <RadioTower size="1em" aria-hidden /> Signals
           </button>
         </div>
         <TfSelector value={timeframe} onChange={setTimeframe} />
@@ -273,7 +270,7 @@ export default function AIChartDashboard() {
                 style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--link)', cursor: 'pointer' }}
                 title={`Go to Trade page for ${sym}`}
               >
-                ⚡ Trade
+                <Zap size="1em" aria-hidden /> Trade
               </button>
               <ChartErrorBoundary label={sym}>
                 <AIChart

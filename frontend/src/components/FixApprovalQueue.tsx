@@ -207,14 +207,14 @@ const FixRow: React.FC<FixRowProps> = ({
                 onClick={onApprove}
                 disabled={acting}
               >
-                {acting ? '…' : <><Check size={13} aria-hidden /> Approve</>}
+                {acting ? '…' : <><Check size="1em" aria-hidden /> Approve</>}
               </button>
               <button
                 style={btnStyle('var(--loss)')}
                 onClick={onDecline}
                 disabled={acting}
               >
-                {acting ? '…' : <><X size={13} aria-hidden /> Decline</>}
+                {acting ? '…' : <><X size="1em" aria-hidden /> Decline</>}
               </button>
             </div>
           )}

@@ -240,7 +240,7 @@ const TradingEngineSection: React.FC = () => {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>🛑</span>
+            <span style={{ fontSize: 20 }}><OctagonAlert size="1em" aria-hidden /></span>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--loss)' }}>KILL SWITCH ACTIVE</div>
               <div style={{ fontSize: 'var(--fs-body)', color: '#fca5a5' }}>All trading is halted across the entire platform</div>

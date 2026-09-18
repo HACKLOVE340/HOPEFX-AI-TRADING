@@ -386,7 +386,7 @@ const ComplianceSection: React.FC = () => {
       {shows('reports') && (
       <SectionCard title="Regulatory Reporting" icon={<Scroll size={18} aria-hidden />} accent="#8b5cf6"
         subtitle="CFTC / MiFID II / CAT filing status"
-        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={13} aria-hidden />} size="sm" />}>
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size="1em" aria-hidden />} size="sm" />}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
           <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
             Report
@@ -472,7 +472,7 @@ const ComplianceSection: React.FC = () => {
               onChange={e => setConsentUserId(e.target.value)}
               style={{ width: 190 }}
             />
-            <ActionBtn label="Refresh" onClick={loadConsent} icon={<RefreshCw size={13} aria-hidden />} size="sm" />
+            <ActionBtn label="Refresh" onClick={loadConsent} icon={<RefreshCw size="1em" aria-hidden />} size="sm" />
           </div>
         }>
         <div style={{ overflowX: 'auto' }}>

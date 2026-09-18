@@ -9,10 +9,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-   Radar, ScanSearch, Cpu,
-   BarChart3, BookOpen,
-} from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Bot, Brain, Cpu, Radar, ScanSearch, Search, Shield, TrendingDown } from 'lucide-react';
 import { tradingApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -234,13 +231,13 @@ const PatternDetector: React.FC = () => {
       subtitle="AI-powered chart pattern recognition for XAU/USD and major instruments"
       actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => navigate('/ai-chart')} style={s.navBtn}>
-            🧠 AI Chart
+            <Brain size="1em" aria-hidden /> AI Chart
           </button>
           <button onClick={() => navigate('/ai-strategy')} style={s.navBtn}>
-            🤖 AI Strategy
+            <Bot size="1em" aria-hidden /> AI Strategy
           </button>
           <button onClick={() => navigate('/risk-calculator')} style={s.navBtn}>
-            🛡 Risk Calc
+            <Shield size="1em" aria-hidden /> Risk Calc
           </button>
         </div>
 
@@ -313,7 +310,7 @@ const PatternDetector: React.FC = () => {
         </div>
       ) : error ? (
         <div style={{ ...s.center, gap: 12 }}>
-          <span style={{ color: 'var(--loss)', fontSize: 14 }}>⚠ {error}</span>
+          <span style={{ color: 'var(--loss)', fontSize: 14 }}><AlertTriangle size="1em" aria-hidden /> {error}</span>
           <button onClick={scan} style={s.retryBtn}>Retry</button>
         </div>
       ) : data ? (
@@ -321,7 +318,7 @@ const PatternDetector: React.FC = () => {
           data.note ? (
             /* Detection never ran — say so, rather than reporting a clean negative. */
             <div style={s.center}>
-              <span style={{ fontSize: 32, marginBottom: 12 }}>📉</span>
+              <span style={{ fontSize: 32, marginBottom: 12 }}><TrendingDown size="1em" aria-hidden /></span>
               <p style={{ color: '#facc15', fontSize: 14, textAlign: 'center', maxWidth: 460, lineHeight: 1.7 }}>
                 Insufficient price history for{' '}
                 <strong style={{ color: '#fde68a' }}>{data.symbol}</strong> / {timeframe}
@@ -334,7 +331,7 @@ const PatternDetector: React.FC = () => {
             </div>
           ) : (
             <div style={s.center}>
-              <span style={{ fontSize: 32, marginBottom: 12 }}>🔍</span>
+              <span style={{ fontSize: 32, marginBottom: 12 }}><Search size="1em" aria-hidden /></span>
               <p style={{ color: 'var(--text-muted)', fontSize: 14, textAlign: 'center', maxWidth: 420, lineHeight: 1.7 }}>
                 No patterns detected above{' '}
                 <strong style={{ color: 'var(--text-dim)' }}>{Math.round(minConf * 100)}%</strong>{' '}

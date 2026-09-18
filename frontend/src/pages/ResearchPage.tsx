@@ -16,10 +16,7 @@ import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-  Sparkles, FlaskConical, Cpu, LineChart,
-  Microscope,
-} from 'lucide-react';
+import { Bot, Cpu, FlaskConical, LineChart, Microscope, Sparkles, X } from 'lucide-react';
 import { researchApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -306,7 +303,7 @@ const ResearchPage: React.FC = () => {
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>Create one to start AI-powered market analysis</div>
               <button onClick={() => navigate('/ai-strategy')}
                 style={{ padding: '7px 18px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 8, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-                🤖 AI Strategy
+                <Bot size="1em" aria-hidden /> AI Strategy
               </button>
             </div>
           )}
@@ -367,7 +364,7 @@ const ResearchPage: React.FC = () => {
                 <button onClick={() => setSelected(null)}
                   style={{ padding: '7px 10px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
                     borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
-                  ✕
+                  <X size="1em" aria-hidden />
                 </button>
               </div>
             </div>

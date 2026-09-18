@@ -19,8 +19,7 @@ import { Badge, type BadgeVariant } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
-import { Search } from 'lucide-react';
-
+import { Search, Shield, Wrench } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AuditEvent {
@@ -238,11 +237,11 @@ const AuditLog: React.FC = () => {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button onClick={() => navigate('/security')}
               style={{ padding: '6px 13px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-              🛡 Security
+              <Shield size="1em" aria-hidden /> Security
             </button>
             <button onClick={() => navigate('/auto-heal')}
               style={{ padding: '6px 13px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-              🔧 Auto-Heal
+              <Wrench size="1em" aria-hidden /> Auto-Heal
             </button>
             <button
               onClick={handleExport}

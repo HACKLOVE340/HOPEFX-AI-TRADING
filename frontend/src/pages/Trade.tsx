@@ -45,8 +45,7 @@ import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol, describeCloseAll, positionSide } from '../lib/utils';
 import type { PriceTick } from '../types';
-import { BarChart3, CandlestickChart, Eye, Monitor, NotebookPen, Repeat, Shield } from 'lucide-react';
-
+import { AlertTriangle, BarChart3, Briefcase, CandlestickChart, Eye, Monitor, NotebookPen, Repeat, Shield } from 'lucide-react';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // Tradable universe — mirrors the 6-char pairs in config/multi_source_feed.yaml
@@ -167,7 +166,7 @@ const BrokerStatusBanner: React.FC = () => {
 
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#ffb800]/10 border border-[#ffb800]/30 text-[11px]">
-      <span className="text-[#ffb800] font-bold">⚠</span>
+      <span className="text-[#ffb800] font-bold"><AlertTriangle size="1em" aria-hidden /></span>
       <span className="text-[#ffb800] font-semibold">
         Paper trading broker is initialising — orders will be accepted once ready.
         The account bar will populate automatically.
@@ -546,21 +545,21 @@ const Trade: React.FC = () => {
               className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[var(--focus)] hover:bg-[#1e3a5f]/40 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
-              👁 <span className="hidden xs:inline ml-1">Watchlist</span>
+              <Eye size="1em" aria-hidden /> <span className="hidden xs:inline ml-1">Watchlist</span>
             </Link>
             <Link
               to="/portfolio"
               className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[var(--ai-model)] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
-              💼 <span className="hidden xs:inline ml-1">Portfolio</span>
+              <Briefcase size="1em" aria-hidden /> <span className="hidden xs:inline ml-1">Portfolio</span>
             </Link>
             <Link
               to="/risk-calculator"
               className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[var(--text-dim)] hover:bg-[#334155]/40 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
-              🛡 <span className="hidden xs:inline ml-1">Risk Calc</span>
+              <Shield size="1em" aria-hidden /> <span className="hidden xs:inline ml-1">Risk Calc</span>
             </Link>
             <button
               onClick={handleCloseAll}

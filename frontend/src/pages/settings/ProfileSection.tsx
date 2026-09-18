@@ -8,8 +8,7 @@ import { TIMEZONES, LANGUAGES } from './types';
 import { Field, Input, Select, Toggle, Card, SectionHeader, SaveBar, Button } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { Globe, Mail, User } from 'lucide-react';
-
+import { Eye, Globe, Library, Mail, Rocket, User } from 'lucide-react';
 const DEFAULT: ProfileSettings = {
   username: '', email: '', bio: '', avatar_url: '',
   website: '', is_public: true, timezone: 'UTC', language: 'en',
@@ -228,7 +227,7 @@ const ProfileSection: React.FC = () => {
                 fontFamily: 'inherit',
               }}
             >
-              👁 View Public Profile
+              <Eye size="1em" aria-hidden /> View Public Profile
             </button>
             <button
               onClick={() => {
@@ -242,7 +241,7 @@ const ProfileSection: React.FC = () => {
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >
-              🚀 Restart Onboarding
+              <Rocket size="1em" aria-hidden /> Restart Onboarding
             </button>
             <a
               href="/docs"
@@ -253,7 +252,7 @@ const ProfileSection: React.FC = () => {
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >
-              📚 Documentation
+              <Library size="1em" aria-hidden /> Documentation
             </a>
           </div>
         </div>

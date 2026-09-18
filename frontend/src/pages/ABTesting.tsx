@@ -106,11 +106,11 @@ const ABTesting: React.FC = () => {
       actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/ai-strategy')}
             style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            <Bot size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> AI Strategy
+            <Bot size="1em" aria-hidden style={{ verticalAlign: '-2px' }} /> AI Strategy
           </button>
           <button onClick={() => navigate('/walk-forward')}
             style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            <TrendingUp size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> Walk-Forward
+            <TrendingUp size="1em" aria-hidden style={{ verticalAlign: '-2px' }} /> Walk-Forward
           </button>
         </div></>}
     >

@@ -20,7 +20,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CrossLinkBar } from '../components';
-import { Banknote, BarChart3, BookOpen, Briefcase, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
+import { AlertTriangle, Banknote, BarChart3, BookOpen, Briefcase, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, X, Zap } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
@@ -296,7 +296,7 @@ const TradeHistory: React.FC = () => {
       {(dateFrom || dateTo) && (
         <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{
           background: 'transparent', border: 'none', color: 'var(--text-faint)', fontSize: 'var(--fs-micro)', cursor: 'pointer', padding: '0 2px',
-        }} title="Clear date filter">✕</button>
+        }} title="Clear date filter"><X size="1em" aria-hidden /></button>
       )}
       <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
       {/* Search */}
@@ -727,7 +727,7 @@ const Portfolio: React.FC = () => {
 
       {equityQuery.isError && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[var(--bear)]/10 border border-[var(--bear)]/30 text-[var(--bear)] text-[12px]">
-          <span>⚠</span>
+          <span><AlertTriangle size="1em" aria-hidden /></span>
           <span>
             Equity curve unavailable — {extractApiError(equityQuery.error, 'check your connection')}
           </span>

@@ -20,7 +20,7 @@ import { teamsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError, fmtPrice, fmtRatio } from '../lib/utils';
 import { useToast } from '../components/Toast';
-
+import { AlertTriangle, Repeat, Trophy, Users, X } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TeamMember {
@@ -143,7 +143,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
         </div>
         <button onClick={onClose}
           style={{ padding: '6px 10px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
-            borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>✕</button>
+            borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}><X size="1em" aria-hidden /></button>
       </div>
 
       {/* Tabs */}
@@ -186,7 +186,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
               </div>
               {inviteMut.isError && (
                 <div style={{ marginTop: 6, fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>
-                  ⚠ {extractApiError(inviteMut.error, 'Invite failed')}
+                  <AlertTriangle size="1em" aria-hidden /> {extractApiError(inviteMut.error, 'Invite failed')}
                 </div>
               )}
               {inviteMut.isSuccess && (
@@ -305,11 +305,11 @@ const TeamsPage: React.FC = () => {
       actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/leaderboard')}
             style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 8, color: '#f59e0b', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer' }}>
-            🏆 Leaderboard
+            <Trophy size="1em" aria-hidden /> Leaderboard
           </button>
           <button onClick={() => navigate('/copy-trading')}
             style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, color: '#34d399', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer' }}>
-            🔁 Copy Trading
+            <Repeat size="1em" aria-hidden /> Copy Trading
           </button>
           <button onClick={() => setShowCreate(s => !s)}
             style={{ padding: '9px 18px', background: '#06b6d4', color: '#fff', border: 'none',
@@ -348,7 +348,7 @@ const TeamsPage: React.FC = () => {
             </button>
             {createMut.isError && (
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>
-                ⚠ {extractApiError(createMut.error, 'Failed to create team')}
+                <AlertTriangle size="1em" aria-hidden /> {extractApiError(createMut.error, 'Failed to create team')}
               </span>
             )}
           </div>
@@ -362,7 +362,7 @@ const TeamsPage: React.FC = () => {
           {!isLoading && teams.length === 0 && (
             <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>👥</div>
+              <div style={{ fontSize: 32, marginBottom: 12 }}><Users size="1em" aria-hidden /></div>
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No teams yet</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Create a team to collaborate with other traders</div>
             </div>

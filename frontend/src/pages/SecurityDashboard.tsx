@@ -20,8 +20,7 @@ import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
 import { PageShell } from '../components/system/PageShell';
 import { extractApiError } from '../lib/utils';
-import { Ban, Globe, Lock, Siren } from 'lucide-react';
-
+import { AlertTriangle, Ban, BarChart3, ClipboardList, Globe, Lock, Siren } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface LockdownStatus {
@@ -196,11 +195,11 @@ const SecurityDashboard: React.FC = () => {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/')}
               style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-              📊 Dashboard
+              <BarChart3 size="1em" aria-hidden /> Dashboard
             </button>
             <button onClick={() => navigate('/audit-log')}
               style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-              📋 Audit Log
+              <ClipboardList size="1em" aria-hidden /> Audit Log
             </button>
           </div>
         }
@@ -211,7 +210,7 @@ const SecurityDashboard: React.FC = () => {
         {lockdown.lockdown_active && (
           <div style={{ ...lockdownBannerStyle, flex: 1 }}>
             <span style={{ fontWeight: 700, fontSize: 14 }}>
-              ⚠ FULL LOCKDOWN ACTIVE — Trading paused, IPs blocked
+              <AlertTriangle size="1em" aria-hidden /> FULL LOCKDOWN ACTIVE — Trading paused, IPs blocked
             </span>
             <button style={clearBtnStyle} onClick={handleClearLockdown} disabled={clearingLockdown}>
               {clearingLockdown ? 'Clearing…' : 'Clear Lockdown'}

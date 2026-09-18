@@ -8,7 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState, CrossLinkBar } from '../components';
 import { RelatedPages } from '../components';
-import { Medal, Trophy, BadgeCheck, Users, Radar, BookOpen, LineChart } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, BookOpen, LineChart, Medal, Radar, RadioTower, Repeat, Trophy, Users, Zap } from 'lucide-react';
 import { api } from '../hooks/useApi';
 import { extractApiError, fmtPctRaw, fmtRatio } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
@@ -70,7 +70,7 @@ const PodiumCard: React.FC<{ trader: Trader; tall?: boolean }> = ({ trader, tall
         <Link to={copyTo}
           className="flex-1 text-center py-1.5 rounded-lg font-bold text-xs no-underline transition-colors"
           style={{ background: color, color: '#0f172a' }}>
-          🔁 Copy
+          <Repeat size="1em" aria-hidden /> Copy
         </Link>
         {trader.user_id && (
           <Link to={`/profile/${trader.user_id}`}
@@ -152,8 +152,8 @@ const Leaderboard: React.FC = () => {
               </button>
             ))}
             <div className="w-px h-5 bg-terminal-border" />
-            <Link to="/copy-trading" className="px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-xs font-semibold no-underline hover:bg-green-500/20 transition-colors">🔁 Copy Trading</Link>
-            <Link to="/signals"      className="px-3 py-1.5 bg-violet-500/10 border border-violet-500/30 rounded-lg text-violet-400 text-xs font-semibold no-underline hover:bg-violet-500/20 transition-colors">📡 Signals</Link>
+            <Link to="/copy-trading" className="px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-xs font-semibold no-underline hover:bg-green-500/20 transition-colors"><Repeat size="1em" aria-hidden /> Copy Trading</Link>
+            <Link to="/signals"      className="px-3 py-1.5 bg-violet-500/10 border border-violet-500/30 rounded-lg text-violet-400 text-xs font-semibold no-underline hover:bg-violet-500/20 transition-colors"><RadioTower size="1em" aria-hidden /> Signals</Link>
           </div>
         }
     >
@@ -165,7 +165,7 @@ const Leaderboard: React.FC = () => {
           ))}
         </div>
       ) : loadErr ? (
-        <div className="bg-red-950/40 border border-red-800 rounded-xl p-4 text-red-400 text-sm">⚠️ {loadErr}</div>
+        <div className="bg-red-950/40 border border-red-800 rounded-xl p-4 text-red-400 text-sm"><AlertTriangle size="1em" aria-hidden /> {loadErr}</div>
       ) : traders.length === 0 ? (
         <EmptyState
           icon={Trophy}
@@ -173,8 +173,8 @@ const Leaderboard: React.FC = () => {
           description="The leaderboard populates once traders have closed positions. Start trading to appear here."
           action={
             <div className="flex gap-2">
-              <Link to="/trade"        className="px-4 py-2 bg-blue-600 rounded-lg text-white text-sm font-semibold no-underline hover:bg-blue-500 transition-colors">⚡ Start Trading</Link>
-              <Link to="/copy-trading" className="px-4 py-2 bg-transparent border border-terminal-border rounded-lg text-slate-400 text-sm no-underline hover:border-slate-500 transition-colors">🔁 Copy Trading</Link>
+              <Link to="/trade"        className="px-4 py-2 bg-blue-600 rounded-lg text-white text-sm font-semibold no-underline hover:bg-blue-500 transition-colors"><Zap size="1em" aria-hidden /> Start Trading</Link>
+              <Link to="/copy-trading" className="px-4 py-2 bg-transparent border border-terminal-border rounded-lg text-slate-400 text-sm no-underline hover:border-slate-500 transition-colors"><Repeat size="1em" aria-hidden /> Copy Trading</Link>
             </div>
           }
           links={[
@@ -296,7 +296,7 @@ const Leaderboard: React.FC = () => {
                         <div className="flex items-center gap-1.5">
                           <Link to={copyTo}
                             className="bg-amber-500/12 border border-amber-500/40 rounded-md text-amber-400 text-xs font-bold px-2 sm:px-2.5 py-1 no-underline hover:bg-amber-500/20 transition-colors whitespace-nowrap">
-                            🔁 Copy
+                            <Repeat size="1em" aria-hidden /> Copy
                           </Link>
                           {profileTo && (
                             <Link to={profileTo}

@@ -19,10 +19,7 @@
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-  BarChart3, TrendingDown, LineChart, Zap, BookOpen, Trophy,
-  Target, CheckCircle2, Repeat, ClipboardList,
-} from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CheckCircle2, ClipboardList, LineChart, Repeat, Target, TrendingDown, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { api as sharedApi } from '../hooks/useApi';
 import {
   useQuery,
@@ -440,7 +437,7 @@ const TCADashboard: React.FC = () => {
               onClick={() => navigate('/pnl')}
               style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: 'var(--ai-model)' }}
             >
-              💹 View P&L Impact
+              <TrendingUp size="1em" aria-hidden /> View P&L Impact
             </button>
             <button style={pg.btn} onClick={refresh} disabled={loading}>Refresh</button>
             <button style={pg.btnCsv} onClick={() => exportCSV(filteredRecords)} disabled={filteredRecords.length === 0}>
@@ -470,7 +467,7 @@ const TCADashboard: React.FC = () => {
       {alerts.length > 0 && (
         <div style={pg.alertBanner}>
           <span style={{ fontWeight: 700 }}>
-            ⚠ {alerts.length} broker{alerts.length > 1 ? 's' : ''} above slippage threshold
+            <AlertTriangle size="1em" aria-hidden /> {alerts.length} broker{alerts.length > 1 ? 's' : ''} above slippage threshold
           </span>
           <span style={{ fontSize: 'var(--fs-body)', color: '#fca5a5' }}>
             {alerts.map(a => a.broker).join(', ')}
@@ -679,7 +676,7 @@ const TCADashboard: React.FC = () => {
 
         {filteredRecords.length === 0 ? (
           <div style={{ ...pg.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 36 }}>📊</div>
+            <div style={{ fontSize: 36 }}><BarChart3 size="1em" aria-hidden /></div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>
               {records.length === 0 ? 'No fill records yet' : 'No records match the current filters'}
             </div>
@@ -691,7 +688,7 @@ const TCADashboard: React.FC = () => {
             {records.length === 0 && (
               <button onClick={() => navigate('/trade')}
                 style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-                ⚡ Start Trading
+                <Zap size="1em" aria-hidden /> Start Trading
               </button>
             )}
           </div>

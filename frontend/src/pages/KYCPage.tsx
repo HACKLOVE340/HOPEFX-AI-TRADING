@@ -14,8 +14,7 @@ import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
-import { CreditCard, Globe2, Hourglass, IdCard, Lock, Search, Settings, ShieldCheck, Timer, Trash2, User } from 'lucide-react';
-
+import { Check, CreditCard, FileText, Globe2, Hourglass, IdCard, Lock, Search, Settings, ShieldCheck, Timer, Trash2, Upload, User } from 'lucide-react';
 /**
  * `unknown` is not a server status — it is the client's answer when it could not
  * ask (F6-01). The catch below used to construct `{ status: 'not_started' }`,
@@ -327,7 +326,7 @@ const KYCPage: React.FC = () => {
           {(kycState?.documents ?? []).length > 0 && (
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 22px', marginBottom: 20 }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>📄</span> Submitted Documents
+                <span><FileText size="1em" aria-hidden /></span> Submitted Documents
               </h3>
               {kycState!.documents.map((doc, i) => {
                 const docLabel = DOC_TYPES.find(d => d.id === doc.type)?.label ?? doc.type;
@@ -359,7 +358,7 @@ const KYCPage: React.FC = () => {
           {canSubmit && (
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '22px 24px', marginBottom: 24 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>📤</span> Upload Documents
+                <span><Upload size="1em" aria-hidden /></span> Upload Documents
               </h3>
               <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 20px', lineHeight: 1.5 }}>
                 Upload at least a government-issued ID and proof of address. Files must be JPG, PNG, or PDF under 10 MB.
@@ -382,7 +381,7 @@ const KYCPage: React.FC = () => {
                         </div>
                         {isUploaded && (
                           <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gain)', fontWeight: 700, background: '#14532d', border: '1px solid #166534', borderRadius: 6, padding: '2px 8px', flexShrink: 0 }}>
-                            ✓ Uploaded
+                            <Check size="1em" aria-hidden /> Uploaded
                           </span>
                         )}
                       </div>

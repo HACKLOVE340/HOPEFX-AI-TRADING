@@ -7,10 +7,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-  Zap, Brain, Eye, BookOpen, Shield,
-
-} from 'lucide-react';
+import { AlertTriangle, BookOpen, Brain, Eye, NotebookPen, Shield, Zap } from 'lucide-react';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -199,11 +196,11 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus, fe
       {/* Quick nav */}
       <button onClick={() => navigate('/journal')}
         className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[var(--border)] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
-        📓 Journal
+        <NotebookPen size="1em" aria-hidden /> Journal
       </button>
       <button onClick={() => navigate('/risk-calculator')}
         className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[var(--border)] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
-        🛡 Risk Calc
+        <Shield size="1em" aria-hidden /> Risk Calc
       </button>
 
       {/* WS status */}
@@ -541,7 +538,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         )}
         {chartError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-20 bg-[#060d18]">
-            <span className="text-[var(--bear)] text-[12px]">⚠ {chartError}</span>
+            <span className="text-[var(--bear)] text-[12px]"><AlertTriangle size="1em" aria-hidden /> {chartError}</span>
             <span className="text-slate-600 text-[10px]">Connect a broker or load historical data</span>
           </div>
         )}

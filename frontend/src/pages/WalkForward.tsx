@@ -11,7 +11,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
-import { LineChart } from 'lucide-react';
+import { BarChart3, Bot, LineChart } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { api } from '../hooks/useApi';
 
@@ -240,7 +240,7 @@ const WalkForward: React.FC = () => {
     return (
       <PageShell {...shell}>
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: 'var(--text-dim)', textAlign: 'center' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}><BarChart3 size="1em" aria-hidden /></div>
           <div style={{ fontSize: 16, color: 'var(--text)', marginBottom: 8 }}>
             {apiError ?? 'No walk-forward data available.'}
           </div>
@@ -252,7 +252,7 @@ const WalkForward: React.FC = () => {
               ↻ Retry
             </button>
             <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: 'var(--text-dim)', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
-              📊 Go to Backtesting
+              <BarChart3 size="1em" aria-hidden /> Go to Backtesting
             </button>
           </div>
         </div>
@@ -281,7 +281,7 @@ const WalkForward: React.FC = () => {
               color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, fontFamily: 'inherit',
             }}
           >
-            🤖 Generate Strategy
+            <Bot size="1em" aria-hidden /> Generate Strategy
           </button>
           <div style={s.searchRow}>
             <input aria-label="Run ID"

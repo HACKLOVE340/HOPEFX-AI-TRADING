@@ -13,7 +13,7 @@
  *   professional+: api-keys, trading
  */
 
-import { SlidersHorizontal } from 'lucide-react';
+import { NotebookPen, Search, SlidersHorizontal } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -228,7 +228,7 @@ const UpgradeNotice: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => 
     padding: '48px 32px', textAlign: 'center',
     background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14,
   }}>
-    <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+    <div style={{ fontSize: 40, marginBottom: 16 }}><Lock size="1em" aria-hidden /></div>
     <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
       {requiredPlan.charAt(0).toUpperCase() + requiredPlan.slice(1)} Plan Required
     </div>
@@ -376,15 +376,15 @@ const Settings: React.FC = () => {
           <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
                 style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-                ⚡ Trade
+                <Zap size="1em" aria-hidden /> Trade
               </button>
               <button onClick={() => navigate('/journal')}
                 style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 7, color: '#10b981', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-                📓 Journal
+                <NotebookPen size="1em" aria-hidden /> Journal
               </button>
               <button onClick={() => navigate('/wallet')}
                 style={{ padding: '6px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-                💰 Wallet
+                <Banknote size="1em" aria-hidden /> Wallet
               </button>
           </div>
         )}
@@ -398,7 +398,7 @@ const Settings: React.FC = () => {
                 background: 'var(--raised)', border: '1px solid var(--border-strong)',
                 borderRadius: 8, padding: '7px 10px',
               }}>
-                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', flexShrink: 0 }}>🔍</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', flexShrink: 0 }}><Search size="1em" aria-hidden /></span>
                 <input aria-label="Search settings"
                   type="text"
                   placeholder="Search settings…"
@@ -496,7 +496,7 @@ const Settings: React.FC = () => {
                       >
                         <span style={S.tabIcon}>{tab.icon}</span>
                         <span style={{ flex: 1 }}>{tab.label}</span>
-                        {locked && <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>🔒</span>}
+                        {locked && <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}><Lock size="1em" aria-hidden /></span>}
                         {isSA && <span style={S.saBadgeSmall}>SA</span>}
                         {tab.adminOnly && !isSA && <span style={S.adminBadge}>ADM</span>}
                       </button>

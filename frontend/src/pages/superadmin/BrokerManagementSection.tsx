@@ -253,7 +253,7 @@ const BrokerManagementSection: React.FC = () => {
                 disabled={busy === 'routing'} onClick={saveRouting} />
             </div>
           ) : (
-            <ActionBtn label="Edit routing" size="sm" icon={<Pencil size={13} aria-hidden />}
+            <ActionBtn label="Edit routing" size="sm" icon={<Pencil size="1em" aria-hidden />}
               onClick={() => { setRoutingDraft(routing); setEditRouting(true); }} />
           )
         }

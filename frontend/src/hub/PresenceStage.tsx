@@ -694,7 +694,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           }}
         />
         <button type="submit" style={control} disabled={!typed.trim()}>
-          <Send size={13} aria-hidden /> Send
+          <Send size="1em" aria-hidden /> Send
         </button>
         <button
           type="button"
@@ -702,13 +702,13 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           disabled={!sttSupported}
           style={{ ...control, borderColor: listening ? C.bad : C.edge2, opacity: sttSupported ? 1 : 0.5 }}
         >
-          <Mic size={13} aria-hidden /> {listening ? 'Stop listening' : 'Talk'}
+          <Mic size="1em" aria-hidden /> {listening ? 'Stop listening' : 'Talk'}
         </button>
         <button type="button" onClick={onStop} style={control}>
           <Square size={12} aria-hidden /> Stop
         </button>
         <button type="button" onClick={onToggleMute} aria-pressed={muted} style={control}>
-          {muted ? <VolumeX size={13} aria-hidden /> : <Volume2 size={13} aria-hidden />}
+          {muted ? <VolumeX size="1em" aria-hidden /> : <Volume2 size="1em" aria-hidden />}
           {muted ? 'Muted' : 'Aloud'}
         </button>
         <button
@@ -721,7 +721,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           title={handsOn ? hands.status.reason || 'Reading hand position from the camera.' : 'Use the camera for hand gestures'}
           style={{ ...control, borderColor: handsOn ? C.core : C.edge2 }}
         >
-          <Hand size={13} aria-hidden /> {handsOn ? 'Hands on' : 'Hands'}
+          <Hand size="1em" aria-hidden /> {handsOn ? 'Hands on' : 'Hands'}
         </button>
       </form>
     </div>

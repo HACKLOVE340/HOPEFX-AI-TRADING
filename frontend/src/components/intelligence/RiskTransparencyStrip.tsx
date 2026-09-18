@@ -13,6 +13,7 @@
 
 import React from 'react';
 import { useStore, selectRiskSnapshot, selectAccount, selectKillSwitch } from '../../store';
+import { Shield } from 'lucide-react';
 
 const fmtPct = (v: number | null | undefined, dp = 1): string =>
   v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(dp)}%`;
@@ -61,7 +62,7 @@ export const RiskTransparencyStrip: React.FC = () => {
       borderRadius: 12, padding: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>🛡️ Risk State</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}><Shield size="1em" aria-hidden /> Risk State</span>
         <span style={{
           fontSize: 'var(--fs-micro)', fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',

@@ -9,8 +9,7 @@ import {
 import type { MLModel } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { BarChart3, Bot, Brain, Package, Pause, Play, RefreshCw, Settings, Square, Target, TrendingUp, Zap } from 'lucide-react';
-
+import { AlertTriangle, BarChart3, Bot, Brain, Check, Package, Pause, Play, RefreshCw, Settings, Square, Target, TrendingUp, Zap } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -282,7 +281,7 @@ const MLAISection: React.FC = () => {
                         title="Entries over these identical bytes report different measured metrics — at least one is wrong"
                         style={{ marginLeft: 6, color: 'var(--loss)', fontWeight: 700 }}
                       >
-                        ⚠ conflict
+                        <AlertTriangle size="1em" aria-hidden /> conflict
                       </span>
                     )}
                   </td>
@@ -469,7 +468,7 @@ const MLSubsystemsPanel: React.FC = () => {
               'GARCH Volatility Estimate', 'Correlation Features', 'COT Positioning',
             ].map(f => (
               <div key={f} style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
-                ✓ {f}
+                <Check size="1em" aria-hidden /> {f}
               </div>
             ))}
           </div>

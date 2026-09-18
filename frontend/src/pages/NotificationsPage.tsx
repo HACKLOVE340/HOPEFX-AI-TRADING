@@ -9,7 +9,7 @@
  *   WS   /ws/notifications           — real-time push
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Settings, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
@@ -176,7 +176,7 @@ const NotificationsPage: React.FC = () => {
           )}
           <button onClick={() => navigate('/settings')}
             style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: 'var(--text-dim)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            ⚙️ Settings
+            <Settings size="1em" aria-hidden /> Settings
           </button>
           {(['all', 'unread'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
@@ -205,7 +205,7 @@ const NotificationsPage: React.FC = () => {
       )}
       {!loading && items.length === 0 && !err && (
         <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 64 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🔔</div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}><Bell size="1em" aria-hidden /></div>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-muted)' }}>No notifications</div>
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginTop: 4 }}>You're all caught up!</div>
         </div>
@@ -251,7 +251,7 @@ const NotificationsPage: React.FC = () => {
                   onClick={e => { e.stopPropagation(); navigate('/trade'); }}
                   style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                 >
-                  ⚡ Trade
+                  <Zap size="1em" aria-hidden /> Trade
                 </button>
               )}
             </div>

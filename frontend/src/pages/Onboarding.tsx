@@ -15,8 +15,7 @@ import { api } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
 import type { UserRole } from '../store';
-import { BarChart3, Play, Shield, TrendingUp, Zap } from 'lucide-react';
-
+import { BarChart3, Check, Play, Shield, TrendingUp, X, Zap } from 'lucide-react';
 function resolvePostOnboardingPath(role: UserRole | undefined): string {
   if (role === 'superadmin') return '/superadmin';
   if (role === 'admin') return '/audit';
@@ -257,7 +256,7 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
         </button>
       ) : (
         <div style={s.resultBox}>
-          <div style={{ color: 'var(--gain)', fontWeight: 600, marginBottom: 12 }}>✓ Backtest complete</div>
+          <div style={{ color: 'var(--gain)', fontWeight: 600, marginBottom: 12 }}><Check size="1em" aria-hidden /> Backtest complete</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, textAlign: 'center' }}>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.return_pct.toFixed(1)}%</div>
@@ -309,7 +308,7 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
         </button>
       ) : (
         <div style={{ ...s.resultBox, border: '1px solid #14532d', background: '#052e16' }}>
-          <div style={{ color: 'var(--gain)', fontWeight: 600 }}>✓ Paper trading active!</div>
+          <div style={{ color: 'var(--gain)', fontWeight: 600 }}><Check size="1em" aria-hidden /> Paper trading active!</div>
           <div style={{ fontSize: 'var(--fs-body)', color: '#86efac', marginTop: 4 }}>
             Head to the Dashboard to watch your first AI signals.
           </div>
@@ -406,7 +405,7 @@ const Onboarding: React.FC = () => {
             <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--warn)', margin: '0 0 4px' }}>HOPEFX Setup</h1>
             <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', margin: 0 }}>Step {step + 1} of {STEPS.length}</p>
           </div>
-          <button onClick={skip} style={s.skipBtn}>✕ Skip</button>
+          <button onClick={skip} style={s.skipBtn}><X size="1em" aria-hidden /> Skip</button>
         </div>
 
         <StepIndicator current={step} total={STEPS.length} />

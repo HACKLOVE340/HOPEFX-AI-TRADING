@@ -15,8 +15,7 @@ import { createChart, LineSeries, type UTCTimestamp } from 'lightweight-charts';
 import { indicatorsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
-import { BarChart3, Bot, Ruler, Search, ShoppingCart, TrendingUp } from 'lucide-react';
-
+import { BarChart3, Bot, Hourglass, Ruler, Search, ShoppingCart, TrendingUp } from 'lucide-react';
 interface Indicator { id: string; name: string; formula: string; symbol: string; color: string; created_at: string; }
 interface PreviewPoint { index: number; value: number; }
 
@@ -204,19 +203,19 @@ const CustomIndicators: React.FC = () => {
           <div style={{ display:'flex', gap:8, alignItems:'center' }}>
             <Link to="/ai-chart"
               style={{ background:'rgba(59,130,246,0.12)', border:'1px solid rgba(59,130,246,0.35)', borderRadius:7, color:'var(--link)', fontSize: 'var(--fs-body)', fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
-              📈 AI Charts
+              <TrendingUp size="1em" aria-hidden /> AI Charts
             </Link>
             <Link to="/ai-strategy"
               style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:7, color:'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
-              🤖 AI Strategy
+              <Bot size="1em" aria-hidden /> AI Strategy
             </Link>
             <Link to="/walk-forward"
               style={{ background:'rgba(96,165,250,0.12)', border:'1px solid rgba(96,165,250,0.35)', borderRadius:7, color:'var(--link)', fontSize: 'var(--fs-body)', fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
-              📊 Walk-Forward
+              <BarChart3 size="1em" aria-hidden /> Walk-Forward
             </Link>
             <Link to="/pattern-detector"
               style={{ background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.35)', borderRadius:7, color:'var(--warn)', fontSize: 'var(--fs-body)', fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
-              🔍 Patterns
+              <Search size="1em" aria-hidden /> Patterns
             </Link>
           </div>
         }
@@ -280,7 +279,7 @@ const CustomIndicators: React.FC = () => {
         <div style={s.card}>
           <div style={s.cardTitle}>Preview — {symbol}</div>
           {loading && (
-            <div style={{ textAlign:'center', padding:'20px 0', color:'var(--text-muted)', fontSize: 'var(--fs-body)'}}>⏳ Computing…</div>
+            <div style={{ textAlign:'center', padding:'20px 0', color:'var(--text-muted)', fontSize: 'var(--fs-body)'}}><Hourglass size="1em" aria-hidden /> Computing…</div>
           )}
           {!loading && preview.length > 0
             ? <PreviewChart data={preview} color={color} />

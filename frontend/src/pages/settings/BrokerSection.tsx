@@ -5,8 +5,7 @@ import type { BrokerSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { Landmark } from 'lucide-react';
-
+import { Check, CheckCircle2, Landmark, XCircle } from 'lucide-react';
 const DEFAULT: BrokerSettings = {
   type: 'paper', api_key: '', account_id: '', practice: true, connected: false,
 };
@@ -197,7 +196,7 @@ const BrokerSection: React.FC = () => {
               />
               {keyOnFile && !form.api_key && (
                 <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gain)', marginTop: 4 }}>
-                  ✓ API key saved — leave blank to keep it, or enter a new key to replace.
+                  <Check size="1em" aria-hidden /> API key saved — leave blank to keep it, or enter a new key to replace.
                 </div>
               )}
             </Field>
@@ -235,10 +234,10 @@ const BrokerSection: React.FC = () => {
                 Test connection
               </Button>
               {testStatus === 'ok' && (
-                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}>✅ {testMsg}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}><CheckCircle2 size="1em" aria-hidden /> {testMsg}</span>
               )}
               {testStatus === 'fail' && (
-                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>❌ {testMsg}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}><XCircle size="1em" aria-hidden /> {testMsg}</span>
               )}
             </div>
           </>

@@ -215,7 +215,7 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
           disabled={busy}
           style={{ ...button, alignSelf: 'flex-start', opacity: busy ? 0.6 : 1 }}
         >
-          <Ban size={13} aria-hidden /> Stop this one
+          <Ban size="1em" aria-hidden /> Stop this one
         </button>
       )}
     </article>
@@ -350,7 +350,7 @@ export const GenerationWorkbench: React.FC = () => {
             disabled={!canSubmit}
             style={{ ...button, opacity: canSubmit ? 1 : 0.55, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
           >
-            {submit.isPending ? <Loader2 size={13} aria-hidden /> : <Send size={13} aria-hidden />}
+            {submit.isPending ? <Loader2 size="1em" aria-hidden /> : <Send size="1em" aria-hidden />}
             Start generating
           </button>
         </div>

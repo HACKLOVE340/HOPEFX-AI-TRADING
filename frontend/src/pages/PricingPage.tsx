@@ -18,8 +18,7 @@ import { useStore, selectIsAuth } from '../store';
 import { normalisePlan } from '../lib/subscription';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';
-import { BarChart3, BookOpen, CircleDot, Handshake, Trophy } from 'lucide-react';
-
+import { BarChart3, BookOpen, Check, CircleDot, ClipboardList, Handshake, Trophy } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 /** Every limit is optional — the catalogue omits them for some plans (audit #40). */
@@ -191,7 +190,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
         {plan.highlights && plan.highlights.length > 0
           ? plan.highlights.map(h => (
               <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)'}}>
-                <span style={{ color: '#22c55e', fontSize: 14, flexShrink: 0 }}>✓</span>
+                <span style={{ color: '#22c55e', fontSize: 14, flexShrink: 0 }}><Check size="1em" aria-hidden /></span>
                 <span style={{ color: 'var(--text-dim)' }}>{h}</span>
               </div>
             ))
@@ -450,7 +449,7 @@ const PricingPage: React.FC = () => {
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading plans…</div>
       ) : plans.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}><ClipboardList size="1em" aria-hidden /></div>
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-value)'}}>Plans unavailable — please try again shortly.</div>
         </div>
       ) : (

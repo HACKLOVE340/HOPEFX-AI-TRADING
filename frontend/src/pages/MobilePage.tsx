@@ -15,8 +15,7 @@ import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
-import { BarChart3, Bell, Settings, ShieldCheck, Smartphone, User } from 'lucide-react';
-
+import { BarChart3, Bell, Check, Settings, ShieldCheck, Smartphone, User, Zap } from 'lucide-react';
 interface MobileConfig {
   ios_version: string;
   android_version: string;
@@ -240,7 +239,7 @@ const MobilePage: React.FC = () => {
           { label: 'Account', href: '/profile' },
           { label: 'Mobile App' },
         ]}
-        badge={<Badge variant="info" style={{ fontSize: 'var(--fs-label)'}}>📱 Available Now</Badge>}
+        badge={<Badge variant="info" style={{ fontSize: 'var(--fs-label)'}}><Smartphone size="1em" aria-hidden /> Available Now</Badge>}
         actions={
           <button
             onClick={load}
@@ -279,7 +278,7 @@ const MobilePage: React.FC = () => {
       {/* Features */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
         <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>⚡</span> Mobile Features
+          <span><Zap size="1em" aria-hidden /></span> Mobile Features
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
           {features.map(f => (
@@ -289,7 +288,7 @@ const MobilePage: React.FC = () => {
                 background: '#14532d', border: '1px solid #166534',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 'var(--fs-micro)', color: 'var(--gain)', flexShrink: 0, fontWeight: 700,
-              }}>✓</span>
+              }}><Check size="1em" aria-hidden /></span>
               {f}
             </div>
           ))}
@@ -299,7 +298,7 @@ const MobilePage: React.FC = () => {
       {/* Push token registration */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
         <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>🔔</span> Push Notifications
+          <span><Bell size="1em" aria-hidden /></span> Push Notifications
         </h3>
         <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
           Register a device push token to receive trade alerts, signal notifications, and account updates on your mobile device.
@@ -348,7 +347,7 @@ const MobilePage: React.FC = () => {
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>📲</span> Active Mobile Sessions
+            <span><Smartphone size="1em" aria-hidden /></span> Active Mobile Sessions
           </h3>
           {sessions.length > 0 && (
             <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{sessions.length} device{sessions.length !== 1 ? 's' : ''}</span>

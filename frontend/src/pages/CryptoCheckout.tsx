@@ -33,7 +33,7 @@ import { PLAN_COLORS } from '../lib/subscription';
 import { extractApiError } from '../lib/utils';
 import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
-
+import { AlertTriangle, Camera, Check, CheckCircle2, Hourglass } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CryptoOption = 'BTC' | 'ETH' | 'USDT';
@@ -176,7 +176,7 @@ const PlanCard: React.FC<{ plan: Plan; selected: boolean; onSelect: () => void }
         {plan.features.slice(0, 3).map(f => <li key={f}>{f}</li>)}
       </ul>
       {selected && (
-        <div style={{ marginTop: 8, fontSize: 'var(--fs-label)', fontWeight: 700, color: accent }}>✓ Selected</div>
+        <div style={{ marginTop: 8, fontSize: 'var(--fs-label)', fontWeight: 700, color: accent }}><Check size="1em" aria-hidden /> Selected</div>
       )}
     </div>
   );
@@ -532,7 +532,7 @@ const CryptoCheckout: React.FC = () => {
                 <div style={{ width: 180, height: 180, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                   borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 32 }}>📷</span>
+                  <span style={{ fontSize: 32 }}><Camera size="1em" aria-hidden /></span>
                   <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'center', padding: '0 12px' }}>
                     QR unavailable — copy address below
                   </div>
@@ -556,7 +556,7 @@ const CryptoCheckout: React.FC = () => {
 
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
             padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--warn)', marginBottom: 14 }}>
-            ⚠️ Send only <strong>{selectedCrypto}</strong> on the{' '}
+            <AlertTriangle size="1em" aria-hidden /> Send only <strong>{selectedCrypto}</strong> on the{' '}
             <strong>{depositInfo.network.toUpperCase()}</strong> network.
             Sending a different asset will result in permanent loss.
           </div>
@@ -590,7 +590,7 @@ const CryptoCheckout: React.FC = () => {
           className="mb-4"
         />
         <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}><Hourglass size="1em" aria-hidden /></div>
           <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>
             Waiting for blockchain confirmations
           </div>
@@ -628,7 +628,7 @@ const CryptoCheckout: React.FC = () => {
       >
 
         <div style={{ ...st.card, textAlign: 'center', padding: '48px 32px' }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
+          <div style={{ fontSize: 56, marginBottom: 16 }}><CheckCircle2 size="1em" aria-hidden /></div>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
             Payment confirmed!
           </h2>
@@ -665,7 +665,7 @@ const CryptoCheckout: React.FC = () => {
       <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
         {addressError ? (
           <>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 32, marginBottom: 12 }}><AlertTriangle size="1em" aria-hidden /></div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>
               Failed to generate deposit address
             </div>

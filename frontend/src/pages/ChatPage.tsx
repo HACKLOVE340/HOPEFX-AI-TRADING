@@ -14,6 +14,7 @@ import { chatApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { openAuthenticatedWebSocket } from '../lib/ws';
 import { useToast } from '../components/Toast';
+import { RadioTower, Zap } from 'lucide-react';
 
 interface ChatRoom {
   id: string;
@@ -214,11 +215,11 @@ const ChatPage: React.FC = () => {
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
                 style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
-                ⚡ Trade
+                <Zap size="1em" aria-hidden /> Trade
               </button>
               <button onClick={() => navigate('/signals')}
                 style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
-                📡 Signals
+                <RadioTower size="1em" aria-hidden /> Signals
               </button>
             </div>
           </div>

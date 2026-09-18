@@ -16,7 +16,7 @@
 import { PageShell } from '../components/system/PageShell';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clapperboard, GraduationCap, Lock, Play } from 'lucide-react';
+import { AlertTriangle, Clapperboard, GraduationCap, Lock, Play } from 'lucide-react';
 import { tutorialsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { useToast } from '../components/Toast';
@@ -119,7 +119,7 @@ const EpisodeCard: React.FC<{ ep: Episode; onOpen: (ep: Episode) => void }> = ({
               background: `${accent}18`, color: accent, border: `1px solid ${accent}40`,
               textTransform: 'uppercase', letterSpacing: '0.05em',
             }}>
-              🔒 {PLAN_LABELS[ep.plan]}
+              <Lock size="1em" aria-hidden /> {PLAN_LABELS[ep.plan]}
             </span>
           ) : ep.published ? (
             <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: 'rgba(74,222,128,0.12)', color: 'var(--gain)', border: '1px solid rgba(74,222,128,0.35)', textTransform: 'uppercase' }}>
@@ -187,7 +187,7 @@ const EpisodeDetail: React.FC<{ ep: Episode; onClose: () => void }> = ({ ep, onC
               gap: 8, padding: '36px 20px', background: 'linear-gradient(135deg, #0a1628 0%, #0d1f33 100%)',
               borderRadius: 10, border: '1px dashed var(--border)',
             }}>
-              <span style={{ fontSize: 'var(--fs-hero)'}}>🎬</span>
+              <span style={{ fontSize: 'var(--fs-hero)'}}><Clapperboard size="1em" aria-hidden /></span>
               <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dim)' }}>Coming soon</span>
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', maxWidth: 420 }}>
                 This episode is scripted and in production. The full chapter outline is below so you
@@ -308,7 +308,7 @@ const Academy: React.FC = () => {
           </div>
         ) : error ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: 48 }}>
-            <span style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)'}}>⚠ {error}</span>
+            <span style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)'}}><AlertTriangle size="1em" aria-hidden /> {error}</span>
             <button onClick={() => void load()} style={{ background: 'var(--border)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '6px 14px', cursor: 'pointer' }}>
               Retry
             </button>

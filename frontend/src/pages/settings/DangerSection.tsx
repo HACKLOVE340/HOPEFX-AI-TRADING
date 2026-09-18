@@ -17,8 +17,7 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 import { Card, SectionHeader, Button, Divider } from './ui';
 import { extractApiError } from '../../lib/utils';
-import { AlertTriangle } from 'lucide-react';
-
+import { AlertTriangle, OctagonAlert, XCircle } from 'lucide-react';
 const DangerSection: React.FC = () => {
   const navigate = useNavigate();
   const clearAuth = useStore((s) => s.clearAuth);
@@ -151,7 +150,7 @@ const DangerSection: React.FC = () => {
               lapsed. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {tradingHalted === true && (
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 600 }}>🛑 Trading halted</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 600 }}><OctagonAlert size="1em" aria-hidden /> Trading halted</span>
             )}
             {tradingHalted === null && (
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>Status unavailable</span>
@@ -238,7 +237,7 @@ const DangerSection: React.FC = () => {
           </Button>
         </div>
         {deleteError && (
-          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 8 }}>❌ {deleteError}</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 8 }}><XCircle size="1em" aria-hidden /> {deleteError}</div>
         )}
       </Card>
     </div>

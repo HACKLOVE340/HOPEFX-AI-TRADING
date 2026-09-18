@@ -10,6 +10,7 @@
 
 import React from 'react';
 import type { EngineSignal, SignalStrength } from '../../types';
+import { Clock, Settings, TrendingUp } from 'lucide-react';
 
 // ── Strength styling ──────────────────────────────────────────────────────────
 const STRENGTH_META: Record<SignalStrength, { label: string; color: string }> = {
@@ -155,9 +156,9 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
 
       {/* Context chips */}
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-        {signal.regime  && <Chip title="Market regime at signal time">📈 {signal.regime}</Chip>}
-        {signal.session && <Chip title="Trading session">🕐 {signal.session}</Chip>}
-        {modelVersion   && <Chip title="Model version that produced this signal" color="#93c5fd">⚙ {modelVersion}</Chip>}
+        {signal.regime  && <Chip title="Market regime at signal time"><TrendingUp size="1em" aria-hidden /> {signal.regime}</Chip>}
+        {signal.session && <Chip title="Trading session"><Clock size="1em" aria-hidden /> {signal.session}</Chip>}
+        {modelVersion   && <Chip title="Model version that produced this signal" color="#93c5fd"><Settings size="1em" aria-hidden /> {modelVersion}</Chip>}
       </div>
     </div>
   );

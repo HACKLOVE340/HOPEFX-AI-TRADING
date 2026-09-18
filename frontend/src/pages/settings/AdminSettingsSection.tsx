@@ -255,7 +255,7 @@ const AdminSettingsSection: React.FC = () => {
               variant="danger"
               onClick={activateGlobalKillSwitch}
             >
-              {killSwitchConfirm ? <><AlertTriangle size={13} aria-hidden /> Confirm — halt all trading</> : 'Activate global kill switch'}
+              {killSwitchConfirm ? <><AlertTriangle size="1em" aria-hidden /> Confirm — halt all trading</> : 'Activate global kill switch'}
             </Button>
             {killSwitchConfirm && (
               <button

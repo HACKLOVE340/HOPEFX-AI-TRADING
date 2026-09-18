@@ -10,8 +10,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { ClipboardList, Link2, Search, Tag } from 'lucide-react';
-
+import { ClipboardList, Link2, Lock, Search, Tag } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
 
@@ -211,7 +210,7 @@ const AuditTrailSection: React.FC = () => {
         borderRadius: 10, padding: '12px 16px', marginBottom: 16,
         display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--fs-body)', color: 'var(--ai-model)',
       }}>
-        <span style={{ fontSize: 16 }}>🔒</span>
+        <span style={{ fontSize: 16 }}><Lock size="1em" aria-hidden /></span>
         <span>
           <strong>Tamper-evident audit trail</strong> — SHA-256 hash-chained records meeting SEC Rule 17a-4 and CFTC requirements.
           Each record links to the previous via cryptographic hash. Export for regulatory submission.

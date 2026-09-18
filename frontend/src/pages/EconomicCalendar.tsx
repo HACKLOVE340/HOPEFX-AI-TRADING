@@ -15,7 +15,7 @@
  *   GET  /api/data-layer/macro         — MacroResponse (via useMacro hook)
  */
 
-import { CalendarDays } from 'lucide-react';
+import { AlertTriangle, Calendar, CalendarDays, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -128,7 +128,7 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
         <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
           {IMPORTANCE_LABEL[ev.importance]}
           {mins <= 60 && mins > 0 && (
-            <span style={{ color: '#f97316', marginLeft: 8 }}>⚠ Approaching</span>
+            <span style={{ color: '#f97316', marginLeft: 8 }}><AlertTriangle size="1em" aria-hidden /> Approaching</span>
           )}
         </div>
       </div>
@@ -187,7 +187,7 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
             }}
             title="Navigate to Trade page to plan a trade around this event"
           >
-            ⚡ Plan Trade
+            <Zap size="1em" aria-hidden /> Plan Trade
           </button>
         )}
       </div>
@@ -369,12 +369,12 @@ const EconomicCalendar: React.FC = () => {
             <div style={s.errorBox}>{fetchErr}</div>
           ) : events.length === 0 ? (
             <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 36 }}>📅</div>
+              <div style={{ fontSize: 36 }}><Calendar size="1em" aria-hidden /></div>
               <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>No events found</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Try adjusting your filters or check back later.</div>
               <button onClick={() => navigate('/trade')}
                 style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-                ⚡ Go to Trade
+                <Zap size="1em" aria-hidden /> Go to Trade
               </button>
             </div>
           ) : (

@@ -221,8 +221,26 @@ _CHILD_TABLE_RE = re.compile(r"\{\s*([A-Z][A-Z0-9_]*)\b")
 _STYLE_KEY_LOOKBACK = 6
 
 
+# An icon sized by the cascade: `<ClipboardList size="1em" aria-hidden />`.
+# `1em` writes straight into the SVG's width/height, so the surrounding
+# `fontSize` is what sizes it — the declaration is load-bearing and is NOT a
+# candidate for a type token.
+_EM_ICON_RE = re.compile(r"<[A-Z]\w*\b[^>]*size=\"1em\"")
+
+
 def _classify(window: str) -> str:
-    """`glyph` when the thing being sized is a character, `type` otherwise."""
+    """What is this font size actually sizing?
+
+    Three answers, not two. `glyph` and `type` were the original pair; `icon`
+    arrived the moment `frontend_emoji_codemod.py` converted a pictograph inside
+    `style={{ fontSize: 32 }}` to a Lucide element at `size="1em"`. The
+    declaration still does the sizing — it is now what makes the SVG 32px — but
+    the glyph it used to size is gone, so a two-way classifier reads it as
+    `type` and it starts arguing for a display token it has no use for. 27 sites
+    moved that way in a single commit.
+    """
+    if _EM_ICON_RE.search(window):
+        return "icon"
     return "glyph" if _GLYPH_RE.search(window) else "type"
 
 
@@ -249,14 +267,17 @@ def _names_this_site_is_reachable_by(lines: list[str], i: int) -> list[str]:
 
 
 def _reclassify_by_name(lines: list[str], i: int) -> str:
-    """Second pass: does anything that USES this site render a glyph?"""
+    """Second pass: what does the thing that USES this site actually render?"""
     for name in _names_this_site_is_reachable_by(lines, i):
         # `s.alertIcon`, `styles.alertIcon`, `st['alertIcon']`, `const STATUS_ICON`
         use = re.compile(r"""(?:[.\['"]|\bconst\s+)""" + re.escape(name) + r"\b")
         for j, line in enumerate(lines):
             if j == i or not use.search(line):
                 continue
-            if _GLYPH_RE.search("\n".join(lines[max(0, j - 1) : j + 3])):
+            window = "\n".join(lines[max(0, j - 1) : j + 3])
+            if _EM_ICON_RE.search(window):
+                return "icon"
+            if _GLYPH_RE.search(window):
                 return "glyph"
     return "type"
 
@@ -293,7 +314,7 @@ def display_band(root: Path) -> list[DisplaySite]:
 
 def display_split(root: Path) -> dict[str, int]:
     """{"glyph": n, "type": m} over the display band."""
-    split = {"glyph": 0, "type": 0}
+    split = {"glyph": 0, "icon": 0, "type": 0}
     for site in display_band(root):
         split[site.kind] += 1
     return split
@@ -386,12 +407,13 @@ def check(root: Path) -> int:
         )
 
     split = display_split(root)
-    band = split["glyph"] + split["type"]
+    band = sum(split.values())
     if band:
         head = (
             f"frontend_size_ratchet: {band} of those are beyond the type scale "
             f"(>= {DISPLAY_FLOOR}px, above --fs-hero at ultra) — "
-            f"{split['glyph']} sizing a glyph, {split['type']} sizing type."
+            f"{split['glyph']} sizing a glyph, {split['icon']} sizing an icon at 1em, "
+            f"{split['type']} sizing type."
         )
         if split["type"]:
             tail = (
@@ -403,9 +425,10 @@ def check(root: Path) -> int:
             )
         else:
             tail = (
-                " Every typographic site in the band reaches a token; what is left is the emoji, "
-                "and those sizes disappear with the emoji rather than being converted. "
-                "python scripts/frontend_emoji_ratchet.py --check"
+                " Every typographic site in the band reaches a token. What is left sizes a "
+                "glyph or an icon: the glyph side disappears with the emoji rather than being "
+                "converted, and the icon side is load-bearing \u2014 it is what makes the SVG that "
+                "size. python scripts/frontend_emoji_ratchet.py --check"
             )
         print(head + tail)
 

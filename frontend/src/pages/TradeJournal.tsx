@@ -19,10 +19,7 @@ import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 import { Section, RelatedPages } from '../components';
 import { EmptyState } from '../components/EmptyState';
-import {
-  BookOpen, TrendingUp, Shield, Brain, CalendarDays, Download,
-  AlertTriangle, Zap, Target, LineChart,
-} from 'lucide-react';
+import { AlertTriangle, BookOpen, Brain, CalendarDays, Download, LineChart, NotebookPen, Repeat, Shield, Target, TrendingUp, Zap } from 'lucide-react';
 import { extractApiError, fmtPnl } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
 
@@ -332,7 +329,7 @@ const TradeJournal: React.FC = () => {
           {loading ? <div style={s.empty}>Loading…</div> :
            trades.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>📓</div>
+              <div style={{ fontSize: 36, marginBottom: 12 }}><NotebookPen size="1em" aria-hidden /></div>
               <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>No journal entries yet</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
                 Journal entries are created automatically when you close a trade.
@@ -350,7 +347,7 @@ const TradeJournal: React.FC = () => {
                   </span>
                   <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{entry.symbol}</span>
                   {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
-                  {!entry.followed_rules && <span style={s.deviationBadge}>⚠ Rule deviation</span>}
+                  {!entry.followed_rules && <span style={s.deviationBadge}><AlertTriangle size="1em" aria-hidden /> Rule deviation</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 18, fontWeight: 700, color: pnlColor(entry.pnl) }}>
@@ -362,7 +359,7 @@ const TradeJournal: React.FC = () => {
                       style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                       title="Open a new trade with the same symbol and direction"
                     >
-                      🔁 Re-trade
+                      <Repeat size="1em" aria-hidden /> Re-trade
                     </button>
                   )}
                   <button onClick={() => editing === entry.trade_id ? setEditing(null) : startEdit(entry)} style={s.editBtn}>
@@ -494,7 +491,7 @@ const TradeJournal: React.FC = () => {
       {tab === 'mistakes' && (
         <>
           {mistakes.length === 0
-            ? <div style={s.empty}>No rule deviations recorded. Keep it up! 🎯</div>
+            ? <div style={s.empty}>No rule deviations recorded. Keep it up! <Target size="1em" aria-hidden /></div>
             : (
               <>
                 {/* Summary banner */}
@@ -524,7 +521,7 @@ const TradeJournal: React.FC = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ ...s.sideBadge, background: '#450a0a', color: 'var(--loss)' }}>{entry.side.toUpperCase()}</span>
                         <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{entry.symbol}</span>
-                        <span style={s.deviationBadge}>⚠ {entry.rule_deviation ?? 'Rule deviation'}</span>
+                        <span style={s.deviationBadge}><AlertTriangle size="1em" aria-hidden /> {entry.rule_deviation ?? 'Rule deviation'}</span>
                         {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

@@ -13,7 +13,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { Calendar, CalendarDays, Globe2, LineChart, Link2, Microscope, Newspaper, Radiation, Radio, Zap } from 'lucide-react';
+import { BarChart3, Calendar, CalendarDays, Globe2, LineChart, Link2, Microscope, Newspaper, Radiation, Radio, Zap } from 'lucide-react';
 import { CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
@@ -316,15 +316,15 @@ const GeopoliticalRiskPage: React.FC = () => {
           <div style={{ display: 'flex', gap: 8 }}>
             <Link to="/research"
               style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
-              🔬 Research
+              <Microscope size="1em" aria-hidden /> Research
             </Link>
             <Link to="/correlation"
               style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
-              📊 Correlation
+              <BarChart3 size="1em" aria-hidden /> Correlation
             </Link>
             <Link to="/nuclear"
               style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
-              ☢ Nuclear AI
+              <Radiation size="1em" aria-hidden /> Nuclear AI
             </Link>
             <Link
               to="/trade"
@@ -332,7 +332,7 @@ const GeopoliticalRiskPage: React.FC = () => {
               style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}
               title="Gold tends to rally during geopolitical risk — buy XAU/USD"
             >
-              ⚡ Trade XAU/USD
+              <Zap size="1em" aria-hidden /> Trade XAU/USD
             </Link>
           </div>
         }

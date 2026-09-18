@@ -15,10 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { EmptyState, CrossLinkBar } from '../components';
-import {
-  Trophy, BarChart3, ListOrdered, CalendarDays, RefreshCw, ChevronRight,
-  LineChart, Briefcase, BookOpen, Shield,
-} from 'lucide-react';
+import { ArrowDownToLine, BarChart3, BookOpen, Bot, Brain, Briefcase, CalendarDays, ChevronRight, LineChart, ListOrdered, RefreshCw, Shield, Timer, Trophy, Zap } from 'lucide-react';
 import { fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError, positionSide } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -459,10 +456,10 @@ const Performance: React.FC = () => {
               action={
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Link to="/trade" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
-                    ⚡ Start Trading
+                    <Zap size="1em" aria-hidden /> Start Trading
                   </Link>
                   <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-block' }}>
-                    🧠 AI Strategy
+                    <Brain size="1em" aria-hidden /> AI Strategy
                   </Link>
                 </div>
               }
@@ -484,7 +481,7 @@ const Performance: React.FC = () => {
                 <StatCard label="Max Drawdown"  value={pub.max_drawdown_pct != null ? `${pub.max_drawdown_pct}%` : '—'} sub="Peak-to-trough" color="#ff1744" to="/pnl" toHint="the drawdown curve" />
               </div>
               <div style={s.noteBox}>
-                <span style={{ color: 'var(--warn)', marginRight: 8 }}>⏱</span>
+                <span style={{ color: 'var(--warn)', marginRight: 8 }}><Timer size="1em" aria-hidden /></span>
                 <strong style={{ color: 'var(--text-strong)' }}>Transparency: </strong>
                 {pub.note}
                 {/* Guarded against the '—' sentinel but not against the field
@@ -575,8 +572,8 @@ const Performance: React.FC = () => {
                      title="From date" aria-label="Trades from date" />
               <input type="date" value={tradeTo}   onChange={(e) => setTradeTo(e.target.value)}   style={s.filterInput}
                      title="To date" aria-label="Trades to date" />
-              <button onClick={() => handleExport('csv')} disabled={exporting} style={{ ...s.refreshBtn, fontSize: 'var(--fs-body)'}}>⬇ CSV</button>
-              <button onClick={() => handleExport('pdf')} disabled={exporting} style={{ ...s.refreshBtn, fontSize: 'var(--fs-body)'}}>⬇ PDF</button>
+              <button onClick={() => handleExport('csv')} disabled={exporting} style={{ ...s.refreshBtn, fontSize: 'var(--fs-body)'}}><ArrowDownToLine size="1em" aria-hidden /> CSV</button>
+              <button onClick={() => handleExport('pdf')} disabled={exporting} style={{ ...s.refreshBtn, fontSize: 'var(--fs-body)'}}><ArrowDownToLine size="1em" aria-hidden /> PDF</button>
             </div>
           </div>
           {tradesQ.isLoading && <PanelSkeleton rows={6} />}
@@ -613,8 +610,8 @@ const Performance: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={s.cardTitle}>Weekly Performance Report</h3>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => handleExport('csv')} disabled={exporting} style={s.refreshBtn}>⬇ Export CSV</button>
-              <button onClick={() => handleExport('pdf')} disabled={exporting} style={s.refreshBtn}>⬇ Export PDF</button>
+              <button onClick={() => handleExport('csv')} disabled={exporting} style={s.refreshBtn}><ArrowDownToLine size="1em" aria-hidden /> Export CSV</button>
+              <button onClick={() => handleExport('pdf')} disabled={exporting} style={s.refreshBtn}><ArrowDownToLine size="1em" aria-hidden /> Export PDF</button>
             </div>
           </div>
           {weeklyQ.isLoading && <PanelSkeleton rows={4} />}
@@ -647,7 +644,7 @@ const Performance: React.FC = () => {
                 </div>
                 {wr.ai_commentary && (
                   <div style={{ background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' }}>
-                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--link)', marginBottom: 6, fontWeight: 600 }}>🤖 AI Commentary</div>
+                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--link)', marginBottom: 6, fontWeight: 600 }}><Bot size="1em" aria-hidden /> AI Commentary</div>
                     <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: 0, lineHeight: 1.6 }}>{String(wr.ai_commentary)}</p>
                   </div>
                 )}

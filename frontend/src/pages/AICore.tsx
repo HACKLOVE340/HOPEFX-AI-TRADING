@@ -96,7 +96,7 @@ const button: React.CSSProperties = {
  */
 const Verdict: React.FC<{ ok: boolean; yes: string; no: string }> = ({ ok, yes, no }) => (
   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: ok ? COLOR.ok : COLOR.bad, fontWeight: 800, fontSize: 'var(--fs-body)'}}>
-    {ok ? <CheckCircle2 size={13} aria-hidden /> : <XCircle size={13} aria-hidden />}
+    {ok ? <CheckCircle2 size="1em" aria-hidden /> : <XCircle size="1em" aria-hidden />}
     {ok ? yes : no}
   </span>
 );

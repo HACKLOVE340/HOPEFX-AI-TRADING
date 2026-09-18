@@ -18,9 +18,7 @@ import { Link } from 'react-router-dom';
 import { CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Activity, AlertTriangle, ChevronLeft, ChevronRight, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp,
-} from 'lucide-react';
+import { Activity, AlertTriangle, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp, Zap } from 'lucide-react';
 import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { pnlApi } from '../hooks/useApi';
@@ -813,11 +811,11 @@ const PnLDashboard: React.FC = () => {
               <span className="text-slate-500 text-sm">Loading trade log…</span>
             ) : (
               <div className="flex flex-col items-center gap-3">
-                <span className="text-3xl opacity-30">📋</span>
+                <span className="text-3xl opacity-30"><ClipboardList size="1em" aria-hidden /></span>
                 <p className="text-slate-400 text-sm font-medium">No fills yet</p>
                 <p className="text-slate-600 text-xs max-w-xs">The trade log populates after your first executed order.</p>
                 <Link to="/trade" className="mt-1 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-600/30 transition-colors" style={{ textDecoration: 'none' }}>
-                  ⚡ Place First Trade
+                  <Zap size="1em" aria-hidden /> Place First Trade
                 </Link>
               </div>
             )}

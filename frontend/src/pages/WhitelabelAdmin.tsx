@@ -13,6 +13,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { BarChart3, X, Zap } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,7 +92,7 @@ const CreateModal: React.FC<{
       <div style={s.modal}>
         <div style={s.modalHeader}>
           <span style={{ fontWeight: 700, fontSize: 16 }}>New Whitelabel Tenant</span>
-          <button style={s.closeBtn} onClick={onClose}>✕</button>
+          <button style={s.closeBtn} onClick={onClose} aria-label="Close"><X size="1em" aria-hidden /></button>
         </div>
 
         {error && <div style={s.errorBanner}>{error}</div>}
@@ -154,7 +155,7 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
       <div style={{ ...s.modal, maxWidth: 560 }}>
         <div style={s.modalHeader}>
           <span style={{ fontWeight: 700, fontSize: 16 }}>Dashboard Preview — {tenant.name}</span>
-          <button style={s.closeBtn} onClick={onClose}>✕</button>
+          <button style={s.closeBtn} onClick={onClose} aria-label="Close"><X size="1em" aria-hidden /></button>
         </div>
         {/* Simulated branded dashboard */}
         <div style={{ background: 'var(--surface)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-strong)' }}>
@@ -318,11 +319,11 @@ const WhitelabelAdmin: React.FC = () => {
       actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/trade')}
             style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            ⚡ Trade
+            <Zap size="1em" aria-hidden /> Trade
           </button>
           <button onClick={() => navigate('/performance')}
             style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            📊 Performance
+            <BarChart3 size="1em" aria-hidden /> Performance
           </button>
           <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
         </div></>}
@@ -342,7 +343,7 @@ const WhitelabelAdmin: React.FC = () => {
       {apiKeyMsg && (
         <div style={s.apiKeyBanner}>
           <span>{apiKeyMsg}</span>
-          <button style={s.closeBtn} onClick={() => setApiKeyMsg('')}>✕</button>
+          <button style={s.closeBtn} onClick={() => setApiKeyMsg('')}><X size="1em" aria-hidden /></button>
         </div>
       )}
 
@@ -350,13 +351,13 @@ const WhitelabelAdmin: React.FC = () => {
       {actionErr && (
         <div style={s.errorBanner}>
           <span>{actionErr}</span>
-          <button style={s.closeBtn} onClick={() => setActionErr(null)}>✕</button>
+          <button style={s.closeBtn} onClick={() => setActionErr(null)}><X size="1em" aria-hidden /></button>
         </div>
       )}
       {loadErr && (
         <div style={s.errorBanner}>
           <span>{loadErr}</span>
-          <button style={s.closeBtn} onClick={() => setLoadErr(null)}>✕</button>
+          <button style={s.closeBtn} onClick={() => setLoadErr(null)}><X size="1em" aria-hidden /></button>
         </div>
       )}
 

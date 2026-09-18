@@ -92,3 +92,46 @@ describe('Toast', () => {
     expect(container.textContent ?? '').not.toMatch(GLYPH);
   });
 });
+
+/**
+ * An icon-only control must state its name.
+ *
+ * This is the failure mode of the conversion itself, and it bit twice before it
+ * was written down. `AccountBar`'s notification button and five close buttons
+ * had an accessible name BY ACCIDENT: the glyph was the button's text content,
+ * so a screen reader announced "bell" or the character. Replacing it with an
+ * `aria-hidden` icon — which is correct, the icon is decorative — leaves the
+ * button with no name at all.
+ *
+ * `jsx-a11y/control-has-associated-label` does not catch these: it is
+ * downgraded to a warning for the 17 files in `a11y-debt.json` and, more to the
+ * point, it did not fire on any of the six.
+ *
+ * Source-level rather than rendered, deliberately: rendering every page that
+ * has a close button is a suite, and the shape is exact enough to match.
+ */
+describe('icon-only buttons', () => {
+  it('never rely on a hidden icon for their name', async () => {
+    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const { join, resolve } = await import('node:path');
+
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((entry) => {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) return entry === 'test' ? [] : walk(full);
+        return full.endsWith('.tsx') ? [full] : [];
+      });
+
+    const ICON_ONLY = /<button\b([^>]*)>\s*(<[A-Z]\w*\s[^>]*aria-hidden[^>]*\/>)\s*<\/button>/;
+    const unnamed: string[] = [];
+    for (const file of walk(resolve(__dirname, '..'))) {
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          const m = ICON_ONLY.exec(line);
+          if (m && !/aria-label|title=/.test(m[1]!)) unnamed.push(`${file.split('/src/')[1]}:${i + 1}`);
+        });
+    }
+    expect(unnamed, `these buttons have no accessible name:\n${unnamed.join('\n')}`).toEqual([]);
+  });
+});

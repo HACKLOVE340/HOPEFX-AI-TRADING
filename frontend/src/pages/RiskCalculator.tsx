@@ -12,7 +12,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { BookOpen, Briefcase, Calculator, Shield, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Briefcase, Calculator, CheckCircle2, ClipboardList, NotebookPen, Shield, X, Zap } from 'lucide-react';
 import { EmptyState } from '../components';
 import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
@@ -423,16 +423,16 @@ const RiskCalculator: React.FC = () => {
             )}
             <button onClick={() => setShowHistory(h => !h)}
               style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              📋 History {history.length > 0 ? `(${history.length})` : ''}
+              <ClipboardList size="1em" aria-hidden /> History {history.length > 0 ? `(${history.length})` : ''}
             </button>
             <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
-              ⚡ Trade
+              <Zap size="1em" aria-hidden /> Trade
             </Link>
             <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
-              📓 Journal
+              <NotebookPen size="1em" aria-hidden /> Journal
             </Link>
             <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
-              🛡 Prop Firm
+              <Shield size="1em" aria-hidden /> Prop Firm
             </Link>
           </div>
         }
@@ -450,7 +450,7 @@ const RiskCalculator: React.FC = () => {
             fontSize: 'var(--fs-body)', color: '#ffb800',
           }}
         >
-          <span aria-hidden="true">⚠</span>
+          <span aria-hidden="true"><AlertTriangle size="1em" aria-hidden /></span>
           <span>
             Couldn&apos;t reach the instrument catalogue — sizing from the
             built-in specification. It is checked against the server on every
@@ -574,7 +574,7 @@ const RiskCalculator: React.FC = () => {
                   textAlign: 'center', marginBottom: 10, boxSizing: 'border-box',
                 }}
               >
-                ⚡ Apply to Trade — {state.symbol}
+                <Zap size="1em" aria-hidden /> Apply to Trade — {state.symbol}
               </Link>
               {/* Save calculation */}
               <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
@@ -596,10 +596,10 @@ const RiskCalculator: React.FC = () => {
           <div style={s.divider} />
           <div style={s.cardTitle}>Quick Tips</div>
           <div style={s.tipList}>
-            <div style={s.tip}>✅ Minimum R:R of 1:2 recommended</div>
-            <div style={s.tip}>✅ Risk no more than 1–2% per trade</div>
-            <div style={s.tip}>✅ At 1:2 R:R you only need 34% win rate to be profitable</div>
-            <div style={s.tip}>⚠️ Higher leverage = higher margin efficiency but more risk</div>
+            <div style={s.tip}><CheckCircle2 size="1em" aria-hidden /> Minimum R:R of 1:2 recommended</div>
+            <div style={s.tip}><CheckCircle2 size="1em" aria-hidden /> Risk no more than 1–2% per trade</div>
+            <div style={s.tip}><CheckCircle2 size="1em" aria-hidden /> At 1:2 R:R you only need 34% win rate to be profitable</div>
+            <div style={s.tip}><AlertTriangle size="1em" aria-hidden /> Higher leverage = higher margin efficiency but more risk</div>
           </div>
         </div>
       </div>
@@ -609,7 +609,7 @@ const RiskCalculator: React.FC = () => {
         <div style={{ marginTop: 24, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div style={s.cardTitle}>Saved Calculations</div>
-            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
+            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}><X size="1em" aria-hidden /></button>
           </div>
           {history.length === 0 ? (
             <EmptyState
@@ -640,7 +640,7 @@ const RiskCalculator: React.FC = () => {
                     </button>
                     <button onClick={() => void handleDeleteHistory(h.id)}
                       style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: 'var(--loss)', fontSize: 'var(--fs-label)', cursor: 'pointer' }}>
-                      ✕
+                      <X size="1em" aria-hidden />
                     </button>
                   </div>
                 </div>
@@ -701,11 +701,11 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
 
       {/* Cross-links */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Prop Firm</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
-        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
-        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
+        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Shield size="1em" aria-hidden /> Prop Firm</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><NotebookPen size="1em" aria-hidden /> Trade Journal</Link>
+        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Zap size="1em" aria-hidden /> Trade</Link>
+        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Briefcase size="1em" aria-hidden /> Portfolio</Link>
+        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><BarChart3 size="1em" aria-hidden /> Performance</Link>
       </div>
       <RelatedPages
         links={[

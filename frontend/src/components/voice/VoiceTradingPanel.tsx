@@ -22,6 +22,7 @@ import { parseVoiceCommand, describeIntent, type VoiceIntent } from '../../lib/v
 import { tradingApi } from '../../hooks/useApi';
 import { describeSubmitFailure } from '../../lib/utils';
 import { useToast } from '../Toast';
+import { Mic } from 'lucide-react';
 
 const VoiceTradingPanel: React.FC = () => {
   const user = useStore(selectUser);
@@ -117,7 +118,7 @@ const VoiceTradingPanel: React.FC = () => {
     return (
       <div style={panelStyle}>
         <div style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>
-          🎙️ Voice trading is unavailable — this browser has no speech recognition.
+          <Mic size="1em" aria-hidden /> Voice trading is unavailable — this browser has no speech recognition.
         </div>
       </div>
     );
@@ -126,7 +127,7 @@ const VoiceTradingPanel: React.FC = () => {
   return (
     <div style={panelStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 800, color: '#fca5a5' }}>🎙️ Voice Trading</span>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 800, color: '#fca5a5' }}><Mic size="1em" aria-hidden /> Voice Trading</span>
         <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 800, color: '#fca5a5', background: '#450a0a', border: '1px solid #dc2626', borderRadius: 6, padding: '1px 7px' }}>
           SUPER ADMIN
         </span>

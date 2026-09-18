@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { aiAssistantApi } from '../../hooks/useApi';
 import { useVoice } from '../../hooks/useVoice';
+import { Bot } from 'lucide-react';
 
 interface ChatTurn {
   id: string;
@@ -194,7 +195,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
         })}
         {sending && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', fontSize: fs }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: '#16233a' }}>🤖</div>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: '#16233a' }}><Bot size="1em" aria-hidden /></div>
             <span>Thinking…</span>
           </div>
         )}

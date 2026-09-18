@@ -6,7 +6,7 @@
  *           POST /api/brain/deploy-strategy
  */
 
-import { ClipboardList } from 'lucide-react';
+import { Check, ClipboardList, TrendingUp } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -336,7 +336,7 @@ const AIStrategyGenerator: React.FC = () => {
             <>
               <div style={s.resultHeader}>
                 <span style={s.strategyName}>{result.strategy_name}</span>
-                <span style={s.badge}>✓ Generated in {result.iterations} iteration{result.iterations !== 1 ? 's' : ''}</span>
+                <span style={s.badge}><Check size="1em" aria-hidden /> Generated in {result.iterations} iteration{result.iterations !== 1 ? 's' : ''}</span>
               </div>
 
               {/* Backtest metrics */}
@@ -400,7 +400,7 @@ const AIStrategyGenerator: React.FC = () => {
                   }}
                   title="Validate this strategy with walk-forward testing"
                 >
-                  📈 Walk-Forward Validate
+                  <TrendingUp size="1em" aria-hidden /> Walk-Forward Validate
                 </button>
                 {deployMsg && (
                   <span style={{ color: deployMsg.startsWith('Deploy failed') ? 'var(--loss)' : 'var(--gain)', fontSize: 14 }}>

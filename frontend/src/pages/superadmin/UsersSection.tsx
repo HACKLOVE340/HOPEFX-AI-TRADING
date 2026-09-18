@@ -11,8 +11,7 @@ import { ROLE_BADGE_STYLES, ROLE_LABELS, PLAN_COLORS, PLAN_LABELS } from '../../
 import type { UserRole } from '../../store';
 import type { Plan } from '../../lib/subscription';
 import { asArray, extractApiError } from '../../lib/utils';
-import { Ban, CheckCircle2, Download, KeyRound, RefreshCw, Trash2, User, Users } from 'lucide-react';
-
+import { Ban, CheckCircle2, Download, KeyRound, RefreshCw, Trash2, User, Users, XCircle } from 'lucide-react';
 const timeAgo = (iso: string | null) => {
   if (!iso) return 'Never';
   const diff = Date.now() - new Date(iso).getTime();
@@ -288,10 +287,10 @@ const BulkResultToast: React.FC<{ result: BulkUserResult; onClose: () => void }>
       <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>Bulk Operation Complete</span>
       <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>x</button>
     </div>
-    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gain)' }}>✅ {result.succeeded.length} succeeded</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--gain)' }}><CheckCircle2 size="1em" aria-hidden /> {result.succeeded.length} succeeded</div>
     {result.failed.length > 0 && (
       <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 4 }}>
-        ❌ {result.failed.length} failed
+        <XCircle size="1em" aria-hidden /> {result.failed.length} failed
         {result.failed.slice(0, 3).map(f => (
           <div key={f.user_id} style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', marginTop: 2 }}>
             {f.user_id}: {f.reason}

@@ -6,8 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../hooks/useApi';
 import { Card, SectionHeader, Button, StatusBadge } from './ui';
 import { extractApiError } from '../../lib/utils';
-import { BarChart3 } from 'lucide-react';
-
+import { AlertTriangle, BarChart3, XCircle } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CpuMetrics {
@@ -234,7 +233,7 @@ const PerformanceSection: React.FC = () => {
           </span>
         )}
         {error && (
-          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>⚠ {error}</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--warn)' }}><AlertTriangle size="1em" aria-hidden /> {error}</span>
         )}
       </div>
 
@@ -368,7 +367,7 @@ const PerformanceSection: React.FC = () => {
             </div>
           ) : (
             <div style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)'}}>
-              ❌ Not connected{redis.error ? ` — ${redis.error}` : ''}
+              <XCircle size="1em" aria-hidden /> Not connected{redis.error ? ` — ${redis.error}` : ''}
             </div>
           )}
         </Card>

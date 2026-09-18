@@ -161,7 +161,7 @@ const SecuritySection: React.FC = () => {
         </Field>
         {pwMsg && (
           <div style={{ fontSize: 'var(--fs-body)', color: pwMsg.type === 'ok' ? '#22c55e' : 'var(--loss)', marginBottom: 12 }}>
-            {pwMsg.type === 'ok' ? <CheckCircle2 size={13} aria-hidden /> : <XCircle size={13} aria-hidden />} {pwMsg.text}
+            {pwMsg.type === 'ok' ? <CheckCircle2 size="1em" aria-hidden /> : <XCircle size="1em" aria-hidden />} {pwMsg.text}
           </div>
         )}
         <Button

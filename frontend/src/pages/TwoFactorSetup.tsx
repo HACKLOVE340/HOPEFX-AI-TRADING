@@ -28,8 +28,7 @@ import { PageHeader } from '../components/PageHeader';
 import QRCode from '../components/QRCode';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { extractApiError } from '../lib/utils';
-import { ShieldCheck } from 'lucide-react';
-
+import { AlertTriangle, ArrowDownToLine, Camera, CheckCircle2, ShieldCheck, Wrench } from 'lucide-react';
 // ── CSRF retry helper ─────────────────────────────────────────────────────────
 
 async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -262,7 +261,7 @@ const TwoFactorSetup: React.FC = () => {
           ]}
         />
         <div style={{ ...s.card, textAlign: 'center', padding: '48px 32px' }}>
-          <div style={{ fontSize: 40, marginBottom: 16 }}>🔧</div>
+          <div style={{ fontSize: 40, marginBottom: 16 }}><Wrench size="1em" aria-hidden /></div>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
             2FA is not available
           </div>
@@ -388,7 +387,7 @@ const TwoFactorSetup: React.FC = () => {
                   borderRadius: 8, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center', padding: 12, gap: 8,
                 }}>
-                  <span style={{ fontSize: 32 }}>📷</span>
+                  <span style={{ fontSize: 32 }}><Camera size="1em" aria-hidden /></span>
                   <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'center' }}>
                     QR image unavailable — use manual entry below
                   </div>
@@ -434,7 +433,7 @@ const TwoFactorSetup: React.FC = () => {
       {step === 'active' && (
         <div style={s.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-            <span style={{ fontSize: 'var(--fs-hero)'}}>✅</span>
+            <span style={{ fontSize: 'var(--fs-hero)'}}><CheckCircle2 size="1em" aria-hidden /></span>
             <div>
               <div style={{ fontWeight: 700, color: 'var(--gain)', fontSize: 16 }}>2FA Activated!</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>Your account is now protected.</div>
@@ -460,7 +459,7 @@ const TwoFactorSetup: React.FC = () => {
           <h2 style={s.cardTitle}>Backup Codes</h2>
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
             padding: '10px 14px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
-            ⚠️ Save these codes now. They will not be shown again.
+            <AlertTriangle size="1em" aria-hidden /> Save these codes now. They will not be shown again.
             Each code can only be used once.
           </div>
           <div style={s.codesGrid}>
@@ -473,7 +472,7 @@ const TwoFactorSetup: React.FC = () => {
               onClick={() => downloadBackupCodes(backupCodes, user?.id ?? user?.email ?? 'user')}
               style={{ ...s.btn, flex: 1, background: '#1d4ed8' }}
             >
-              ⬇ Download codes
+              <ArrowDownToLine size="1em" aria-hidden /> Download codes
             </button>
             <button
               onClick={async () => {

@@ -8,6 +8,17 @@
    BASE LAYER
 ───────────────────────────────────────────────────────────────────────────── */
 @layer base {
+
+  /* Lucide icons sit inline beside text, and an inline SVG sits ON the
+     baseline — a glyph does not, which is why an icon that replaced an emoji
+     reads a couple of pixels low. One rule here instead of an inline style at
+     every call site; `.lucide` is the class lucide-react emits on every icon.
+     It also renders `stroke="currentColor"`, which is the other half of why an
+     icon is not an emoji: it takes the colour of the text it sits in. */
+  .lucide {
+    vertical-align: -0.125em;
+  }
+
   :root {
     --bg:            #05070d;
     --surface:       #0a0e18;

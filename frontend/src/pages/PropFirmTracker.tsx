@@ -7,7 +7,7 @@
  * deduplication) and usePolling to pause polling when the tab is hidden.
  */
 
-import { Calendar, ChartBar, ClipboardList, Shield, Siren } from 'lucide-react';
+import { Bot, Calendar, ChartBar, Check, CheckCircle2, ClipboardList, Shield, Siren, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -296,12 +296,12 @@ const PropFirmTracker: React.FC = () => {
           {historyQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!historyQ.isLoading && (historyQ.data ?? []).length === 0 && (
             <div style={{ textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 32 }}>🏆</div>
+              <div style={{ fontSize: 32 }}><Trophy size="1em" aria-hidden /></div>
               <div style={{ color: 'var(--text-dim)', fontSize: 14, fontWeight: 600 }}>No challenge history yet</div>
               <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Complete a challenge phase to see your history here.</div>
               <button onClick={() => navigate('/trade')}
                 style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-                ⚡ Start Trading
+                <Zap size="1em" aria-hidden /> Start Trading
               </button>
             </div>
           )}
@@ -328,7 +328,7 @@ const PropFirmTracker: React.FC = () => {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Breach Alerts</h3>
           {alertsQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!alertsQ.isLoading && (alertsQ.data ?? []).length === 0 && (
-            <div style={{ color: 'var(--gain)', textAlign: 'center', padding: 32 }}>✅ No breach alerts. All limits within bounds.</div>
+            <div style={{ color: 'var(--gain)', textAlign: 'center', padding: 32 }}><CheckCircle2 size="1em" aria-hidden /> No breach alerts. All limits within bounds.</div>
           )}
           {(alertsQ.data ?? []).map(alert => (
             <div key={alert.alert_id} style={{ background: alert.severity === 'critical' ? '#450a0a' : '#431407', border: `1px solid ${alert.severity === 'critical' ? '#7f1d1d' : '#92400e'}`, borderRadius: 8, padding: '12px 16px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -345,7 +345,7 @@ const PropFirmTracker: React.FC = () => {
                   {ackingId === alert.alert_id ? '…' : 'Acknowledge'}
                 </button>
               )}
-              {alert.acknowledged && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gain)', flexShrink: 0, marginLeft: 12 }}>✓ Ack</span>}
+              {alert.acknowledged && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--gain)', flexShrink: 0, marginLeft: 12 }}><Check size="1em" aria-hidden /> Ack</span>}
             </div>
           ))}
         </div>
@@ -358,12 +358,12 @@ const PropFirmTracker: React.FC = () => {
           {dailyQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!dailyQ.isLoading && (dailyQ.data ?? []).length === 0 && (
             <div style={{ textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 32 }}>📈</div>
+              <div style={{ fontSize: 32 }}><TrendingUp size="1em" aria-hidden /></div>
               <div style={{ color: 'var(--text-dim)', fontSize: 14, fontWeight: 600 }}>No daily stats yet</div>
               <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Trade to start building your daily P&amp;L record.</div>
               <button onClick={() => navigate('/trade')}
                 style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-                ⚡ Start Trading
+                <Zap size="1em" aria-hidden /> Start Trading
               </button>
             </div>
           )}
@@ -394,7 +394,7 @@ const PropFirmTracker: React.FC = () => {
         <>
           {/* AI message banner */}
           <div style={{ ...s.banner, ...bannerStyle }}>
-            🤖 AI: {status.ai_message}
+            <Bot size="1em" aria-hidden /> AI: {status.ai_message}
           </div>
 
           {/* Equity summary */}
@@ -438,7 +438,7 @@ const PropFirmTracker: React.FC = () => {
             {/* Trading days */}
             <div style={{ marginBottom: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>📅 Trading Days</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}><Calendar size="1em" aria-hidden /> Trading Days</span>
                 <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, fontFamily: 'monospace', color: '#cbd5e1' }}>
                   {status.trading_days_completed} / {status.trading_days_required}
                 </span>
@@ -454,7 +454,7 @@ const PropFirmTracker: React.FC = () => {
 
           {/* P&L summary */}
           <div style={s.pnlRow}>
-            <span style={{ fontSize: 14, color: 'var(--text-dim)' }}>📈 P&L:</span>
+            <span style={{ fontSize: 14, color: 'var(--text-dim)' }}><TrendingUp size="1em" aria-hidden /> P&L:</span>
             <span style={{
               fontSize: 16, fontWeight: 700,
               color: status.profit_target_amount >= 0 ? 'var(--gain)' : 'var(--loss)',

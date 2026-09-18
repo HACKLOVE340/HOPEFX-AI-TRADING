@@ -163,7 +163,7 @@ const BillingSection: React.FC = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                   {billing.features.map((f) => (
                     <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
-                      <Check size={13} aria-hidden style={{ color: '#22c55e', verticalAlign: '-2px' }} /> {f}
+                      <Check size="1em" aria-hidden style={{ color: '#22c55e', verticalAlign: '-2px' }} /> {f}
                     </div>
                   ))}
                 </div>
@@ -219,7 +219,7 @@ const BillingSection: React.FC = () => {
               </div>
               {features.map((f) => (
                 <div key={f} style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', marginBottom: 3, display: 'flex', gap: 5 }}>
-                  <Check size={13} aria-hidden style={{ color: '#22c55e', verticalAlign: '-2px' }} /> {f}
+                  <Check size="1em" aria-hidden style={{ color: '#22c55e', verticalAlign: '-2px' }} /> {f}
                 </div>
               ))}
               <Button

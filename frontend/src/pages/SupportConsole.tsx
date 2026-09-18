@@ -197,7 +197,7 @@ export default function SupportConsole(): React.ReactElement {
             color: L.colour, border: `1px solid ${C.border}`, borderRadius: 99, padding: '3px 10px',
           }}
         >
-          <L.Icon size={13} aria-hidden="true" />
+          <L.Icon size="1em" aria-hidden="true" />
           {L.text}
         </span>
         <button

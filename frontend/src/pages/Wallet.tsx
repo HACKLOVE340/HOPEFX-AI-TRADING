@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageShell } from '../components/system/PageShell';
 import { RelatedPages } from '../components';
-import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, ClipboardList, CreditCard, Receipt, Send, ShieldCheck, Star, Wallet as WalletIcon } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, Check, ClipboardList, CreditCard, Receipt, Send, ShieldCheck, Star, Wallet as WalletIcon, Zap } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -307,11 +307,11 @@ const Wallet: React.FC = () => {
           <div className="flex gap-2 flex-wrap">
             <Link to="/trade"
               className="px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-xs font-bold no-underline hover:bg-green-500/20 transition-colors">
-              ⚡ Trade
+              <Zap size="1em" aria-hidden /> Trade
             </Link>
             <Link to="/pricing"
               className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-bold no-underline hover:bg-amber-500/20 transition-colors">
-              ⭐ Upgrade
+              <Star size="1em" aria-hidden /> Upgrade
             </Link>
           </div>
         }
@@ -529,7 +529,7 @@ const Wallet: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                   {subscription.features?.map(f => (
                     <div key={f} className="flex items-center gap-2 text-slate-400 text-sm">
-                      <span className="text-green-400 flex-shrink-0">✓</span> {f}
+                      <span className="text-green-400 flex-shrink-0"><Check size="1em" aria-hidden /></span> {f}
                     </div>
                   ))}
                 </div>
@@ -588,7 +588,7 @@ const Wallet: React.FC = () => {
                   className="flex items-center justify-between gap-3 bg-terminal-raised border border-terminal-border rounded-xl px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-lg bg-blue-950 flex items-center justify-center text-lg flex-shrink-0">
-                      💳
+                      <CreditCard size="1em" aria-hidden />
                     </div>
                     <div>
                       <div className="text-slate-200 text-sm font-semibold capitalize">

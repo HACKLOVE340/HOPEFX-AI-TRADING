@@ -136,7 +136,7 @@ export default function Support(): React.ReactElement {
             border: `1px solid ${C.accent}`, background: C.accent, color: C.onAccent, cursor: 'pointer',
           }}
         >
-          <Plus size={13} aria-hidden="true" style={{ verticalAlign: -2, marginRight: 5 }} />
+          <Plus size="1em" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 5 }} />
           New ticket
         </button>
       </header>

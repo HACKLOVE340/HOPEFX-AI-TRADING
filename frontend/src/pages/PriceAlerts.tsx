@@ -19,7 +19,7 @@ import { api } from '../hooks/useApi';
 import { useStore, selectTriggeredAlerts, selectFeedLive } from '../store';
 import { LiveFeedNotice } from '../components/ui/LiveFeedNotice';
 import { extractApiError, toSlashSymbol } from '../lib/utils';
-
+import { AlertTriangle, Bell, Eye, Trash2, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AlertCondition {
@@ -276,12 +276,12 @@ const PriceAlerts: React.FC = () => {
         loading ? <div style={s.empty}>Loading…</div> :
         alerts.length === 0 ? (
           <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 36 }}>🔔</div>
+            <div style={{ fontSize: 36 }}><Bell size="1em" aria-hidden /></div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>No alerts yet</div>
             <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Use the form above to create your first price alert.</div>
             <button onClick={() => navigate('/watchlist')}
               style={{ padding: '7px 18px', background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: 8, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-              👁 Watchlist
+              <Eye size="1em" aria-hidden /> Watchlist
             </button>
           </div>
         ) :
@@ -303,7 +303,7 @@ const PriceAlerts: React.FC = () => {
               style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '4px 10px', cursor: 'pointer', marginRight: 6 }}
               title={`Trade ${alert.symbol}`}
             >
-              ⚡ Trade
+              <Zap size="1em" aria-hidden /> Trade
             </button>
             <button onClick={() => handleToggle(alert)} style={s.iconBtn}
               title={alert.status === 'paused' ? 'Resume' : 'Pause'}>
@@ -311,7 +311,7 @@ const PriceAlerts: React.FC = () => {
             </button>
             <button onClick={() => handleDelete(alert.id)}
               style={{ ...s.iconBtn, color: 'var(--loss)' }} title="Delete">
-              🗑
+              <Trash2 size="1em" aria-hidden />
             </button>
           </div>
         ))
@@ -328,14 +328,14 @@ const PriceAlerts: React.FC = () => {
               ? <div style={s.empty}>No live triggers yet. Alerts fire here in real-time via WebSocket.</div>
               : (
                 <div style={{ ...s.empty, color: '#ffb800' }} role="status" aria-live="polite">
-                  ⚠️ Live trigger feed is not connected. Alerts may have fired
+                  <AlertTriangle size="1em" aria-hidden /> Live trigger feed is not connected. Alerts may have fired
                   without appearing here — check the Trigger History tab.
                 </div>
               )
           )
           : wsTriggered.map((t) => (
             <div key={t.id} style={{ ...s.historyRow, background: 'var(--raised)', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
-              <span style={{ color: '#f97316', fontSize: 16 }}>⚡</span>
+              <span style={{ color: '#f97316', fontSize: 16 }}><Zap size="1em" aria-hidden /></span>
               <div style={{ flex: 1 }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{t.symbol}</span>
                 <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginLeft: 8 }}>{t.condition}</span>
@@ -348,7 +348,7 @@ const PriceAlerts: React.FC = () => {
                 onClick={() => navigate('/trade', { state: { signal: { symbol: toSlashSymbol(t.symbol) } } })}
                 style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.4)', borderRadius: 5, color: '#f97316', fontSize: 'var(--fs-label)', fontWeight: 800, padding: '4px 10px', cursor: 'pointer', marginLeft: 8 }}
               >
-                ⚡ Trade Now
+                <Zap size="1em" aria-hidden /> Trade Now
               </button>
             </div>
           ))
@@ -359,7 +359,7 @@ const PriceAlerts: React.FC = () => {
         history.length === 0 ? <div style={s.empty}>No triggers yet.</div> :
         history.slice(0, 50).map((t, i) => (
           <div key={i} style={s.historyRow}>
-            <span style={{ color: '#f97316', fontSize: 'var(--fs-body)'}}>⚡</span>
+            <span style={{ color: '#f97316', fontSize: 'var(--fs-body)'}}><Zap size="1em" aria-hidden /></span>
             <div style={{ flex: 1 }}>
               <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{t.alert_name}</span>
               <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)', marginLeft: 8 }}>

@@ -18,8 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
-import { Rewind } from 'lucide-react';
-
+import { AlertTriangle, BarChart3, Bot, Check, NotebookPen, Rewind, SkipForward, TrendingUp, X } from 'lucide-react';
 // Playback speed options (ms between auto-step ticks)
 /** 1× — the speed used if an index somehow falls outside SPEED_OPTIONS. */
 const DEFAULT_SPEED_MS = 500;
@@ -291,15 +290,15 @@ const ReplayPage: React.FC = () => {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <Link to="/ai-chart"
               style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', color: 'var(--link)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
-              📈 AI Charts
+              <TrendingUp size="1em" aria-hidden /> AI Charts
             </Link>
             <Link to="/walk-forward"
               style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: 'var(--ai-model)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
-              📊 Walk-Forward
+              <BarChart3 size="1em" aria-hidden /> Walk-Forward
             </Link>
             <Link to="/ai-strategy"
               style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
-              🤖 AI Strategy
+              <Bot size="1em" aria-hidden /> AI Strategy
             </Link>
             <button onClick={() => setShowCreate((s: boolean) => !s)}
               style={{ padding: '7px 16px', background: '#3b82f6', color: '#fff', border: 'none',
@@ -357,7 +356,7 @@ const ReplayPage: React.FC = () => {
                 borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>Cancel</button>
             {createMut.isError && (
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>
-                ⚠ {extractApiError(createMut.error, 'Failed to create session')}
+                <AlertTriangle size="1em" aria-hidden /> {extractApiError(createMut.error, 'Failed to create session')}
               </span>
             )}
           </div>
@@ -371,12 +370,12 @@ const ReplayPage: React.FC = () => {
           {!isLoading && sessions.length === 0 && (
             <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
               padding: 40, textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📈</div>
+              <div style={{ fontSize: 32, marginBottom: 12 }}><TrendingUp size="1em" aria-hidden /></div>
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No replay sessions</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>Create a session to replay historical market data</div>
               <button onClick={() => navigate('/ai-chart')}
                 style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-                📊 Open AI Chart
+                <BarChart3 size="1em" aria-hidden /> Open AI Chart
               </button>
             </div>
           )}
@@ -417,7 +416,7 @@ const ReplayPage: React.FC = () => {
                 </button>
                 <button onClick={() => setSelected(null)}
                   style={{ padding: '6px 10px', background: 'var(--surface-hover)', color: 'var(--text-dim)',
-                    border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>✕</button>
+                    border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}><X size="1em" aria-hidden /></button>
               </div>
             </div>
 
@@ -443,7 +442,7 @@ const ReplayPage: React.FC = () => {
                 style={{ padding: '8px 16px', background: '#3b82f6', color: '#fff', border: 'none',
                   borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                   opacity: (stepMut.isPending || selected.status === 'completed') ? 0.5 : 1 }}>
-                ⏭ Step
+                <SkipForward size="1em" aria-hidden /> Step
               </button>
               <button onClick={toggleAutoPlay}
                 disabled={selected.status === 'completed'}
@@ -482,7 +481,7 @@ const ReplayPage: React.FC = () => {
                 </button>
               </div>
               {selected.status === 'completed' && (
-                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e', fontWeight: 600 }}>✓ Completed</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e', fontWeight: 600 }}><Check size="1em" aria-hidden /> Completed</span>
               )}
             </div>
             {/* Keyboard hint */}
@@ -528,10 +527,10 @@ const ReplayPage: React.FC = () => {
 
       {/* Cross-links */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
-        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
-        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
+        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><TrendingUp size="1em" aria-hidden /> AI Charts</Link>
+        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Bot size="1em" aria-hidden /> AI Strategy</Link>
+        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><BarChart3 size="1em" aria-hidden /> Walk-Forward</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><NotebookPen size="1em" aria-hidden /> Trade Journal</Link>
       </div>
     </PageShell>
   );

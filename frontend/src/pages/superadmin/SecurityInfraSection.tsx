@@ -9,8 +9,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { Bug, ClipboardList, Folder, KeyRound, RefreshCw, Shield, Wrench } from 'lucide-react';
-
+import { AlertTriangle, Bug, ClipboardList, Folder, KeyRound, RefreshCw, Shield, Wrench } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -236,7 +235,7 @@ const SecurityInfraSection: React.FC = () => {
             </div>
             {healer.violations?.length > 0 && (
               <div>
-                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>⚠️ Integrity Violations</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}><AlertTriangle size="1em" aria-hidden /> Integrity Violations</div>
                 {healer.violations.map((v, i) => (
                   <div key={i} style={{ background: 'rgba(248,113,113,0.05)', border: '1px solid #7f1d1d', borderRadius: 6, padding: '8px 12px', marginBottom: 6 }}>
                     <div style={{ fontSize: 'var(--fs-body)', fontFamily: 'monospace', color: 'var(--loss)' }}>{v.file}</div>

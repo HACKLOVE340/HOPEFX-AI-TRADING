@@ -12,7 +12,6 @@ import {
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
 import { AlertTriangle, Bandage, BarChart3, Brain, ClipboardList, Clock, FlaskConical, Folder, Globe, Hammer, Landmark, Lock, Microscope, Play, RefreshCw, Save, Search, Settings, Shield, ShieldCheck, Wrench, XCircle, Zap } from 'lucide-react';
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface HealerLiveStatus {
@@ -204,7 +203,7 @@ const LiveStatusCard: React.FC<{
             width: 40, height: 40, borderRadius: 10,
             background: `${stateColor}22`, border: `1px solid ${stateColor}44`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
-          }}>🛡️</div>
+          }}><Shield size="1em" aria-hidden /></div>
           <div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' }}>Autonomous Healing Engine</div>
             <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 1 }}>Real-time integrity monitor · Self-patching system</div>
@@ -597,7 +596,7 @@ const SafetyGatesPanel: React.FC<{
                     marginLeft: 'auto', fontSize: 'var(--fs-micro)', fontWeight: 700,
                     color: '#ef4444', background: '#450a0a',
                     border: '1px solid #dc2626', borderRadius: 4, padding: '2px 7px',
-                  }}>⚠️ DANGEROUS</span>
+                  }}><AlertTriangle size="1em" aria-hidden /> DANGEROUS</span>
                 )}
               </div>
             );
@@ -744,7 +743,7 @@ const DriftLogPanel: React.FC<{
                 </td>
                 <td style={{ padding: '7px 10px', color: 'var(--text)', fontFamily: 'monospace', fontSize: 'var(--fs-label)'}}>{e.path}</td>
                 <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                  {e.protected && <span style={{ color: '#ef4444', fontSize: 'var(--fs-label)', fontWeight: 700 }}>🔒</span>}
+                  {e.protected && <span style={{ color: '#ef4444', fontSize: 'var(--fs-label)', fontWeight: 700 }}><Lock size="1em" aria-hidden /></span>}
                 </td>
                 <td style={{ padding: '7px 10px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 'var(--fs-micro)'}}>
                   {e.expected && e.actual ? `${e.expected}…→${e.actual}…` : '—'}

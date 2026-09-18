@@ -16,6 +16,7 @@ import {
   regimeLabel, regimeColor,
 } from '../utils/formatters';
 import type { AIAnalysis, ChartClickContext } from '../types';
+import { AlertTriangle, X } from 'lucide-react';
 
 // ─── Typing animation hook ────────────────────────────────────────────────────
 
@@ -224,7 +225,7 @@ const AnalysisPanel = memo(({ analysis }: { analysis: AIAnalysis }) => {
         <div style={ab.warningsBox}>
           {analysis.warnings.map((w, i) => (
             <div key={i} style={ab.warning}>
-              <span style={ab.warnIcon}>⚠</span>
+              <span style={ab.warnIcon}><AlertTriangle size="1em" aria-hidden /></span>
               {w}
             </div>
           ))}
@@ -337,7 +338,7 @@ const AIChartBot: React.FC = () => {
           <AnalysisLoading context={context} />
         ) : error ? (
           <div style={ab.errorBox}>
-            <span style={ab.errorIcon}>✕</span>
+            <span style={ab.errorIcon}><X size="1em" aria-hidden /></span>
             <span style={ab.errorText}>{error}</span>
             <button onClick={handleClear} style={ab.retryBtn}>RETRY</button>
           </div>

@@ -165,7 +165,7 @@ const NuclearDashboard = memo(() => {
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
-          <Brain size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> AI Explain Panel {showExplainPanel ? '◀ Hide' : '▶ Show'}
+          <Brain size="1em" aria-hidden style={{ verticalAlign: '-2px' }} /> AI Explain Panel {showExplainPanel ? '◀ Hide' : '▶ Show'}
         </button>
       </div>
 

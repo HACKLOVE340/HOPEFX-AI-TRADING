@@ -11,7 +11,6 @@ import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { AlertTriangle, ArrowLeftRight, BarChart3, Bot, Brain, Bug, CandlestickChart, ClipboardList, Construction, Container, Database, FileText, Flag, FlaskConical, Gamepad2, Globe, Globe2, Hammer, Hash, HeartPulse, IdCard, Inbox, KeyRound, Landmark, Lightbulb, Link2, Lock, Mail, Map as MapIcon, Megaphone, Microscope, Monitor, OctagonAlert, Package, Plug, Puzzle, Radio, RefreshCw, Repeat, Ruler, Scale, Scroll, Search, Settings, Shield, Shuffle, Siren, Stethoscope, Target, Timer, TrafficCone, TrendingDown, TrendingUp, Trophy, Users, Wrench, Zap } from 'lucide-react';
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PlatformConfig {
@@ -1309,7 +1308,7 @@ const KillSwitchTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCo
     <SectionHeader icon={<OctagonAlert size={18} aria-hidden />} title="Global Kill Switch" desc="kill_switch.py — immediately halts all trading across all pods" />
     <div style={{ marginBottom: 12, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
       <div style={{ fontSize: 'var(--fs-body)', color: '#fca5a5', fontWeight: 600 }}>
-        ⚠️ Activating the kill switch immediately stops all live trading, cancels pending orders, and blocks new order submission across all running pods.
+        <AlertTriangle size="1em" aria-hidden /> Activating the kill switch immediately stops all live trading, cancels pending orders, and blocks new order submission across all running pods.
       </div>
     </div>
     <Tog id="ks" label="ACTIVATE GLOBAL KILL SWITCH" desc="HOPEFX_KILL_SWITCH — sets env var and propagates via Redis + K8s ConfigMap" checked={cfg.hopefx_kill_switch} onChange={(v) => set({ hopefx_kill_switch: v })} />

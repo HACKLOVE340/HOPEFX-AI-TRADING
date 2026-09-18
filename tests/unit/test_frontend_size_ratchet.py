@@ -246,7 +246,7 @@ def test_the_split_sums_to_the_band(tmp_path):
         },
     )
     split = mod.display_split(root)
-    assert split == {"glyph": 1, "type": 2}
+    assert split == {"glyph": 1, "icon": 0, "type": 2}
     assert sum(split.values()) == len(mod.display_band(root))
 
 
@@ -263,7 +263,7 @@ def test_the_live_tree_has_a_display_band_at_all():
     mod = _load()
     band = mod.display_band(REPO)
     assert len(band) >= 20
-    assert {s.kind for s in band} <= {"glyph", "type"}
+    assert {s.kind for s in band} <= {"glyph", "icon", "type"}
     assert band, "the display band is empty — the scan matched nothing"
 
 
@@ -387,3 +387,67 @@ def test_a_currency_symbol_is_type_not_a_glyph(tmp_path):
         {"a.tsx": "const M = { BTC: { icon: '₿' } };\n<span style={{ fontSize: 32 }}>{m.icon}</span>\n"},
     )
     assert [site.kind for site in mod.display_band(root)] == ["type"]
+
+
+# ── the third thing a font size can be sizing ────────────────────────────────
+#
+# `fontSize: 32` around a pictograph was a glyph. Convert that glyph to a Lucide
+# icon at `size="1em"` and the declaration is still load-bearing — it is now
+# what sizes the SVG — but the window no longer contains a glyph, so a two-way
+# classifier calls it `type` and it starts arguing for a display token it does
+# not need. 27 sites moved that way in one commit.
+
+
+def test_a_font_size_that_sizes_an_icon_is_neither_glyph_nor_type(tmp_path):
+    mod = _load()
+    root = _tree(
+        tmp_path,
+        {"a.tsx": '<div style={{ fontSize: 32, marginBottom: 12 }}><ClipboardList size="1em" aria-hidden /></div>\n'},
+    )
+    assert [s.kind for s in mod.display_band(root)] == ["icon"]
+
+
+def test_an_icon_with_a_pixel_size_does_not_claim_the_font_size(tmp_path):
+    """`size={32}` ignores the cascade, so the `fontSize` beside it really is
+    sizing whatever text is left — the classifier must not absorb it."""
+    mod = _load()
+    root = _tree(tmp_path, {"a.tsx": "  title: { fontSize: 36, fontWeight: 800 },\n"})
+    assert [s.kind for s in mod.display_band(root)] == ["type"]
+
+
+def test_the_split_reports_all_three(tmp_path):
+    mod = _load()
+    root = _tree(
+        tmp_path,
+        {
+            "a.tsx": "<div style={{ fontSize: 32 }}>\U0001f4cb</div>\n",
+            "b.tsx": '<div style={{ fontSize: 36 }}><Link size="1em" aria-hidden /></div>\n',
+            "c.tsx": "  title: { fontSize: 48 },\n",
+        },
+    )
+    assert mod.display_split(root) == {"glyph": 1, "icon": 1, "type": 1}
+
+
+def test_a_named_style_used_on_an_em_icon_elsewhere_is_an_icon(tmp_path):
+    """The second pass has to learn `icon` too, or it re-answers `type`.
+
+    `NuclearAlertOverlay`'s `alertIcon: { fontSize: 32 }` sized a radiation
+    glyph 130 lines away. The glyph became `<Radiation size="1em" />`, the
+    declaration went on sizing it, and the by-name pass — which only looked for
+    glyphs — reported the one remaining `type` site in the whole band.
+    """
+    mod = _load()
+    root = _tree(
+        tmp_path,
+        {
+            "a.tsx": (
+                'export const A = () => <span style={s.alertIcon}><Radiation size="1em" aria-hidden /></span>;\n'
+                "const s = {\n"
+                "  alertIcon: {\n"
+                "    fontSize: 32, flexShrink: 0,\n"
+                "  },\n"
+                "};\n"
+            )
+        },
+    )
+    assert [site.kind for site in mod.display_band(root)] == ["icon"]

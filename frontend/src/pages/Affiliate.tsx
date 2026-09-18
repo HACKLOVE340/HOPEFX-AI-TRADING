@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Share2 } from 'lucide-react';
+import { Repeat, Share2, Trophy } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -170,8 +170,8 @@ const Affiliate:React.FC=()=>{
           </div>
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <button onClick={()=>navigate('/copy-trading')} style={st.refreshBtn}>🔁 Copy Trading</button>
-          <button onClick={()=>navigate('/leaderboard')} style={st.refreshBtn}>🏆 Leaderboard</button>
+          <button onClick={()=>navigate('/copy-trading')} style={st.refreshBtn}><Repeat size="1em" aria-hidden /> Copy Trading</button>
+          <button onClick={()=>navigate('/leaderboard')} aria-label="Global leaderboard" style={st.refreshBtn}><Trophy size="1em" aria-hidden /> Leaderboard</button>
           <button onClick={loadData} style={st.refreshBtn}>↻ Refresh</button>
         </div>
       </div>

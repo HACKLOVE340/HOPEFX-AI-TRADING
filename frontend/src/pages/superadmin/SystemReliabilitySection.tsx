@@ -5,8 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { asArray, extractApiError } from '../../lib/utils';
 import { Card, SectionHeader, Button } from '../settings/ui';
 import { ActionBanner } from '../../components/ActionBanner';
-import { BarChart3, CheckCircle2, FlaskConical, Globe2, Hospital, Map, Microscope, RefreshCw, Search, TrendingUp } from 'lucide-react';
-
+import { AlertTriangle, BarChart3, Camera, CheckCircle2, FlaskConical, Globe2, Hospital, Map, Microscope, RefreshCw, Search, TrendingUp, XCircle } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Component {
@@ -333,7 +332,7 @@ const HealthEnginePanel: React.FC = () => {
                 <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{h.checked_at}</span>
               </div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 4 }}>
-                {h.total_components} components — ✅ {h.ok_count} OK / ⚠️ {h.warning_count} warn / ❌ {h.error_count} err — {h.probe_duration_ms}ms
+                {h.total_components} components — <CheckCircle2 size="1em" aria-hidden /> {h.ok_count} OK / <AlertTriangle size="1em" aria-hidden /> {h.warning_count} warn / <XCircle size="1em" aria-hidden /> {h.error_count} err — {h.probe_duration_ms}ms
               </div>
             </div>
           ))}
@@ -1099,7 +1098,7 @@ const SystemReliabilitySection: React.FC = () => {
 
       {error && (
         <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 'var(--fs-body)', color: '#fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <span>❌ {error}</span>
+          <span><XCircle size="1em" aria-hidden /> {error}</span>
           <button
             onClick={fetchStatus}
             style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: 'transparent', color: '#fca5a5', cursor: 'pointer', fontSize: 'var(--fs-body)', flexShrink: 0 }}
@@ -1163,7 +1162,7 @@ const SystemReliabilitySection: React.FC = () => {
           {tracesErr && <ActionBanner message={tracesErr} ok={false} onDismiss={() => setTracesErr('')} />}
           {traceTestResult && (
             <div style={{ background: '#052e16', border: '1px solid #16a34a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 'var(--fs-body)'}}>
-              ✅ Test trace emitted — trace_id: <code style={{ color: '#86efac' }}>{String(traceTestResult.trace_id)}</code>
+              <CheckCircle2 size="1em" aria-hidden /> Test trace emitted — trace_id: <code style={{ color: '#86efac' }}>{String(traceTestResult.trace_id)}</code>
               {' | '}DB: <strong>{String((traceTestResult.probes as Record<string,string>)?.database)}</strong>
               {' | '}Redis: <strong>{String((traceTestResult.probes as Record<string,string>)?.redis)}</strong>
               {' | '}Broker: <strong>{String((traceTestResult.probes as Record<string,string>)?.broker)}</strong>
@@ -1266,7 +1265,7 @@ const SystemReliabilitySection: React.FC = () => {
               size="sm"
               variant="secondary"
             >
-              📸 Snapshot Now
+              <Camera size="1em" aria-hidden /> Snapshot Now
             </Button>
           </div>
           {historyErr && <ActionBanner message={historyErr} ok={false} onDismiss={() => setHistoryErr('')} />}
@@ -1301,9 +1300,9 @@ const SystemReliabilitySection: React.FC = () => {
                     <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
                       <th style={{ textAlign: 'left', padding: '6px 10px' }}>Timestamp</th>
                       <th style={{ textAlign: 'left', padding: '6px 10px' }}>Overall</th>
-                      <th style={{ textAlign: 'right', padding: '6px 10px' }}>✅ OK</th>
-                      <th style={{ textAlign: 'right', padding: '6px 10px' }}>⚠️ Warn</th>
-                      <th style={{ textAlign: 'right', padding: '6px 10px' }}>❌ Error</th>
+                      <th style={{ textAlign: 'right', padding: '6px 10px' }}><CheckCircle2 size="1em" aria-hidden /> OK</th>
+                      <th style={{ textAlign: 'right', padding: '6px 10px' }}><AlertTriangle size="1em" aria-hidden /> Warn</th>
+                      <th style={{ textAlign: 'right', padding: '6px 10px' }}><XCircle size="1em" aria-hidden /> Error</th>
                       <th style={{ textAlign: 'right', padding: '6px 10px' }}>Probe ms</th>
                     </tr>
                   </thead>

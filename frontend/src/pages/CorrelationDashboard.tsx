@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-
+import { AlertTriangle, BarChart3, Bot, Link, Zap } from 'lucide-react';
 interface CorrelationData {
   symbols: string[];
   matrix: Record<string, Record<string, number>>;
@@ -100,7 +100,7 @@ const CorrelationDashboard: React.FC = () => {
             onClick={() => navigate('/ai-strategy')}
             style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight:700, padding:'5px 12px', cursor:'pointer' }}
           >
-            🤖 Generate Strategy
+            <Bot size="1em" aria-hidden /> Generate Strategy
           </button>
         </div></>}
     >
@@ -108,12 +108,12 @@ const CorrelationDashboard: React.FC = () => {
 
       {loading ? <div style={s.dim}>Loading…</div> : loadErr ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <span style={{ color: 'var(--loss)' }}>⚠ {loadErr}</span>
+          <span style={{ color: 'var(--loss)' }}><AlertTriangle size="1em" aria-hidden /> {loadErr}</span>
           <button onClick={load} style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 16px' }}>Retry</button>
         </div>
       ) : (!corr && !cot) ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 36 }}>🔗</div>
+          <div style={{ fontSize: 36 }}><Link size="1em" aria-hidden /></div>
           <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>Correlation data unavailable</div>
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Ensure the data layer is running, then retry.</div>
           <button onClick={load}
@@ -122,7 +122,7 @@ const CorrelationDashboard: React.FC = () => {
           </button>
           <button onClick={() => navigate('/ai-chart')}
             style={{ padding: '7px 18px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', borderRadius: 8, color: 'var(--accent)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            📊 AI Chart
+            <BarChart3 size="1em" aria-hidden /> AI Chart
           </button>
         </div>
       ) : (
@@ -196,7 +196,7 @@ const CorrelationDashboard: React.FC = () => {
                     onClick={() => navigate('/ai-strategy')}
                     style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'var(--ai-model)', fontSize: 'var(--fs-label)', fontWeight:700, padding:'4px 10px', cursor:'pointer' }}
                   >
-                    🤖 Build Strategy from Insights
+                    <Bot size="1em" aria-hidden /> Build Strategy from Insights
                   </button>
                 </div>
                 {(corr.insights ?? []).map((ins, i) => (
@@ -280,7 +280,7 @@ const CorrelationDashboard: React.FC = () => {
                   color: cot.sentiment === 'BULLISH' ? 'var(--gain)' : 'var(--loss)',
                 }}
               >
-                ⚡ Trade XAU/USD — {cot.sentiment}
+                <Zap size="1em" aria-hidden /> Trade XAU/USD — {cot.sentiment}
               </button>
             </div>
           )}

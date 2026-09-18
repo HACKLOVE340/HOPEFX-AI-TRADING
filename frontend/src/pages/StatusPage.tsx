@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Circle, ShieldAlert, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { CheckCircle2, Circle, LayoutDashboard, RefreshCw, ShieldAlert, XCircle } from 'lucide-react';
 import { Activity } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { api } from '../hooks/useApi';
@@ -233,7 +233,7 @@ const StatusPage: React.FC = () => {
     return (
       <PageShell {...shell}>
         <div style={{ ...styles.banner, background: '#450a0a', border: '1px solid #dc2626' }}>
-          <span style={{ fontSize: 32 }}>❌</span>
+          <span style={{ fontSize: 32 }}><XCircle size="1em" aria-hidden /></span>
           <div>
             <div style={styles.bannerTitle}>Status unavailable</div>
             <div style={styles.bannerSub}>{error ?? 'No data received from the API.'}</div>

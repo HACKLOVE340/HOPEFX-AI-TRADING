@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { UserRound } from 'lucide-react';
+import { Eye, Trophy, User, UserRound, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -181,7 +181,7 @@ const Profile: React.FC = () => {
   if (!profile) return (
     <PageShell {...shell}>
       <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>👤</div>
+        <div style={{ fontSize: 48, marginBottom: 16 }}><User size="1em" aria-hidden /></div>
         <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>
           Profile not found
         </div>
@@ -233,11 +233,11 @@ const Profile: React.FC = () => {
         <div style={s.headerActions}>
           <button onClick={() => navigate('/trade')}
             style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            ⚡ Trade
+            <Zap size="1em" aria-hidden /> Trade
           </button>
           <button onClick={() => navigate('/leaderboard')}
             style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-            🏆 Leaderboard
+            <Trophy size="1em" aria-hidden /> Leaderboard
           </button>
           {isOwn ? (
             <>
@@ -248,7 +248,7 @@ const Profile: React.FC = () => {
                 style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: 'var(--link)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)'}}
                 title="See how your profile looks to other traders"
               >
-                👁 View Public Profile
+                <Eye size="1em" aria-hidden /> View Public Profile
               </a>
               <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
             </>
