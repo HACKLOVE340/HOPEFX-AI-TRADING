@@ -75,9 +75,12 @@ omit =
     # imports it (it is the module pinned out of production as superseded).
     # Lifted with them.
     #
-    # ml/rl_agent.py stays: no unit test imports it, verified rather than
-    # asserted, and re-checked on every run.
-    ml/rl_agent.py
+    # ml/rl_agent.py was here on the same ground -- "no unit test imports it,
+    # verified rather than asserted, and re-checked on every run". The re-check
+    # did its job: tests/unit/test_model_loaders_reach_the_integrity_gate.py now
+    # imports it, to prove RLAgent.load refuses an artefact whose checksum does
+    # not match. The stated reason expired, so the entry goes. Lifted 2026-09-19
+    # by tests/unit/test_coveragerc_exclusions_are_honest.py turning red.
     # Whitelabel customisations are not part of the core test suite
     whitelabel/*
     # ── F105 ──────────────────────────────────────────────────────────────────

@@ -49,10 +49,18 @@ CONFIG = REPO / ".coveragerc"
 #: Every one of these is asserted below to have no unit importer, so if a unit
 #: test ever starts importing one, this allowlist stops being true and the
 #: entry has to be re-argued rather than inherited.
+#: Exclusions kept on a stated, re-checked ground — not "it was hard to test".
+#:
+#: `ml/rl_agent.py` was here on the ground that no unit test imported it. That
+#: expired on 2026-09-19: tests/unit/test_model_loaders_reach_the_integrity_gate.py
+#: imports it to prove RLAgent.load refuses an artefact whose checksum does not
+#: match. This list is the thing that caught it — `test_it_still_has_no_unit_importer`
+#: went red, which is the whole point of re-checking a reason rather than trusting
+#: it. Lifted from .coveragerc and removed here in the same change, exactly as
+#: `ml/advanced_ai.py` was before it.
 DELIBERATE: frozenset[str] = frozenset(
     {
         "core/acceleration/gpu_engine.py",
-        "ml/rl_agent.py",
         "core/background_tasks.py",
         "core/email_webhook.py",
     }
