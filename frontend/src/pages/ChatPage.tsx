@@ -14,7 +14,8 @@ import { chatApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { openAuthenticatedWebSocket } from '../lib/ws';
 import { useToast } from '../components/Toast';
-import { RadioTower, Zap } from 'lucide-react';
+import { Headphones, Lock, MessagesSquare, RadioTower, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface ChatRoom {
   id: string;
@@ -37,10 +38,16 @@ interface ChatMessage {
   edited?: boolean;
 }
 
-const ROOM_ICONS: Record<string, string> = {
-  community: '💬',
-  support:   '🎧',
-  private:   '🔒',
+const ROOM_ICONS: Record<string, LucideIcon> = {
+  community: MessagesSquare,
+  support:   Headphones,
+  private:   Lock,
+};
+
+/** The room's kind, drawn at the inherited font size so it tracks data-density. */
+const RoomIcon: React.FC<{ type: string }> = ({ type }) => {
+  const Icon = ROOM_ICONS[type] ?? MessagesSquare;
+  return <Icon size="1em" aria-hidden />;
 };
 
 const ChatPage: React.FC = () => {
@@ -181,7 +188,7 @@ const ChatPage: React.FC = () => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>{ROOM_ICONS[room.type] ?? '💬'}</span>
+                  <span style={{ fontSize: 16 }}><RoomIcon type={room.type} /></span>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{room.name}</span>
                 </div>
                 {room.unread_count > 0 && (
@@ -205,7 +212,7 @@ const ChatPage: React.FC = () => {
         {/* Room header */}
         {activeRoom && (
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>{ROOM_ICONS[activeRoom.type] ?? '💬'}</span>
+            <span style={{ fontSize: 20 }}><RoomIcon type={activeRoom.type} /></span>
             <div>
               <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' }}>{activeRoom.name}</div>
               {activeRoom.description && (

@@ -7,7 +7,7 @@
  * deduplication) and usePolling to pause polling when the tab is hidden.
  */
 
-import { Bot, Calendar, ChartBar, Check, CheckCircle2, ClipboardList, Shield, Siren, TrendingUp, Trophy, Zap } from 'lucide-react';
+import { AlertTriangle, Bot, Calendar, ChartBar, Check, CheckCircle2, CircleX, ClipboardList, Shield, Siren, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -231,9 +231,9 @@ const PropFirmTracker: React.FC = () => {
   usePolling(() => { if (enabled) refetch(); }, 10_000);
 
   const statusIcon = !status ? null
-    : status.kill_switch_active ? '❌'
-    : status.paused ? '⚠️'
-    : '✅';
+    : status.kill_switch_active ? <CircleX size="1em" aria-label="Kill switch active" />
+    : status.paused ? <AlertTriangle size="1em" aria-label="Paused" />
+    : <CheckCircle2 size="1em" aria-label="Within limits" />;
 
   const bannerStyle: React.CSSProperties = !status ? {} : {
     background: status.kill_switch_active ? '#450a0a'
@@ -334,7 +334,7 @@ const PropFirmTracker: React.FC = () => {
             <div key={alert.alert_id} style={{ background: alert.severity === 'critical' ? '#450a0a' : '#431407', border: `1px solid ${alert.severity === 'critical' ? '#7f1d1d' : '#92400e'}`, borderRadius: 8, padding: '12px 16px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: alert.severity === 'critical' ? 'var(--loss)' : 'var(--warn)', marginBottom: 4 }}>
-                  {alert.severity === 'critical' ? '🚨' : '⚠️'} {alert.alert_type}
+                  {alert.severity === 'critical' ? <Siren size="1em" aria-hidden /> : <AlertTriangle size="1em" aria-hidden />} {alert.alert_type}
                 </div>
                 <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{alert.message}</div>
                 <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>{new Date(alert.created_at).toLocaleString()}</div>

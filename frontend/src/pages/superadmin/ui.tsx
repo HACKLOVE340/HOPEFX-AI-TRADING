@@ -85,7 +85,11 @@ export const KpiTile: React.FC<KpiTileProps> = ({
 
 interface SectionCardProps {
   title: string;
-  subtitle?: string;
+  // ReactNode for the same reason `icon` below is: a subtitle that has to say
+  // "ACTIVE" needs to carry a warning SVG, and an emoji in a string cannot be
+  // one. Widening is backward compatible — every existing caller passes a
+  // string, which is already a ReactNode.
+  subtitle?: React.ReactNode;
   // ReactNode, not string: a section heading should be able to carry an SVG
   // icon rather than an emoji glyph. Widening is backward compatible — every
   // existing caller passes a string, which is already a ReactNode.

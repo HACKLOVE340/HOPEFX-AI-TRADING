@@ -424,13 +424,13 @@ const Settings: React.FC = () => {
                 <div style={S.groupLabel}>Quick Access</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0 8px' }}>
                   {[
-                    { id: 'profile' as SettingsTab,        label: '👤 Profile' },
-                    { id: 'security' as SettingsTab,       label: '🔒 Security' },
-                    { id: 'broker' as SettingsTab,         label: '🏦 Broker' },
-                    { id: 'notifications' as SettingsTab,  label: '🔔 Alerts' },
-                    { id: 'billing' as SettingsTab,        label: '💳 Billing' },
-                    { id: 'danger' as SettingsTab,         label: '⚠️ Danger' },
-                  ].map(({ id, label }) => (
+                    { id: 'profile' as SettingsTab,        icon: User,          label: 'Profile' },
+                    { id: 'security' as SettingsTab,       icon: Lock,          label: 'Security' },
+                    { id: 'broker' as SettingsTab,         icon: Landmark,      label: 'Broker' },
+                    { id: 'notifications' as SettingsTab,  icon: Bell,          label: 'Alerts' },
+                    { id: 'billing' as SettingsTab,        icon: CreditCard,    label: 'Billing' },
+                    { id: 'danger' as SettingsTab,         icon: AlertTriangle, label: 'Danger' },
+                  ].map(({ id, icon: Icon, label }) => (
                     <button
                       key={id}
                       onClick={() => selectTab(id)}
@@ -444,7 +444,7 @@ const Settings: React.FC = () => {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {label}
+                      <Icon size="1em" aria-hidden /> {label}
                     </button>
                   ))}
                 </div>

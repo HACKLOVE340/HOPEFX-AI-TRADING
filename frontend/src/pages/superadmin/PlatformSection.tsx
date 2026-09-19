@@ -8,7 +8,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { Mail, Megaphone, Radio, Settings, Wrench } from 'lucide-react';
+import { AlertTriangle, Check, Mail, Megaphone, Radio, Settings, Wrench } from 'lucide-react';
 
 interface PlatformConfig {
   platform_name: string;
@@ -109,13 +109,13 @@ const PlatformSection: React.FC = () => {
       const d = res.data as { valid?: boolean; errors?: string[] };
       if (d.valid) {
         setMsgOk(true);
-        setMsg('✅ Configuration is valid');
+        setMsg('Configuration is valid');
       } else {
         // The call succeeded; the configuration did not. Reporting an invalid
         // config as a green banner is the exact failure-renders-as-success bug
         // this sweep exists to remove.
         setMsgOk(false);
-        setMsg('⚠️ Validation errors: ' + (d.errors?.join('; ') ?? 'Unknown errors'));
+        setMsg('Validation errors: ' + (d.errors?.join('; ') ?? 'Unknown errors'));
       }
     } catch (e: unknown) {
       setMsgOk(false);
@@ -128,7 +128,7 @@ const PlatformSection: React.FC = () => {
     try {
       await superadminApi.testSmtpConfig(smtpTest);
       setMsgOk(true);
-      setMsg('✅ SMTP connection successful');
+      setMsg('SMTP connection successful');
     } catch (e: unknown) {
       setMsgOk(false);
       setMsg(extractApiError(e, 'SMTP test failed'));
@@ -254,7 +254,9 @@ const PlatformSection: React.FC = () => {
 
       {/* Maintenance */}
       <SectionCard title="Maintenance Mode" icon={<Wrench size={18} aria-hidden />} accent="#f59e0b"
-        subtitle={cfg.maintenance_mode ? '⚠️ Currently ACTIVE — users see downtime page' : 'Platform is live'}>
+        subtitle={cfg.maintenance_mode
+          ? <><AlertTriangle size="1em" aria-hidden /> Currently ACTIVE — users see downtime page</>
+          : 'Platform is live'}>
         <div style={{ marginBottom: 14 }}>
           <Input
             label="Maintenance Message (shown to users)"
@@ -267,7 +269,7 @@ const PlatformSection: React.FC = () => {
           label={cfg.maintenance_mode ? 'Disable Maintenance Mode' : 'Enable Maintenance Mode'}
           onClick={() => setConfirm('maintenance')}
           variant={cfg.maintenance_mode ? 'success' : 'danger'}
-          icon={cfg.maintenance_mode ? '✅' : '🔧'}
+          icon={cfg.maintenance_mode ? <Check size="1em" aria-hidden /> : <Wrench size="1em" aria-hidden />}
           loading={saving}
         />
       </SectionCard>
