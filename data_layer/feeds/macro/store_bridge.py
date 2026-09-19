@@ -170,26 +170,48 @@ class MacroStoreBridge:
         """
         self._running = True
 
-        # Attempt FRED load with retry
-        for attempt in range(1, _STARTUP_MAX_RETRIES + 1):
+        if not self._fred.is_configured():
+            # Not set is not transient: no retry can change the answer to
+            # "is FRED_API_KEY set", and it cannot change between one retry
+            # and the next within this process. Retrying here used to add
+            # 5s + 10s (MACRO_BRIDGE_STARTUP_RETRIES=3's own backoff) of
+            # guaranteed-failing sleep to every cold start without a key —
+            # measured directly: fred.py already logs why (WARNING, once)
+            # before the first attempt even tries the network, so waiting to
+            # ask the same unanswerable question twice more bought nothing.
+            # One attempt still runs, because it also covers the last-known-
+            # good local cache path in `_load_fred_into_store`, which does
+            # not require a key.
+            logger.warning(
+                "MacroStoreBridge: FRED_API_KEY is not set — skipping retry (there is nothing "
+                "to retry) and falling back to the local cache or CSV files in data/macro/ "
+                "immediately."
+            )
             await self._load_fred_into_store()
-            if self._loaded:
-                break
-            if attempt < _STARTUP_MAX_RETRIES:
-                wait = _STARTUP_RETRY_DELAY * (2 ** (attempt - 1))
-                logger.warning(
-                    "MacroStoreBridge: FRED load attempt %d/%d failed — retrying in %.1fs",
-                    attempt,
-                    _STARTUP_MAX_RETRIES,
-                    wait,
-                )
-                await asyncio.sleep(wait)
-            else:
-                logger.warning(
-                    "MacroStoreBridge: all %d FRED load attempts failed — falling back to CSV files in data/macro/",
-                    _STARTUP_MAX_RETRIES,
-                )
+            if not self._loaded:
                 self._load_csv_fallback()
+        else:
+            # Attempt FRED load with retry — for a real transient failure
+            # (network error, 5xx, rate limit) the next attempt may succeed.
+            for attempt in range(1, _STARTUP_MAX_RETRIES + 1):
+                await self._load_fred_into_store()
+                if self._loaded:
+                    break
+                if attempt < _STARTUP_MAX_RETRIES:
+                    wait = _STARTUP_RETRY_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "MacroStoreBridge: FRED load attempt %d/%d failed — retrying in %.1fs",
+                        attempt,
+                        _STARTUP_MAX_RETRIES,
+                        wait,
+                    )
+                    await asyncio.sleep(wait)
+                else:
+                    logger.warning(
+                        "MacroStoreBridge: all %d FRED load attempts failed — falling back to CSV files in data/macro/",
+                        _STARTUP_MAX_RETRIES,
+                    )
+                    self._load_csv_fallback()
 
         # Load WGC demand data (non-blocking — failure is non-fatal)
         await self._load_wgc_into_store()

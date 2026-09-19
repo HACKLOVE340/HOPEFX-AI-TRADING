@@ -92,6 +92,21 @@ class FREDFeed:
         if self._session and not self._session.closed:
             await self._session.close()
 
+    def is_configured(self) -> bool:
+        """True when FRED_API_KEY is set.
+
+        Checked at call time, matching ``fetch_series`` — ``.env`` may not be
+        loaded yet at import time, so this must not cache the answer.
+
+        A missing key is not a transient condition: it cannot succeed on
+        retry, only on an operator setting the variable. Callers (notably
+        ``MacroStoreBridge.start()``) use this to skip retrying a fetch that
+        is already known, before making any request, to be unsucceedable —
+        as opposed to a network error or a 5xx, which genuinely may clear on
+        the next attempt and should still be retried.
+        """
+        return bool(os.getenv("FRED_API_KEY", ""))
+
     async def fetch_series(
         self,
         series_id: str,
