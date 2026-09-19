@@ -91,6 +91,14 @@ def check_broken_imports(*, root: str = ".", **_: Any) -> dict[str, Any]:
             # quietly — skipping is how it survives a hundred audits.
             unparseable.append({"file": str(path), "error": f"line {exc.lineno}: {exc.msg}"})
             continue
+        except UnicodeDecodeError as exc:
+            # Not an OSError -- UnicodeDecodeError derives from ValueError, so
+            # it matched neither handler and aborted the whole walk, disabling
+            # this watcher for every remaining file in the tree. A file whose
+            # bytes cannot be read is a finding for the same reason a file that
+            # cannot be parsed is one: skipping is how it survives an audit.
+            unparseable.append({"file": str(path), "error": f"not valid UTF-8: {exc.reason} at byte {exc.start}"})
+            continue
         except OSError as exc:
             unparseable.append({"file": str(path), "error": str(exc)})
             continue
