@@ -73,16 +73,27 @@ async def get_latest_tick(
     orch = _get_orchestrator()
     tick = orch.get_latest_tick(symbol)
     if tick is None:
-        # Try to get a price from yfinance as a fallback for dev environments
+        # Try to get a price from yfinance as a fallback for dev environments.
+        #
+        # XAU_USD/XAUUSD are deliberately excluded: Yahoo has no spot gold
+        # ticker (delisted, verified 2026-07-26), and GC=F is gold FUTURES —
+        # a different instrument with a real, varying basis to spot. Every
+        # field below ("source", "quality", "confidence") describes
+        # freshness/reliability, none discloses an instrument swap, so
+        # substituting GC=F here would silently mislabel a futures price as
+        # this platform's primary spot symbol. CLAUDE.md: "Do not put a
+        # yfinance ticker back" — refuse instead, matching the chart
+        # endpoint's existing 503 behaviour for the same instrument.
         fallback_price: float | None = None
-        try:
-            import yfinance as _yf
+        if symbol not in ("XAU_USD", "XAUUSD"):
+            try:
+                import yfinance as _yf
 
-            _ticker = _yf.Ticker("GC=F" if symbol in ("XAU_USD", "XAUUSD") else symbol)
-            _info = _ticker.fast_info
-            fallback_price = float(_info.last_price) if hasattr(_info, "last_price") and _info.last_price else None
-        except Exception:  # nosec B110  # noqa: S110
-            pass
+                _ticker = _yf.Ticker(symbol)
+                _info = _ticker.fast_info
+                fallback_price = float(_info.last_price) if hasattr(_info, "last_price") and _info.last_price else None
+            except Exception:  # nosec B110  # noqa: S110
+                pass
 
         if fallback_price is not None:
             return {
@@ -99,10 +110,16 @@ async def get_latest_tick(
                 "available": True,
                 "note": "Live feed not started — using yfinance fallback price",
             }
+        note = "Live feed not started. Start the orchestrator or configure GOLDAPI_KEY."
+        if symbol in ("XAU_USD", "XAUUSD"):
+            note += (
+                " Yahoo Finance has no spot XAU/USD ticker (GC=F is gold futures, "
+                "not spot), so no yfinance fallback is used for gold."
+            )
         return {
             "symbol": symbol,
             "available": False,
-            "note": "Live feed not started. Start the orchestrator or configure GOLDAPI_KEY.",
+            "note": note,
             "timestamp": datetime.now(UTC).isoformat(),
         }
     return {
