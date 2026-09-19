@@ -26,7 +26,14 @@ classifiers = [
 ]
 keywords = ["trading", "ai", "machine-learning", "xauusd", "forex", "cryptocurrency", "bitcoin"]
 dynamic = ["dependencies"]
-requires-python = ">=3.10"
+# Ceiling, not decoration. hdwallet (requirements.txt) pins coincurve<21, and
+# coincurve 20.0.0 ships no 3.13 wheel — so pip falls back to the sdist and the
+# build dies in cmake. Worse, a 3.13 env that DID install would break the model
+# loader: the committed .pkl artifacts are pickled on the Dockerfile's 3.12 and
+# ml/__init__.py::_verify_checksum refuses bytes from another interpreter.
+# tests/unit/test_python_pin_matches_the_runtime.py derives this from the
+# Dockerfile, so raising the image's Python turns it red rather than letting it rot.
+requires-python = ">=3.10,<3.13"
 
 [project.optional-dependencies]
 dev = [
