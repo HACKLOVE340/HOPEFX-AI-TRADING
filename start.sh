@@ -42,16 +42,36 @@ else
 fi
 if [ "$NEED_BUILD" = "1" ]; then
     if command -v npm >/dev/null 2>&1 && [ -f "frontend/package.json" ]; then
+        # Stamp the commit ONLY when the build actually succeeded.
+        #
+        # This used to have a second branch that stamped whenever
+        # static/index.html merely existed, on the theory that a post-build PWA
+        # step can exit non-zero after Vite has written a valid bundle. The
+        # theory is true and the handling was not: index.html from the PREVIOUS
+        # build also exists, so a genuinely failed build stamped the current
+        # commit onto a stale bundle. Every run after that reported the frontend
+        # as up to date and skipped the rebuild, which pinned the machine to the
+        # old UI permanently and hid the real build error behind one warning
+        # that had already scrolled past.
+        #
+        # If a post-build step is genuinely non-fatal, fix it at its source or
+        # make the build script tolerate it. Do not infer success from an
+        # artifact that a failed build cannot remove.
         if (cd frontend && npm install --silent && npm run build); then
             echo "$CURRENT_COMMIT" > static/.build-commit
-            echo "[INFO] Frontend built successfully → static/"
-        elif [ -f "static/index.html" ]; then
-            # Trust the artifact: a post-build step (e.g. PWA/workbox) can exit
-            # non-zero after Vite has already written a valid bundle.
-            echo "$CURRENT_COMMIT" > static/.build-commit
-            echo "[INFO] Frontend built (npm exit non-zero but bundle present — likely a post-build PWA warning)"
+            echo "[INFO] Frontend built successfully -> static/"
         else
-            echo "[WARN] Frontend build failed (no static/index.html) — API will still start, but / may show stale/no UI"
+            rm -f static/.build-commit
+            echo ""
+            echo "[ERROR] ================================================================"
+            echo "[ERROR]  FRONTEND BUILD FAILED."
+            echo "[ERROR]  The API will start, but the UI served will be stale or absent."
+            echo "[ERROR]  The build output above is the real error - read it, do not"
+            echo "[ERROR]  re-run this script expecting it to clear."
+            echo "[ERROR]  Reproduce it directly with:"
+            echo "[ERROR]      cd frontend && npm install && npm run build"
+            echo "[ERROR] ================================================================"
+            echo ""
         fi
     else
         echo "[WARN] npm not found or frontend/package.json missing — skipping frontend build"

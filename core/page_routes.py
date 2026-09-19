@@ -264,6 +264,52 @@ def _slashed_route_exists(app: FastAPI, path: str) -> bool:
         return False
 
 
+#: Served wherever a page is requested but the React bundle is not built.
+#: One copy: the "only the legacy dashboard is built" branch and the "nothing
+#: is built" branch are the same situation to the person in the browser, and
+#: they drifted apart while they were two literals.
+_BUILD_REQUIRED_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HOPEFX — Build Required</title>
+  <style>
+    body{background:#0f172a;color:#f1f5f9;font-family:system-ui,sans-serif;
+         display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+    .card{background:#1e293b;border:1px solid #334155;border-radius:12px;
+          padding:40px;max-width:520px;text-align:center}
+    h1{color:#3b82f6;margin-bottom:8px}
+    code{background:#0f172a;padding:4px 8px;border-radius:4px;font-size:0.9em;color:#94a3b8}
+    pre{background:#0f172a;padding:16px;border-radius:8px;text-align:left;
+        overflow-x:auto;color:#94a3b8;font-size:0.85em}
+    a{color:#3b82f6;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .badge{display:inline-block;background:#1d4ed8;color:#fff;padding:4px 12px;
+           border-radius:20px;font-size:0.8em;margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>HOPEFX AI Trading</h1>
+    <span class="badge">Frontend Build Required</span>
+    <p style="color:#94a3b8;margin-top:16px">
+      The React frontend has not been built yet.<br>
+      Run the following command to build it:
+    </p>
+    <pre>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</pre>
+    <p style="color:#94a3b8">Or use the quick-start script:</p>
+    <pre>./start.sh</pre>
+    <p style="margin-top:24px">
+      <a href="/docs">API Documentation →</a>
+      &nbsp;&nbsp;
+      <a href="/health">Health Check →</a>
+    </p>
+  </div>
+</body>
+</html>"""
+
+
 def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
     """Return the named template file, or *fallback_html* if missing."""
     path = _TEMPLATES / name
@@ -272,8 +318,16 @@ def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
     return HTMLResponse(content=fallback_html, status_code=200)
 
 
-def register_page_routes(app: FastAPI) -> None:
-    """Mount all HTML page routes and the React dashboard on *app*."""
+def register_page_routes(app: FastAPI, root: Path | None = None) -> None:
+    """Mount all HTML page routes and the React dashboard on *app*.
+
+    *root* overrides the repository root the build outputs are looked up under.
+    Production passes nothing. It exists so the unbuilt-frontend branches can be
+    exercised by a test: they are reached only when `static/index.html` is
+    absent, and with the path hard-coded the only way to reach them was to move
+    the real directory aside, which no test will do to a shared checkout. Those
+    branches shipped a redirect to a two-week-old bundle for that reason.
+    """
 
     @app.get("/docs/", include_in_schema=False)
     async def docs_trailing_slash():
@@ -362,7 +416,7 @@ def register_page_routes(app: FastAPI) -> None:
     # Build commands:
     #   Main app:   cd frontend && npm run build   → outputs to ../static/
     #   GodMode:    cd dashboard && npm run build  → outputs to dashboard/dist/
-    _root = Path(__file__).parent.parent
+    _root = root if root is not None else Path(__file__).parent.parent
     _frontend_dist = _root / "static"  # frontend Vite build output
     _dashboard_dist = _root / "dashboard" / "dist"  # legacy dashboard build
 
@@ -633,67 +687,40 @@ def register_page_routes(app: FastAPI) -> None:
         # putting it here left it unreachable.
 
     elif _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
-        # Fallback: only legacy dashboard is built
+        # Only the legacy dashboard is built.
+        #
+        # This used to answer "/" with a 302 to /godmode/, which is how an
+        # operator whose frontend build had failed was shown a committed bundle
+        # weeks old and told nothing about it. It reads as the product being
+        # stale rather than as a build that did not run, and it hands the person
+        # a UI whose links go nowhere the current application has.
+        #
+        # The bundle is committed deliberately and stays reachable, explicitly,
+        # at /godmode/. What it no longer does is stand in for the application.
         @app.get("/", include_in_schema=False)
-        async def _root_redirect_godmode():
-            return RedirectResponse(url="/godmode/", status_code=302)
+        async def _root_build_required():
+            return HTMLResponse(content=_BUILD_REQUIRED_HTML, status_code=503)
 
         app.mount(
             "/godmode",
             StaticFiles(directory=str(_dashboard_dist), html=True),
             name="godmode_dashboard",
         )
-        logger.info("GodMode dashboard mounted at /godmode/ (dashboard/dist/) — main app not built yet")
-        logger.warning("Run 'cd frontend && npm run build' to build the main React app")
+        logger.error(
+            "Main React app is NOT built (no %s) - serving the build-required page at /. "
+            "The legacy dashboard stays reachable at /godmode/ but is not the application. "
+            "Build with: cd frontend && npm install && npm run build",
+            _frontend_dist / "index.html",
+        )
 
     else:
-        # No built frontend found — serve a helpful placeholder at / that
-        # explains how to build the frontend. The API still works fully.
+        # Nothing is built. From the browser's point of view this is the same
+        # situation as the branch above, so it gets the same page and the same
+        # status: the server cannot serve the application, and answering 200
+        # tells every probe, cache and uptime check that it can.
         @app.get("/", include_in_schema=False)
         async def _root_no_frontend():
-            return HTMLResponse(
-                content="""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HOPEFX — Build Required</title>
-  <style>
-    body{background:#0f172a;color:#f1f5f9;font-family:system-ui,sans-serif;
-         display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-    .card{background:#1e293b;border:1px solid #334155;border-radius:12px;
-          padding:40px;max-width:520px;text-align:center}
-    h1{color:#3b82f6;margin-bottom:8px}
-    code{background:#0f172a;padding:4px 8px;border-radius:4px;font-size:0.9em;color:#94a3b8}
-    pre{background:#0f172a;padding:16px;border-radius:8px;text-align:left;
-        overflow-x:auto;color:#94a3b8;font-size:0.85em}
-    a{color:#3b82f6;text-decoration:none}
-    a:hover{text-decoration:underline}
-    .badge{display:inline-block;background:#1d4ed8;color:#fff;padding:4px 12px;
-           border-radius:20px;font-size:0.8em;margin-top:8px}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>HOPEFX AI Trading</h1>
-    <span class="badge">Frontend Build Required</span>
-    <p style="color:#94a3b8;margin-top:16px">
-      The React frontend has not been built yet.<br>
-      Run the following command to build it:
-    </p>
-    <pre>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</pre>
-    <p style="color:#94a3b8">Or use the quick-start script:</p>
-    <pre>./start.sh</pre>
-    <p style="margin-top:24px">
-      <a href="/docs">API Documentation →</a>
-      &nbsp;&nbsp;
-      <a href="/health">Health Check →</a>
-    </p>
-  </div>
-</body>
-</html>""",
-                status_code=200,
-            )
+            return HTMLResponse(content=_BUILD_REQUIRED_HTML, status_code=503)
 
         logger.warning(
             "No React build found — serving placeholder at /. Build the frontend with: cd frontend && npm run build"
