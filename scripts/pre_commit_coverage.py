@@ -212,7 +212,40 @@ def _imports_module(text: str, module_path: Path) -> bool:
         return False
     prefix = f"from {package.replace('/', '.')} import "
     pattern = re.compile(rf"\b{re.escape(stem)}\b")
-    return any(prefix in line and pattern.search(line.split(prefix, 1)[1]) for line in text.splitlines())
+
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if prefix not in line:
+            continue
+        rest = line.split(prefix, 1)[1]
+        if pattern.search(rest):
+            return True
+        # The FOURTH form. The check above is per LINE, and this repository
+        # imports its constitutional predicates as
+        #
+        #     from invariants import (
+        #         integrations as integ,
+        #     )
+        #
+        # where the prefix line leaves only "(" and every stem sits below it.
+        # Measured: _find_test_files("invariants/integrations.py") returned []
+        # so the gate SKIPPED the module and reported Passed — 20 of the 21
+        # unpaired modules in the tree were invariants/*, the safety predicates
+        # of a money-moving system, silently exempt from their own floor.
+        #
+        # Scan only to the closing parenthesis, so this widens to the statement
+        # and NOT to the package: `from invariants import (constitution,)` still
+        # must not pair integrations.py, which is what the per-line rule was
+        # protecting and what test_it_does_not_pair_a_sibling_it_never_named pins.
+        if rest.lstrip().startswith("("):
+            depth = rest.count("(") - rest.count(")")
+            for continuation in lines[i + 1 :]:
+                if pattern.search(continuation):
+                    return True
+                depth += continuation.count("(") - continuation.count(")")
+                if depth <= 0:
+                    break
+    return False
 
 
 def _find_test_files(module_path: Path) -> list[Path]:

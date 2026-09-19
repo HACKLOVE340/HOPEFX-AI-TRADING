@@ -268,3 +268,59 @@ class TestNestedPackagesWhoseParentImportsNumpy:
 
     def test_the_target_is_a_path_not_a_dotted_name(self, hook) -> None:
         assert hook._coverage_target(self.MODULE) == "data_layer/feeds/macro"
+
+
+class TestTheParenthesisedMultilineImport:
+    """The fourth import form — and it silently exempted `invariants/`.
+
+    `_imports_module`'s package-form check runs PER LINE:
+
+        return any(prefix in line and pattern.search(line.split(prefix, 1)[1]) ...)
+
+    For the form this repository actually uses for its constitutional predicates
+
+        from invariants import (
+            integrations as integ,
+        )
+
+    the line carrying the prefix is `from invariants import (`, and splitting on
+    the prefix leaves `"("`. The stem is on a LATER line, so the search fails and
+    the file is not paired.
+
+    Measured before the fix:
+      * `hook._imports_module(<test_invariants_platform.py>, invariants/integrations.py)` -> False
+      * `_find_test_files(invariants/integrations.py)` -> [] — NO paired tests, so
+        the gate skipped the module entirely and reported Passed. It was never
+        measured; it did not pass a measurement.
+      * 21 source modules were unpaired for this reason, 20 of them `invariants/*`
+        — the safety predicates of a money-moving system, silently exempt.
+
+    The docstring said "Three forms, and the third is the one the first version
+    missed." This is the fourth.
+    """
+
+    def _platform_test_text(self) -> str:
+        return (REPO / "tests" / "unit" / "test_invariants_platform.py").read_text()
+
+    def test_the_form_this_repo_uses_for_invariants_is_recognised(self, hook):
+        assert hook._imports_module(self._platform_test_text(), pathlib.Path("invariants/integrations.py"))
+
+    def test_a_synthetic_parenthesised_import_is_recognised(self, hook):
+        text = "from invariants import (\n    constitution,\n    integrations as integ,\n)\n"
+        assert hook._imports_module(text, pathlib.Path("invariants/integrations.py"))
+
+    def test_it_does_not_pair_a_sibling_it_never_named(self, hook):
+        """The positive control that matters — the per-line rule exists to stop
+        `from invariants import` pulling every test into every module's run.
+        Widening to the block must not widen to the whole package."""
+        text = "from invariants import (\n    constitution,\n)\n"
+        assert not hook._imports_module(text, pathlib.Path("invariants/integrations.py"))
+
+    def test_the_invariants_package_is_actually_paired_now(self, hook):
+        """The blast radius, asserted rather than described."""
+        unpaired = [
+            p.as_posix()
+            for p in sorted((REPO / "invariants").glob("*.py"))
+            if p.name != "__init__.py" and not hook._find_test_files(pathlib.Path("invariants") / p.name)
+        ]
+        assert not unpaired, f"{len(unpaired)} invariants module(s) still have no paired test: {unpaired[:5]}"

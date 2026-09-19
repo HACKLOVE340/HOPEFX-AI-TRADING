@@ -402,10 +402,6 @@ execution/_prom_metrics.py
 execution/fix_router.py
 execution/hopefx_engine.py
 execution/legacy.py
-invariants/ml_pipeline.py
-invariants/payments.py
-invariants/portfolio.py
-invariants/security.py
 market_data/validation.py
 ml/__init__.py
 ml/hourly_trainer.py
