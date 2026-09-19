@@ -65,6 +65,10 @@ _SKIP = {".venv", "node_modules", ".git", "static", "dashboard", "htmlcov", ".my
 #: code" (F255/F257) applies to the checker as much as to the thing checked.
 _EXT = {".py", ".ts", ".tsx", ".sh", ".yml", ".yaml", ".json", ".template", ".toml", ".tf", ".conf"}
 
+#: Files that WRITE a .env rather than read one. A key they emit is not
+#: evidence that anything consumes it. See the note in `_source_text`.
+_ENV_GENERATORS = frozenset({"bootstrap_dev.py", "bootstrap_env.py", "bootstrap_prod.py"})
+
 _KEY_RE = re.compile(r"^\s*([A-Z][A-Z0-9_]*)\s*=")
 
 
@@ -93,6 +97,17 @@ def _source_text() -> str:
         # correct files for quoting the defect they fixed; this one absolved
         # seven broken lines for the same reason.
         if path.resolve() == Path(__file__).resolve():
+            continue
+        # The .env GENERATORS, for the same reason and a worse consequence.
+        # `scripts/bootstrap_dev.py` WRITES a key into every developer's .env;
+        # it does not read one. But it is a .py file under a directory this scan
+        # does not skip, so a key it emits appeared in "source" and was counted
+        # as read -- the example and the generator vouching for each other.
+        # Measured 2026-09-19: excluding these three moved the dead count from
+        # 0 to 3 (CTRADER_CLIENT_ID, CTRADER_ACCOUNT_ID, SUMSUB_WEBHOOK_SECRET).
+        # Every one had been declared dead-looking and passing for as long as
+        # both files have existed.
+        if path.name in _ENV_GENERATORS:
             continue
         try:
             parts.append(path.read_text(encoding="utf-8", errors="ignore"))
