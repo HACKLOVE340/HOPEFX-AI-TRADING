@@ -18,7 +18,7 @@ import { useStore, selectIsAuth } from '../store';
 import { normalisePlan } from '../lib/subscription';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';
-import { BarChart3, BookOpen, Check, CircleDot, ClipboardList, Handshake, Trophy } from 'lucide-react';
+import { BarChart3, BookOpen, Check, CircleDot, ClipboardList, Handshake, Trophy, X } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 /** Every limit is optional — the catalogue omits them for some plans (audit #40). */
@@ -199,7 +199,7 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
               return (
                 <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body)'}}>
                   <span style={{ color: included ? '#22c55e' : 'var(--text-faint)', fontSize: 14, flexShrink: 0 }}>
-                    {included ? '✓' : '✕'}
+                    {included ? <Check size="1em" aria-label="Included" /> : <X size="1em" aria-label="Not included" />}
                   </span>
                   <span style={{ color: included ? 'var(--text-dim)' : 'var(--text-faint)' }}>
                     {FEATURE_LABELS[f] ?? f}
@@ -284,7 +284,7 @@ function ComparisonTable({ plans }: { plans: PlanData[] }) {
                   <td key={p.id} style={{ textAlign: 'center', padding: '10px 8px',
                     borderBottom: '1px solid var(--border)' }}>
                     <span style={{ color: included ? '#22c55e' : 'var(--text-faint)', fontSize: 16 }}>
-                      {included ? '✓' : '✕'}
+                      {included ? <Check size="1em" aria-label="Included" /> : <X size="1em" aria-label="Not included" />}
                     </span>
                   </td>
                 );

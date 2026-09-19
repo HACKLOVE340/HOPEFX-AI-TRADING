@@ -12,7 +12,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { AlertTriangle, BarChart3, BookOpen, Briefcase, Calculator, CheckCircle2, ClipboardList, NotebookPen, Shield, X, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Briefcase, Calculator, CheckCircle2, ClipboardList, NotebookPen, Save, Shield, X, Zap } from 'lucide-react';
 import { EmptyState } from '../components';
 import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
@@ -273,7 +273,11 @@ const RiskCalculator: React.FC = () => {
   const { markFailed } = freshness;
   const [history, setHistory]       = useState<SavedCalc[]>([]);
   const [saving, setSaving]         = useState(false);
-  const [saveMsg, setSaveMsg]       = useState('');
+  // {text, ok} rather than a string: the colour below used to be decided by
+  // saveMsg.startsWith('✓'), so the tick was not decoration — it was the
+  // success flag. Removing the glyph without this would have rendered every
+  // successful save in the failure colour.
+  const [saveMsg, setSaveMsg]       = useState<{ text: string; ok: boolean } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [calcLabel, setCalcLabel]   = useState('');
   const priceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -357,7 +361,7 @@ const RiskCalculator: React.FC = () => {
   const handleSave = async () => {
     if (!result) return;
     setSaving(true);
-    setSaveMsg('');
+    setSaveMsg(null);
     try {
       await riskCalcApi.saveCalc({
         symbol:       state.symbol,
@@ -370,11 +374,11 @@ const RiskCalculator: React.FC = () => {
         reward_amount: result.rewardAmount,
         label:        calcLabel || undefined,
       });
-      setSaveMsg('✓ Saved');
+      setSaveMsg({ text: 'Saved', ok: true });
       setCalcLabel('');
       await loadHistory();
-    } catch { setSaveMsg('⚠ Save failed'); }
-    finally { setSaving(false); setTimeout(() => setSaveMsg(''), 3000); }
+    } catch { setSaveMsg({ text: 'Save failed', ok: false }); }
+    finally { setSaving(false); setTimeout(() => setSaveMsg(null), 3000); }
   };
 
   const handleDeleteHistory = async (id: string) => {
@@ -585,9 +589,11 @@ const RiskCalculator: React.FC = () => {
                 />
                 <button onClick={() => void handleSave()} disabled={saving}
                   style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
-                  {saving ? '…' : '💾 Save'}
+                  {saving ? '…' : <><Save size="1em" aria-hidden /> Save</>}
                 </button>
-                {saveMsg && <span style={{ fontSize: 'var(--fs-label)', color: saveMsg.startsWith('✓') ? '#22c55e' : 'var(--loss)', alignSelf: 'center' }}>{saveMsg}</span>}
+                {saveMsg && <span style={{ fontSize: 'var(--fs-label)', color: saveMsg.ok ? '#22c55e' : 'var(--loss)', alignSelf: 'center' }}>
+                  {saveMsg.ok ? <CheckCircle2 size="1em" aria-hidden /> : <AlertTriangle size="1em" aria-hidden />} {saveMsg.text}
+                </span>}
               </div>
             </>
           )}

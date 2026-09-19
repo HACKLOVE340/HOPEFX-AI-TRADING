@@ -10,10 +10,13 @@ const DEFAULT: BrokerSettings = {
   type: 'paper', api_key: '', account_id: '', practice: true, connected: false,
 };
 
+// Plain text: these render as <option> elements, which can hold a string and
+// nothing else — an SVG there is not a rendering the browser offers. (Lucide
+// also has no llama.)
 const BROKER_OPTIONS = [
-  { value: 'paper',  label: '📄 Paper Trading (no real money)' },
-  { value: 'oanda',  label: '🏦 OANDA' },
-  { value: 'alpaca', label: '🦙 Alpaca' },
+  { value: 'paper',  label: 'Paper Trading (no real money)' },
+  { value: 'oanda',  label: 'OANDA' },
+  { value: 'alpaca', label: 'Alpaca' },
 ];
 
 const BrokerSection: React.FC = () => {

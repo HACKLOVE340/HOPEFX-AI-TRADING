@@ -28,7 +28,7 @@ import { PageHeader } from '../components/PageHeader';
 import QRCode from '../components/QRCode';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { extractApiError } from '../lib/utils';
-import { AlertTriangle, ArrowDownToLine, BarChart3, Camera, CheckCircle2, Key, Settings, ShieldCheck, User, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowDownToLine, BarChart3, Camera, CheckCircle2, Key, Lock, LockOpen, Settings, ShieldCheck, User, Wrench } from 'lucide-react';
 // ── CSRF retry helper ─────────────────────────────────────────────────────────
 
 async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -311,7 +311,7 @@ const TwoFactorSetup: React.FC = () => {
         background: status.enabled ? '#14532d' : 'var(--raised)',
         border: '1px solid ' + (status.enabled ? '#166534' : '#334155'),
       }}>
-        <span style={{ fontSize: 22 }}>{status.enabled ? '🔒' : '🔓'}</span>
+        <span style={{ fontSize: 22 }}>{status.enabled ? <Lock size="1em" aria-label="Two-factor enabled" /> : <LockOpen size="1em" aria-label="Two-factor disabled" />}</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, color: status.enabled ? 'var(--gain)' : 'var(--text-dim)' }}>
             2FA is {status.enabled ? 'ENABLED' : 'DISABLED'}
@@ -401,7 +401,7 @@ const TwoFactorSetup: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span style={s.secretLabel}>Manual entry secret</span>
               <button onClick={handleCopySecret} style={s.copyBtn}>
-                {copiedSecret ? '✅ Copied' : 'Copy'}
+                {copiedSecret ? <><CheckCircle2 size="1em" aria-hidden /> Copied</> : 'Copy'}
               </button>
             </div>
             <code style={s.secretCode}>{setupData.secret}</code>
