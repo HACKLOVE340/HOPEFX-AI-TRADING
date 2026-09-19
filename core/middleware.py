@@ -682,10 +682,23 @@ def setup_csrf_middleware(app: FastAPI) -> None:
 
 
 # ── Startup health gate ───────────────────────────────────────────────────────
-# Returns 503 for data-dependent API endpoints until app_state.initialized
-# is True.  Health, auth, CSRF, docs, and static assets are always allowed
-# through so the frontend can render and users can log in while the trading
-# engine is still warming up.
+# Returns 503 for data-dependent endpoints until app_state.initialized is True.
+# Health, auth, CSRF, docs, static assets AND the SPA's own document routes are
+# allowed through so the frontend can render and users can log in while the
+# trading engine is still warming up.
+#
+# That last clause was the intent from the start and was not delivered: /static
+# was allowed but "/", "/login" and "/dashboard" were not, so a browser
+# navigating during startup got {"detail": "Server is starting up..."} AS ITS
+# PAGE and never reached the HTML that loads /static/*. Measured cold against
+# the real server on 2026-09-19: 50 seconds of it, because startup waits on
+# three FRED retries — while the message says "a few seconds".
+# SubscriptionPaywallMiddleware below had already written the rule down:
+# "Gating them would return raw JSON to a browser navigation."
+#
+# Ownership is DERIVED from the route table (core.page_routes.server_namespaces),
+# not from a second hand-maintained prefix list — that list is F199, and the
+# catch-all stopped keeping one in F198.
 
 # Paths that are always allowed regardless of startup state.
 _STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
@@ -711,6 +724,31 @@ _STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
 )
 
 
+#: Never handed to the SPA, whatever the route table says. Namespaces are
+#: derived, and a control that reads an EMPTY table answers "nothing is
+#: claimed" and passes everything — it cannot fail. This is the floor under it.
+_STARTUP_GATE_FLOOR: tuple[str, ...] = ("/api", "/api/")
+
+
+def _server_claims_path(app, path: str) -> bool:
+    """True when a server route owns *path* — so the startup gate should hold it.
+
+    False means no registered route is under this path, i.e. it is a SPA
+    document navigation and the shell should be served. Fails CLOSED: if
+    ownership cannot be derived, the path is treated as the server's and the
+    503 stands, which is the behaviour this function replaced.
+    """
+    if path in _STARTUP_GATE_FLOOR or path.startswith("/api/"):
+        return True
+    try:
+        from core.page_routes import server_namespaces
+
+        namespaces = server_namespaces(app)
+    except Exception:  # nosec B110 — cannot prove the SPA owns it, so gate it
+        return True
+    return any(path == ns or path.startswith(ns + "/") for ns in namespaces)
+
+
 class StartupGateMiddleware(BaseHTTPMiddleware):
     """Block data-dependent endpoints with 503 until startup completes.
 
@@ -734,23 +772,33 @@ class StartupGateMiddleware(BaseHTTPMiddleware):
         app_state = getattr(request.app.state, "app_state", None)
         initialized = getattr(app_state, "initialized", False) if app_state else False
 
-        if not initialized:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "detail": "Server is starting up. Please retry in a few seconds.",
-                    "status": "starting",
-                },
-                headers={"Retry-After": "5"},
-            )
+        if initialized:
+            return await call_next(request)
 
-        return await call_next(request)
+        # Uninitialized. A path no server route claims is a browser navigating
+        # to a page: serve the SPA shell, which carries no data of its own. The
+        # gate is not weakened — every /api/... call the shell then makes is
+        # still refused below, so nothing answers with uninitialized data.
+        if not _server_claims_path(request.app, path):
+            return await call_next(request)
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Server is starting up. Please retry in a few seconds.",
+                "status": "starting",
+            },
+            headers={"Retry-After": "5"},
+        )
 
 
 def setup_startup_gate(app: FastAPI) -> None:
     """Add the startup health gate middleware."""
     app.add_middleware(StartupGateMiddleware)
-    logger.info("StartupGateMiddleware registered — data endpoints return 503 until initialized")
+    logger.info(
+        "StartupGateMiddleware registered — server-owned paths return 503 until "
+        "initialized; SPA document routes serve the shell"
+    )
 
 
 # ── Paywall ───────────────────────────────────────────────────────────────────
