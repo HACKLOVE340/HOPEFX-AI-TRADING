@@ -67,9 +67,15 @@ type Tab = 'trades' | 'stats' | 'mistakes' | 'emotions' | 'weekly';
 const EMOTION_TAGS = ['patient', 'fomo', 'revenge', 'disciplined', 'hesitant', 'overconfident', 'fearful'];
 const TRADE_TAGS   = ['trend', 'breakout', 'reversal', 'news', 'scalp', 'swing', 'mistake', 'best-trade'];
 
-const EMOTION_EMOJI: Record<string, string> = {
-  patient: '😌', fomo: '😰', revenge: '😤', disciplined: '🎯',
-  hesitant: '😟', overconfident: '😎', fearful: '😨',
+// The emotion is shown as its WORD, not a face. A face is a sentiment scale
+// with no shared reading — the angry face meant "revenge" only to whoever
+// picked it — and it carried no accessible name, so the tag was invisible
+// to a screen reader and to search. The word was already the tooltip; it is
+// now the content.
+const EMOTION_TONE: Record<string, string> = {
+  patient: 'var(--gain)',  disciplined: 'var(--gain)',
+  fomo: 'var(--loss)',     revenge: 'var(--loss)',      fearful: 'var(--loss)',
+  hesitant: 'var(--warn)', overconfident: 'var(--warn)',
 };
 
 function fmt(n: number | null | undefined, d = 2): string {
@@ -346,7 +352,7 @@ const TradeJournal: React.FC = () => {
                     {entry.side.toUpperCase()}
                   </span>
                   <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{entry.symbol}</span>
-                  {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
+                  {entry.emotion && <span style={{ ...s.emotionBadge, color: EMOTION_TONE[entry.emotion] ?? 'var(--text-muted)' }}>{entry.emotion}</span>}
                   {!entry.followed_rules && <span style={s.deviationBadge}><AlertTriangle size="1em" aria-hidden /> Rule deviation</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -414,7 +420,7 @@ const TradeJournal: React.FC = () => {
                     {EMOTION_TAGS.map((em) => (
                       <button key={em} onClick={() => setEditForm({ ...editForm, emotion: em })}
                         style={{ ...s.tagPickerBtn, ...(editForm.emotion === em ? s.tagPickerBtnActive : {}) }}>
-                        {EMOTION_EMOJI[em]} {em}
+                        {em}
                       </button>
                     ))}
                   </div>
@@ -471,7 +477,7 @@ const TradeJournal: React.FC = () => {
                   return (
                     <div key={e.tag} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ width: 110, fontSize: 'var(--fs-label)', color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>
-                        {EMOTION_EMOJI[e.tag] ?? ''} {e.tag}
+                        {e.tag}
                       </span>
                       <div style={{ flex: 1, height: 14, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.4s ease' }} />
@@ -485,7 +491,7 @@ const TradeJournal: React.FC = () => {
               </div>
             </div>
           )}
-          {(stats.by_emotion ?? []).map((e) => <TagRow key={e.tag} stat={e} emoji={EMOTION_EMOJI[e.tag]} />)}
+          {(stats.by_emotion ?? []).map((e) => <TagRow key={e.tag} stat={e} />)}
         </div>
       )}
 
@@ -524,7 +530,7 @@ const TradeJournal: React.FC = () => {
                         <span style={{ ...s.sideBadge, background: '#450a0a', color: 'var(--loss)' }}>{entry.side.toUpperCase()}</span>
                         <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{entry.symbol}</span>
                         <span style={s.deviationBadge}><AlertTriangle size="1em" aria-hidden /> {entry.rule_deviation ?? 'Rule deviation'}</span>
-                        {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
+                        {entry.emotion && <span style={{ ...s.emotionBadge, color: EMOTION_TONE[entry.emotion] ?? 'var(--text-muted)' }}>{entry.emotion}</span>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{new Date(entry.opened_at).toLocaleDateString()}</span>
@@ -567,9 +573,9 @@ const StatCard: React.FC<{ label: string; value: string; positive?: boolean }> =
   </div>
 );
 
-const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) => (
+const TagRow: React.FC<{ stat: TagStats }> = ({ stat }) => (
   <div style={s.tagStatRow}>
-    <span style={{ width: 120, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{emoji ? `${emoji} ` : ''}{stat.tag}</span>
+    <span style={{ width: 120, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{stat.tag}</span>
     <span style={{ width: 50, color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{stat.count}×</span>
     <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
       <div style={{ width: `${stat.win_rate}%`, height: '100%', background: stat.win_rate >= 50 ? 'var(--gain)' : 'var(--loss)', borderRadius: 4 }} />
@@ -595,6 +601,7 @@ const s: Record<string, React.CSSProperties> = {
   tradeHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sideBadge:       { borderRadius: 4, fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px' },
   deviationBadge:  { background: '#450a0a', color: 'var(--loss)', fontSize: 'var(--fs-label)', padding: '2px 8px', borderRadius: 4 },
+  emotionBadge:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, fontSize: 'var(--fs-label)', fontWeight: 600, padding: '1px 6px', textTransform: 'capitalize' as const },
   priceRow:        { display: 'flex', gap: 16, marginBottom: 8 },
   priceItem:       { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
   tagRow:          { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },

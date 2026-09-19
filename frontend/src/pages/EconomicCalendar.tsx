@@ -15,7 +15,7 @@
  *   GET  /api/data-layer/macro         — MacroResponse (via useMacro hook)
  */
 
-import { AlertTriangle, Calendar, CalendarDays, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, Calendar, CalendarDays, Pause, Play, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -70,9 +70,15 @@ const IMPORTANCE_LABEL: Record<string, string> = {
   low:      'Low',
 };
 
-const FLAG: Record<string, string> = {
-  US: '🇺🇸', EU: '🇪🇺', UK: '🇬🇧', JP: '🇯🇵', CA: '🇨🇦',
-  AU: '🇦🇺', NZ: '🇳🇿', CH: '🇨🇭', CN: '🇨🇳',
+// Country CODE, not a flag. Lucide ships no flags, and a regional-indicator
+// pair already renders as bare letters on Windows — so the letters are what a
+// good share of users see anyway, and they render identically everywhere.
+// The full name rides along as the accessible name, which the emoji could not
+// carry: a badge reading "EU" is announced "European Union".
+const COUNTRY_NAME: Record<string, string> = {
+  US: 'United States', EU: 'European Union', UK: 'United Kingdom',
+  JP: 'Japan',         CA: 'Canada',         AU: 'Australia',
+  NZ: 'New Zealand',   CH: 'Switzerland',    CN: 'China',
 };
 
 /**
@@ -114,7 +120,7 @@ function formatDate(iso: string): string {
 
 const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = ({ event: ev, onPlanTrade }) => {
   const color = IMPORTANCE_COLOR[ev.importance] ?? '#64748b';
-  const flag  = FLAG[ev.country] ?? '🌐';
+  const country = ev.country || 'GLOBAL';
   const mins  = minutesUntil(ev);
   const isHighImpact = ev.importance === 'high' || ev.importance === 'critical';
 
@@ -127,7 +133,7 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
 
       <div style={s.eventMain}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 16 }}>{flag}</span>
+          <span style={s.countryBadge} aria-label={COUNTRY_NAME[country] ?? country}>{country}</span>
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{ev.title}</span>
           {ev.currency && <span style={s.currencyBadge}>{ev.currency}</span>}
         </div>
@@ -300,6 +306,8 @@ const EconomicCalendar: React.FC = () => {
             <button
               onClick={handleToggleAutoPause}
               disabled={savingPause}
+              aria-pressed={autoPause.enabled}
+              aria-label={autoPause.enabled ? 'Auto-pause is on — turn it off' : 'Auto-pause is off — turn it on'}
               style={{
                 ...s.toggleBtn,
                 background: autoPause.enabled ? '#166534' : 'var(--surface-hover)',
@@ -307,7 +315,9 @@ const EconomicCalendar: React.FC = () => {
                 opacity:    savingPause ? 0.6 : 1,
               }}
             >
-              {autoPause.enabled ? '⏸ ON' : '▶ OFF'}
+              {autoPause.enabled
+                ? <><Pause size="1em" aria-hidden /> ON</>
+                : <><Play size="1em" aria-hidden /> OFF</>}
             </button>
             <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
               {autoPause.enabled
@@ -348,7 +358,9 @@ const EconomicCalendar: React.FC = () => {
             onClick={() => setTab(t)}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
           >
-            {t === 'calendar' ? '📅 Calendar' : '📊 Macro Data Layer'}
+            {t === 'calendar'
+              ? <><Calendar size="1em" aria-hidden /> Calendar</>
+              : <><BarChart3 size="1em" aria-hidden /> Macro Data Layer</>}
           </button>
         ))}
       </div>
@@ -428,6 +440,7 @@ const s: Record<string, React.CSSProperties> = {
   dataLabel:     { fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.5 },
   dataValue:     { fontSize: 14, fontWeight: 600, color: 'var(--text-strong)', marginTop: 2 },
   currencyBadge: { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 'var(--fs-label)', padding: '1px 6px' },
+  countryBadge:  { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-muted)', fontSize: 'var(--fs-label)', fontWeight: 700, letterSpacing: 0.5, padding: '1px 6px' },
   empty:         { textAlign: 'center', color: 'var(--text-faint)', padding: 40 },
   errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
 };

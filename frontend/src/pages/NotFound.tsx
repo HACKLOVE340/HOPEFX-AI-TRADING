@@ -9,6 +9,7 @@
  * Unauthenticated visitors are sent to /login.
  */
 
+import { BarChart3, Notebook, Radio, Shield, Zap } from 'lucide-react';
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore, selectIsAuth } from '../store';
@@ -137,12 +138,12 @@ const NotFound: React.FC = () => {
       {isAuth && (
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center', marginTop: '0.5rem' }}>
           {[
-            { label: '⚡ Trade',       path: '/trade'      },
-            { label: '📡 Signals',     path: '/signals'    },
-            { label: '📓 Journal',     path: '/journal'    },
-            { label: '📊 Performance', path: '/performance'},
-            { label: '🛡 Risk Calc',   path: '/risk-calculator' },
-          ].map(({ label, path }) => (
+            { icon: Zap,        label: 'Trade',       path: '/trade'      },
+            { icon: Radio,      label: 'Signals',     path: '/signals'    },
+            { icon: Notebook,   label: 'Journal',     path: '/journal'    },
+            { icon: BarChart3,  label: 'Performance', path: '/performance'},
+            { icon: Shield,     label: 'Risk Calc',   path: '/risk-calculator' },
+          ].map(({ icon: Icon, label, path }) => (
             <button
               key={path}
               onClick={() => navigate(path)}
@@ -157,7 +158,7 @@ const NotFound: React.FC = () => {
                 padding:      '6px 12px',
               }}
             >
-              {label}
+              <Icon size="1em" aria-hidden /> {label}
             </button>
           ))}
         </div>
