@@ -367,6 +367,33 @@ class PPORLAgent:
         return save_path
 
     def load(self, path: str) -> None:
+        # stable-baselines3 appends `.zip` when it saves, and `save()` above
+        # hands it an extensionless path, so the artifact is resolved the same
+        # way before it is hashed — otherwise the gate would check a file that
+        # is not the one being loaded.
+        # When neither candidate is on disk there is nothing to hash and nothing
+        # to unpickle either, so that case is left exactly as it was and
+        # `PPO.load` reports it.
+        artifact = next(
+            (c for c in (Path(path), Path(f"{path}.zip")) if c.is_file()),
+            None,
+        )
+
+        # Before `PPO.load`, which unpickles the policy out of the zip.
+        from ml import _verify_checksum
+
+        if artifact is not None and not _verify_checksum(artifact):
+            # _verify_checksum has already logged CRITICAL with the specifics.
+            logger.error(
+                "REFUSING to load PPO policy %s: it failed its integrity check.",
+                artifact,
+            )
+            raise ValueError(
+                f"PPO policy '{artifact}' failed its integrity check and was refused. "
+                "It exists — this is not a missing file — and its bytes do not match "
+                "the sha256 recorded in that directory's model_checksums.json.",
+            )
+
         self._model = PPO.load(path)
         logger.info("ppo_agent.loaded path=%s", path)
 
@@ -531,9 +558,22 @@ class VectorRAGNewsSentiment:
         if index_path.exists():
             self._index = faiss.read_index(str(index_path))
         if meta_path.exists():
-            meta = joblib.load(meta_path)
-            self._stored_headlines = meta["headlines"]
-            self._stored_scores = meta["scores"]
+            from ml import _verify_checksum
+
+            if not _verify_checksum(meta_path):
+                # _verify_checksum has already logged CRITICAL with the specifics.
+                # Existence was checked above, so False is REFUSED, not absent.
+                # The headlines stay empty rather than being restored from an
+                # artifact whose bytes do not match their record.
+                logger.error(
+                    "REFUSING the RAG metadata at %s: it failed its integrity check. "
+                    "News sentiment starts empty rather than from unverified state.",
+                    meta_path,
+                )
+            else:
+                meta = joblib.load(meta_path)  # nosec B301 - integrity-checked immediately above
+                self._stored_headlines = meta["headlines"]
+                self._stored_scores = meta["scores"]
         logger.info(
             "rag.loaded directory=%s items=%d",
             directory,

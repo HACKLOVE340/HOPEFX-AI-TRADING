@@ -301,8 +301,18 @@ def _verify_checksum(path: _Path) -> bool:
     return True
 
 
+#: Every file extension this package treats as a model artifact. The baseline
+#: must cover all of them: `_verify_checksum` bootstraps a directory by calling
+#: `_record_checksums`, so an artifact kind that loop skips is one the "not in
+#: baseline" branch re-bootstraps and re-allows on every single load — the
+#: refusal is unreachable for it, forever. This was `*.pkl` only, and the
+#: evidence is committed: `ml/saved_models/rl/model_checksums.json` is `{}`
+#: beside a 189 KB `hopefx_ppo.zip`, which is exactly what that loop wrote.
+_ARTIFACT_SUFFIXES = frozenset({".pkl", ".zip", ".pt", ".h5", ".joblib", ".onnx", ".safetensors"})
+
+
 def _record_checksums(directory: _Path | None = None) -> None:
-    """Write SHA-256 checksums for every .pkl in *directory*.
+    """Write SHA-256 checksums for every model artifact in *directory*.
 
     Defaults to the packaged directory, whose baseline is committed and
     verified in CI.
@@ -310,9 +320,13 @@ def _record_checksums(directory: _Path | None = None) -> None:
     target = directory or _PACKAGED
     try:
         checksums = {}
-        for pkl in target.glob("*.pkl"):
+        for pkl in sorted(target.iterdir()):
+            if not pkl.is_file() or pkl.suffix not in _ARTIFACT_SUFFIXES:
+                continue
             checksums[pkl.name] = _sha256(pkl)
-        _checksum_file_for(target).write_text(_json.dumps(checksums, indent=2))
+        # Trailing newline so a bootstrapped baseline is byte-identical in shape
+        # to a committed one, which `end-of-file-fixer` would otherwise rewrite.
+        _checksum_file_for(target).write_text(_json.dumps(checksums, indent=2) + "\n")
         _ml_logger.info("Model checksums recorded for %s: %d files", target, len(checksums))
     except Exception as exc:
         _ml_logger.warning("Could not record model checksums: %s", exc)

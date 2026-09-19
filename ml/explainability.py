@@ -97,6 +97,19 @@ def _load_model(model_name: str) -> Any | None:
     if not pkl_path.exists():
         return None
 
+    from ml import _verify_checksum
+
+    if not _verify_checksum(pkl_path):
+        # _verify_checksum has already logged CRITICAL with the specifics.
+        # Existence was checked above, so False here is REFUSED, not absent.
+        logger.error(
+            "explainability._load_model(%s): REFUSED — %s failed its integrity check. "
+            "No explanation is produced rather than one attributed to unverified weights.",
+            model_name,
+            pkl_path,
+        )
+        return None
+
     obj = None
     for loader_name, _loader in (("joblib", None), ("pickle", None)):
         try:

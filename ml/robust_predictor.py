@@ -963,7 +963,18 @@ class RobustPredictor:
         if not Path(manifest).exists():
             raise FileNotFoundError(f"RobustPredictor manifest not found: {manifest}")
 
-        state = joblib.load(manifest)  # nosec B301 - manifest path is hardcoded to saved_models
+        from ml import _verify_checksum
+
+        if not _verify_checksum(Path(manifest)):
+            # _verify_checksum has already logged CRITICAL with the specifics.
+            # Existence was checked immediately above, so False is REFUSED, not absent.
+            raise ValueError(
+                f"RobustPredictor refused '{manifest}': it failed its integrity check. "
+                "The manifest names every ensemble member and where to read it, so an "
+                "unverified one decides what else gets unpickled.",
+            )
+
+        state = joblib.load(manifest)  # nosec B301 - integrity-checked immediately above
         self.config = state["config"]
         self.selected_features = state["selected_features"]
         self.feature_importance_history = state.get("feature_importance_history", [])
@@ -981,21 +992,50 @@ class RobustPredictor:
         # Load ensemble members
         self.models = {}
         for name, member_path in state.get("saved_members", {}).items():
-            if Path(member_path).exists():
-                self.models[name] = joblib.load(member_path)  # nosec B301 - member_path from saved state
-            else:
+            if not Path(member_path).exists():
                 logger.warning("RobustPredictor: member %s not found at %s", name, member_path)
+                continue
+            if not _verify_checksum(Path(member_path)):
+                # Dropped rather than loaded. `predict` counts self.models, so a
+                # refused member leaves a smaller ensemble that reports its real
+                # size — it does not silently vote with unverified weights.
+                logger.error(
+                    "REFUSING ensemble member %s at %s: it failed its integrity check. "
+                    "It is dropped from the ensemble rather than loaded.",
+                    name,
+                    member_path,
+                )
+                continue
+            self.models[name] = joblib.load(member_path)  # nosec B301 - integrity-checked immediately above
 
         # Load meta-model
         meta_path = state.get("meta_model_path")
         if meta_path and Path(meta_path).exists():
-            self.meta_model = joblib.load(meta_path)  # nosec B301 - meta_path from saved state
+            if _verify_checksum(Path(meta_path)):
+                self.meta_model = joblib.load(meta_path)  # nosec B301 - integrity-checked immediately above
+            else:
+                logger.error(
+                    "REFUSING meta-model %s: it failed its integrity check. `self.meta_model` "
+                    "stays None, which is the same state as a predictor that was never "
+                    "stacked — it is not restored from an unverified artifact.",
+                    meta_path,
+                )
 
         # Load scalers
         for name in self.config.ensemble_methods:
             scaler_path = Path(path) / f"scaler_{name}.joblib"
             if Path(scaler_path).exists():
-                self.scalers[name] = joblib.load(scaler_path)  # nosec B301 - scaler_path from saved state
+                if _verify_checksum(Path(scaler_path)):
+                    self.scalers[name] = joblib.load(scaler_path)  # nosec B301 - integrity-checked above
+                else:
+                    logger.error(
+                        "REFUSING scaler %s at %s: it failed its integrity check — it is not "
+                        "restored. (`self.scalers` is written by save() and read by nothing "
+                        "else in this class today; the refusal is stated rather than claiming "
+                        "a downstream effect that does not exist.)",
+                        name,
+                        scaler_path,
+                    )
 
         logger.info(
             "RobustPredictor loaded from %s (%d members, calibrated=%s)",

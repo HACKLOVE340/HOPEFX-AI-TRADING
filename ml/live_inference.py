@@ -269,7 +269,24 @@ class AdvancedModelPredictor:
             if not self._verify_model_integrity():
                 return False
 
-            payload = joblib.load(self.model_path)
+            # A second, independent record. `_verify_model_integrity` above checks
+            # ml/saved_models/registry.json and is fail-OPEN for a path the
+            # registry does not track; `_verify_checksum` checks the per-directory
+            # model_checksums.json and is fail-CLOSED on a mismatch in every
+            # environment. They cover different files, so both run.
+            from ml import _verify_checksum
+
+            if not _verify_checksum(self.model_path):
+                # _verify_checksum has already logged CRITICAL with the specifics.
+                logger.error(
+                    "REFUSING to load %s: it failed its integrity check against "
+                    "model_checksums.json. The file is present — this is a refusal, "
+                    "not a missing model.",
+                    self.model_path,
+                )
+                return False
+
+            payload = joblib.load(self.model_path)  # nosec B301 - integrity-checked immediately above
             # advanced_oos.pkl is a sklearn Pipeline (scaler + calibrated XGB)
             self._model = payload
             logger.info("AdvancedModelPredictor loaded: %s", self.model_path.name)

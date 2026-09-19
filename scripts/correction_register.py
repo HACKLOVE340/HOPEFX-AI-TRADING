@@ -981,21 +981,72 @@ def _p_f175() -> tuple[str, str]:
     )
 
 
+def _derivation_probe() -> tuple[bool, str]:
+    """Run the catch-all's ownership rule against a throwaway app.
+
+    Executed rather than grepped. A probe that greps for `_registered_paths`
+    measures how the module is written; this one builds three routes and asks
+    the derivation what it concludes, so it fails if the walk stops descending
+    into an included router — the exact way the previous
+    `_claimed_by_a_real_route` check was dead while reading as correct.
+    """
+    try:
+        from fastapi import APIRouter, FastAPI
+
+        from core.page_routes import server_namespaces
+    except Exception as exc:  # pragma: no cover - reported, never swallowed
+        return False, f"could not import the derivation: {exc}"
+
+    app = FastAPI()
+    router = APIRouter(prefix="/probe-namespace")
+
+    @router.get("/thing")
+    async def _thing() -> dict[str, bool]:
+        return {"ok": True}
+
+    app.include_router(router)
+    namespaces = server_namespaces(app)
+
+    if "/probe-namespace" not in namespaces:
+        return False, "the route walk cannot see a route inside an included router"
+    if "/probe-namespace/thing" in namespaces:
+        # The asymmetry that IS F198: a registered leaf makes the paths BELOW
+        # its parent the server's, and never the leaf itself.
+        return False, "a registered leaf was treated as a namespace of its own"
+    return True, "derived from the route table"
+
+
 def _p_f198() -> tuple[str, str]:
     """`/kyc` and `/mobile` returned raw JSON 404 on direct navigation."""
     page = _code("core/page_routes.py")
-    proven = _exists("tests/unit/test_every_spa_route_serves_the_app.py")
-    fixed_by_route_table = "_claimed_by_a_real_route" in page
-    if not (proven and fixed_by_route_table):
-        return OPEN, "the catch-all still refuses page paths on a prefix string alone"
+    if not page:
+        # Fail closed. `hand_list_gone` below is a NOT-in test, and an empty
+        # read satisfies it — a probe that read nothing would otherwise report
+        # the list gone because it never looked (F255/F257).
+        return UNVERIFIED, "core/page_routes.py not found"
+    proven = _exists("tests/unit/test_every_spa_route_serves_the_app.py") and _exists(
+        "tests/unit/test_the_catchall_derives_api_ownership.py"
+    )
+    hand_list_gone = "_passthrough_prefixes" not in page
+    derived, why = _derivation_probe()
+    if not (proven and derived):
+        return OPEN, f"the catch-all does not derive path ownership from the route table ({why})"
+    if not hand_list_gone:
+        return OPEN, "the hand-maintained prefix list is still what the catch-all consults"
     return PARTIAL, (
-        "/kyc serves the SPA again — nothing claimed it, and only the string in "
-        "_passthrough_prefixes was refusing it. /mobile remains a genuine collision: "
-        "App.tsx declares the page AND router_registry mounts the mobile API "
-        "sub-application at the same path (measured: one exact route, one Mount). "
-        "Serving the SPA there would shadow a live API, so resolving it means renaming "
-        "the page or moving the mount to /api/mobile — a product choice, pinned by a "
-        "test so the exemption cannot quietly become permanent"
+        "the SHAPE is fixed: the catch-all reads the route table instead of a "
+        "hand-maintained prefix list — a path is the server's when something is "
+        "registered at it, at it + '/', or strictly below it, and the React router's "
+        "when nothing is, under a stated floor of /api/ and /ws/ so a router that fails "
+        "to register cannot become an HTML 200 on every API path. /kyc serves the SPA "
+        "because nothing claims it, and /kyc/webhooks/sumsub still reaches its handler "
+        "because something does; a router added at a brand-new prefix needs no edit "
+        "here in either direction. What REMAINS is /mobile, and it is a product "
+        "decision rather than a wiring one: App.tsx declares the page AND "
+        "router_registry mounts the mobile API sub-application at the same path, so "
+        "serving the SPA there would shadow a live API. Resolving it means renaming the "
+        "page or moving the mount to /api/mobile — pinned by a test so the exemption "
+        "cannot quietly become permanent"
     )
 
 
@@ -1013,8 +1064,10 @@ def _p_f199() -> tuple[str, str]:
         return UNVERIFIED, "core/page_routes.py not found"
     proven = _exists("tests/unit/test_every_spa_route_serves_the_app.py")
     # The bare-name entries in _passthrough_prefixes used to 404 a page path
-    # purely on a string match, with no route behind it.
-    asks_the_route_table = "_claimed_by_a_real_route" in page
+    # purely on a string match, with no route behind it. The list is gone; what
+    # is measured now is that the replacement can see a route at all, executed
+    # rather than grepped.
+    asks_the_route_table, _why = _derivation_probe()
     if proven and asks_the_route_table:
         return FIXED, (
             "the catch-all passes a bare page path through only when a route or mount "
@@ -4328,22 +4381,47 @@ FINDINGS: list[Finding] = [
         "P1",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "Half done. `/kyc` serves the SPA again: measured, nothing claimed that path at "
-        "all — zero exact routes, zero sub-routes — and the only thing refusing it was the "
-        "string `kyc` in the catch-all's `_passthrough_prefixes`. A user following a "
+        "The symptom was fixed first and the SHAPE second. `/kyc` was refused by one "
+        "string in a hand-maintained tuple of prefixes the catch-all consulted to decide "
+        "whether a path was the API's or the React router's — a user following a "
         'verification email got `{"detail":"No route for GET /kyc"}` on a regulatory '
-        "gate. Sub-paths still pass through on the prefix, so `/kyc/webhooks/sumsub` keeps "
-        "reaching its handler — answering a provider webhook with the SPA shell would be "
-        "worse than 404ing it. **`/mobile` is a real collision and stays open**: App.tsx "
-        "declares the page and `core/router_registry.py` mounts the mobile API "
-        "sub-application at the same path, so serving the SPA there would shadow a live "
-        "API. Renaming the page or moving the mount to `/api/mobile` is a product choice.",
-        "tests/unit/test_every_spa_route_serves_the_app.py found both routes "
-        "independently, without being told the finding existed, by asking whether a direct "
-        "GET returns HTML. `/mobile` is exempted with its reason and pinned by "
-        "test_the_mobile_collision_is_still_a_collision, so the exemption fails the day it "
-        "stops being true.",
-        "pytest tests/unit/test_every_spa_route_serves_the_app.py -q",
+        "gate. Editing that string fixed `/kyc` and left the mechanism, and the mechanism "
+        "was wrong in BOTH directions, measured: `/replay/<session>` and `/decision/<id>` "
+        "— declared pages with nothing mounted under them — were 404'd as raw JSON on the "
+        "listed string alone, while a router at a namespace nobody had added to the list "
+        "answered `200 text/html` for every path inside it that had no route. The second "
+        "is the dangerous one here: a JSON client gets HTML and a 200, so a missing "
+        "endpoint reads as a parse error three layers from the cause. **The list is now "
+        "gone.** Ownership is derived from `app.routes` at request time: the server's if "
+        "something is registered at the path, at the path + `/`, or strictly BELOW it; "
+        "the React router's if nothing is. That last asymmetry is the whole finding — "
+        "`/kyc/applicants` makes `/kyc/*` the server's without taking `/kyc` from the "
+        "page. Under it sits ONE stated floor, `/api/` and `/ws/`, because derivation "
+        "cannot describe a namespace that failed to register and 'the routers did not "
+        "load' must not present as an HTML 200 on every API path. The walk it reads is "
+        "not optional: this FastAPI records each `include_router` as an opaque "
+        "`_IncludedRouter`, and the previous `_claimed_by_a_real_route` check read "
+        "`.path` straight off `app.routes` — so it answered 'nothing claims /kyc' while "
+        "six `/kyc/*` routes were registered, and the half-fix was correct by accident. "
+        "**`/mobile` is a real collision and stays open**: App.tsx declares the page and "
+        "`core/router_registry.py` mounts the mobile API sub-application at the same "
+        "path, so serving the SPA there would shadow a live API. Renaming the page or "
+        "moving the mount to `/api/mobile` is a product choice.",
+        "tests/unit/test_the_catchall_derives_api_ownership.py — twelve, five red on the "
+        "pre-fix tree, and it covers both directions because a catch-all that swallows an "
+        "API path is worse than the bug it fixes: a page sub-path nothing is mounted "
+        "under serves the app, and a namespace invented inside the test file (so it "
+        "cannot be in any list) still answers its own route, still 404s JSON for a path "
+        "it does not have, and is never answered with the SPA shell. Two guard the "
+        "measurement rather than the result, per hopefx-dead-controls: one asserts the "
+        "route walk can see inside an included router at all (it would otherwise report "
+        "'nothing is registered' and the catch-all would serve HTML everywhere, which is "
+        "exactly how the previous check was dead), and one holds it against "
+        "`core.router_registry.iter_api_routes` so the two walks cannot diverge. "
+        "tests/unit/test_every_spa_route_serves_the_app.py still fetches every path "
+        "App.tsx declares.",
+        "pytest tests/unit/test_the_catchall_derives_api_ownership.py "
+        "tests/unit/test_every_spa_route_serves_the_app.py -q",
         _p_f198,
         [S_UI, S_TDD],
     ),

@@ -246,14 +246,32 @@ class TestRecordChecksums:
         stored = json.loads((model_dir / "model_checksums.json").read_text())
         assert set(stored) == {"a.pkl", "b.pkl"}
 
-    def test_it_ignores_non_pkl_files(self, model_dir):
+    def test_it_records_every_artifact_kind_and_nothing_else(self, model_dir):
+        """It used to assert that `model.zip` was EXCLUDED, which was the defect.
+
+        `_verify_checksum` bootstraps a directory by calling this function, so an
+        artifact kind it skips is one the "not in baseline" branch re-bootstraps
+        and re-allows on every single load — the refusal branch was unreachable
+        for every artifact not named `.pkl`. The evidence was committed:
+        `ml/saved_models/rl/model_checksums.json` was `{}` beside a 189 KB
+        `hopefx_ppo.zip`, which is exactly what the old `*.pkl` glob wrote.
+
+        What is genuinely out of scope is a file that is not a model artifact at
+        all — `notes.txt`, a training report, a config — and that half is kept.
+        """
         _write(model_dir, "a.pkl")
         (model_dir / "notes.txt").write_text("hello")
+        (model_dir / "report.json").write_text("{}")
         (model_dir / "model.zip").write_bytes(b"zip")
+        (model_dir / "scaler.joblib").write_bytes(b"joblib")
 
         ml_pkg._record_checksums(model_dir)
 
-        assert set(json.loads((model_dir / "model_checksums.json").read_text())) == {"a.pkl"}
+        assert set(json.loads((model_dir / "model_checksums.json").read_text())) == {
+            "a.pkl",
+            "model.zip",
+            "scaler.joblib",
+        }
 
     def test_an_empty_directory_records_an_empty_baseline(self, model_dir):
         ml_pkg._record_checksums(model_dir)

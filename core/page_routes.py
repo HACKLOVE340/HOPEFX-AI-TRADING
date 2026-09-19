@@ -120,22 +120,136 @@ class _CachingStaticFiles(StaticFiles):
         return response
 
 
+# ── Who owns a path: the server, or the React router ─────────────────────────
+#
+# The catch-all at the bottom of this file has to answer one question for every
+# path that reaches it — is this the API's, or is it a page? It used to answer
+# from a hand-maintained tuple of string prefixes (`_passthrough_prefixes`),
+# and a list is wrong in both directions the moment either side changes:
+#
+#   * A page path whose name happened to be in the list was refused although
+#     nothing was mounted there. That was F198: a user following a KYC
+#     verification email got `{"detail":"No route for GET /kyc"}` on a
+#     regulatory gate. Editing the string fixed `/kyc` and left the shape, and
+#     `/replay/<session>` and `/decision/<id>` were refused the same way.
+#   * An API namespace nobody added to the list was answered with the SPA
+#     shell — measured, a router at `/webhooks` returned `200 text/html` for
+#     every path inside it that had no route. That is the worse direction: a
+#     JSON client gets HTML and a 200, so a missing endpoint reads as a parse
+#     error somewhere else entirely.
+#
+# So the answer is now derived from what is actually registered, read at
+# request time:
+#
+#   1. something is registered at exactly this path        -> the server's
+#   2. something is registered at this path + "/"          -> redirect there
+#   3. the path sits INSIDE a namespace something is
+#      registered under (`/api/…`, `/kyc/…`, `/ws/…`)      -> the server's
+#   4. otherwise                                           -> the SPA's
+#
+# Rule 3 is deliberately about paths strictly BELOW a namespace, never the
+# namespace root itself. `/kyc/applicants` being registered makes `/kyc/*` the
+# server's; it does not make `/kyc` the server's, because nothing is registered
+# there and the frontend has a page of that name. That single distinction is
+# F198, expressed as a rule instead of as an edit to a string.
+
+
+def _iter_route_paths(routes, _prefix: str = ""):
+    """Yield the fully-prefixed path of every route reachable from *routes*.
+
+    The generalisation of ``core.router_registry.iter_api_routes`` — same walk
+    and same prefix accumulation, but it yields Mounts, WebSocket routes and
+    plain Starlette routes too, because a path can be claimed by any of them.
+    ``test_the_route_walk_agrees_with_iter_api_routes`` holds the two together.
+
+    The walk is not optional. With this FastAPI, ``app.routes`` holds an opaque
+    ``_IncludedRouter`` per ``include_router()`` call rather than flat routes,
+    and a route nested two inclusions deep carries only its own router's
+    prefix on ``.path`` — the ancestors' prefixes live on each wrapper's
+    ``include_context``. Reading ``.path`` off ``app.routes`` therefore sees
+    almost nothing: that is precisely how the catch-all's previous
+    ``_claimed_by_a_real_route`` check answered "nothing claims /kyc" while six
+    ``/kyc/*`` routes were registered.
+    """
+    for route in routes:
+        original_router = getattr(route, "original_router", None)
+        if original_router is not None and hasattr(original_router, "routes"):
+            ctx = getattr(route, "include_context", None)
+            sub_prefix = (getattr(ctx, "prefix", "") or "") if ctx is not None else ""
+            if _prefix and sub_prefix:
+                combined = _prefix.rstrip("/") + "/" + sub_prefix.lstrip("/")
+            else:
+                combined = _prefix or sub_prefix
+            yield from _iter_route_paths(original_router.routes, combined)
+            continue
+        if _serves_the_spa(route):
+            # The pages and the catch-all are the thing being decided about;
+            # counting them as claims would make every page path the server's.
+            continue
+        path = getattr(route, "path", None)
+        if not isinstance(path, str) or not path.startswith("/"):
+            continue
+        yield (_prefix.rstrip("/") + "/" + path.lstrip("/")) if _prefix else path
+
+
+#: Set on every endpoint this module registers to serve index.html, so the walk
+#: above can tell a page from a claim without importing the closures.
+_SPA_OWNED_ATTR = "_hopefx_serves_the_spa"
+
+#: The name of the StaticFiles mount at "/" — it matches every path, so it can
+#: never be evidence that anything in particular is claimed.
+_SPA_MOUNT_NAME = "frontend_spa"
+
+
+def _serves_the_spa(route) -> bool:
+    """True for the page routes, the catch-all, and the SPA static mount."""
+    endpoint = getattr(route, "endpoint", None)
+    if endpoint is not None and getattr(endpoint, _SPA_OWNED_ATTR, False):
+        return True
+    return getattr(route, "name", None) == _SPA_MOUNT_NAME
+
+
 @lru_cache(maxsize=512)
-def _slashed_paths(route_count: int, app_id: int) -> frozenset[str]:
+def _registered_paths(route_count: int, app_id: int) -> frozenset[str]:
     """Every registered path, flattened. Cached per (route count, app identity).
 
-    A plain ``for route in app.routes`` walk does not see API routes: with this
-    FastAPI version, ``app.routes`` holds opaque ``_IncludedRouter`` wrappers
-    for each included router rather than flat ``APIRoute`` instances. The v1
-    alias registration in core/router_registry.py hit the same thing and
-    silently created zero aliases until it switched to ``iter_api_routes``.
+    The cache key is the same one ``_slashed_paths`` used before it: a router
+    included AFTER the pages changes ``len(app.routes)`` and re-derives. A
+    router that gains routes in place does not, which is why the answer is
+    recomputed from the app rather than frozen at registration.
     """
-    from core.router_registry import iter_api_routes
-
     app = _APP_BY_ID.get(app_id)
     if app is None:
         return frozenset()
-    return frozenset(r.path for r in iter_api_routes(app.routes))
+    return frozenset(_iter_route_paths(app.routes))
+
+
+@lru_cache(maxsize=512)
+def _namespaces(route_count: int, app_id: int) -> frozenset[str]:
+    """Every proper path prefix something is registered under.
+
+    `/api/v1/auth/login` contributes `/api`, `/api/v1` and `/api/v1/auth` — and
+    deliberately NOT `/api/v1/auth/login` itself. A path is inside a namespace
+    only when something is registered strictly below it; see rule 3 above.
+    """
+    out: set[str] = set()
+    for path in _registered_paths(route_count, app_id):
+        parts = path.strip("/").split("/")
+        for i in range(1, len(parts)):
+            out.add("/" + "/".join(parts[:i]))
+    return frozenset(out)
+
+
+def server_namespaces(app: FastAPI) -> frozenset[str]:
+    """The derived namespace set for *app* — public so a test can prove it is live.
+
+    A control that reads an empty route table answers "the SPA owns everything"
+    and cannot fail; the test asserts this is non-empty and contains namespaces
+    it registered itself, so a FastAPI upgrade that changes the internals turns
+    a test red instead of turning the catch-all into a wildcard.
+    """
+    _APP_BY_ID[id(app)] = app
+    return _namespaces(len(app.routes), id(app))
 
 
 _APP_BY_ID: dict[int, FastAPI] = {}
@@ -145,7 +259,7 @@ def _slashed_route_exists(app: FastAPI, path: str) -> bool:
     """True when *path* (which ends in '/') is a real registered route."""
     _APP_BY_ID[id(app)] = app
     try:
-        return path in _slashed_paths(len(app.routes), id(app))
+        return path in _registered_paths(len(app.routes), id(app))
     except Exception:  # nosec B110 — a redirect aid must never break a request
         return False
 
@@ -367,6 +481,10 @@ def register_page_routes(app: FastAPI) -> None:
         async def _spa_index(_req: Request) -> FileResponse:
             return FileResponse(str(_index_html))
 
+        # Marked so `_iter_route_paths` can tell a page from a claim: a page
+        # route is the thing being decided about, not evidence of ownership.
+        setattr(_spa_index, _SPA_OWNED_ATTR, True)
+
         for _spa_path in _SPA_ROUTES:
             app.add_api_route(
                 _spa_path,
@@ -379,70 +497,44 @@ def register_page_routes(app: FastAPI) -> None:
         # Must NOT intercept API routes, WebSocket paths, or static assets.
         @app.get("/{full_path:path}", include_in_schema=False, response_model=None)
         async def _spa_catchall(full_path: str, request: Request) -> Response:
-            # Paths that belong to real server-side handlers — pass through
-            # by returning 404 here so Starlette tries the next matching route.
-            # Note: StaticFiles mount is registered AFTER this route, so assets
-            # under /assets/ are served by the StaticFiles handler, not here.
-            _passthrough_prefixes = (
-                "api/",
-                "ws/",
-                "godmode/",
-                "godmode",
-                "docs",
-                "redoc",
-                "health",
-                "health/",
-                "metrics",
-                "kyc",
-                "kyc/",
-                "decision",
-                "decision/",
-                "replay",
-                "replay/",
-                "mobile",
-                "mobile/",
-                "favicon.ico",
+            # Does the server own this path, or does the React router?
+            #
+            # Answered from the route table, not from a list of strings — see
+            # the four rules at the top of this file, and F198 for what the
+            # list did in each direction. `request.app` rather than the
+            # closed-over `app`, so a router included after this one is still
+            # seen.
+            _path = "/" + full_path
+            _live_app = request.app
+            _APP_BY_ID[id(_live_app)] = _live_app
+            _route_count = len(_live_app.routes)
+            _registered = _registered_paths(_route_count, id(_live_app))
+            _ns = _namespaces(_route_count, id(_live_app))
+
+            def _inside_a_registered_namespace(path: str) -> bool:
+                """True when something is registered strictly BELOW an ancestor.
+
+                `/kyc/webhooks/sumsub` is inside `/kyc`; `/kyc` is not inside
+                itself. That asymmetry is the whole of F198 — the KYC router
+                owning `/kyc/*` must not take `/kyc` away from the page.
+                """
+                parts = path.strip("/").split("/")
+                return any("/" + "/".join(parts[:i]) in _ns for i in range(1, len(parts)))
+
+            _is_server = (
+                _path in _registered
+                or _path + "/" in _registered
+                or _inside_a_registered_namespace(_path)
+                # The floor. Derivation gives the right answer for every
+                # namespace that exists; it cannot give one for a namespace
+                # that failed to register, and "the API routers did not load"
+                # must not present as an HTML 200 on every API path. These two
+                # prefixes are ones the React router never owns — this is a
+                # floor under the derivation, not the list coming back.
+                or full_path.startswith(("api/", "ws/"))
             )
 
-            # A bare name in the list above — "kyc", "mobile", "godmode" — is both
-            # an API namespace and an SPA page name, and the list cannot tell
-            # them apart. `full_path == p` therefore 404'd `/kyc` even though no
-            # route claims it: measured, `/kyc` has zero exact routes and zero
-            # sub-routes in this configuration, so the only thing refusing it was
-            # the string. A user following a KYC verification email got
-            # `{"detail":"No route for GET /kyc"}` on a regulatory gate (F198).
-            #
-            # Sub-paths still pass through on the prefix — `/kyc/webhooks/sumsub`
-            # must reach Sumsub's handler whether or not it is registered in this
-            # configuration, because answering a provider webhook with the SPA
-            # shell is worse than 404ing it. Only the EXACT bare path now asks
-            # the route table, and it passes through only when something really
-            # claims it. `/mobile` does (a Mount), so it still passes through;
-            # `/kyc` does not, so it reaches the page.
-            #
-            # The third clause `full_path.startswith(p)` is gone: it matched
-            # "kycsomething" and "mobilephones" as server paths too.
-            def _claimed_by_a_real_route(path: str) -> bool:
-                target = "/" + path
-                return any(
-                    getattr(route, "path", None) == target or str(getattr(route, "path", "")).startswith(target + "/")
-                    for route in app.routes
-                    if getattr(route, "endpoint", None) is not _spa_catchall
-                )
-
-            def _is_server_path(p: str) -> bool:
-                # The list holds two shapes — "api/" already carries its
-                # separator, "kyc" does not — so the sub-path test has to
-                # normalise. Appending "/" unconditionally builds "api//" and
-                # stops matching /api/anything, which returned the SPA shell for
-                # every unknown API path; caught by
-                # test_an_api_404_carries_a_body_naming_the_route.
-                sub = p if p.endswith("/") else p + "/"
-                if full_path.startswith(sub):
-                    return True
-                return full_path == p.rstrip("/") and _claimed_by_a_real_route(p.rstrip("/"))
-
-            if any(_is_server_path(p) for p in _passthrough_prefixes):
+            if _is_server:
                 # Restore the trailing-slash redirect this route otherwise eats.
                 #
                 # The comment here used to say returning 404 "passes through so
@@ -526,6 +618,10 @@ def register_page_routes(app: FastAPI) -> None:
                 return FileResponse(str(_asset), headers=_asset_cache_headers(_safe_rel))
             # Everything else is a React Router path → serve index.html
             return FileResponse(str(_index_html), headers=_INDEX_CACHE_HEADERS)
+
+        # The catch-all matches every path, so it can never be evidence that a
+        # particular path is claimed. Marked for the same walk as _spa_index.
+        setattr(_spa_catchall, _SPA_OWNED_ATTR, True)
 
         app.mount(
             "/",

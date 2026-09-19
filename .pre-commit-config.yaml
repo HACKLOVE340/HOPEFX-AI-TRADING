@@ -273,7 +273,7 @@ repos:
         name: Correction register matches what the code measures
         language: system
         entry: python scripts/correction_register.py --check
-        files: '^(docs/audit/CORRECTION_REGISTER\.md$|scripts/correction_register\.py$|\.coveragerc$|\.github/workflows/.*\.yml$|(api|brokers|execution|monetization|payments|database|invariants|core|ml|scripts)/.*\.py$|(k8s|deployments/k8s)/.*\.ya?ml$)'
+        files: '^(docs/audit/CORRECTION_REGISTER\.md$|scripts/correction_register\.py$|\.coveragerc$|\.github/workflows/.*\.yml$|(api|brokers|execution|monetization|payments|database|invariants|core|ml|scripts)/.*\.py$|(k8s|deployments/k8s)/.*\.ya?ml$|frontend/a11y-debt\.json$|docs/FRONTEND_[A-Z_]+_DEBT\.json$)'
         pass_filenames: false
         stages: [pre-commit]
 

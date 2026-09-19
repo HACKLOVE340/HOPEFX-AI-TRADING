@@ -200,7 +200,21 @@ class BaseMLModel(ABC):
                     f"'{self._MODEL_BASE_DIR}'. Refusing to load.",
                 ) from None
 
-        data = joblib.load(resolved)  # nosec B301 - path validated above; file written by this app
+        # The path check above says WHERE the file may come from; it says nothing
+        # about what is in it. `joblib.load` on a pickle is arbitrary code
+        # execution, so the bytes are checked against the integrity baseline
+        # `ml/__init__.py` keeps for that directory before they are unpickled.
+        from ml import _verify_checksum
+
+        if not _verify_checksum(resolved):
+            # _verify_checksum has already logged CRITICAL with the specifics.
+            raise ValueError(
+                f"Model '{resolved}' failed its integrity check and was refused. "
+                "It exists — this is not a missing file — and its bytes do not match "
+                "the sha256 recorded in that directory's model_checksums.json.",
+            )
+
+        data = joblib.load(resolved)  # nosec B301 - path validated and integrity-checked above
 
         self.model = data["model"]
         self.config = data["config"]
