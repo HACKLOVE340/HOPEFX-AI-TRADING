@@ -14,7 +14,7 @@ import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
-import { Check, CreditCard, FileText, Globe2, Hourglass, IdCard, Lock, Search, Settings, ShieldCheck, Timer, Trash2, Upload, User } from 'lucide-react';
+import { Check, Circle, CreditCard, FileText, Globe2, Hourglass, IdCard, Lock, Search, Settings, ShieldCheck, Timer, Trash2, Upload, User, X } from 'lucide-react';
 /**
  * `unknown` is not a server status — it is the client's answer when it could not
  * ask (F6-01). The catch below used to construct `{ status: 'not_started' }`,
@@ -37,11 +37,11 @@ const STATUS_CONFIG: Record<KYCStatus, {
   badgeVariant: 'success' | 'warning' | 'info' | 'danger' | 'neutral';
 }> = {
   unknown:      { label: 'Status unavailable', color: '#ffb800', bg: '#78350f22', border: '#92400e', icon: '?', badgeVariant: 'warning' },
-  not_started:  { label: 'Not Started',  color: '#94a3b8', bg: '#1e293b22', border: '#334155', icon: '○', badgeVariant: 'neutral' },
+  not_started:  { label: 'Not Started',  color: '#94a3b8', bg: '#1e293b22', border: '#334155', icon: <Circle size={16} aria-hidden />, badgeVariant: 'neutral' },
   pending:      { label: 'Pending',       color: '#f59e0b', bg: '#78350f22', border: '#92400e', icon: <Hourglass size={16} aria-hidden />, badgeVariant: 'warning' },
   under_review: { label: 'Under Review',  color: '#60a5fa', bg: '#1e3a5f22', border: '#1d4ed8', icon: <Search size={16} aria-hidden />, badgeVariant: 'info' },
-  approved:     { label: 'Approved',      color: '#4ade80', bg: '#14532d22', border: '#166534', icon: '✓', badgeVariant: 'success' },
-  rejected:     { label: 'Rejected',      color: '#f87171', bg: '#450a0a22', border: '#7f1d1d', icon: '✕', badgeVariant: 'danger' },
+  approved:     { label: 'Approved',      color: '#4ade80', bg: '#14532d22', border: '#166534', icon: <Check size={16} aria-hidden />, badgeVariant: 'success' },
+  rejected:     { label: 'Rejected',      color: '#f87171', bg: '#450a0a22', border: '#7f1d1d', icon: <X size={16} aria-hidden />, badgeVariant: 'danger' },
 };
 
 const DOC_TYPES = [
@@ -105,7 +105,7 @@ const StepIndicator: React.FC<{ status: KYCStatus }> = ({ status }) => {
                 fontSize: 'var(--fs-body)', fontWeight: 700,
                 color: done ? 'var(--gain)' : active ? '#93c5fd' : 'var(--text-faint)',
               }}>
-                {done ? '✓' : step.id}
+                {done ? <Check size="1em" aria-label="Completed" /> : step.id}
               </div>
               <span style={{ fontSize: 'var(--fs-label)', color: active ? '#93c5fd' : done ? 'var(--gain)' : 'var(--text-faint)', fontWeight: active ? 600 : 400, textAlign: 'center' }}>
                 {step.label}

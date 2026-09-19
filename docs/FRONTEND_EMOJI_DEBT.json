@@ -1,6 +1,6 @@
 {
  "_comment": "Emoji per file in frontend/src. This number may only fall. See scripts/frontend_emoji_ratchet.py for why emoji cannot serve as icons, and for the rule that a file reaching zero must be DELETED from this list rather than left at 0 \u2014 an entry describing nothing is how a ratchet stops being one.",
- "_total": 70,
+ "_total": 58,
  "files": {
   "frontend/src/components/ConfirmDialog.tsx": 3,
   "frontend/src/components/ErrorBanner.tsx": 2,
@@ -15,8 +15,6 @@
   "frontend/src/pages/AuditLog.tsx": 1,
   "frontend/src/pages/CopyTrading.tsx": 3,
   "frontend/src/pages/CryptoCheckout.tsx": 1,
-  "frontend/src/pages/Dashboard.tsx": 3,
-  "frontend/src/pages/KYCPage.tsx": 3,
   "frontend/src/pages/Marketplace.tsx": 3,
   "frontend/src/pages/Onboarding.tsx": 2,
   "frontend/src/pages/Portfolio.tsx": 2,
@@ -26,9 +24,7 @@
   "frontend/src/pages/ResearchPage.tsx": 2,
   "frontend/src/pages/RiskCalculator.tsx": 1,
   "frontend/src/pages/SecurityDashboard.tsx": 2,
-  "frontend/src/pages/SuperAdminDashboard.tsx": 3,
   "frontend/src/pages/Trade.tsx": 1,
-  "frontend/src/pages/Trading.tsx": 3,
   "frontend/src/pages/Wallet.tsx": 2,
   "frontend/src/pages/settings/PerformanceSection.tsx": 1,
   "frontend/src/pages/settings/PlatformConfiguration.tsx": 1,

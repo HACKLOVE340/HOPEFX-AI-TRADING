@@ -5,7 +5,7 @@
  */
 
 import React, { useState, Suspense, lazy, Component, useEffect, useCallback, useRef } from 'react';
-import { AlertTriangle, Banknote, BarChart3, Bell, BookOpen, Brain, Building2, CircleDot, ClipboardList, Flag, Globe, Landmark, Laptop, Link2, Lock, Microscope, OctagonAlert, OctagonX, Play, RefreshCw, Scale, Search, Settings, Shield, Stethoscope, Tag, TrendingUp, Users, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, Banknote, BarChart3, Bell, BookOpen, Brain, Building2, CircleDot, ClipboardList, Flag, Globe, Landmark, Laptop, Link2, Lock, LockOpen, Microscope, OctagonAlert, OctagonX, Play, RefreshCw, Scale, Search, Settings, Shield, Stethoscope, Tag, TrendingUp, Users, Wrench, Zap } from 'lucide-react';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
 import VoiceTradingPanel from '../components/voice/VoiceTradingPanel';
@@ -105,7 +105,7 @@ const KillSwitchConfirm: React.FC<{
       <div className={`bg-[var(--surface)] border-2 rounded-xl p-6 sm:p-8 w-full max-w-sm shadow-2xl ${
         currentlyActive ? 'border-green-500' : 'border-red-500'
       }`}>
-        <div className="text-4xl text-center mb-3">{currentlyActive ? '🔓' : '🛑'}</div>
+        <div className="text-4xl text-center mb-3">{currentlyActive ? <LockOpen size="1em" aria-label="Trading active" /> : <OctagonX size="1em" aria-label="Kill switch active" />}</div>
         <div className={`text-lg font-black text-center mb-2 ${currentlyActive ? 'text-green-400' : 'text-red-400'}`}>
           {currentlyActive ? 'Resume Trading?' : 'Activate Kill Switch?'}
         </div>
@@ -146,7 +146,9 @@ const KillSwitchConfirm: React.FC<{
                 ? currentlyActive ? 'bg-green-700 hover:bg-green-600 text-white' : 'bg-red-700 hover:bg-red-600 text-white'
                 : 'bg-terminal-raised text-slate-600'
             }`}>
-            {currentlyActive ? '▶ Resume Trading' : '🛑 Activate Kill Switch'}
+            {currentlyActive
+              ? <><Play size="1em" aria-hidden /> Resume Trading</>
+              : <><OctagonX size="1em" aria-hidden /> Activate Kill Switch</>}
           </button>
         </div>
       </div>

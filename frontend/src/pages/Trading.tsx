@@ -7,7 +7,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { AlertTriangle, BookOpen, Brain, Eye, NotebookPen, Shield, Zap } from 'lucide-react';
+import { AlertTriangle, BookOpen, Brain, Eye, NotebookPen, OctagonX, Shield, Zap } from 'lucide-react';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -832,7 +832,7 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
             'disabled:opacity-40 disabled:cursor-not-allowed',
           )}
         >
-          {loading ? 'Analysing…' : '⚡ Run AI Analysis'}
+          {loading ? 'Analysing…' : <><Zap size="1em" aria-hidden /> Run AI Analysis</>}
         </button>
 
         {error && (
@@ -943,7 +943,9 @@ function EmergencyStopButton() {
             : 'bg-[var(--bear)]/10 border-[var(--bear)]/40 text-[var(--bear)] hover:bg-[var(--bear)]/20',
         )}
       >
-        {loading ? 'Stopping…' : confirming ? '⚠ CONFIRM EMERGENCY STOP' : '🛑 Emergency Stop'}
+        {loading ? 'Stopping…'
+          : confirming ? <><AlertTriangle size="1em" aria-hidden /> CONFIRM EMERGENCY STOP</>
+          : <><OctagonX size="1em" aria-hidden /> Emergency Stop</>}
       </button>
       {confirming && (
         <button onClick={() => setConfirming(false)} className="text-[10px] text-slate-500 hover:text-slate-300 text-center">

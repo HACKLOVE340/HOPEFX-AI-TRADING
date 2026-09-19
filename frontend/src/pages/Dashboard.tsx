@@ -18,7 +18,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowRight, BarChart3, BookOpen, Brain, Briefcase, Calculator, Calendar, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BarChart3, BookOpen, Brain, Briefcase, Calculator, Calendar, CheckCircle2, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import { EmptyState, CrossLinkBar, Spinner } from '../components';
 import { RiskHeadroomPanel } from '../components/system/RiskHeadroomPanel';
@@ -542,7 +542,9 @@ const MlAccuracyCard: React.FC = () => {
           color: safeAccuracy >= 0.60 ? 'var(--gain)' : 'var(--warn)',
           border: `1px solid ${safeAccuracy >= 0.60 ? '#4ade8044' : '#fbbf2444'}`,
         }}>
-          {safeAccuracy >= 0.60 ? '✅ GATE PASSED' : '⚠️ BELOW THRESHOLD'}
+          {safeAccuracy >= 0.60
+            ? <><CheckCircle2 size="1em" aria-hidden /> GATE PASSED</>
+            : <><AlertTriangle size="1em" aria-hidden /> BELOW THRESHOLD</>}
         </div>
       </div>
       <div style={s.mlGrid}>
@@ -878,7 +880,7 @@ const Dashboard: React.FC = () => {
             icon={TrendingUp}
             title="No equity history yet"
             description="Start trading to see your equity curve grow here."
-            links={[{ label: '⚡ Start Trading', href: '/trade' }]}
+            links={[{ icon: <Zap size="1em" aria-hidden />, label: 'Start Trading', href: '/trade' }]}
             compact
           />
         ) : (
