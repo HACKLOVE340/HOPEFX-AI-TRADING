@@ -34,6 +34,9 @@ import { NAV_ITEMS } from '../components/sidebar/navConfig';
 import { PresenceAnywhere } from './PresenceAnywhere';
 import type { SurfaceEntry } from './pageCapabilities';
 import { derivePresence } from './presence';
+import { chooseHeadMode, signalsFromPresence } from './headModes';
+import { useSpeech } from './speechBus';
+import { isPresenceVisible, useSummoned } from './presenceSummons';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 import { readLanes, subscribeLanes } from './floatingLanes';
 import type { Rect } from './spatial';
@@ -118,21 +121,48 @@ export function PresenceAnywhereMount(): React.ReactElement | null {
     };
   }, []);
 
+  // Speech is a real measurement now, from the bus that exists for exactly
+  // this. It used to be the literal `false` below, so the head's mouth stayed
+  // shut while the platform talked -- the defect speechBus.ts was written to
+  // fix, still live at this call site because the mount never subscribed.
+  const speech = useSpeech();
+  const summoned = useSummoned();
+
   const presence = useMemo(
     () =>
       derivePresence({
         wsStatus: 'connected',
         feedStale: false,
         micOpen: false,
-        speaking: false,
+        speaking: speech.speaking,
         jobsRunning: 0,
         jobsQueued: 0,
+        // Still literals, and still wrong -- but no longer INVISIBLY wrong.
+        // `riskHeadroom: null` resolves to `concerned` at severity 0.35, below
+        // the floor in presenceSummons, so it can no longer put a permanently
+        // worried face on every page. Wiring these to the live risk and job
+        // feeds is the next piece of work, not this one.
         riskHeadroom: null,
         alert: null,
         providersReachable: 1,
       }),
-    [],
+    [speech.speaking],
   );
+
+  // Down unless called, talking, listening, or carrying something urgent.
+  // Returning null rather than hiding a rendered node keeps the ~900-quad head
+  // off the frame budget entirely on every page that did not ask for it.
+  const visible = isPresenceVisible({
+    speaking: speech.speaking,
+    micOpen: false,
+    // Through the same helper PresenceCore uses, so the severity that decides
+    // visibility here and the face drawn there cannot come from two readings.
+    severity: chooseHeadMode(
+      signalsFromPresence(presence, { speaking: speech.speaking, micOpen: false }),
+    ).severity,
+  });
+  if (!visible) return null;
+  void summoned; // re-render trigger; visibility is read from the bus above.
 
   return (
     <PresenceAnywhere
