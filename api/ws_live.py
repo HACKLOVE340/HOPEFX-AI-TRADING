@@ -639,18 +639,29 @@ _BROKER_KEY: dict[str, str] = {}
 
 # Reverse map: broker/no-slash symbol → frontend slash format
 _SLASH_SYMBOL: dict[str, str] = {v: k for k, v in _BROKER_KEY.items()}
-# Extra aliases that may arrive from various publishers
+# Extra aliases that may arrive from various publishers.
+#
+# GC=F and SI=F are intentionally ABSENT here. They are gold/silver FUTURES,
+# a different instrument from spot XAU/USD and XAG/USD with a real, varying
+# basis to spot. This table used to map "GC=F" -> "XAU/USD" and "SI=F" ->
+# "XAG/USD", so any tick published under a futures ticker — from any
+# publisher, present or future — would be silently relabelled as spot and
+# broadcast to every connected client with no field disclosing the swap.
+# CLAUDE.md: "Do not put a yfinance ticker back." Same defect ce72406 closed
+# on api/ws_public.py, api/data_layer.py, api/advanced_trading.py and
+# data/scheduler.py; this is the authenticated live socket's copy of it.
+# With no entry, `_to_slash` below has no pair-structure rule that could
+# reconstruct "XAU/USD" from "GC=F" either, so it falls through unchanged —
+# a futures tick stays labelled as what it is, never fabricated as spot.
 _SLASH_SYMBOL.update(
     {
         "XAUUSD": "XAU/USD",
         "XAGUSD": "XAG/USD",
-        "SI=F": "XAG/USD",
         "EURUSD": "EUR/USD",
         "GBPUSD": "GBP/USD",
         "USDJPY": "USD/JPY",
         "BTCUSD": "BTC/USD",
         "ETHUSD": "ETH/USD",
-        "GC=F": "XAU/USD",
         "EURUSD=X": "EUR/USD",
         "GBPUSD=X": "GBP/USD",
         "USDJPY=X": "USD/JPY",
@@ -1278,9 +1289,23 @@ async def _price_broadcaster_live_only() -> None:
 # Yahoo no longer serves spot platinum, and that quoting an ETF or a futures
 # contract in its place "would be far worse than no quote at all". It reaches
 # the UI via twelve_data / alpha_vantage, or shows no feed.
+#
+# XAU/USD and XAG/USD are likewise deliberately absent, for the identical
+# reason and not merely by analogy: Yahoo has no spot gold/silver ticker
+# (delisted, verified 2026-07-26), and GC=F/SI=F are FUTURES — a different
+# instrument with a real, varying basis to spot. This map used to point
+# "XAU/USD" -> "GC=F" and "XAG/USD" -> "SI=F", so `_yfinance_price_once`
+# below — which `start_broadcasters()` runs unconditionally every 15s for as
+# long as any client is connected — fetched a futures price every cycle and
+# broadcast it under the "XAU/USD"/"XAG/USD" label with nothing disclosing
+# the swap. CLAUDE.md: "Do not put a yfinance ticker back." Same defect
+# ce72406 closed on api/ws_public.py, api/data_layer.py,
+# api/advanced_trading.py and data/scheduler.py. With no entry here, gold and
+# silver are simply never fetched or broadcast by this fallback poller; they
+# still reach the client through `_get_live_price`'s four legitimate levels
+# (price engine / broker / Redis tick cache / EventBus) when a real feed is
+# configured, or show "No live feed" otherwise.
 _YF_SYMBOL_MAP: dict[str, str] = {
-    "XAU/USD": "GC=F",
-    "XAG/USD": "SI=F",
     "EUR/USD": "EURUSD=X",
     "GBP/USD": "GBPUSD=X",
     "USD/JPY": "USDJPY=X",

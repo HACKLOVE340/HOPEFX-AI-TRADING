@@ -24,8 +24,16 @@ from api.ws_live import _to_slash
         # Forms that already worked and must keep working.
         ("XAUUSD", "XAU/USD"),
         ("BTCUSD", "BTC/USD"),
-        ("GC=F", "XAU/USD"),
-        ("SI=F", "XAG/USD"),
+        # GC=F/SI=F are gold/silver FUTURES, not spot. Relabelling them under
+        # the spot slash symbol would be the exact undisclosed-instrument-
+        # substitution defect closed elsewhere by ce72406 and, on this file,
+        # by the ws_live-specific fix (see
+        # tests/unit/test_gold_futures_not_served_as_spot.py::TestWsLiveSlashSymbolMap).
+        # They have no pair structure to infer, so — like any other futures
+        # or index code with no pair structure (see "US30" below) — they
+        # fall through unchanged rather than being resolved to a spot symbol.
+        ("GC=F", "GC=F"),
+        ("SI=F", "SI=F"),
         ("EURUSD=X", "EUR/USD"),
         # Rule-derived forms, so a new symbol needs no edit here.
         ("BTC-USD", "BTC/USD"),

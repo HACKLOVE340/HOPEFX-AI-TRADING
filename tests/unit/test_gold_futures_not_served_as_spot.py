@@ -379,3 +379,161 @@ class TestSchedulerYfinanceMap:
     def test_no_gold_futures_ticker_anywhere_in_the_executable_source(self):
         code = _code_only(REPO_ROOT / "data" / "scheduler.py")
         assert "GC=F" not in code
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# api/ws_live.py — the AUTHENTICATED live WebSocket (/ws/live)
+#
+# This is the "last site" of the same defect, flagged but out of scope in
+# ce72406: two independent GC=F/SI=F maps, both on paths that actually
+# execute against every connected client, not merely a fallback that might
+# fire:
+#
+#   * `_SLASH_SYMBOL` (~line 653) — normalises an INCOMING tick's raw symbol
+#     to the frontend's slash form. It is consulted by `_to_slash`, which
+#     `_eventbus_tick_once` calls on every tick relayed from the EventBus
+#     (`_eventbus_tick_broadcaster`, one of the three tasks `_price_broadcaster`
+#     always starts). Pre-fix, a tick published under "GC=F"/"SI=F" — from any
+#     publisher, present or future — would be silently relabelled "XAU/USD"/
+#     "XAG/USD" and broadcast as spot.
+#
+#   * `_YF_SYMBOL_MAP` (~line 1282) — feeds `_yfinance_price_once`, which
+#     `start_broadcasters()` (called unconditionally from `app.py`'s lifespan)
+#     runs every 15 seconds via `_yfinance_price_broadcaster`, for as long as
+#     any client is connected. Pre-fix it called `yf.download(["GC=F", "SI=F",
+#     ...])` directly and broadcast the result under "symbol": "XAU/USD" /
+#     "XAG/USD" — not a rare fallback, a periodic feed.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestWsLiveSlashSymbolMap:
+    def test_source_has_no_gold_or_silver_futures_alias(self):
+        from api import ws_live
+
+        assert "GC=F" not in ws_live._SLASH_SYMBOL, (
+            "GC=F must not normalise to a gold spot symbol — that IS the undisclosed substitution"
+        )
+        assert "SI=F" not in ws_live._SLASH_SYMBOL
+        assert "XAU/USD" not in ws_live._SLASH_SYMBOL.values() or all(
+            k != "GC=F" for k, v in ws_live._SLASH_SYMBOL.items() if v == "XAU/USD"
+        )
+
+    def test_futures_codes_pass_through_unrelabelled(self):
+        """With no entry, `_to_slash` has no rule that could reconstruct
+        XAU/USD from GC=F (4 chars: no '/', no '-', not a 6-char pair), so it
+        must fall through unchanged — like any other futures/index code with
+        no pair structure (compare "US30" in test_ws_live_symbols.py)."""
+        from api.ws_live import _to_slash
+
+        assert _to_slash("GC=F") == "GC=F"
+        assert _to_slash("SI=F") == "SI=F"
+
+    def test_non_gold_aliases_still_resolve(self):
+        """Positive control: removing the gold/silver entries must not break
+        the alias table's real job for symbols the fix must not touch."""
+        from api.ws_live import _to_slash
+
+        assert _to_slash("XAUUSD") == "XAU/USD"  # genuine spot alias — kept
+        assert _to_slash("EURUSD=X") == "EUR/USD"
+        assert _to_slash("BTCUSD") == "BTC/USD"
+
+
+class _WsLiveSeries:
+    def __init__(self, values):
+        self._v = list(values)
+
+    def dropna(self):
+        return self
+
+    @property
+    def empty(self):
+        return not self._v
+
+    @property
+    def iloc(self):
+        return self._v
+
+
+class _WsLiveCols(list):
+    """Columns object reporting `.levels`, which is how the code under test
+    detects a MultiIndex frame (yfinance's shape when several tickers are
+    requested at once — the shape production actually takes)."""
+
+    def __init__(self, tickers):
+        super().__init__([("Close", t) for t in tickers])
+        self.levels = [["Close"], list(tickers)]
+
+
+class _WsLiveMultiFrame:
+    def __init__(self, price_by_ticker: dict[str, float]):
+        self._prices = price_by_ticker
+        self.columns = _WsLiveCols(list(price_by_ticker))
+
+    def __getitem__(self, col):
+        return _WsLiveSeries([self._prices[col[1]]])
+
+
+class _WsLiveRecorder:
+    def __init__(self):
+        self.connection_count = 1
+        self.broadcast_calls: list[tuple[str, dict]] = []
+
+    async def broadcast(self, channel, payload):
+        self.broadcast_calls.append((channel, payload))
+
+
+class TestWsLiveYfinancePoller:
+    def test_symbol_map_has_no_gold_or_silver_futures_ticker(self):
+        from api import ws_live
+
+        assert ws_live._YF_SYMBOL_MAP.get("XAU/USD") is None
+        assert ws_live._YF_SYMBOL_MAP.get("XAG/USD") is None
+        assert "GC=F" not in ws_live._YF_SYMBOL_MAP.values()
+        assert "SI=F" not in ws_live._YF_SYMBOL_MAP.values()
+
+    @pytest.mark.asyncio
+    async def test_poller_never_requests_gold_or_silver_futures(self, monkeypatch):
+        """End-to-end, against the REAL (unmocked) `_YF_SYMBOL_MAP` — proves
+        the periodic poller that actually runs in production never asks
+        yfinance for GC=F/SI=F, and never broadcasts a tick under the
+        XAU/USD or XAG/USD label from this path. A non-gold symbol still
+        broadcasting is the positive control: it proves the harness observed
+        the real `download()` call rather than passing vacuously."""
+        from api import ws_live
+
+        real_map = dict(ws_live._YF_SYMBOL_MAP)
+        assert real_map, "the real symbol map is empty — this test would prove nothing"
+
+        calls: list[list[str]] = []
+
+        def _download(tickers, *_a, **_k):
+            calls.append(list(tickers))
+            return _WsLiveMultiFrame(dict.fromkeys(tickers, 1.2345))
+
+        mod = types.ModuleType("yfinance")
+        mod.download = _download
+        monkeypatch.setitem(sys.modules, "yfinance", mod)
+
+        rec = _WsLiveRecorder()
+        monkeypatch.setattr(ws_live, "_manager", rec)
+        monkeypatch.setattr(ws_live, "_yf_last_prices", {})
+
+        await ws_live._yfinance_price_once()
+
+        assert calls, "the fake yfinance was never reached — the test observed nothing"
+        requested = calls[0]
+        assert "GC=F" not in requested, f"GC=F was requested: {requested}"
+        assert "SI=F" not in requested, f"SI=F was requested: {requested}"
+
+        broadcast_symbols = [payload["data"]["symbol"] for _channel, payload in rec.broadcast_calls]
+        assert "XAU/USD" not in broadcast_symbols
+        assert "XAG/USD" not in broadcast_symbols
+        assert broadcast_symbols, (
+            "no symbol was broadcast at all — the positive control did not fire, "
+            "so 'gold absent' above is not distinguishable from 'nothing works'"
+        )
+
+    def test_no_gold_futures_ticker_anywhere_in_the_executable_source(self):
+        code = _code_only(REPO_ROOT / "api" / "ws_live.py")
+        assert "GC=F" not in code
+        assert "SI=F" not in code
