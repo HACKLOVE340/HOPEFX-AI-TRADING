@@ -15,7 +15,7 @@ import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
-import { BarChart3, Bell, Check, Settings, ShieldCheck, Smartphone, User, Zap } from 'lucide-react';
+import { BarChart3, Bell, Check, Download, Settings, ShieldCheck, Smartphone, User, Zap } from 'lucide-react';
 interface MobileConfig {
   ios_version: string;
   android_version: string;
@@ -64,7 +64,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
       borderRadius: 14, padding: '28px 24px', textAlign: 'center',
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
     }}>
-      <div style={{ fontSize: 52, marginBottom: 12 }}>{isIos ? '🍎' : '🤖'}</div>
+      <div style={{ fontSize: 52, marginBottom: 12 }}><Smartphone size="1em" aria-hidden /></div>
       <div style={{ fontSize: 'var(--fs-title)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>
         {isIos ? 'iOS App' : 'Android App'}
       </div>
@@ -99,7 +99,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
           opacity: url ? 1 : 0.5, cursor: url ? 'pointer' : 'not-allowed',
         }}
       >
-        <span style={{ fontSize: 16 }}>{isIos ? '⬇' : '⬇'}</span>
+        <Download size="1em" aria-hidden />
         {isIos ? 'Download on App Store' : 'Get it on Google Play'}
       </a>
     </div>
@@ -123,7 +123,7 @@ const SessionRow: React.FC<{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 18, flexShrink: 0,
     }}>
-      {session.device_os?.toLowerCase().includes('ios') ? '📱' : '🤖'}
+      <Smartphone size="1em" aria-hidden />
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)', display: 'flex', alignItems: 'center', gap: 8 }}>

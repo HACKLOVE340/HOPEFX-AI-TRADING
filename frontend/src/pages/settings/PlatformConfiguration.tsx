@@ -10,7 +10,7 @@ import {
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { AlertTriangle, ArrowLeftRight, BarChart3, Bell, Bot, Brain, Bug, CandlestickChart, ClipboardList, Construction, Container, Database, FileText, Flag, FlaskConical, Gamepad2, Gauge, Globe, Globe2, Hammer, Hash, HeartPulse, IdCard, Inbox, KeyRound, Landmark, Lightbulb, Link2, Lock, Mail, Map as MapIcon, Megaphone, Microscope, Monitor, OctagonAlert, Package, Plug, Puzzle, Radio, RadioTower, RefreshCw, Repeat, Ruler, Scale, Scroll, Search, Settings, Shield, Shuffle, Siren, Stethoscope, Target, Timer, TrafficCone, TrendingDown, TrendingUp, Trophy, Users, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, BarChart3, Bell, Bot, Brain, Bug, CandlestickChart, ClipboardList, Construction, Container, Database, FileText, Flag, FlaskConical, Gamepad2, Gauge, Globe, Globe2, Hammer, Hash, HeartPulse, IdCard, Inbox, KeyRound, Landmark, Lightbulb, Link2, Lock, Mail, Map as MapIcon, Megaphone, Microscope, Monitor, OctagonAlert, Package, Plug, Puzzle, CircleCheck, CircleX, Loader2, Trash2, Radio, RadioTower, RefreshCw, Repeat, Ruler, Scale, Scroll, Search, Settings, Shield, Shuffle, Siren, Stethoscope, Target, Timer, TrafficCone, TrendingDown, TrendingUp, Trophy, Users, Wrench, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PlatformConfig {
@@ -1376,7 +1376,7 @@ const HealingTab: React.FC<{
           <SectionHeader icon={<BarChart3 size={18} aria-hidden />} title="Live Healer Status" />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 8 }}>
             {[
-              { label: 'Running',          value: healerStatus.running ? '✅ Yes' : '❌ No' },
+              { label: 'Running',          value: healerStatus.running ? 'Yes' : 'No' },
               { label: 'Baseline Files',   value: healerStatus.baseline_files },
               { label: 'Drift Events',     value: healerStatus.drift_events },
               { label: 'Patches Applied',  value: healerStatus.patches_applied },
@@ -2257,11 +2257,11 @@ const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
         <Tog id="smtp_tls" label="Use TLS (STARTTLS)" desc="SMTP_TLS" checked={cfg.smtp_tls} onChange={(v) => set({ smtp_tls: v })} />
         <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
           <Button onClick={testSmtp} disabled={testing} variant="secondary">
-            {testing ? 'Testing…' : '🔌 Test SMTP Connection'}
+            {testing ? 'Testing…' : <><Plug size="1em" aria-hidden /> Test SMTP Connection</>}
           </Button>
           {testResult && (
             <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: testResult === 'ok' ? '#22c55e' : '#ef4444' }}>
-              {testResult === 'ok' ? '✓' : '✗'} {testMsg}
+              {testResult === 'ok' ? <CircleCheck size="1em" aria-hidden /> : <CircleX size="1em" aria-hidden />} {testMsg}
             </span>
           )}
         </div>
@@ -2478,7 +2478,7 @@ const InfrastructureTab: React.FC = () => {
             />
           </Field>
           <Button onClick={requestFlush} disabled={flushing} variant="danger" style={{ marginBottom: 20 }}>
-            {flushing ? 'Flushing…' : '🗑️ Flush Cache'}
+            {flushing ? 'Flushing…' : <><Trash2 size="1em" aria-hidden /> Flush Cache</>}
           </Button>
         </div>
         {confirmFlushAll && (
@@ -2889,7 +2889,7 @@ const PlatformConfiguration: React.FC = () => {
           description="Every setting, parameter, threshold, and flag across the entire HOPEFX platform. Super Admin only."
         />
         <Button onClick={handleValidate} disabled={validating} variant="secondary" style={{ marginTop: 4, flexShrink: 0 }}>
-          {validating ? '⏳ Validating…' : '✅ Validate Config'}
+          {validating ? <><Loader2 size="1em" aria-hidden /> Validating…</> : <><CircleCheck size="1em" aria-hidden /> Validate Config</>}
         </Button>
       </div>
 
@@ -2903,7 +2903,9 @@ const PlatformConfiguration: React.FC = () => {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: validationResult.issues.length > 0 ? 10 : 0 }}>
             <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: validationResult.valid ? 'var(--gain)' : 'var(--loss)' }}>
-              {validationResult.valid ? '✓ Config valid' : `✗ ${validationResult.error_count} error(s), ${validationResult.warning_count} warning(s)`}
+              {validationResult.valid
+                ? <><CircleCheck size="1em" aria-hidden /> Config valid</>
+                : <><CircleX size="1em" aria-hidden /> {validationResult.error_count} error(s), {validationResult.warning_count} warning(s)</>}
             </span>
             <button onClick={() => setValidationResult(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>×</button>
           </div>

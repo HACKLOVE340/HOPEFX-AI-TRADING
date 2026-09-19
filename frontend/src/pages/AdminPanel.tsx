@@ -21,7 +21,7 @@ import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { AlertTriangle, CircleDot, RadioTower, Search, Settings, Shield, Stethoscope, Tag, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, Check, CircleDot, RadioTower, Search, Settings, Shield, Stethoscope, Tag, Wrench, Zap } from 'lucide-react';
 // ── Maintenance / Broadcast types ─────────────────────────────────────────────
 
 interface MaintenanceStatus {
@@ -188,7 +188,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
     try {
       await superadminApi.broadcastMessage(broadcast);
       setBroadcast({ title: '', body: '', type: 'info' });
-      flash('Broadcast sent to all active users ✓');
+      flash('Broadcast sent to all active users');
     } catch {
       flash('Broadcast failed — check superadmin privileges');
     } finally {
@@ -214,7 +214,9 @@ const MaintenanceBroadcastPanel: React.FC = () => {
           <div>
             <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}><Wrench size="1em" aria-hidden /> Maintenance Mode</div>
             <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
-              {maint.maintenance_mode ? '⚠️ ACTIVE — users see downtime page' : 'Platform is live'}
+              {maint.maintenance_mode
+                ? <><AlertTriangle size="1em" aria-hidden /> ACTIVE — users see downtime page</>
+                : 'Platform is live'}
             </div>
           </div>
           <div style={{
@@ -245,7 +247,9 @@ const MaintenanceBroadcastPanel: React.FC = () => {
             color: '#fff', opacity: saving ? 0.7 : 1,
           }}
         >
-          {maint.maintenance_mode ? '✅ Disable Maintenance Mode' : '🔧 Enable Maintenance Mode'}
+          {maint.maintenance_mode
+            ? <><Check size="1em" aria-hidden /> Disable Maintenance Mode</>
+            : <><Wrench size="1em" aria-hidden /> Enable Maintenance Mode</>}
         </button>
       </div>
 
@@ -372,7 +376,7 @@ const AdminPanel: React.FC = () => {
 
   return (
     <PageShell width="wide"
-        title="🔧 Admin Panel"
+        title="Admin Panel"
         subtitle="Platform operations, user management, and system health"
         actions={
           <button
