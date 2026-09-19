@@ -201,15 +201,45 @@ class TestTheRatchet:
         blocking = [f for f in check_all() if f.blocking]
         assert not blocking, "new findings: " + "; ".join(f"{f.document}:{f.line} {f.detail}" for f in blocking[:5])
 
-    def test_the_baseline_has_not_silenced_the_checker(self) -> None:
-        # Baselined is not the same as gone. If this reaches zero it means the
-        # checker stopped looking, not that every reference was fixed.
-        #
-        # This floor was 40 (measured ~45) until the stale_path check itself
-        # gained gitignore-awareness: it was reporting accurate references to
-        # runtime-generated artefacts (data/oanda_paper_start.json,
-        # backtest/results/multi_symbol_report.json) as stale. Fixing that false
-        # positive dropped the real, unbaselined count to 37 — a genuine
-        # reduction in checker error, not the checker looking away. Floor kept
-        # well below the new count so a real regression still trips this.
-        assert len(check_all(baseline=Baseline())) >= 30
+    def test_the_baseline_has_not_silenced_the_checker(self, tmp_path: Path) -> None:
+        """The checker still FINDS a stale reference when one exists.
+
+        This asserted `len(check_all(baseline=Baseline())) >= 30` — a count
+        floor used as a proxy for "the checker is still looking". The reasoning
+        was sound: baselined is not the same as gone, and zero could mean the
+        scanner died rather than that the corpus was clean.
+
+        The proxy outlived the condition it proxied. The unbaselined count was
+        ~37 when the floor was written; the stale references were then actually
+        fixed, the count reached 0, and the floor started FAILING BECAUSE THE
+        DEBT WAS PAID — asserting that the defect still exists. That is the
+        shape CLAUDE.md records twice already (the calibration leakage guard
+        that checked a mechanism the code no longer had, and the three suites
+        that encoded dead controls as requirements).
+
+        Measured 2026-09-19: 95 checkable documents, 0 findings unbaselined,
+        and injecting two references to files that do not exist produced
+        exactly two findings — so the scanner was alive the whole time and the
+        corpus really was clean.
+
+        So assert the PROPERTY instead of a proxy for it: plant a reference to
+        a file that does not exist and require the checker to report it. This
+        holds whether the real corpus has 0 stale references or 400, and it
+        cannot pass against a checker that stopped looking. It runs in tmp_path
+        rather than mutating a tracked document.
+        """
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "CLAUDE.md").write_text(
+            "See `docs/deliberately_absent_for_this_test.md` for details.\n"
+        )
+
+        # Positive control on the harness itself: a scope that found no
+        # documents would make the assertion below vacuous.
+        assert len(checkable_documents(tmp_path)) >= 1, "the checker saw no documents at all"
+
+        findings = check_all(repo=tmp_path, baseline=Baseline())
+        assert findings, (
+            "the checker reported nothing for a reference to a file that does not "
+            "exist — it has stopped looking"
+        )
+        assert any("deliberately_absent_for_this_test.md" in f.detail for f in findings)
