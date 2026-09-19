@@ -11,21 +11,21 @@ import {
 import type { ServiceStatus, BackupRecord, ScheduledJob } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { AlarmClock, CheckCircle2, KeyRound, Package, Save, XCircle } from 'lucide-react';
-
+import { AlarmClock, Brain, CheckCircle2, Database, KeyRound, Package, Plug, Save, Settings, TrendingUp, Wrench, XCircle, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const fmtDuration = (ms: number) =>
   ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${(ms / 60000).toFixed(1)}m`;
 
-const SERVICE_ICONS: Record<string, string> = {
-  database:   '🗄️',
-  redis:      '⚡',
-  broker:     '📈',
-  ml_engine:  '🧠',
-  websocket:  '🔌',
-  celery:     '⚙️',
+const SERVICE_ICONS: Record<string, LucideIcon> = {
+  database:   Database,
+  redis:      Zap,
+  broker:     TrendingUp,
+  ml_engine:  Brain,
+  websocket:  Plug,
+  celery:     Settings,
 };
 
 interface ApiKey {
@@ -175,7 +175,7 @@ const SystemHealthSection: React.FC = () => {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 18 }}>{SERVICE_ICONS[svc.name] ?? '🔧'}</span>
+                  <span style={{ fontSize: 18 }}>{(() => { const I = SERVICE_ICONS[svc.name] ?? Wrench; return <I size="1em" aria-hidden />; })()}</span>
                   <span style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>{svc.name.replace(/_/g, ' ')}</span>
                 </div>
                 <StatusBadge status={svc.status} />

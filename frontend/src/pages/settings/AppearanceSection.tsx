@@ -5,7 +5,7 @@ import type { AppearanceSettings } from './types';
 import { ACCENT_COLORS } from './types';
 import { Card, SectionHeader, Field, Select, Toggle, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
-import { Palette } from 'lucide-react';
+import { Laptop, Moon, Palette, Sun } from 'lucide-react';
 import { useDensityPref } from '../../lib/densityPref';
 import type { Density } from '../../components/system/PageSurface';
 
@@ -116,7 +116,7 @@ const AppearanceSection: React.FC = () => {
               }}
             >
               <span style={{ fontSize: 22 }}>
-                {t === 'dark' ? '🌙' : t === 'light' ? '☀️' : '💻'}
+                {t === 'dark' ? <Moon size="1em" aria-hidden /> : t === 'light' ? <Sun size="1em" aria-hidden /> : <Laptop size="1em" aria-hidden />}
               </span>
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
@@ -212,10 +212,10 @@ const AppearanceSection: React.FC = () => {
             value={form.chart_style}
             onChange={(e) => update({ chart_style: e.target.value as AppearanceSettings['chart_style'] })}
             options={[
-              { value: 'candles', label: '🕯️ Candlestick' },
-              { value: 'bars',    label: '📊 OHLC Bars' },
-              { value: 'line',    label: '📈 Line' },
-              { value: 'area',    label: '🏔️ Area' },
+              { value: 'candles', label: 'Candlestick' },
+              { value: 'bars',    label: 'OHLC Bars' },
+              { value: 'line',    label: 'Line' },
+              { value: 'area',    label: 'Area' },
             ]}
           />
         </Field>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Circle, LayoutDashboard, RefreshCw, ShieldAlert, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, HelpCircle, LayoutDashboard, RefreshCw, ShieldAlert, XCircle } from 'lucide-react';
 import { Activity } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
 import { extractApiError } from '../lib/utils';
+import type { LucideIcon } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -85,11 +86,11 @@ const STATUS_BORDER: Record<string, string> = {
   unknown:   '#334155',
 };
 
-const STATUS_ICON: Record<string, string> = {
-  healthy:   '✅',
-  degraded:  '⚠️',
-  unhealthy: '❌',
-  unknown:   '❓',
+const STATUS_ICON: Record<string, LucideIcon> = {
+  healthy:   CheckCircle2,
+  degraded:  AlertTriangle,
+  unhealthy: XCircle,
+  unknown:   HelpCircle,
 };
 
 const STATUS_TEXT: Record<string, string> = {
@@ -261,7 +262,7 @@ const StatusPage: React.FC = () => {
         background: STATUS_BG[status],
         border: `1px solid ${STATUS_BORDER[status]}`,
       }}>
-        <span style={{ fontSize: 32 }}>{STATUS_ICON[status]}</span>
+        <span style={{ fontSize: 32 }}>{(() => { const I = STATUS_ICON[status] ?? HelpCircle; return <I size="1em" aria-hidden />; })()}</span>
         <div>
           <div style={styles.bannerTitle}>{STATUS_TEXT[status]}</div>
           <div style={styles.bannerSub}>
@@ -467,7 +468,7 @@ const StatusPage: React.FC = () => {
           incidents.slice(0, 10).map(inc => (
             <div key={inc.date} style={styles.incidentRow}>
               <span style={{ color: inc.severity === 'major' ? '#ef4444' : 'var(--warn)' }}>
-                {inc.severity === 'major' ? '❌' : '⚠️'}
+                {inc.severity === 'major' ? <XCircle size="1em" aria-hidden /> : <AlertTriangle size="1em" aria-hidden />}
               </span>
               <span style={{ color: 'var(--text)', fontWeight: 500 }}>{inc.date}</span>
               <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)', flex: 1 }}>{inc.title}</span>
