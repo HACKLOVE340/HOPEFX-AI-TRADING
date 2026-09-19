@@ -79,7 +79,15 @@ class TestItAsksCoverageForSomethingItCanResolve:
         cmd = hook._coverage_command(
             pathlib.Path("api/superadmin/ml_ai.py"), [pathlib.Path("tests/unit/test_superadmin.py")]
         )
-        assert "--cov=api.superadmin" in cmd
+        # A directory PATH, not a dotted name: a dotted `api.superadmin` is
+        # resolved by coverage with `importlib.util.find_spec` inside a
+        # sys.modules snapshot/restore, which imports (and then evicts) `api`'s
+        # `__init__.py` to get its search path — poisoning numpy for any parent
+        # package that imports it. A path is matched by directory tree instead,
+        # with no import at all. See `_coverage_target`'s docstring and
+        # `TestFindSpecCannotPoisonTheTarget` below.
+        assert "--cov=api/superadmin" in cmd
+        assert "--cov=api.superadmin" not in cmd
 
     def test_the_rcfile_fail_under_is_neutralised(self, hook) -> None:
         # .coveragerc sets fail_under=70 for the whole project. The hook judges a
@@ -182,3 +190,81 @@ class TestItActuallyRuns:
         assert "cannot load module more than once" not in output, "the numpy double-load is back:\n" + output[-2000:]
         assert pct is not None, "coverage still could not be measured:\n" + output[-2000:]
         assert 0.0 < pct <= 100.0
+
+
+class TestNestedPackagesWhoseParentImportsNumpy:
+    """`--cov=risk` is single-segment and was never the whole story.
+
+    `find_spec("risk.manager")` never has to execute a parent, because `risk`
+    has none — so the previous fix (dotted *package* name) happened to work for
+    every module the earlier test class checked. It does not work for a module
+    whose immediate package has a PARENT: `find_spec("data_layer.feeds.macro")`
+    must import `data_layer` and `data_layer.feeds` to read their `__path__`,
+    and `data_layer/feeds/__init__.py` imports pandas/numpy — so this is the
+    exact defect this gate exists to catch: `data_layer/feeds/macro/`, one of
+    17 distinct package targets (56 files, measured 2026-09-19 across
+    `data_layer/`, `ml/`, `risk/compliance/`, `brokers/prop_firms/` and
+    `analysis/patterns/`) that a dotted `--cov=` target could never measure.
+
+    `test_the_dotted_form_is_the_disease_not_a_hypothesis` is the positive
+    control: it proves the harness used below can actually observe the
+    ImportError when it is really there, by deliberately asking coverage for
+    the dotted form and watching it fail — so `test_it_measures_a_module_whose_
+    *_parent_package_imports_numpy`'s green result means the fix, not a
+    harness that never exercised the failure path.
+    """
+
+    MODULE = pathlib.Path("data_layer/feeds/macro/store_bridge.py")
+    TEST_FILE = pathlib.Path("tests/unit/test_macro_bridge_staleness.py")
+
+    def _run_with_target(self, hook, target: str) -> tuple[str, str]:
+        """Run the gate's own subprocess plumbing against an explicit `--cov=` target.
+
+        Reuses `_coverage_command`'s argument list (timeouts, isolation flags,
+        report format) and only swaps the `--cov=` entry, so this differs from
+        `_run_coverage` in exactly the one variable under test.
+        """
+        import os as _os
+        import subprocess as _sp
+        import tempfile as _tf
+
+        cmd = hook._coverage_command(self.MODULE, [self.TEST_FILE])
+        cmd = [f"--cov={target}" if a.startswith("--cov=") else a for a in cmd]
+        with _tf.TemporaryDirectory(prefix="hopefx-cov-test-") as scratch:
+            env = {**_os.environ, "CI_FAST": "1", "COVERAGE_FILE": str(pathlib.Path(scratch) / ".coverage")}
+            result = _sp.run(cmd, check=False, capture_output=True, text=True, timeout=60, env=env)  # nosec B603
+            return result.stdout, result.stderr
+
+    @pytest.mark.slow
+    def test_the_dotted_form_is_the_disease_not_a_hypothesis(self, hook) -> None:
+        """Positive control: the OLD (dotted) target really does poison numpy.
+
+        Without this, a green result below could mean either "fixed" or "this
+        harness never actually ran the failing path" — indistinguishable from
+        the outside, and this repository's most common defect shape (see
+        `hopefx-dead-controls`).
+        """
+        dotted = ".".join(self.MODULE.parts[:-1])  # "data_layer.feeds.macro"
+        stdout, stderr = self._run_with_target(hook, dotted)
+        combined = stdout + stderr
+        assert "cannot load module more than once per process" in combined, (
+            f"expected the dotted target {dotted!r} to reproduce the numpy "
+            f"double-load; the harness observed nothing, so it cannot be "
+            f"trusted to prove the fix either:\n{combined[-2000:]}"
+        )
+
+    @pytest.mark.slow
+    def test_it_measures_a_module_whose_parent_package_imports_numpy(self, hook) -> None:
+        """The fix: `_coverage_target` now returns a directory path, and this
+        exact reproduction from the finding (`--cov=data_layer.feeds.macro`
+        crashing conftest collection) is gone.
+        """
+        pct, output = hook._run_coverage(self.MODULE, [self.TEST_FILE])
+        assert "cannot load module more than once" not in output, (
+            "the numpy double-load is back for a nested package:\n" + output[-2000:]
+        )
+        assert pct is not None, "coverage still could not be measured:\n" + output[-2000:]
+        assert 0.0 < pct <= 100.0
+
+    def test_the_target_is_a_path_not_a_dotted_name(self, hook) -> None:
+        assert hook._coverage_target(self.MODULE) == "data_layer/feeds/macro"

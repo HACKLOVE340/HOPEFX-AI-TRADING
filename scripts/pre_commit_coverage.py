@@ -258,28 +258,53 @@ def _find_test_files(module_path: Path) -> list[Path]:
 def _coverage_target(module_path: Path) -> str:
     """What to hand `--cov=`.
 
-    A dotted *module* name (``risk.manager``) makes coverage resolve and import
-    the module itself, which re-initialises numpy's C extension inside a process
-    that already imported it via ``tests/conftest.py``:
+    A dotted name — ``risk.manager`` OR its parent ``risk.compliance`` — is a
+    *package* name to coverage, not a filesystem path, and coverage resolves it
+    with ``importlib.util.find_spec`` inside a ``sys_modules_saved()`` block
+    (``coverage/inorout.py::set_matchers_depending_on_syspath``): it snapshots
+    ``sys.modules``, calls ``find_spec``, then DELETES every module the block
+    newly added. ``find_spec("a.b.c")`` must import (execute) every PARENT
+    package on the way to ``c`` — ``a`` and ``a.b`` — to read their
+    ``__path__``, even though it never executes ``c`` itself. If any of those
+    parents imports numpy for the first time, that import is torn down again by
+    the eviction — the C extension stays initialised at the process level, but
+    its Python-level ``sys.modules`` entry is gone. The next *unrelated* import
+    of numpy (``tests/conftest.py`` -> ``data.real_time_price_engine`` ->
+    ``import numpy``) then finds no cached module and tries to re-run the
+    extension's init function, which a single-phase-init C extension refuses:
 
         numpy/_core/multiarray.py:11: in <module>
             from . import _multiarray_umath, overrides
         ImportError: cannot load module more than once per process
 
-    Every module in scope imports numpy transitively, so the gate could not
-    measure a single one — and reported that as "the test may not import the
-    module", which blames the test and invites ``SKIP_COVERAGE_GATE=1``.
+    A single-segment name (``risk``) has no parent to import, so
+    ``find_spec("risk")`` executes nothing and never poisons anything — which is
+    why ``--cov=risk`` for ``risk/manager.py`` happened to work. A multi-segment
+    name whose PARENT transitively imports numpy — ``data_layer.feeds.macro``
+    (parent ``data_layer.feeds`` imports pandas/numpy), ``ml.models``,
+    ``risk.compliance`` — does not: measured repo-wide, 17 of the 114 distinct
+    package targets this gate resolves to are poisoned this way, covering 56
+    files across `data_layer/`, `ml/`, `risk/compliance/`, `brokers/prop_firms/`
+    and `analysis/patterns/` (see tests/unit/test_coverage_gate_can_measure.py).
 
-    The module's immediate *package* name resolves as a directory and does not
-    import anything, so ``--cov=ai.hub`` works where ``--cov=ai.hub.capabilities``
-    cannot. Instrumenting the top-level ``ai`` package would load every AI
-    department and make a small registry change pay for the whole subsystem.
-    The module's own figure is then read out of the report by
-    `_parse_module_coverage`.
+    A directory PATH (``data_layer/feeds/macro``) is not a package name at all:
+    coverage's own classification (``InOrOut.__init__``) tests
+    ``os.path.isdir(src)`` and, for a real directory, treats it as a
+    ``source_dir`` matched by file path — no ``find_spec``, no import, no
+    eviction, and no scope change: it is the same immediate-package directory
+    the dotted form named, matched by `TreeMatcher` instead of resolved by
+    `find_spec`. The module's own figure is read out of the report the same way
+    either way, by `_parse_module_coverage`.
+
+    (A specific *file* path — ``data_layer/feeds/macro/store_bridge.py`` — is
+    NOT a directory, so it falls into the same `find_spec`-as-a-dotted-name
+    branch, fails to resolve as a module name at all, and coverage silently
+    measures nothing for it. That is a different, non-fix: it never raises, but
+    it never produces a number either.)
     """
     parts = Path(str(module_path).replace("\\", "/")).parts
     if len(parts) > 1:
-        return ".".join(parts[:-1])
+        return str(Path(*parts[:-1]))
     # A module at the repository root has no package to name, and its bare stem
     # would be a dotted module again. `.` measures the tree; the row is read the
     # same way either way.
