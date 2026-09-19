@@ -445,52 +445,43 @@ class MTFFusionStore:
             return None
 
     def _load_from_yfinance(self) -> None:
-        """Fallback: fetch H4 and D1 from yfinance (GC=F proxy for XAU_USD)."""
-        try:
-            import yfinance as yf
+        """Refuse the yfinance fallback — there is no genuine spot ticker to use.
 
-            ticker = "GC=F"
-            logger.info("MTFFusionStore: falling back to yfinance (%s)", ticker)
+        This method used to fetch H4/D1 bars for the hardcoded ticker "GC=F"
+        (gold FUTURES) regardless of ``self.symbol``, and this store is only
+        ever constructed with symbol="XAU_USD" in production
+        (core/startup_factories.py::init_mtf_store, gated by the DATA_SYMBOL
+        env var — see every ``MTFFusionStore(`` call site in the repo). So the
+        fallback was not "a proxy that happens to be gold" — it was, in every
+        real invocation, gold futures silently standing in for gold spot,
+        with the resulting d_*/h_* regime columns handed to
+        ml/inference_engine.py::InferenceEngine._get_mtf_df and from there
+        into ``HOPEFXDecisionEngine._phase2_ml``'s probability, i.e. straight
+        into the order path. That is the same undisclosed instrument
+        substitution ce72406 fixed on four other live-serving paths
+        (api/ws_public.py, api/data_layer.py, api/advanced_trading.py,
+        data/scheduler.py) — CLAUDE.md: "Do not put a yfinance ticker back."
 
-            if self._h4_df is None:
-                raw = yf.download(ticker, period="2y", interval="1h", progress=False, auto_adjust=True)
-                if not raw.empty:
-                    # yfinance >= 0.2.x returns MultiIndex columns like ('Close', 'GC=F')
-                    if hasattr(raw.columns, "levels"):
-                        raw.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in raw.columns]
-                    else:
-                        raw.columns = [c.lower() for c in raw.columns]
-                    raw.index = pd.to_datetime(raw.index, utc=True)
-                    # Resample 1h → 4h
-                    agg = {
-                        "open": "first",
-                        "high": "max",
-                        "low": "min",
-                        "close": "last",
-                        "volume": "sum",
-                    }
-                    available = {k: v for k, v in agg.items() if k in raw.columns}
-                    self._h4_df = raw.resample("4h").agg(available).dropna(subset=["close"])
-
-            if self._d1_df is None:
-                raw = yf.download(
-                    ticker,
-                    period="10y",
-                    interval="1d",
-                    progress=False,
-                    auto_adjust=True,
-                )
-                if not raw.empty:
-                    # yfinance >= 0.2.x returns MultiIndex columns like ('Close', 'GC=F')
-                    if hasattr(raw.columns, "levels"):
-                        raw.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in raw.columns]
-                    else:
-                        raw.columns = [c.lower() for c in raw.columns]
-                    raw.index = pd.to_datetime(raw.index, utc=True)
-                    self._d1_df = raw.dropna(subset=["close"])
-
-        except Exception as exc:
-            logger.warning("MTFFusionStore: yfinance fallback failed: %s", exc)
+        Refuse rather than substitute: leave ``_h4_df``/``_d1_df`` as None so
+        the existing "features unavailable" path already takes over
+        (``align_to_h1`` returns None -> ``_get_mtf_df`` returns None ->
+        ``mtf_active=False`` in ``InferenceEngine.predict``, which is the
+        normal, already-tested degraded mode — not a new one). Absent
+        regime features are a known unknown the engine can gate on; a
+        silently-swapped instrument is not. See
+        tests/unit/test_gold_futures_not_served_as_spot.py.
+        """
+        self._bootstrap_error = (
+            f"yfinance fallback refused for {self.symbol}: no genuine spot "
+            "ticker exists for this instrument on yfinance (a futures "
+            "contract is not spot and must not be substituted silently)"
+        )
+        logger.warning(
+            "MTFFusionStore: refusing yfinance fallback for %s — no genuine "
+            "spot ticker exists; MTF regime features will be unavailable "
+            "rather than derived from a different instrument",
+            self.symbol,
+        )
 
     # ── Live bar update ───────────────────────────────────────────────────────
 

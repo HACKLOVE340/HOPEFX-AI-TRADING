@@ -537,3 +537,124 @@ class TestWsLiveYfinancePoller:
         code = _code_only(REPO_ROOT / "api" / "ws_live.py")
         assert "GC=F" not in code
         assert "SI=F" not in code
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# research/pipeline/mtf_fusion.py — MTFFusionStore, reaches LIVE ML INFERENCE
+#
+# Unlike the four sites above, this is not a display or an API response: its
+# output (d_*/h_* regime columns) is appended to the feature matrix inside
+# ml/inference_engine.py::InferenceEngine._get_mtf_df -> predict(), and that
+# result is what core/decision/HOPEFXDecisionEngine.py::_phase2_ml uses to
+# override the trade probability — i.e. the order path itself. The store is
+# only ever constructed with symbol="XAU_USD" in production
+# (core/startup_factories.py::init_mtf_store, DATA_SYMBOL env var default),
+# and no data/XAU_USD_H4.csv or data/XAU_USD_D.csv is bundled (only
+# data/XAU_USD_M.csv, monthly), so with FEATURE_MTF_FUSION=true (the default)
+# and no OANDA credentials writing those files, the yfinance(GC=F) fallback
+# fires on every default-config startup — reproduced in a real
+# `uvicorn app:app` boot log:
+#   "MTFFusionStore: falling back to yfinance (GC=F)"
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class _EmptyMtfFrame:
+    """Stands in for an empty yfinance download — enough to prove whether the
+    call happened at all without simulating pandas resample/groupby, which
+    `_load_from_yfinance` used to do to the real result before the fix."""
+
+    empty = True
+
+
+@pytest.fixture
+def fake_mtf_yfinance(monkeypatch):
+    """Fake `yfinance.download`, recording every ticker requested."""
+    calls: list[str] = []
+
+    def _download(ticker, *_a, **_k):
+        calls.append(ticker)
+        return _EmptyMtfFrame()
+
+    mod = types.ModuleType("yfinance")
+    mod.download = _download
+    monkeypatch.setitem(sys.modules, "yfinance", mod)
+    return calls
+
+
+class TestMTFFusionStoreYfinanceFallback:
+    def test_no_bundled_h4_or_daily_csv_for_xau_usd(self):
+        """Documents WHY the fallback fires in the real default config: this
+        is not a hypothetical path. Only data/XAU_USD_M.csv (monthly) is
+        bundled — no H4 or daily CSV — so `_load_data()` always falls
+        through to `_load_from_yfinance()` for the symbol every production
+        MTFFusionStore is actually constructed with."""
+        data_dir = REPO_ROOT / "data"
+        assert not (data_dir / "XAU_USD_H4.csv").exists()
+        assert not (data_dir / "XAU_USD_D.csv").exists()
+
+    def test_load_from_yfinance_refuses_for_gold_and_silver(self, fake_mtf_yfinance):
+        from research.pipeline.mtf_fusion import MTFFusionStore
+
+        for symbol in ("XAU_USD", "XAUUSD", "XAG_USD", "XAGUSD"):
+            store = MTFFusionStore(symbol=symbol, data_dir="/tmp/nonexistent_mtf_data_dir")
+            store._load_from_yfinance()
+            assert store._h4_df is None, f"{symbol}: H4 must stay empty, not futures-derived"
+            assert store._d1_df is None, f"{symbol}: D1 must stay empty, not futures-derived"
+        assert "GC=F" not in fake_mtf_yfinance, f"GC=F was requested: {fake_mtf_yfinance}"
+        assert "SI=F" not in fake_mtf_yfinance, f"SI=F was requested: {fake_mtf_yfinance}"
+
+    def test_refusal_is_disclosed_not_silent(self):
+        """A silent refusal is indistinguishable from 'nobody tried' — the
+        store must say WHY, on the same status() surface
+        core/signal_engine.py exposes to diagnostics (status['phase1_mtf'])."""
+        from research.pipeline.mtf_fusion import MTFFusionStore
+
+        store = MTFFusionStore(symbol="XAU_USD", data_dir="/tmp/nonexistent_mtf_data_dir")
+        store._load_from_yfinance()
+        assert store._bootstrap_error, "the refusal must be recorded, not silent"
+        assert "GC=F" not in store._bootstrap_error, (
+            "the disclosure text must not itself name the futures ticker as if it had been used"
+        )
+
+    def test_positive_control_the_harness_observes_a_real_call(self, fake_mtf_yfinance):
+        """Mutation-style positive control: prove the fake `yfinance` module
+        IS reached and recorded by this file's fixture, by performing the
+        exact call `_load_from_yfinance` used to make unconditionally before
+        the fix (`yf.download("GC=F", ...)`). If this ever failed, every
+        'GC=F not requested' assertion above would be passing vacuously
+        because the mock was never wired in the first place."""
+        import yfinance as yf  # the fake module installed by fake_mtf_yfinance
+
+        yf.download("GC=F", period="2y", interval="1h", progress=False, auto_adjust=True)
+        assert "GC=F" in fake_mtf_yfinance, "the harness did not observe a call it should have — the mock is not live"
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_end_to_end_leaves_store_not_ready_for_gold(self, fake_mtf_yfinance):
+        """End-to-end through the real startup path: bootstrap() ->
+        _load_data() -> CSV miss (no H4/D1 CSV bundled) -> the yfinance
+        fallback. With the substitution refused, the store must be not-ready
+        rather than silently ready on futures data, and align_to_h1 must
+        return None — the existing 'features unavailable' path — not a
+        DataFrame derived from a different instrument."""
+        from research.pipeline.mtf_fusion import MTFFusionStore
+
+        store = MTFFusionStore(symbol="XAU_USD", data_dir="/tmp/nonexistent_mtf_data_dir")
+        await store.bootstrap()
+
+        assert store._bootstrapped is True
+        assert store.is_ready is False, "no CSV and a refused fallback must leave the store not-ready"
+        assert "GC=F" not in fake_mtf_yfinance
+
+        import pandas as pd
+
+        idx = pd.date_range("2024-01-01", periods=5, freq="h", tz="UTC")
+        ohlcv = pd.DataFrame(
+            {"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0},
+            index=idx,
+        )
+        assert store.align_to_h1(ohlcv) is None, "must refuse (None), never a GC=F-derived DataFrame"
+
+    def test_no_gold_futures_ticker_anywhere_in_the_executable_source(self):
+        code = _code_only(REPO_ROOT / "research" / "pipeline" / "mtf_fusion.py")
+        assert "GC=F" not in code
+        assert "SI=F" not in code
