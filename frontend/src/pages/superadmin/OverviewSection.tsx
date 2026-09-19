@@ -189,7 +189,7 @@ const OverviewSection: React.FC = () => {
     try {
       await superadminApi.killSwitch(enabling);
       setActionMsgOk(true);
-      setActionMsg(enabling ? '🛑 Kill switch activated — trading halted' : '▶️ Kill switch deactivated — trading resumed');
+      setActionMsg(enabling ? 'Kill switch activated — trading halted' : 'Kill switch deactivated — trading resumed');
       load(true);
     } catch (e: unknown) {
       setActionMsgOk(false);
@@ -205,7 +205,7 @@ const OverviewSection: React.FC = () => {
     try {
       await superadminApi.maintenanceMode(enabling, enabling ? 'Maintenance started from Overview' : undefined);
       setActionMsgOk(true);
-      setActionMsg(enabling ? '🔧 Maintenance mode enabled' : '✅ Maintenance mode disabled');
+      setActionMsg(enabling ? 'Maintenance mode enabled' : 'Maintenance mode disabled');
       load(true);
     } catch (e: unknown) {
       setActionMsgOk(false);

@@ -168,7 +168,7 @@ const TradingEngineSection: React.FC = () => {
             { label: 'Uptime',         value: `${Math.floor(status.uptime_seconds / 3600)}h ${Math.floor((status.uptime_seconds % 3600) / 60)}m` },
             { label: 'Open Positions', value: status.positions_open },
             { label: 'Last Signal',    value: status.last_signal_at ? new Date(status.last_signal_at).toLocaleTimeString() : 'N/A' },
-            { label: 'Heartbeat',      value: status.heartbeat_ok ? '✅ OK' : '❌ Miss' },
+            { label: 'Heartbeat',      value: status.heartbeat_ok ? 'OK' : 'Miss' },
           ].map(s => (
             <div key={s.label} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               <span style={{ color: 'var(--text-faint)' }}>{s.label}: </span>
@@ -211,7 +211,7 @@ const TradingEngineSection: React.FC = () => {
 
       {confirm === 'kill' && (
         <ConfirmDialog
-          title={cfg.kill_switch_active ? 'Deactivate Kill Switch' : '⚠️ Activate Kill Switch'}
+          title={cfg.kill_switch_active ? 'Deactivate Kill Switch' : 'Activate Kill Switch'}
           message={cfg.kill_switch_active
             ? 'This will resume all trading activity. Ensure market conditions are safe before proceeding.'
             : 'This will IMMEDIATELY halt ALL trading across the entire platform. All open orders will be cancelled. This affects every user.'}
@@ -270,7 +270,8 @@ const TradingEngineSection: React.FC = () => {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <StatusBadge status={cfg.engine_status} />
           <ActionBtn
-            label={cfg.kill_switch_active ? '🛑 Kill Switch ACTIVE' : 'Activate Kill Switch'}
+            label={cfg.kill_switch_active ? 'Kill Switch ACTIVE' : 'Activate Kill Switch'}
+          icon={cfg.kill_switch_active ? <OctagonAlert size="1em" aria-hidden /> : undefined}
             onClick={() => setConfirm('kill')}
             variant={cfg.kill_switch_active ? 'success' : 'danger'}
             loading={saving}

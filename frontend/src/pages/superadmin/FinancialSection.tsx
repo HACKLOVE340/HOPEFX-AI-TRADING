@@ -567,7 +567,7 @@ const AffiliatePanel: React.FC = () => {
                 {stats.top_affiliates.map((a, idx) => (
                   <tr key={a.affiliate_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? 'var(--warn)' : idx === 1 ? 'var(--text-dim)' : '#78350f', fontWeight: 700 }}>
-                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                      {idx + 1}
                     </td>
                     <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{a.username}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{a.referrals.toLocaleString()}</td>
@@ -985,7 +985,7 @@ const FinancialSection: React.FC = () => {
                                       style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 'var(--fs-body)', width: 120 }}
                                     />
                                     <ActionBtn label="Confirm" onClick={doRefund} variant="danger" size="sm" loading={busy} />
-                                    <ActionBtn label="✕" onClick={() => { setRefundTarget(null); setRefundReason(''); }} variant="ghost" size="sm" />
+                                    <ActionBtn label="Cancel" onClick={() => { setRefundTarget(null); setRefundReason(''); }} variant="ghost" size="sm" />
                                   </div>
                                 ) : (
                                   <ActionBtn label="Refund" onClick={() => setRefundTarget(p)} variant="danger" size="sm" />

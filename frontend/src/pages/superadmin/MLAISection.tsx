@@ -9,7 +9,7 @@ import {
 import type { MLModel } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { AlertTriangle, BarChart3, Bot, Brain, Check, Package, Pause, Play, RefreshCw, Settings, Square, Target, TrendingUp, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, Bot, Brain, Check, Hash, Package, Pause, Play, RadioTower, RefreshCw, Settings, Square, Target, TrendingDown, TrendingUp, Zap } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -376,10 +376,10 @@ const MLSubsystemsPanel: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const STABS = [
-    { id: 'filter',   label: '🎯 Signal Filter' },
-    { id: 'online',   label: '📡 Online Learner' },
-    { id: 'drift',    label: '📉 Drift Monitor' },
-    { id: 'features', label: '🔢 ML Metrics' },
+    { id: 'filter',   icon: Target,       label: 'Signal Filter' },
+    { id: 'online',   icon: RadioTower,   label: 'Online Learner' },
+    { id: 'drift',    icon: TrendingDown, label: 'Drift Monitor' },
+    { id: 'features', icon: Hash,         label: 'ML Metrics' },
   ] as const;
 
   return (
@@ -391,7 +391,7 @@ const MLSubsystemsPanel: React.FC = () => {
             fontWeight: tab === t.id ? 700 : 500,
             background: tab === t.id ? '#2e1065' : 'var(--raised)',
             color: tab === t.id ? '#c084fc' : 'var(--text-dim)',
-          }}>{t.label}</button>
+          }}><t.icon size="1em" aria-hidden /> {t.label}</button>
         ))}
         <button onClick={load} disabled={loading} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)'}}>
           {loading ? '…' : '↻'}

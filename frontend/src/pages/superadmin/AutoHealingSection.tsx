@@ -223,7 +223,7 @@ const LiveStatusCard: React.FC<{
           { label: 'Tests Indexed',     value: testIndex ? String(testIndex.total) : '—',       icon: <FlaskConical size={16} aria-hidden />, accent: '#8b5cf6' },
           { label: 'Last Scan',         value: fmtAgo(status?.last_scan ?? null),               icon: <Clock size={16} aria-hidden />, accent: '#06b6d4' },
           { label: 'Last Test Run',     value: fmtAgo(testIndex?.last_run ?? null),             icon: <Play size={16} aria-hidden />, accent: '#a78bfa' },
-          { label: 'Last Run Result',   value: testIndex?.last_run_passed != null ? `${testIndex.last_run_passed}✓ ${testIndex.last_run_failed ?? 0}✗` : '—', icon: <ClipboardList size={16} aria-hidden />, accent: testIndex?.last_run_failed ? '#ef4444' : '#22c55e' },
+          { label: 'Last Run Result',   value: testIndex?.last_run_passed != null ? `${testIndex.last_run_passed} passed · ${testIndex.last_run_failed ?? 0} failed` : '—', icon: <ClipboardList size={16} aria-hidden />, accent: testIndex?.last_run_failed ? '#ef4444' : '#22c55e' },
         ].map(tile => (
           <KpiTile key={tile.label} label={tile.label} value={tile.value} icon={tile.icon} accent={tile.accent} />
         ))}
