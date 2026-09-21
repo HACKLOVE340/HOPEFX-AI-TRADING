@@ -48,7 +48,30 @@ pyotp>=2.9.0,<3.0.0
 # python-ecdsa removed: package abandoned at 0.18.0, no 0.19.x release exists.
 # CVE-2024-49298 (Minerva timing attack) is mitigated by the `cryptography`
 # package already listed above, which uses OpenSSL's constant-time ECDSA.
-hdwallet>=3.6.1,<4.0.0
+#
+# NOT INSTALLED ON WINDOWS. hdwallet pulls in ed25519-blake2b (Monero curve
+# support), which publishes no Windows wheel and always compiles from source
+# there — and Windows carries no C++ toolchain by default, unlike Linux
+# (gcc) or macOS (Xcode CLT). A bare `pip install -r requirements.txt` died
+# on that build on 2026-09-21. This is the same shape quickfix was fixed for
+# below: a native-extension dep that cannot build on a platform, pinned
+# unconditionally, blocking the base platform install for a feature that
+# platform was never going to reach anyway.
+#
+# Not load-bearing to run HOPEFX: payments/crypto/address_generator.py and
+# payments/crypto/bitcoin.py both guard the import and raise a clear
+# RuntimeError naming the missing package rather than crash or fabricate an
+# address (test_crypto_deposit_addresses_are_real.py, F222) — a Windows
+# deployment loses crypto deposit address generation, loudly, nothing else.
+# requirements-ci.txt pins hdwallet independently on the Linux runner where
+# it already builds cleanly, so this does not reduce CI's coverage of real
+# BIP-vector-correct address derivation.
+#
+# Want it on Windows anyway? Install "Desktop development with C++" from the
+# Visual Studio Build Tools installer, then: pip install hdwallet>=3.6.1,<4.0.0
+#
+# Pinned by tests/unit/test_hdwallet_marker_skips_windows.py.
+hdwallet>=3.6.1,<4.0.0; sys_platform != "win32"
 pydantic[email]>=2.5.0,<3.0.0
 email-validator>=2.1.0,<3.0.0
 # Web framework — pin minor to avoid breaking middleware changes
