@@ -31,8 +31,31 @@ import { resolve } from 'node:path';
 
 const CSS = readFileSync(resolve(__dirname, '../index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
 
+/**
+ * Index of the rule whose selector LIST contains `selector` as a whole item.
+ *
+ * `:root` gained a second selector -- `:root, [data-theme="dark"]` -- so a
+ * subtree can ask for the dark palette while the document is light. A bare
+ * `indexOf(':root {')` stopped finding it and this file reported the type
+ * scale as missing, with NaN comparisons that read as a broken scale rather
+ * than a broken parser. Same defect, same day, as the one in
+ * design_tokens.test.ts.
+ */
+function ruleStart(selector: string): number {
+  let from = 0;
+  for (;;) {
+    const at = CSS.indexOf(selector, from);
+    if (at === -1) return -1;
+    const open = CSS.indexOf('{', at);
+    if (open === -1) return -1;
+    const prev = Math.max(CSS.lastIndexOf('}', at), CSS.lastIndexOf(';', at));
+    if (CSS.slice(prev + 1, open).split(',').some((part) => part.trim() === selector.trim())) return at;
+    from = at + selector.length;
+  }
+}
+
 function block(selector: string): string {
-  const at = CSS.indexOf(selector);
+  const at = ruleStart(selector);
   if (at === -1) throw new Error(`no rule for ${selector} in index.css`);
   const open = CSS.indexOf('{', at);
   let depth = 0;
@@ -52,7 +75,7 @@ function declared(body: string): Map<string, string> {
   return out;
 }
 
-const root = declared(block(':root {'));
+const root = declared(block(':root'));
 const promax = declared(block('[data-density="promax"]'));
 const ultra = declared(block('[data-density="ultra"]'));
 const comfortable = declared(block('[data-density="comfortable"]'));

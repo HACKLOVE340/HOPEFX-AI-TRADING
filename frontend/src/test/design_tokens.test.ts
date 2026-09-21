@@ -43,9 +43,38 @@ const RAW = readFileSync(resolve(__dirname, '../index.css'), 'utf8');
  */
 const CSS = RAW.replace(/\/\*[\s\S]*?\*\//g, ' ');
 
-/** Body of the first rule whose selector matches, brace-balanced. */
+/** Index of the rule whose selector list contains `selector` as a whole item. */
+function ruleStart(selector: string): number {
+  let from = 0;
+  for (;;) {
+    const at = CSS.indexOf(selector, from);
+    if (at === -1) return -1;
+    const open = CSS.indexOf('{', at);
+    if (open === -1) return -1;
+    // Everything between the previous '}' (or the start) and this '{' is the
+    // selector list this occurrence belongs to.
+    const prev = Math.max(CSS.lastIndexOf('}', at), CSS.lastIndexOf(';', at));
+    const list = CSS.slice(prev + 1, open);
+    if (list.split(',').some((part) => part.trim() === selector.trim())) return at;
+    from = at + selector.length;
+  }
+}
+
+/**
+ * Body of the first rule whose SELECTOR LIST contains `selector`, brace-balanced.
+ *
+ * It used to be a bare `indexOf(selector)` with the caller passing `':root {'`,
+ * brace included. That broke the day `:root` gained a second selector --
+ * `:root, [data-theme="dark"] { ... }`, added so a subtree can ask for the dark
+ * palette while the document is light. The token layer was correct and proven
+ * in a browser; the parser was reading a formatting detail as if it were the
+ * structure, and reported the base palette as one token instead of sixty-three.
+ *
+ * Matching the selector within its list instead means reordering or extending a
+ * selector list cannot make this file lie about the design system again.
+ */
 function block(selector: string): string {
-  const at = CSS.indexOf(selector);
+  const at = ruleStart(selector);
   if (at === -1) throw new Error(`no rule for ${selector} in index.css`);
   // Search from `at`, not past the selector: a selector string that already
   // ends in '{' would otherwise skip its own brace and balance the NEXT rule.
@@ -76,7 +105,7 @@ function isColour(value: string): boolean {
   return /^(#|rgba?\(|hsla?\(|color-mix\()/.test(value);
 }
 
-const base = declared(block(':root {'));
+const base = declared(block(':root'));
 const light = declared(block(':root[data-theme="light"]'));
 const ai = declared(block('[data-surface="ai"]'));
 const ultra = declared(block('[data-density="ultra"]'));

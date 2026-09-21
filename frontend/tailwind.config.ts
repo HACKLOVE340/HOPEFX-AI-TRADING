@@ -108,6 +108,16 @@ const config: Config = {
         model:     'var(--ai-model)',
       },
       backgroundColor: {
+        // Roles that existed for text and borders but not for fills, so a page
+        // needing a muted divider or a gain-coloured chip had to reach for a
+        // `terminal-*` / `neon-*` literal -- which does not follow the theme.
+        // Added when the landing page was moved onto tokens.
+        edge:      'var(--border)',
+        hairline:  'var(--hairline)',
+        gain:      'var(--gain)',
+        loss:      'var(--loss)',
+        warn:      'var(--warn)',
+        info:      'var(--info)',
         base:      'var(--bg)',
         surface:   'var(--surface)',
         raised:    'var(--raised)',
@@ -118,6 +128,10 @@ const config: Config = {
         overlay:   'var(--overlay)',
       },
       borderColor: {
+        gain:      'var(--gain)',
+        loss:      'var(--loss)',
+        warn:      'var(--warn)',
+        info:      'var(--info)',
         edge:      'var(--border)',
         'edge-strong': 'var(--border-strong)',
         hairline:  'var(--hairline)',

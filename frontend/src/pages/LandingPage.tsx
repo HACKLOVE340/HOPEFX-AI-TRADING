@@ -382,17 +382,17 @@ function TickerBar({ ticks }: { ticks: Record<string, TickerItem> }) {
   // Show placeholder slots while waiting for first tick data
   if (items.length === 0) {
     return (
-      <div className="w-full overflow-hidden border-b border-terminal-border bg-terminal-surface/60 backdrop-blur-sm">
+      <div className="w-full overflow-hidden border-b border-edge bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] backdrop-blur-sm">
         <div className="flex gap-0 whitespace-nowrap">
           {PUBLIC_SYMBOLS.map(sym => (
             <div
               key={sym}
-              className="inline-flex items-center gap-2 px-6 py-2 border-r border-terminal-border/40 shrink-0"
+              className="inline-flex items-center gap-2 px-6 py-2 border-r border-[color-mix(in_srgb,var(--border)_40%,transparent)] shrink-0"
             >
-              <span className="text-xs font-mono font-semibold text-slate-500 tracking-wide">
+              <span className="text-xs font-mono font-semibold text-muted tracking-wide">
                 {sym.replace('_', '/')}
               </span>
-              <span className="w-14 h-3 rounded bg-terminal-border/60 animate-pulse" />
+              <span className="w-14 h-3 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] animate-pulse" />
             </div>
           ))}
         </div>
@@ -401,7 +401,7 @@ function TickerBar({ ticks }: { ticks: Record<string, TickerItem> }) {
   }
 
   return (
-    <div className="w-full overflow-hidden border-b border-terminal-border bg-terminal-surface/60 backdrop-blur-sm">
+    <div className="w-full overflow-hidden border-b border-edge bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] backdrop-blur-sm">
       <div
         className="ticker-track flex gap-0 whitespace-nowrap"
         style={{ animation: 'tickerScroll 28s linear infinite' }}
@@ -414,9 +414,9 @@ function TickerBar({ ticks }: { ticks: Record<string, TickerItem> }) {
           return (
             <div
               key={`${item.symbol}-${i}`}
-              className="inline-flex items-center gap-2 px-6 py-2 border-r border-terminal-border/40 shrink-0"
+              className="inline-flex items-center gap-2 px-6 py-2 border-r border-[color-mix(in_srgb,var(--border)_40%,transparent)] shrink-0"
             >
-              <span className="text-xs font-mono font-semibold text-slate-300 tracking-wide">
+              <span className="text-xs font-mono font-semibold text-ink tracking-wide">
                 {item.symbol.replace('_', '/')}
               </span>
               <span className={`text-xs font-mono tabular-nums font-bold ${up ? 'text-bull' : 'text-bear'}`}>
@@ -454,7 +454,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
     <motion.nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'bg-terminal-bg/95 backdrop-blur-xl border-b border-terminal-border shadow-terminal'
+          ? 'bg-[color-mix(in_srgb,var(--bg)_95%,transparent)] backdrop-blur-xl border-b border-edge shadow-terminal'
           : 'bg-transparent'
       }`}
       initial={{ y: -80 }}
@@ -464,11 +464,11 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-neon-blue/20 border border-neon-blue/40 flex items-center justify-center">
-            <Activity size={14} className="text-neon-blue" />
+          <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] border border-[color-mix(in_srgb,var(--accent)_40%,transparent)] flex items-center justify-center">
+            <Activity size={14} className="text-accent" />
           </div>
-          <span className="text-lg font-bold tracking-tight text-slate-100">
-            HOPE<span className="text-neon-blue">FX</span>
+          <span className="text-lg font-bold tracking-tight text-strong">
+            HOPE<span className="text-accent">FX</span>
           </span>
         </a>
 
@@ -479,7 +479,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
               key={href}
               href={href}
               onClick={(e) => handleSmoothScroll(e, href)}
-              className="text-sm text-slate-400 hover:text-slate-100 transition-colors duration-150 font-medium"
+              className="text-sm text-dim hover:text-strong transition-colors duration-150 font-medium"
             >
               {label}
             </a>
@@ -488,12 +488,12 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-3">
-          <a href="/login" className="text-sm font-semibold text-slate-300 hover:text-white transition-colors px-3 py-1.5">
+          <a href="/login" className="text-sm font-semibold text-ink hover:text-white transition-colors px-3 py-1.5">
             Log in
           </a>
           <a
             href={registerHref()}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-neon-blue text-terminal-bg px-4 py-2 rounded-lg hover:bg-neon-blue/90 transition-all duration-150 shadow-neon-blue"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-accent text-on-accent px-4 py-2 rounded-lg hover:bg-[color-mix(in_srgb,var(--accent)_90%,transparent)] transition-all duration-150 shadow-neon-blue"
           >
             Start free trial <ArrowRight size={14} />
           </a>
@@ -501,7 +501,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
 
         {/* Mobile hamburger — 44×44 touch target */}
         <button
-          className="md:hidden flex items-center justify-center w-11 h-11 text-slate-400 hover:text-white rounded-lg"
+          className="md:hidden flex items-center justify-center w-11 h-11 text-dim hover:text-white rounded-lg"
           onClick={() => setMobileOpen(v => !v)}
           aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileOpen}
@@ -517,7 +517,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-terminal-surface border-b border-terminal-border overflow-hidden"
+            className="md:hidden bg-surface border-b border-edge overflow-hidden"
           >
             <div className="px-4 py-3 flex flex-col">
               {NAV_LINKS.map(([href, label]) => (
@@ -525,7 +525,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
                   key={href}
                   href={href}
                   onClick={(e) => handleSmoothScroll(e, href)}
-                  className="flex items-center text-sm text-slate-300 hover:text-white font-medium min-h-[44px] border-b border-terminal-border/40 last:border-0"
+                  className="flex items-center text-sm text-ink hover:text-white font-medium min-h-[44px] border-b border-[color-mix(in_srgb,var(--border)_40%,transparent)] last:border-0"
                 >
                   {label}
                 </a>
@@ -533,13 +533,13 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
               <div className="pt-3 pb-1 flex flex-col gap-2">
                 <a
                   href="/login"
-                  className="flex items-center justify-center text-sm font-semibold text-slate-300 min-h-[44px] border border-terminal-border rounded-lg hover:border-slate-500 hover:text-white transition-colors"
+                  className="flex items-center justify-center text-sm font-semibold text-ink min-h-[44px] border border-edge rounded-lg hover:border-edge-strong hover:text-white transition-colors"
                 >
                   Log in
                 </a>
                 <a
                   href={registerHref()}
-                  className="flex items-center justify-center text-sm font-semibold bg-neon-blue text-terminal-bg min-h-[44px] rounded-lg hover:bg-neon-blue/90 transition-colors"
+                  className="flex items-center justify-center text-sm font-semibold bg-accent text-on-accent min-h-[44px] rounded-lg hover:bg-[color-mix(in_srgb,var(--accent)_90%,transparent)] transition-colors"
                 >
                   Start free trial
                 </a>
@@ -561,8 +561,8 @@ function Hero() {
       <div className="absolute inset-0 bg-grid-terminal opacity-60 pointer-events-none" />
       {/* Radial glow */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-neon-blue/5 blur-3xl" />
-        <div className="absolute top-1/2 left-1/4 w-[300px] h-[300px] rounded-full bg-neon-purple/5 blur-3xl" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[color-mix(in_srgb,var(--accent)_5%,transparent)] blur-3xl" />
+        <div className="absolute top-1/2 left-1/4 w-[300px] h-[300px] rounded-full bg-[color-mix(in_srgb,var(--info)_5%,transparent)] blur-3xl" />
       </div>
 
       <div className="relative z-10 max-w-4xl mx-auto">
@@ -571,9 +571,9 @@ function Hero() {
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="inline-flex items-center gap-2 bg-neon-blue/10 border border-neon-blue/30 text-neon-blue text-xs font-semibold px-4 py-1.5 rounded-full mb-8 tracking-wide"
+          className="inline-flex items-center gap-2 bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] text-accent text-xs font-semibold px-4 py-1.5 rounded-full mb-8 tracking-wide"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-neon-blue animate-pulse-fast" />
+          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-fast" />
           AI-Powered Trading Platform
         </motion.div>
 
@@ -582,10 +582,10 @@ function Hero() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.65, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          className="text-4xl xs:text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-100 leading-[1.08] mb-6"
+          className="text-4xl xs:text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-strong leading-[1.08] mb-6"
         >
           Trade{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-amber to-yellow-300">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--warn)] to-yellow-300">
             gold & forex
           </span>
           <br />
@@ -597,7 +597,7 @@ function Hero() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.35 }}
-          className="text-lg text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed"
+          className="text-lg text-dim max-w-2xl mx-auto mb-10 leading-relaxed"
         >
           HOPEFX combines machine learning, macro data feeds, and automated risk management
           to execute strategies that adapt to market conditions in real time.
@@ -612,7 +612,7 @@ function Hero() {
         >
           <a
             href={registerHref()}
-            className="inline-flex items-center justify-center gap-2 bg-neon-blue text-terminal-bg font-bold text-base px-7 py-3.5 rounded-xl hover:bg-neon-blue/90 transition-all duration-150 shadow-neon-blue hover:shadow-lg hover:-translate-y-0.5 w-full xs:w-auto min-h-[48px]"
+            className="inline-flex items-center justify-center gap-2 bg-accent text-on-accent font-bold text-base px-7 py-3.5 rounded-xl hover:bg-[color-mix(in_srgb,var(--accent)_90%,transparent)] transition-all duration-150 shadow-neon-blue hover:shadow-lg hover:-translate-y-0.5 w-full xs:w-auto min-h-[48px]"
           >
             Start free trial <ArrowRight size={16} />
           </a>
@@ -623,7 +623,7 @@ function Hero() {
               const el = document.querySelector('#how-it-works') as HTMLElement | null;
               if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 64, behavior: 'smooth' });
             }}
-            className="inline-flex items-center justify-center gap-2 border border-terminal-border text-slate-300 font-semibold text-base px-7 py-3.5 rounded-xl hover:border-slate-500 hover:text-white transition-all duration-150 w-full xs:w-auto min-h-[48px]"
+            className="inline-flex items-center justify-center gap-2 border border-edge text-ink font-semibold text-base px-7 py-3.5 rounded-xl hover:border-edge-strong hover:text-white transition-all duration-150 w-full xs:w-auto min-h-[48px]"
           >
             See how it works <ChevronRight size={16} />
           </a>
@@ -638,7 +638,7 @@ function Hero() {
         >
           {HERO_STATS.map((stat) => (
             <div key={stat.label} className="text-center">
-              <div className="text-3xl font-extrabold text-slate-100 font-mono tabular-nums">
+              <div className="text-3xl font-extrabold text-strong font-mono tabular-nums">
                 <AnimatedCounter
                   target={stat.value}
                   suffix={stat.suffix}
@@ -647,7 +647,7 @@ function Hero() {
                   display={'display' in stat ? stat.display : undefined}
                 />
               </div>
-              <div className="text-xs text-slate-500 mt-1">{stat.label}</div>
+              <div className="text-xs text-muted mt-1">{stat.label}</div>
             </div>
           ))}
         </motion.div>
@@ -658,7 +658,7 @@ function Hero() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-slate-600"
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-faint"
       >
         <span className="text-2xs uppercase tracking-widest">Scroll</span>
         <motion.div
@@ -681,11 +681,11 @@ function FeaturesSection() {
     <section id="features" className="py-24 px-4">
       <div className="max-w-6xl mx-auto">
         <Reveal>
-          <p className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-3">Features</p>
-          <h2 className="text-4xl font-extrabold text-slate-100 tracking-tight mb-4">
+          <p className="text-xs font-bold text-accent uppercase tracking-widest mb-3">Features</p>
+          <h2 className="text-4xl font-extrabold text-strong tracking-tight mb-4">
             Everything you need to trade smarter
           </h2>
-          <p className="text-slate-400 text-base max-w-xl mb-14">
+          <p className="text-dim text-base max-w-xl mb-14">
             From signal generation to execution, HOPEFX handles the full trading lifecycle.
           </p>
         </Reveal>
@@ -694,7 +694,7 @@ function FeaturesSection() {
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={i * 0.5}>
               <motion.div
-                className="relative bg-terminal-surface border border-terminal-border rounded-xl p-6 cursor-default overflow-hidden group"
+                className="relative bg-surface border border-edge rounded-xl p-6 cursor-default overflow-hidden group"
                 onHoverStart={() => setHovered(f.title)}
                 onHoverEnd={() => setHovered(null)}
                 whileHover={{ y: -4, transition: { duration: 0.2 } }}
@@ -716,8 +716,8 @@ function FeaturesSection() {
                 >
                   {f.icon}
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">{f.title}</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">{f.desc}</p>
+                <h3 className="text-sm font-bold text-strong mb-2">{f.title}</h3>
+                <p className="text-sm text-dim leading-relaxed">{f.desc}</p>
               </motion.div>
             </Reveal>
           ))}
@@ -731,37 +731,37 @@ function FeaturesSection() {
 
 function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="py-24 px-4 bg-terminal-surface/40">
+    <section id="how-it-works" className="py-24 px-4 bg-[color-mix(in_srgb,var(--surface)_40%,transparent)]">
       <div className="max-w-6xl mx-auto">
         <Reveal>
-          <p className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-3">How it works</p>
-          <h2 className="text-4xl font-extrabold text-slate-100 tracking-tight mb-4">
+          <p className="text-xs font-bold text-accent uppercase tracking-widest mb-3">How it works</p>
+          <h2 className="text-4xl font-extrabold text-strong tracking-tight mb-4">
             From setup to live trading in minutes
           </h2>
-          <p className="text-slate-400 text-base max-w-xl mb-16">
+          <p className="text-dim text-base max-w-xl mb-16">
             No coding required. Connect your broker, choose a strategy, and let the AI handle execution.
           </p>
         </Reveal>
 
         <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-8 relative">
           {/* Connector line (desktop) */}
-          <div className="hidden lg:block absolute top-8 left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-transparent via-terminal-border to-transparent" />
+          <div className="hidden lg:block absolute top-8 left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-transparent via-[var(--border)] to-transparent" />
 
           {STEPS.map((step, i) => (
             <Reveal key={step.n} delay={i * 0.6}>
               <div className="flex flex-col items-center text-center relative">
                 <motion.div
-                  className="w-16 h-16 rounded-2xl bg-terminal-surface border border-terminal-border flex items-center justify-center mb-5 relative z-10"
+                  className="w-16 h-16 rounded-2xl bg-surface border border-edge flex items-center justify-center mb-5 relative z-10"
                   whileHover={{ scale: 1.08, borderColor: '#00d4ff' }}
                   transition={{ duration: 0.2 }}
                 >
-                  <div className="text-neon-blue">{step.icon}</div>
-                  <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-neon-blue text-terminal-bg text-2xs font-extrabold flex items-center justify-center">
+                  <div className="text-accent">{step.icon}</div>
+                  <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-accent text-on-accent text-2xs font-extrabold flex items-center justify-center">
                     {step.n}
                   </span>
                 </motion.div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">{step.title}</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">{step.desc}</p>
+                <h3 className="text-sm font-bold text-strong mb-2">{step.title}</h3>
+                <p className="text-sm text-dim leading-relaxed">{step.desc}</p>
               </div>
             </Reveal>
           ))}
@@ -798,11 +798,11 @@ function PricingSection() {
     <section id="pricing" className="py-24 px-4">
       <div className="max-w-7xl mx-auto">
         <Reveal>
-          <p className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-3">Pricing</p>
-          <h2 className="text-4xl font-extrabold text-slate-100 tracking-tight mb-4">
+          <p className="text-xs font-bold text-accent uppercase tracking-widest mb-3">Pricing</p>
+          <h2 className="text-4xl font-extrabold text-strong tracking-tight mb-4">
             Simple, transparent pricing
           </h2>
-          <p className="text-slate-400 text-base max-w-xl mb-8">
+          <p className="text-dim text-base max-w-xl mb-8">
             All plans include a 14-day free trial. No card required to start.
           </p>
         </Reveal>
@@ -810,10 +810,10 @@ function PricingSection() {
         {/* Toggle */}
         <Reveal delay={0.5}>
           <div className="flex items-center gap-3 mb-12">
-            <span className={`text-sm font-medium ${!annual ? 'text-slate-100' : 'text-slate-500'}`}>Monthly</span>
+            <span className={`text-sm font-medium ${!annual ? 'text-strong' : 'text-muted'}`}>Monthly</span>
             <button
               onClick={() => setAnnual(v => !v)}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${annual ? 'bg-neon-blue' : 'bg-terminal-border'}`}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${annual ? 'bg-accent' : 'bg-edge'}`}
               aria-label="Toggle annual billing"
             >
               <motion.span
@@ -822,9 +822,9 @@ function PricingSection() {
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               />
             </button>
-            <span className={`text-sm font-medium ${annual ? 'text-slate-100' : 'text-slate-500'}`}>
+            <span className={`text-sm font-medium ${annual ? 'text-strong' : 'text-muted'}`}>
               Annual
-              <span className="ml-2 text-2xs font-bold text-neon-green bg-neon-green/10 border border-neon-green/30 px-2 py-0.5 rounded-full">
+              <span className="ml-2 text-2xs font-bold text-gain bg-[color-mix(in_srgb,var(--gain)_10%,transparent)] border border-[color-mix(in_srgb,var(--gain)_30%,transparent)] px-2 py-0.5 rounded-full">
                 Save {savingsPct}%
               </span>
             </span>
@@ -833,8 +833,8 @@ function PricingSection() {
 
         {/* Error state */}
         {error && !loading && plans.length === 0 && (
-          <div className="text-center py-12 text-slate-500 text-sm">
-            Unable to load pricing. <a href="/pricing" className="text-neon-blue underline">View full pricing page</a>
+          <div className="text-center py-12 text-muted text-sm">
+            Unable to load pricing. <a href="/pricing" className="text-accent underline">View full pricing page</a>
           </div>
         )}
 
@@ -842,15 +842,15 @@ function PricingSection() {
         {loading && (
           <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="rounded-2xl bg-terminal-surface border border-terminal-border p-7 animate-pulse">
-                <div className="h-4 w-24 bg-terminal-border rounded mb-4" />
-                <div className="h-10 w-20 bg-terminal-border rounded mb-6" />
+              <div key={i} className="rounded-2xl bg-surface border border-edge p-7 animate-pulse">
+                <div className="h-4 w-24 bg-edge rounded mb-4" />
+                <div className="h-10 w-20 bg-edge rounded mb-6" />
                 <div className="space-y-2.5 mb-7">
                   {Array.from({ length: 5 }).map((_, j) => (
-                    <div key={j} className="h-3 bg-terminal-border/60 rounded w-full" />
+                    <div key={j} className="h-3 bg-[color-mix(in_srgb,var(--border)_60%,transparent)] rounded w-full" />
                   ))}
                 </div>
-                <div className="h-10 bg-terminal-border rounded-xl" />
+                <div className="h-10 bg-edge rounded-xl" />
               </div>
             ))}
           </div>
@@ -866,21 +866,21 @@ function PricingSection() {
                   <motion.div
                     className={`relative rounded-2xl p-7 flex flex-col h-full ${
                       featured
-                        ? 'bg-gradient-to-b from-neon-blue/10 to-terminal-surface border-2 border-neon-blue/50 shadow-neon-blue'
-                        : 'bg-terminal-surface border border-terminal-border'
+                        ? 'bg-gradient-to-b from-[color-mix(in_srgb,var(--accent)_10%,transparent)] to-[var(--surface)] border-2 border-[color-mix(in_srgb,var(--accent)_50%,transparent)] shadow-neon-blue'
+                        : 'bg-surface border border-edge'
                     }`}
                     whileHover={{ y: -4 }}
                     transition={{ duration: 0.2 }}
                   >
                     {plan.badge && (
-                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-neon-blue text-terminal-bg text-2xs font-extrabold px-4 py-1 rounded-full whitespace-nowrap tracking-wide">
+                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-accent text-on-accent text-2xs font-extrabold px-4 py-1 rounded-full whitespace-nowrap tracking-wide">
                         {plan.badge}
                       </div>
                     )}
 
                     <div className="mb-6">
-                      <h3 className="text-base font-bold text-slate-100 mb-1">{plan.name}</h3>
-                      <p className="text-xs text-slate-500 mb-3 leading-snug">{plan.tagline}</p>
+                      <h3 className="text-base font-bold text-strong mb-1">{plan.name}</h3>
+                      <p className="text-xs text-muted mb-3 leading-snug">{plan.tagline}</p>
                       <div className="flex items-end gap-1">
                         <AnimatePresence mode="wait">
                           <motion.span
@@ -889,29 +889,29 @@ function PricingSection() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 8 }}
                             transition={{ duration: 0.18 }}
-                            className="text-4xl font-extrabold text-slate-100 font-mono tabular-nums"
+                            className="text-4xl font-extrabold text-strong font-mono tabular-nums"
                           >
                             {displayPrice(plan)}
                           </motion.span>
                         </AnimatePresence>
                         {plan.price_usd_monthly > 0 && (
-                          <span className="text-sm text-slate-500 mb-1.5">/mo</span>
+                          <span className="text-sm text-muted mb-1.5">/mo</span>
                         )}
                       </div>
                       {annual && plan.price_usd_annual > 0 && (
-                        <p className="text-2xs text-slate-500 mt-1">
+                        <p className="text-2xs text-muted mt-1">
                           Billed ${plan.price_usd_annual.toLocaleString()}/yr — save {plan.annual_savings_pct}%
                         </p>
                       )}
                       {plan.commission_label && (
-                        <p className="text-2xs text-slate-600 mt-1">{plan.commission_label}</p>
+                        <p className="text-2xs text-faint mt-1">{plan.commission_label}</p>
                       )}
                     </div>
 
                     <ul className="flex-1 space-y-2.5 mb-7">
                       {plan.highlights.map(f => (
-                        <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
-                          <Check size={14} className="text-neon-green mt-0.5 shrink-0" />
+                        <li key={f} className="flex items-start gap-2.5 text-sm text-ink">
+                          <Check size={14} className="text-gain mt-0.5 shrink-0" />
                           {f}
                         </li>
                       ))}
@@ -921,8 +921,8 @@ function PricingSection() {
                       href={plan.cta_href}
                       className={`w-full text-center text-sm font-bold py-3 rounded-xl transition-all duration-150 ${
                         featured
-                          ? 'bg-neon-blue text-terminal-bg hover:bg-neon-blue/90 shadow-neon-blue'
-                          : 'border border-terminal-border text-slate-300 hover:border-slate-500 hover:text-white'
+                          ? 'bg-accent text-on-accent hover:bg-[color-mix(in_srgb,var(--accent)_90%,transparent)] shadow-neon-blue'
+                          : 'border border-edge text-ink hover:border-edge-strong hover:text-white'
                       }`}
                     >
                       {plan.cta}
@@ -942,11 +942,11 @@ function PricingSection() {
 
 function TestimonialsSection() {
   return (
-    <section className="py-24 px-4 bg-terminal-surface/40">
+    <section className="py-24 px-4 bg-[color-mix(in_srgb,var(--surface)_40%,transparent)]">
       <div className="max-w-5xl mx-auto">
         <Reveal>
-          <p className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-3">Testimonials</p>
-          <h2 className="text-4xl font-extrabold text-slate-100 tracking-tight mb-14">
+          <p className="text-xs font-bold text-accent uppercase tracking-widest mb-3">Testimonials</p>
+          <h2 className="text-4xl font-extrabold text-strong tracking-tight mb-14">
             Trusted by traders worldwide
           </h2>
         </Reveal>
@@ -955,7 +955,7 @@ function TestimonialsSection() {
           {TESTIMONIALS.map((t, i) => (
             <Reveal key={t.author} delay={i * 0.6}>
               <motion.div
-                className="bg-terminal-surface border border-terminal-border rounded-xl p-6 flex flex-col h-full"
+                className="bg-surface border border-edge rounded-xl p-6 flex flex-col h-full"
                 whileHover={{ y: -3 }}
                 transition={{ duration: 0.2 }}
               >
@@ -965,20 +965,20 @@ function TestimonialsSection() {
                     <Star
                       key={si}
                       size={13}
-                      className={si < t.stars ? 'text-neon-amber fill-neon-amber' : 'text-slate-600'}
+                      className={si < t.stars ? 'text-warn fill-neon-amber' : 'text-faint'}
                     />
                   ))}
                 </div>
 
-                <p className="text-sm text-slate-300 leading-relaxed italic flex-1 mb-5">{t.text}</p>
+                <p className="text-sm text-ink leading-relaxed italic flex-1 mb-5">{t.text}</p>
 
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-neon-blue/20 border border-neon-blue/30 flex items-center justify-center text-xs font-bold text-neon-blue shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] border border-[color-mix(in_srgb,var(--accent)_30%,transparent)] flex items-center justify-center text-xs font-bold text-accent shrink-0">
                     {t.avatar}
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-slate-200">{t.author}</div>
-                    <div className="text-xs text-slate-500">{t.role}</div>
+                    <div className="text-sm font-semibold text-strong">{t.author}</div>
+                    <div className="text-xs text-muted">{t.role}</div>
                   </div>
                 </div>
               </motion.div>
@@ -995,31 +995,31 @@ function TestimonialsSection() {
 function CTABand() {
   return (
     <section className="py-24 px-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-neon-blue/8 via-transparent to-neon-purple/8 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-[color-mix(in_srgb,var(--accent)_8%,transparent)] via-transparent to-[color-mix(in_srgb,var(--info)_8%,transparent)] pointer-events-none" />
       <div className="absolute inset-0 bg-grid-terminal opacity-40 pointer-events-none" />
       <Reveal>
         <div className="relative max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-neon-amber/10 border border-neon-amber/30 text-neon-amber text-xs font-semibold px-4 py-1.5 rounded-full mb-6 tracking-wide">
-            <span className="w-1.5 h-1.5 rounded-full bg-neon-amber animate-pulse-fast" />
+          <div className="inline-flex items-center gap-2 bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] border border-[color-mix(in_srgb,var(--warn)_30%,transparent)] text-warn text-xs font-semibold px-4 py-1.5 rounded-full mb-6 tracking-wide">
+            <span className="w-1.5 h-1.5 rounded-full bg-warn animate-pulse-fast" />
             Limited Elite spots available
           </div>
-          <h2 className="text-4xl font-extrabold text-slate-100 tracking-tight mb-4">
+          <h2 className="text-4xl font-extrabold text-strong tracking-tight mb-4">
             Start trading smarter today
           </h2>
-          <p className="text-slate-400 text-base mb-8 max-w-xl mx-auto">
+          <p className="text-dim text-base mb-8 max-w-xl mx-auto">
             14-day free trial on all plans. No credit card required. Cancel anytime.
             Paper trading is free forever.
           </p>
           <div className="flex flex-col xs:flex-row flex-wrap items-center justify-center gap-3 w-full">
             <a
               href={registerHref()}
-              className="inline-flex items-center justify-center gap-2 bg-neon-green text-terminal-bg font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-green/90 transition-all duration-150 shadow-neon-green hover:-translate-y-0.5 w-full xs:w-auto min-h-[52px]"
+              className="inline-flex items-center justify-center gap-2 bg-gain text-on-accent font-bold text-base px-8 py-4 rounded-xl hover:bg-[color-mix(in_srgb,var(--gain)_90%,transparent)] transition-all duration-150 shadow-neon-green hover:-translate-y-0.5 w-full xs:w-auto min-h-[52px]"
             >
               Create free account <ArrowRight size={16} />
             </a>
             <a
               href="/register?plan=elite"
-              className="inline-flex items-center justify-center gap-2 border border-neon-amber/50 text-neon-amber font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-amber/10 transition-all duration-150 hover:-translate-y-0.5 w-full xs:w-auto min-h-[52px]"
+              className="inline-flex items-center justify-center gap-2 border border-[color-mix(in_srgb,var(--warn)_50%,transparent)] text-warn font-bold text-base px-8 py-4 rounded-xl hover:bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] transition-all duration-150 hover:-translate-y-0.5 w-full xs:w-auto min-h-[52px]"
             >
               Unlock Elite <Eye size={16} />
             </a>
@@ -1043,31 +1043,31 @@ function Footer() {
   };
 
   return (
-    <footer className="bg-terminal-surface border-t border-terminal-border px-4 pt-14 pb-8">
+    <footer className="bg-surface border-t border-edge px-4 pt-14 pb-8">
       <div className="max-w-6xl mx-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <a href="/" className="flex items-center gap-2 mb-3 w-fit">
-              <div className="w-7 h-7 rounded-lg bg-neon-blue/20 border border-neon-blue/40 flex items-center justify-center">
-                <Activity size={14} className="text-neon-blue" />
+              <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] border border-[color-mix(in_srgb,var(--accent)_40%,transparent)] flex items-center justify-center">
+                <Activity size={14} className="text-accent" />
               </div>
-              <span className="text-lg font-bold text-slate-100">
-                HOPE<span className="text-neon-blue">FX</span>
+              <span className="text-lg font-bold text-strong">
+                HOPE<span className="text-accent">FX</span>
               </span>
             </a>
-            <p className="text-xs text-slate-500 leading-relaxed max-w-[220px]">
+            <p className="text-xs text-muted leading-relaxed max-w-[220px]">
               AI-powered gold and forex trading platform. Institutional-grade tools for independent traders.
             </p>
             <div className="flex items-center gap-2 mt-4">
               <span className="w-1.5 h-1.5 rounded-full bg-bull animate-pulse-fast" />
-              <span className="text-2xs text-slate-500">Systems operational</span>
+              <span className="text-2xs text-muted">Systems operational</span>
             </div>
           </div>
 
           {/* Product */}
           <div>
-            <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Product</p>
+            <p className="text-xs font-bold text-ink uppercase tracking-widest mb-4">Product</p>
             {([
               ['#features',      'Features'],
               ['#pricing',       'Pricing'],
@@ -1080,7 +1080,7 @@ function Footer() {
                 key={l}
                 href={h}
                 onClick={(e) => handleAnchorScroll(e, h)}
-                className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5"
+                className="flex items-center gap-1.5 text-sm text-muted hover:text-ink transition-colors mb-2.5"
               >
                 {l === 'Market News' && <Newspaper size={11} className="shrink-0" />}
                 {l}
@@ -1090,7 +1090,7 @@ function Footer() {
 
           {/* Company */}
           <div>
-            <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Company</p>
+            <p className="text-xs font-bold text-ink uppercase tracking-widest mb-4">Company</p>
             {([
               ['/pricing',    'Pricing'],
               ['/affiliate',  'Affiliate program'],
@@ -1099,13 +1099,13 @@ function Footer() {
               ['/terms',      'Terms of service'],
               ['/privacy',    'Legal'],
             ] as [string, string][]).map(([h, l]) => (
-              <a key={l} href={h} className="block text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">{l}</a>
+              <a key={l} href={h} className="block text-sm text-muted hover:text-ink transition-colors mb-2.5">{l}</a>
             ))}
           </div>
 
           {/* Support */}
           <div>
-            <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Support</p>
+            <p className="text-xs font-bold text-ink uppercase tracking-widest mb-4">Support</p>
             {([
               ['mailto:support@hopefx.io', 'Contact support'],
               ['/docs',                    'Documentation'],
@@ -1113,7 +1113,7 @@ function Footer() {
               ['/risk-calc',               'Risk calculator'],
               ['/onboarding',              'Getting started'],
             ] as [string, string][]).map(([h, l]) => (
-              <a key={l} href={h} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">
+              <a key={l} href={h} className="flex items-center gap-1 text-sm text-muted hover:text-ink transition-colors mb-2.5">
                 {l} {h.startsWith('mailto:') && <ExternalLink size={10} />}
               </a>
             ))}
@@ -1121,8 +1121,8 @@ function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-terminal-border pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span className="text-xs text-slate-600">
+        <div className="border-t border-edge pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span className="text-xs text-faint">
             © {currentYear} HOPEFX. All rights reserved.
           </span>
           <div className="flex gap-4">
@@ -1132,12 +1132,12 @@ function Footer() {
               ['/docs',    'Docs'],
               ['/status',  'Status'],
             ] as [string, string][]).map(([h, l]) => (
-              <a key={l} href={h} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">{l}</a>
+              <a key={l} href={h} className="text-xs text-faint hover:text-dim transition-colors">{l}</a>
             ))}
           </div>
         </div>
 
-        <p className="text-2xs text-slate-700 mt-4 leading-relaxed max-w-4xl">
+        <p className="text-2xs text-faint mt-4 leading-relaxed max-w-4xl">
           RISK DISCLAIMER: Trading foreign exchange and commodities on margin carries a high level of risk
           and may not be suitable for all investors. Past performance is not indicative of future results.
           HOPEFX does not provide financial advice. Paper trading is simulated — no real funds are at risk.
@@ -1190,13 +1190,13 @@ function SignalStrip() {
   // Show a muted placeholder strip while signals are loading or unavailable
   if (signals.length === 0) {
     return (
-      <div className="w-full overflow-hidden bg-terminal-raised border-y border-terminal-border py-2">
+      <div className="w-full overflow-hidden bg-raised border-y border-edge py-2">
         <div className="flex gap-0 whitespace-nowrap">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="inline-flex items-center gap-2 px-5 border-r border-terminal-border/30 shrink-0">
-              <span className="w-14 h-2.5 rounded bg-terminal-border/50 animate-pulse" />
-              <span className="w-8 h-2.5 rounded bg-terminal-border/40 animate-pulse" />
-              <span className="w-8 h-2.5 rounded bg-terminal-border/30 animate-pulse" />
+            <div key={i} className="inline-flex items-center gap-2 px-5 border-r border-[color-mix(in_srgb,var(--border)_30%,transparent)] shrink-0">
+              <span className="w-14 h-2.5 rounded bg-[color-mix(in_srgb,var(--border)_50%,transparent)] animate-pulse" />
+              <span className="w-8 h-2.5 rounded bg-[color-mix(in_srgb,var(--border)_40%,transparent)] animate-pulse" />
+              <span className="w-8 h-2.5 rounded bg-[color-mix(in_srgb,var(--border)_30%,transparent)] animate-pulse" />
             </div>
           ))}
         </div>
@@ -1205,20 +1205,20 @@ function SignalStrip() {
   }
 
   return (
-    <div className="w-full overflow-hidden bg-terminal-raised border-y border-terminal-border py-2">
+    <div className="w-full overflow-hidden bg-raised border-y border-edge py-2">
       <div className="ticker-track flex gap-0 whitespace-nowrap" style={{ animation: 'tickerScroll 40s linear infinite' }}>
         {[...signals, ...signals].map((sig, i) => {
           const up = sig.direction === 'long';
           const neutral = sig.direction === 'neutral';
           return (
-            <div key={i} className="inline-flex items-center gap-2 px-5 border-r border-terminal-border/30 shrink-0">
-              <span className="text-2xs font-mono font-semibold text-slate-400 uppercase tracking-wide">
+            <div key={i} className="inline-flex items-center gap-2 px-5 border-r border-[color-mix(in_srgb,var(--border)_30%,transparent)] shrink-0">
+              <span className="text-2xs font-mono font-semibold text-dim uppercase tracking-wide">
                 {sig.symbol?.replace('_', '/')}
               </span>
-              <span className={`text-2xs font-bold uppercase ${neutral ? 'text-slate-400' : up ? 'text-bull' : 'text-bear'}`}>
+              <span className={`text-2xs font-bold uppercase ${neutral ? 'text-dim' : up ? 'text-bull' : 'text-bear'}`}>
                 {sig.direction}
               </span>
-              <span className="text-2xs text-slate-500 font-mono">
+              <span className="text-2xs text-muted font-mono">
                 {(sig.confidence * 100).toFixed(0)}%
               </span>
             </div>
@@ -1271,12 +1271,12 @@ function PlatformStatsBar() {
   // Skeleton while loading
   if (!stats && !error) {
     return (
-      <div className="w-full bg-terminal-surface/60 border-b border-terminal-border">
+      <div className="w-full bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] border-b border-edge">
         <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="w-16 h-2.5 rounded bg-terminal-border/50 animate-pulse" />
-              <span className="w-10 h-2.5 rounded bg-terminal-border/40 animate-pulse" />
+              <span className="w-16 h-2.5 rounded bg-[color-mix(in_srgb,var(--border)_50%,transparent)] animate-pulse" />
+              <span className="w-10 h-2.5 rounded bg-[color-mix(in_srgb,var(--border)_40%,transparent)] animate-pulse" />
             </div>
           ))}
         </div>
@@ -1297,17 +1297,17 @@ function PlatformStatsBar() {
   ];
 
   return (
-    <div className="w-full bg-terminal-surface/60 border-b border-terminal-border">
+    <div className="w-full bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] border-b border-edge">
       <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
         {items.map(item => (
           <div key={item.label} className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">{item.label}</span>
-            <span className="text-xs font-mono font-bold text-slate-200 tabular-nums">{item.value}</span>
+            <span className="text-xs text-muted">{item.label}</span>
+            <span className="text-xs font-mono font-bold text-strong tabular-nums">{item.value}</span>
           </div>
         ))}
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-bull animate-pulse-fast" />
-          <span className="text-2xs text-slate-500">Live data</span>
+          <span className="text-2xs text-muted">Live data</span>
         </div>
       </div>
     </div>
@@ -1397,7 +1397,7 @@ const LandingPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="landing-root min-h-screen bg-terminal-bg text-slate-200 font-sans antialiased">
+    <div className="landing-root min-h-screen bg-base text-strong font-sans antialiased">
 
       {/* Sticky nav */}
       <Navbar scrolled={scrolled} />

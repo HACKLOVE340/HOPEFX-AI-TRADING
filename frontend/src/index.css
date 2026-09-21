@@ -19,7 +19,28 @@
     vertical-align: -0.125em;
   }
 
-  :root {
+  /* Dark is the default, and it is also askable for.
+   *
+   * `:root` carried the dark values and `:root[data-theme="light"]` overrode
+   * them, so a subtree had no way to opt back into dark -- there was no
+   * `[data-theme="dark"]` block and no `prefers-color-scheme` query anywhere in
+   * this file. A surface that is dark by design (the marketing page, the
+   * instrument palette) therefore had to paint fixed literals instead of
+   * tokens, and a literal does not follow the theme. That is how the landing
+   * page ended up legible only by not participating.
+   *
+   * Adding the attribute to this selector rather than duplicating forty custom
+   * properties keeps one source for the values. Custom properties inherit from
+   * the nearest ancestor that sets them, so `[data-theme="dark"]` on a div wins
+   * for that subtree even while `:root[data-theme="light"]` is set on <html> --
+   * specificity only decides between rules matching the SAME element.
+   *
+   * The light override must stay after this block. `the_landing_page_follows_
+   * the_theme.test.ts` asserts that order, because if it ever moved above,
+   * switching the theme would silently stop doing anything.
+   */
+  :root,
+  [data-theme="dark"] {
     --bg:            #05070d;
     --surface:       #0a0e18;
     --raised:        #0f1523;
