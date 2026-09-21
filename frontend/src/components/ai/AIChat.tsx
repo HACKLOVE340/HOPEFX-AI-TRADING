@@ -10,6 +10,8 @@
  * histories isolated.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+
+import { summonPresence, dismissPresence } from '../../hub/presenceSummons';
 import { aiAssistantApi } from '../../hooks/useApi';
 import { useVoice } from '../../hooks/useVoice';
 
@@ -75,6 +77,19 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
+  }, []);
+
+  // Call the presence while the assistant is open, and let it go on the way
+  // out. Before this, the head was mounted on every page for every signed-in
+  // person and nothing could dismiss it; now it is down unless something asks.
+  //
+  // This is the explicit caller. The other is `useVoice`, which publishes to
+  // speechBus and raises the presence whenever the platform actually talks --
+  // so opening this panel and being spoken to are both "called", and neither
+  // depends on the other being wired.
+  useEffect(() => {
+    summonPresence('the assistant is open');
+    return () => { dismissPresence(); };
   }, []);
 
   useEffect(() => {
