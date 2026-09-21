@@ -5,16 +5,18 @@ import type { BrokerSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { Landmark } from 'lucide-react';
-
+import { Check, CheckCircle2, Landmark, XCircle } from 'lucide-react';
 const DEFAULT: BrokerSettings = {
   type: 'paper', api_key: '', account_id: '', practice: true, connected: false,
 };
 
+// Plain text: these render as <option> elements, which can hold a string and
+// nothing else — an SVG there is not a rendering the browser offers. (Lucide
+// also has no llama.)
 const BROKER_OPTIONS = [
-  { value: 'paper',  label: '📄 Paper Trading (no real money)' },
-  { value: 'oanda',  label: '🏦 OANDA' },
-  { value: 'alpaca', label: '🦙 Alpaca' },
+  { value: 'paper',  label: 'Paper Trading (no real money)' },
+  { value: 'oanda',  label: 'OANDA' },
+  { value: 'alpaca', label: 'Alpaca' },
 ];
 
 const BrokerSection: React.FC = () => {
@@ -196,8 +198,8 @@ const BrokerSection: React.FC = () => {
                 autoComplete="off"
               />
               {keyOnFile && !form.api_key && (
-                <div style={{ fontSize: 11, color: 'var(--gain)', marginTop: 4 }}>
-                  ✓ API key saved — leave blank to keep it, or enter a new key to replace.
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--gain)', marginTop: 4 }}>
+                  <Check size="1em" aria-hidden /> API key saved — leave blank to keep it, or enter a new key to replace.
                 </div>
               )}
             </Field>
@@ -235,10 +237,10 @@ const BrokerSection: React.FC = () => {
                 Test connection
               </Button>
               {testStatus === 'ok' && (
-                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}>✅ {testMsg}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}><CheckCircle2 size="1em" aria-hidden /> {testMsg}</span>
               )}
               {testStatus === 'fail' && (
-                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>❌ {testMsg}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}><XCircle size="1em" aria-hidden /> {testMsg}</span>
               )}
             </div>
           </>

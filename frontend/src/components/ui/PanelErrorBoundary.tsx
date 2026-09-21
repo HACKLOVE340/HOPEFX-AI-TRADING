@@ -6,6 +6,7 @@
  */
 
 import React, { Component } from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 interface Props {
   title?:    string;
@@ -36,7 +37,7 @@ export class PanelErrorBoundary extends Component<Props, State> {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 p-4 bg-[var(--surface)] border border-[#ff3b5c]/20 rounded-lg">
         <div className="flex items-center gap-2">
-          <span className="text-[#ff3b5c] text-sm">⚠</span>
+          <AlertTriangle size={14} aria-hidden className="text-[#ff3b5c]" />
           <span className="text-[11px] font-semibold text-[#ff3b5c] uppercase tracking-wider">
             {this.props.title ?? 'Panel'} Error
           </span>

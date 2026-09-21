@@ -11,21 +11,21 @@ import {
 import type { ServiceStatus, BackupRecord, ScheduledJob } from './types';
 import { asArray, extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { AlarmClock, CheckCircle2, KeyRound, Package, Save, XCircle } from 'lucide-react';
-
+import { AlarmClock, Brain, CheckCircle2, Database, KeyRound, Package, Plug, Save, Settings, TrendingUp, Wrench, XCircle, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const fmtDuration = (ms: number) =>
   ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${(ms / 60000).toFixed(1)}m`;
 
-const SERVICE_ICONS: Record<string, string> = {
-  database:   '🗄️',
-  redis:      '⚡',
-  broker:     '📈',
-  ml_engine:  '🧠',
-  websocket:  '🔌',
-  celery:     '⚙️',
+const SERVICE_ICONS: Record<string, LucideIcon> = {
+  database:   Database,
+  redis:      Zap,
+  broker:     TrendingUp,
+  ml_engine:  Brain,
+  websocket:  Plug,
+  celery:     Settings,
 };
 
 interface ApiKey {
@@ -175,12 +175,12 @@ const SystemHealthSection: React.FC = () => {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 18 }}>{SERVICE_ICONS[svc.name] ?? '🔧'}</span>
+                  <span style={{ fontSize: 18 }}>{(() => { const I = SERVICE_ICONS[svc.name] ?? Wrench; return <I size="1em" aria-hidden />; })()}</span>
                   <span style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>{svc.name.replace(/_/g, ' ')}</span>
                 </div>
                 <StatusBadge status={svc.status} />
               </div>
-              <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+              <div style={{ display: 'flex', gap: 16, fontSize: 'var(--fs-body)'}}>
                 <div>
                   <div style={{ color: 'var(--text-faint)', marginBottom: 2 }}>Latency</div>
                   <div style={{ color: svc.latency_ms > 500 ? 'var(--loss)' : svc.latency_ms > 100 ? 'var(--warn)' : 'var(--gain)', fontWeight: 700 }}>
@@ -193,7 +193,7 @@ const SystemHealthSection: React.FC = () => {
                 </div>
               </div>
               {svc.error && (
-                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--loss)', background: 'rgba(248,113,113,0.05)', padding: '4px 8px', borderRadius: 4 }}>
+                <div style={{ marginTop: 8, fontSize: 'var(--fs-label)', color: 'var(--loss)', background: 'rgba(248,113,113,0.05)', padding: '4px 8px', borderRadius: 4 }}>
                   {svc.error}
                 </div>
               )}
@@ -235,11 +235,11 @@ const SystemHealthSection: React.FC = () => {
                 <tbody>
                   {backups.map(b => (
                     <tr key={b.backup_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
-                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--link)' }}>{b.backup_id}</td>
+                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 'var(--fs-label)', color: 'var(--link)' }}>{b.backup_id}</td>
                       <td style={{ padding: '10px 16px', textTransform: 'capitalize', color: 'var(--text-dim)' }}>{b.type}</td>
                       <td style={{ padding: '10px 16px' }}><StatusBadge status={b.status} /></td>
-                      <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{b.size_mb.toFixed(1)} MB</td>
-                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(b.created_at)}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{b.size_mb.toFixed(1)} MB</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(b.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -264,12 +264,12 @@ const SystemHealthSection: React.FC = () => {
                 <tr key={job.job_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 16px' }}>
                     <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)'}}>{job.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{job.job_id}</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>{job.job_id}</div>
                   </td>
-                  <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--ai-model)' }}>{job.schedule}</td>
+                  <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 'var(--fs-label)', color: 'var(--ai-model)' }}>{job.schedule}</td>
                   <td style={{ padding: '10px 16px' }}><StatusBadge status={job.status} /></td>
-                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(job.last_run)}</td>
-                  <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(job.last_run)}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>
                     {job.last_duration_ms ? fmtDuration(job.last_duration_ms) : '—'}
                   </td>
                   <td style={{ padding: '10px 16px' }}>
@@ -306,15 +306,15 @@ const SystemHealthSection: React.FC = () => {
                 {apiKeys.map(k => (
                   <tr key={k.key_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 16px' }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--ai-model)' }}>{k.prefix}…</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{k.name}</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 'var(--fs-body)', color: 'var(--ai-model)' }}>{k.prefix}…</div>
+                      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{k.name}</div>
                     </td>
-                    <td style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-dim)', fontFamily: 'monospace' }}>{k.user_id.slice(0, 12)}…</td>
-                    <td style={{ padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)' }}>{k.scopes?.join(', ') || 'all'}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(k.created_at)}</td>
-                    <td style={{ padding: '10px 16px', fontSize: 12, color: k.last_used ? 'var(--text-dim)' : 'var(--text-faint)' }}>{fmtDate(k.last_used)}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{k.user_id.slice(0, 12)}…</td>
+                    <td style={{ padding: '10px 16px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{k.scopes?.join(', ') || 'all'}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{fmtDate(k.created_at)}</td>
+                    <td style={{ padding: '10px 16px', fontSize: 'var(--fs-body)', color: k.last_used ? 'var(--text-dim)' : 'var(--text-faint)' }}>{fmtDate(k.last_used)}</td>
                     <td style={{ padding: '10px 16px' }}>
-                      <span style={{ color: k.active ? 'var(--gain)' : 'var(--loss)', fontSize: 12, fontWeight: 700 }}>
+                      <span style={{ color: k.active ? 'var(--gain)' : 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700 }}>
                         {k.active ? 'Active' : 'Revoked'}
                       </span>
                     </td>

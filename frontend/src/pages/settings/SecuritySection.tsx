@@ -21,8 +21,7 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 import { Card, SectionHeader, Button, StatusBadge, Divider, Input, Field } from './ui';
 import { extractApiError } from '../../lib/utils';
-import { Lock } from 'lucide-react';
-
+import { CheckCircle2, Lock, XCircle } from 'lucide-react';
 const SecuritySection: React.FC = () => {
   const navigate = useNavigate();
   const confirm  = useConfirm();
@@ -162,7 +161,7 @@ const SecuritySection: React.FC = () => {
         </Field>
         {pwMsg && (
           <div style={{ fontSize: 'var(--fs-body)', color: pwMsg.type === 'ok' ? '#22c55e' : 'var(--loss)', marginBottom: 12 }}>
-            {pwMsg.type === 'ok' ? '✅' : '❌'} {pwMsg.text}
+            {pwMsg.type === 'ok' ? <CheckCircle2 size="1em" aria-hidden /> : <XCircle size="1em" aria-hidden />} {pwMsg.text}
           </div>
         )}
         <Button
@@ -277,7 +276,7 @@ const SecuritySection: React.FC = () => {
                   </span>
                   {session.current && <StatusBadge status="ok" label="This device" />}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                   {session.ip_address} · Last active {new Date(session.last_active).toLocaleDateString()}
                 </div>
               </div>

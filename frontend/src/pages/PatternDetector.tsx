@@ -9,10 +9,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-   Radar, ScanSearch, Cpu,
-   BarChart3, BookOpen,
-} from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Bot, Brain, Cpu, Radar, ScanSearch, Search, Shield, TrendingDown } from 'lucide-react';
 import { tradingApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -101,7 +98,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
           {formatPatternName(pattern.pattern_type)}
         </div>
         <span style={{
-          fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
+          fontSize: 'var(--fs-label)', fontWeight: 700, padding: '3px 8px', borderRadius: 20,
           background: neutral ? 'var(--raised)' : bullish ? '#14532d' : '#450a0a',
           color: dirColor,
           border: `1px solid ${neutral ? '#334155' : bullish ? '#166534' : '#7f1d1d'}`,
@@ -115,8 +112,8 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
       {/* Confidence bar */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Confidence</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: barColor }}>{pct}%</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>Confidence</span>
+          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: barColor }}>{pct}%</span>
         </div>
         <div style={{ height: 6, borderRadius: 4, background: 'var(--surface)', overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 4, transition: 'width 0.4s ease' }} />
@@ -141,17 +138,17 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
 
       {/* R:R + description */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>R:R</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>R:R</span>
         <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>
           {riskReward(pattern.entry_price, pattern.target_price, pattern.stop_loss)}
         </span>
-        <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginLeft: 'auto' }}>
           Bars {pattern.start_index}–{pattern.end_index}
         </span>
       </div>
 
       {pattern.description && (
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 12 }}>
+        <p style={{ margin: 0, fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 12 }}>
           {pattern.description}
         </p>
       )}
@@ -171,7 +168,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
         </button>
       )}
       {pattern.confidence >= 0.5 && neutral && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0' }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0' }}>
           Direction unconfirmed — await breakout before trading
         </div>
       )}
@@ -234,13 +231,13 @@ const PatternDetector: React.FC = () => {
       subtitle="AI-powered chart pattern recognition for XAU/USD and major instruments"
       actions={<><div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => navigate('/ai-chart')} style={s.navBtn}>
-            🧠 AI Chart
+            <Brain size="1em" aria-hidden /> AI Chart
           </button>
           <button onClick={() => navigate('/ai-strategy')} style={s.navBtn}>
-            🤖 AI Strategy
+            <Bot size="1em" aria-hidden /> AI Strategy
           </button>
           <button onClick={() => navigate('/risk-calculator')} style={s.navBtn}>
-            🛡 Risk Calc
+            <Shield size="1em" aria-hidden /> Risk Calc
           </button>
         </div>
 
@@ -313,7 +310,7 @@ const PatternDetector: React.FC = () => {
         </div>
       ) : error ? (
         <div style={{ ...s.center, gap: 12 }}>
-          <span style={{ color: 'var(--loss)', fontSize: 14 }}>⚠ {error}</span>
+          <span style={{ color: 'var(--loss)', fontSize: 14 }}><AlertTriangle size="1em" aria-hidden /> {error}</span>
           <button onClick={scan} style={s.retryBtn}>Retry</button>
         </div>
       ) : data ? (
@@ -321,7 +318,7 @@ const PatternDetector: React.FC = () => {
           data.note ? (
             /* Detection never ran — say so, rather than reporting a clean negative. */
             <div style={s.center}>
-              <span style={{ fontSize: 32, marginBottom: 12 }}>📉</span>
+              <span style={{ fontSize: 32, marginBottom: 12 }}><TrendingDown size="1em" aria-hidden /></span>
               <p style={{ color: '#facc15', fontSize: 14, textAlign: 'center', maxWidth: 460, lineHeight: 1.7 }}>
                 Insufficient price history for{' '}
                 <strong style={{ color: '#fde68a' }}>{data.symbol}</strong> / {timeframe}
@@ -334,7 +331,7 @@ const PatternDetector: React.FC = () => {
             </div>
           ) : (
             <div style={s.center}>
-              <span style={{ fontSize: 32, marginBottom: 12 }}>🔍</span>
+              <span style={{ fontSize: 32, marginBottom: 12 }}><Search size="1em" aria-hidden /></span>
               <p style={{ color: 'var(--text-muted)', fontSize: 14, textAlign: 'center', maxWidth: 420, lineHeight: 1.7 }}>
                 No patterns detected above{' '}
                 <strong style={{ color: 'var(--text-dim)' }}>{Math.round(minConf * 100)}%</strong>{' '}
@@ -379,7 +376,7 @@ const s: Record<string, React.CSSProperties> = {
 
   controls: { display: 'flex', alignItems: 'flex-end', gap: 20, flexWrap: 'wrap' },
   controlGroup: { display: 'flex', flexDirection: 'column', gap: 6 },
-  controlLabel: { fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 },
+  controlLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontWeight: 600 },
 
   select: {
     background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6,
@@ -389,7 +386,7 @@ const s: Record<string, React.CSSProperties> = {
 
   tfBtn: {
     background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6,
-    color: 'var(--text-muted)', fontSize: 12, padding: '5px 9px', cursor: 'pointer',
+    color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: '5px 9px', cursor: 'pointer',
     fontWeight: 500,
   },
   tfBtnActive: { background: '#3b82f6', border: '1px solid #3b82f6', color: '#fff' },
@@ -411,7 +408,7 @@ const s: Record<string, React.CSSProperties> = {
   card: { background: 'var(--raised)', borderRadius: 12, padding: 22, border: '1px solid var(--border-strong)' },
 
   priceCell:  { background: 'var(--surface)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 },
-  priceLabel: { fontSize: 11, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' },
+  priceLabel: { fontSize: 'var(--fs-label)', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' },
   priceVal:   { fontSize: 14, fontWeight: 700 },
 
   center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 64, gap: 8 },
@@ -424,7 +421,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   navBtn: {
     background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
-    color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+    color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600,
     padding: '6px 14px', fontFamily: 'inherit',
   },
 };

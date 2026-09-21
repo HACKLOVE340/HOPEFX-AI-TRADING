@@ -345,7 +345,7 @@ const s: Record<string, React.CSSProperties> = {
   form:    { display: 'flex', flexDirection: 'column', gap: 16 },
   field:   { display: 'flex', flexDirection: 'column' },
   label: {
-    fontSize: 11, fontWeight: 700, color: 'var(--text-dim)',
+    fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-dim)',
     textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6,
   },
   input: {
@@ -372,7 +372,7 @@ const s: Record<string, React.CSSProperties> = {
     touchAction: 'manipulation',
   },
   forgotLink: { fontSize: 'var(--fs-body)', color: 'var(--link)', textDecoration: 'none', fontWeight: 500, minHeight: 44, display: 'inline-flex', alignItems: 'center' },
-  totpHint:   { fontSize: 11, color: 'var(--text-muted)', marginTop: 6 },
+  totpHint:   { fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 },
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)',

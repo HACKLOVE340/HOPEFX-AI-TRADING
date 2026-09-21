@@ -14,8 +14,7 @@ import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageShell } from '../components/system/PageShell';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
-import { AlertTriangle, Bandage, Bug, Folder, Microscope, Siren, XCircle, Zap } from 'lucide-react';
-
+import { AlertTriangle, Bandage, BarChart3, Bug, CheckCircle2, Folder, Microscope, Ruler, Search, Shield, Siren, XCircle, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface HealStatus {
@@ -152,13 +151,13 @@ const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patc
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
         <div>
           <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 14 }}>Patch Diff — {patch.file}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
             {patch.endpoint} · {new Date(patch.applied_at).toLocaleString()}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: patch.success ? '#14532d' : '#450a0a', color: patch.success ? 'var(--gain)' : 'var(--loss)' }}>
-            {patch.success ? '✅ Applied' : '❌ Failed'}
+          <span style={{ fontSize: 'var(--fs-body)', padding: '2px 8px', borderRadius: 4, background: patch.success ? '#14532d' : '#450a0a', color: patch.success ? 'var(--gain)' : 'var(--loss)' }}>
+            {patch.success ? <><CheckCircle2 size="1em" aria-hidden /> Applied</> : <><XCircle size="1em" aria-hidden /> Failed</>}
           </span>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
@@ -206,10 +205,10 @@ const PatchTable: React.FC<{ patches: PatchRecord[]; loading: boolean }> = ({ pa
         <div style={tableWrapStyle}>
           {patches.slice(0, 20).map((p, i) => (
             <div key={i} style={{ ...tableRowStyle, cursor: 'pointer' }} onClick={() => setDiffPatch(p)}>
-              <span style={successBadgeStyle(p.success)}>{p.success ? '✅ applied' : '❌ failed'}</span>
+              <span style={successBadgeStyle(p.success)}>{p.success ? <><CheckCircle2 size="1em" aria-hidden /> applied</> : <><XCircle size="1em" aria-hidden /> failed</>}</span>
               <span style={monoStyle}>{p.file}</span>
               <span style={{ ...timeStyle, marginLeft: 'auto' }}>{new Date(p.applied_at).toLocaleTimeString()}</span>
-              <span style={{ fontSize: 11, color: '#3b82f6', marginLeft: 8 }}>View diff →</span>
+              <span style={{ fontSize: 'var(--fs-label)', color: '#3b82f6', marginLeft: 8 }}>View diff →</span>
             </div>
           ))}
         </div>
@@ -240,7 +239,7 @@ const ThreatTable: React.FC<{
             <span style={severityBadgeStyle(t.severity)}>{t.severity}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={monoStyle}>{t.path}</div>
-              <div style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 2 }}>{t.detail}</div>
+              <div style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-label)', marginTop: 2 }}>{t.detail}</div>
             </div>
             {!t.quarantined ? (
               <button
@@ -355,12 +354,12 @@ const AutoHealDashboard: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/security')}
-              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              🛡 Security
+              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+              <Shield size="1em" aria-hidden /> Security
             </button>
             <button onClick={() => navigate('/')}
-              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              📊 Dashboard
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+              <BarChart3 size="1em" aria-hidden /> Dashboard
             </button>
           </div>
         }
@@ -372,7 +371,7 @@ const AutoHealDashboard: React.FC = () => {
       <div style={actionBarStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button style={actionBtnStyle} onClick={handleScan} disabled={scanning}>
-            {scanning ? '🔍 Scanning…' : '🔍 Integrity Scan'}
+            <Search size="1em" aria-hidden /> {scanning ? 'Scanning…' : 'Integrity Scan'}
           </button>
           {scanning && (
             <div style={{ position: 'relative', width: '100%', background: 'var(--raised)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
@@ -381,11 +380,11 @@ const AutoHealDashboard: React.FC = () => {
           )}
         </div>
         <button style={actionBtnStyle} onClick={handleRebuild} disabled={rebuilding}>
-          {rebuilding ? 'Rebuilding…' : '📐 Rebuild Baseline'}
+          {rebuilding ? 'Rebuilding…' : <><Ruler size="1em" aria-hidden /> Rebuild Baseline</>}
         </button>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button style={{ ...actionBtnStyle, background: '#7c3aed' }} onClick={handleAvScan} disabled={avScanning}>
-            {avScanning ? '🛡️ AV Scan…' : '🛡️ AV Full Scan'}
+            <Shield size="1em" aria-hidden /> {avScanning ? 'AV Scan…' : 'AV Full Scan'}
           </button>
           {avScanning && (
             <div style={{ position: 'relative', width: '100%', background: 'var(--raised)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
@@ -487,7 +486,7 @@ const AutoHealDashboard: React.FC = () => {
 
 const errorBannerStyle: React.CSSProperties = {
   background: '#f9731622', border: '1px solid #f97316',
-  borderRadius: 8, color: '#fdba74', fontSize: 12, padding: '10px 16px',
+  borderRadius: 8, color: '#fdba74', fontSize: 'var(--fs-body)', padding: '10px 16px',
 };
 
 const actionBarStyle: React.CSSProperties = {
@@ -496,12 +495,12 @@ const actionBarStyle: React.CSSProperties = {
 
 const actionBtnStyle: React.CSSProperties = {
   background: '#1d4ed8', border: 'none', borderRadius: 6,
-  color: '#fff', cursor: 'pointer', fontSize: 12,
+  color: '#fff', cursor: 'pointer', fontSize: 'var(--fs-body)',
   fontWeight: 700, padding: '8px 16px',
 };
 
 const sectionLabelStyle: React.CSSProperties = {
-  color: 'var(--text-muted)', fontSize: 11, fontWeight: 700,
+  color: 'var(--text-muted)', fontSize: 'var(--fs-label)', fontWeight: 700,
   letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 4,
 };
 
@@ -532,11 +531,11 @@ const panelTitleStyle: React.CSSProperties = {
 
 const panelCountStyle: React.CSSProperties = {
   background: 'var(--surface-hover)', borderRadius: 10, color: 'var(--text-dim)',
-  fontSize: 11, fontWeight: 700, padding: '2px 8px',
+  fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px',
 };
 
 const emptyStyle: React.CSSProperties = {
-  color: 'var(--text-muted)', fontSize: 12, padding: '20px 16px', textAlign: 'center',
+  color: 'var(--text-muted)', fontSize: 'var(--fs-body)', padding: '20px 16px', textAlign: 'center',
 };
 
 const tableWrapStyle: React.CSSProperties = {
@@ -550,16 +549,16 @@ const tableRowStyle: React.CSSProperties = {
 
 const monoStyle: React.CSSProperties = {
   color: 'var(--text, var(--text-strong))', fontFamily: 'monospace',
-  fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  fontSize: 'var(--fs-label)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 };
 
 const timeStyle: React.CSSProperties = {
-  color: 'var(--text-muted)', fontSize: 11, flexShrink: 0,
+  color: 'var(--text-muted)', fontSize: 'var(--fs-label)', flexShrink: 0,
 };
 
 const diffStyle: React.CSSProperties = {
   background: 'var(--surface)', color: 'var(--text-dim)', fontFamily: 'monospace',
-  fontSize: 10, margin: 0, maxHeight: 200, overflowY: 'auto',
+  fontSize: 'var(--fs-micro)', margin: 0, maxHeight: 200, overflowY: 'auto',
   padding: '8px 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
 };
 
@@ -599,13 +598,13 @@ function severityBadgeStyle(sev: string): React.CSSProperties {
 
 const quarantineBtnStyle: React.CSSProperties = {
   background: '#7c3aed22', border: '1px solid #7c3aed', borderRadius: 6,
-  color: 'var(--ai-model)', cursor: 'pointer', fontSize: 11,
+  color: 'var(--ai-model)', cursor: 'pointer', fontSize: 'var(--fs-label)',
   fontWeight: 700, padding: '3px 10px', flexShrink: 0,
 };
 
 const quarantinedBadgeStyle: React.CSSProperties = {
   background: '#33415522', border: '1px solid var(--border-strong)', borderRadius: 10,
-  color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, padding: '2px 7px', flexShrink: 0,
+  color: 'var(--text-muted)', fontSize: 'var(--fs-micro)', fontWeight: 700, padding: '2px 7px', flexShrink: 0,
 };
 
 export default AutoHealDashboard;

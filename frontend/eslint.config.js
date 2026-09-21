@@ -188,10 +188,22 @@ export default tseslint.config(
   // The list may only shrink. `src/test/a11y_debt_is_accurate.test.ts` fails if
   // a listed file has no violations left, or no longer exists: an entry that
   // describes nothing is how a ratchet stops being one.
-  {
-    files: Object.keys(a11yDebt.files),
-    rules: {
-      'jsx-a11y/control-has-associated-label': ['warn', A11Y_LABEL_OPTIONS],
-    },
-  },
+  //
+  // Spread rather than stated, so an EMPTY list contributes no config block at
+  // all. Flat config rejects `files: []` outright — `Key "files": Expected
+  // value to be a non-empty array` — and it rejects it at LOAD time, so the
+  // ratchet reaching zero would take `npm run lint` down with it for every
+  // rule in this file, not just this one. Zero entries means the rule is an
+  // error everywhere with no exceptions, which is the state the ratchet exists
+  // to arrive at; it must not be the state that breaks the gate.
+  ...(Object.keys(a11yDebt.files).length > 0
+    ? [
+        {
+          files: Object.keys(a11yDebt.files),
+          rules: {
+            'jsx-a11y/control-has-associated-label': ['warn', A11Y_LABEL_OPTIONS],
+          },
+        },
+      ]
+    : []),
 );

@@ -398,10 +398,26 @@ class RLAgent:
         if not Path(self.model_path).exists():
             logger.warning("No saved model at %s", self.model_path)
             return False
+
+        # Before stable-baselines3 is even imported: `PPO.load` unpickles the
+        # policy out of the zip, so the gate has to run on the bytes first.
+        # Existence was checked above, so False here is REFUSED, not absent.
+        from ml import _verify_checksum
+
+        if not _verify_checksum(Path(self.model_path)):
+            # _verify_checksum has already logged CRITICAL with the specifics.
+            logger.error(
+                "REFUSING to load RL policy %s: it failed its integrity check. "
+                "The file is present and its bytes do not match the sha256 recorded "
+                "in that directory's model_checksums.json.",
+                self.model_path,
+            )
+            return False
+
         try:
             from stable_baselines3 import PPO
 
-            self._model = PPO.load(self.model_path)
+            self._model = PPO.load(self.model_path)  # nosec B301 - integrity-checked immediately above
             logger.info("Loaded RL model from %s", self.model_path)
             return True
         except Exception as exc:

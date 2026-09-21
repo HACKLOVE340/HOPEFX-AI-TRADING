@@ -30,6 +30,7 @@ import { cn, fmtPrice, extractApiError } from '../../lib/utils';
 import type { PriceTick } from '../../types';
 import { toUTCSeconds as toUTC } from '../../lib/chartTime';
 import { assessBars } from '../../lib/barQuality';
+import { AlertTriangle } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -491,7 +492,7 @@ export function AIChart({
         )}
         {chartError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 z-20 bg-[#060d18]">
-            <span className="text-[var(--bear)] text-[11px]">⚠ {chartError}</span>
+            <span className="text-[var(--bear)] text-[11px]"><AlertTriangle size="1em" aria-hidden /> {chartError}</span>
             <span className="text-slate-600 text-[10px]">Connect a data feed or load historical data</span>
           </div>
         )}

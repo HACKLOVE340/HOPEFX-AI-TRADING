@@ -221,14 +221,14 @@ function TabBar({
               border: 'none',
               borderBottom: isActive ? `2px solid ${color}` : '2px solid transparent',
               color: isActive ? color : 'var(--text-faint)',
-              fontSize: 10, fontWeight: 700, cursor: 'pointer',
+              fontSize: 'var(--fs-micro)', fontWeight: 700, cursor: 'pointer',
               transition: 'all 0.15s ease',
               letterSpacing: 0.5,
             }}
             onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
             onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}
           >
-            <span style={{ fontSize: 11 }}>{icon}</span>
+            <span style={{ fontSize: 'var(--fs-label)'}}>{icon}</span>
             <span style={{ textTransform: 'uppercase' }}>{label}</span>
             {badge !== undefined && badge > 0 && (
               <span style={{

@@ -13,6 +13,7 @@
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
@@ -141,7 +142,7 @@ export const Modal: React.FC<ModalProps> = ({
               aria-label="Close dialog"
               className="text-slate-500 hover:text-slate-300 bg-transparent border-0 cursor-pointer text-lg leading-none p-1 rounded transition-colors min-w-touch min-h-touch flex items-center justify-center"
             >
-              ✕
+              <X size={18} strokeWidth={2} aria-hidden />
             </button>
           </div>
         )}

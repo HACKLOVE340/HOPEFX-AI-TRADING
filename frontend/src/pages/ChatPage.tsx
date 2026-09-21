@@ -14,6 +14,8 @@ import { chatApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { openAuthenticatedWebSocket } from '../lib/ws';
 import { useToast } from '../components/Toast';
+import { Headphones, Lock, MessagesSquare, RadioTower, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface ChatRoom {
   id: string;
@@ -36,10 +38,16 @@ interface ChatMessage {
   edited?: boolean;
 }
 
-const ROOM_ICONS: Record<string, string> = {
-  community: '💬',
-  support:   '🎧',
-  private:   '🔒',
+const ROOM_ICONS: Record<string, LucideIcon> = {
+  community: MessagesSquare,
+  support:   Headphones,
+  private:   Lock,
+};
+
+/** The room's kind, drawn at the inherited font size so it tracks data-density. */
+const RoomIcon: React.FC<{ type: string }> = ({ type }) => {
+  const Icon = ROOM_ICONS[type] ?? MessagesSquare;
+  return <Icon size="1em" aria-hidden />;
 };
 
 const ChatPage: React.FC = () => {
@@ -180,17 +188,17 @@ const ChatPage: React.FC = () => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>{ROOM_ICONS[room.type] ?? '💬'}</span>
+                  <span style={{ fontSize: 16 }}><RoomIcon type={room.type} /></span>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{room.name}</span>
                 </div>
                 {room.unread_count > 0 && (
-                  <span style={{ background: '#3b82f6', color: '#fff', borderRadius: 10, fontSize: 11, fontWeight: 700, padding: '1px 6px' }}>
+                  <span style={{ background: '#3b82f6', color: '#fff', borderRadius: 10, fontSize: 'var(--fs-label)', fontWeight: 700, padding: '1px 6px' }}>
                     {room.unread_count}
                   </span>
                 )}
               </div>
               {room.last_message && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {room.last_message}
                 </div>
               )}
@@ -204,21 +212,21 @@ const ChatPage: React.FC = () => {
         {/* Room header */}
         {activeRoom && (
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>{ROOM_ICONS[activeRoom.type] ?? '💬'}</span>
+            <span style={{ fontSize: 20 }}><RoomIcon type={activeRoom.type} /></span>
             <div>
               <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' }}>{activeRoom.name}</div>
               {activeRoom.description && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{activeRoom.description}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{activeRoom.description}</div>
               )}
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
-                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
-                ⚡ Trade
+                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                <Zap size="1em" aria-hidden /> Trade
               </button>
               <button onClick={() => navigate('/signals')}
-                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
-                📡 Signals
+                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                <RadioTower size="1em" aria-hidden /> Signals
               </button>
             </div>
           </div>
@@ -240,7 +248,7 @@ const ChatPage: React.FC = () => {
               </div>
               <div style={{ maxWidth: '70%' }}>
                 {!isOwn(msg) && (
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>{msg.username}</div>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 3 }}>{msg.username}</div>
                 )}
                 <div style={{
                   background: isOwn(msg) ? '#1e3a5f' : 'var(--raised)',
@@ -250,7 +258,7 @@ const ChatPage: React.FC = () => {
                 }}>
                   {msg.content}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 3, textAlign: isOwn(msg) ? 'right' : 'left' }}>
+                <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginTop: 3, textAlign: isOwn(msg) ? 'right' : 'left' }}>
                   {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   {msg.edited && ' (edited)'}
                 </div>

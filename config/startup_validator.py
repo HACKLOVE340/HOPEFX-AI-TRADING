@@ -244,6 +244,13 @@ PLACEHOLDER_GUARDED: tuple[str, ...] = (
     # Exchange credentials — brokers/bybit_connector.py authenticates with them.
     "BYBIT_API_KEY",
     "BYBIT_API_SECRET",
+    # Per-tenant signing key for the white-label surface —
+    # whitelabel/tenant_isolation.py mints tenant tokens with it. Deliberately
+    # NOT an alias of SECURITY_JWT_SECRET: aliasing them would make one leak
+    # compromise both. Added 2026-09-18 when .env.example was first compared
+    # against scripts/bootstrap_dev.py, which had been writing this key into
+    # every generated .env while the example documented nothing about it.
+    "JWT_SECRET",
 )
 
 # Placeholders in `.env.example` that are deliberately *not* secrets. Empty

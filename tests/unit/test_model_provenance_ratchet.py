@@ -3,24 +3,26 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """The model-provenance ratchet must be able to fail.
 
-Measured 2026-09-13, and the second number is the one that matters:
+Measured 2026-09-18:
 
-    2 of 12 recorded artifacts MISMATCH their sha256
-    2 of 14 ml/ modules that load a model reach any integrity check at all
+    0 of 17 recorded artifacts MISMATCH their sha256
+    12 of 14 ml/ modules that load a model reach an integrity check
 
 `ml/__init__.py::_verify_checksum` is fail-closed in production and gates a
 `pickle.load`, so what it permits is arbitrary code execution rather than merely
-a wrong prediction. Twelve modules do not reach it — including
-`ml/inference_engine.py`, which is the live inference path.
+a wrong prediction.
 
-Neither number is closed by this ratchet, deliberately, and the module docstring
-of `check()` says why: "which bytes are the real ones" for the two mismatches is
-an owner decision (MASTER_OUTSTANDING A8), and adding a fail-closed check to
-`inference_engine.py` today would refuse a model that currently loads and halt
-live inference. Both are decisions with a blast radius.
+Measured 2026-09-13 it read 2 of 12 mismatching and 2 of 14 reaching a check,
+and five assertions below were written around those figures — a floor of eight
+ungated loaders, a named entry for `ml/inference_engine.py`, an injection that
+dropped `ml/pipeline.py` from the list, an injection that popped an unlisted
+artifact off it, and a scope pin that required the identity survey to be
+non-clean. Each is rewritten here, and each says in its own docstring what it
+used to claim, because a floor under the debt is a test that fails when the
+debt is repaid.
 
-What the ratchet refuses is the thirteenth ungated loader and the eighth
-unlisted artifact — so the hole stops growing while the decisions are made.
+What the ratchet refuses is the FOURTH ungated loader and the FIRST new
+unlisted artifact.
 
 Every rule below is exercised by introducing the defect, because
 `hopefx-dead-controls` is about gates that read correctly and never fire.
@@ -66,46 +68,93 @@ def test_the_committed_baseline_matches_the_tree():
     assert result.returncode == 0, result.stderr
 
 
-def test_the_baseline_records_the_measured_scale():
-    """A sanity floor: if these collapse, the surveys broke, not the debt."""
-    recorded = json.loads(BASELINE.read_text(encoding="utf-8"))
-    assert len(recorded["ungated_loaders"]) >= 8, "the ungated-loader survey stopped matching"
-    assert len(recorded["unlisted_artifacts"]) >= 4, "the unlisted-artifact survey stopped matching"
+def test_the_surveys_still_match_something():
+    """A scan that matched nothing agrees with every rule (F255).
+
+    This used to assert `len(ungated_loaders) >= 8` and
+    `len(unlisted_artifacts) >= 4` — a floor UNDER THE DEBT, which reads as a
+    sanity check and behaves as a requirement that the hole stay open. Ten
+    loaders were routed through the gate and all seven unlisted artifacts were
+    recorded on 2026-09-18, and the assertion that survived the repair is the
+    one it was actually for: that the surveys are still looking at something.
+
+    So it asserts the surveys, not the baseline. `check()` has its own guard for
+    an empty wiring survey; this covers the identity survey too, and it cannot
+    be satisfied by repaying debt.
+    """
+    report = run("--json")
+    assert report.returncode == 0, report.stderr
+    measured = json.loads(report.stdout)
+
+    assert len(measured["wiring"]) >= 10, "the loader-call survey stopped matching ml/ modules"
+    assert len(measured["identity"]) >= 15, "the artifact survey stopped matching committed binaries"
+    assert len(measured["reach"]) >= 4, "the model-directory survey stopped matching directories"
 
 
-def test_the_live_inference_path_is_named_in_the_debt():
-    """The entry a reader must not miss.
+def test_the_live_inference_path_reaches_the_gate():
+    """It left the debt list, so this asserts the fix rather than the hole.
+
+    This used to assert `"ml/inference_engine.py" in recorded["ungated_loaders"]`
+    and carried a note that it must leave the list once fixed. It has:
+    `_load_calibrator` now runs `ml._verify_checksum` before `joblib.load`, and
+    `tests/unit/test_model_loaders_reach_the_integrity_gate.py` corrupts a real
+    calibrator and asserts the load is refused.
 
     `ml/inference_engine.py` is the module the running platform predicts from,
-    and it reaches no integrity check. If it ever leaves this list, it is
-    because it was fixed — and it must leave, because the rule below refuses a
-    stale entry.
+    so it is named here rather than left to the aggregate count.
+    """
+    report = run("--json")
+    wiring = {r["module"]: r["gates"] for r in json.loads(report.stdout)["wiring"]}
+
+    assert "ml/inference_engine.py" in wiring, "the wiring survey stopped seeing the live inference path"
+    assert wiring["ml/inference_engine.py"], "the live inference path reaches no integrity check"
+
+    recorded = json.loads(BASELINE.read_text(encoding="utf-8"))
+    assert "ml/inference_engine.py" not in recorded["ungated_loaders"]
+
+
+def test_an_ungated_loader_missing_from_the_baseline_blocks(restore_baseline):
+    """The injection. A new bare loader must not be absorbed silently.
+
+    It used to drop the hard-coded `"ml/pipeline.py"` from the list. That module
+    was gated on 2026-09-18, so the removal became a no-op and the injection
+    quietly stopped injecting anything — the test passed while proving nothing.
+    The module now comes from the recorded list, so it cannot rot the same way.
     """
     recorded = json.loads(BASELINE.read_text(encoding="utf-8"))
-    assert "ml/inference_engine.py" in recorded["ungated_loaders"]
-
-
-def test_a_thirteenth_ungated_loader_blocks(restore_baseline):
-    """The injection. A new bare loader must not be absorbed silently."""
-    recorded = json.loads(BASELINE.read_text(encoding="utf-8"))
-    recorded["ungated_loaders"] = [m for m in recorded["ungated_loaders"] if m != "ml/pipeline.py"]
+    assert recorded["ungated_loaders"], "no ungated loader left to inject with — assert the fix instead"
+    victim = recorded["ungated_loaders"][0]
+    recorded["ungated_loaders"] = [m for m in recorded["ungated_loaders"] if m != victim]
     BASELINE.write_text(json.dumps(recorded, indent=1, sort_keys=True) + "\n", encoding="utf-8")
 
     result = run("--check")
     assert result.returncode == 1, "an ungated loader missing from the baseline must block"
-    assert "ml/pipeline.py" in result.stderr
+    assert victim in result.stderr
     assert "joblib.load gates arbitrary code execution" in result.stderr
 
 
-def test_an_eighth_unlisted_artifact_blocks(restore_baseline):
-    """Same rule, other list: a committed binary no baseline records."""
-    recorded = json.loads(BASELINE.read_text(encoding="utf-8"))
-    dropped = recorded["unlisted_artifacts"].pop()
-    BASELINE.write_text(json.dumps(recorded, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+def test_a_new_unlisted_artifact_blocks():
+    """Same rule, other list: a model binary no baseline records.
 
-    result = run("--check")
-    assert result.returncode == 1, "an unlisted artifact missing from the baseline must block"
-    assert dropped in result.stderr
+    It used to `.pop()` an entry off `unlisted_artifacts` and assert the gate
+    noticed it was gone. All seven were recorded on 2026-09-18, so that list is
+    empty and `.pop()` raises IndexError — there is nothing left to remove. The
+    injection now puts a REAL unrecorded artifact in a real model directory,
+    which is both the defect's actual shape and something that cannot be
+    disarmed by repaying the debt.
+    """
+    probe = REPO / "ml" / "rl_models" / "ratchet_probe.pkl"
+    assert not probe.exists(), "a leftover probe from an earlier run — remove it before trusting this"
+    probe.write_bytes(b"pretend model bytes")
+    try:
+        result = run("--check")
+        assert result.returncode == 1, "an unrecorded model binary must block"
+        assert "ml/rl_models/ratchet_probe.pkl" in result.stderr
+        assert "record it in the baseline its directory uses" in result.stderr
+    finally:
+        probe.unlink()
+
+    assert run("--check").returncode == 0, "the probe was not cleaned up"
 
 
 def test_a_cleared_entry_must_leave_the_list(restore_baseline):
@@ -142,21 +191,43 @@ def test_artifact_identity_is_outside_this_gate_entirely(restore_baseline):
 
     The report still SURVEYS identity — that capability is what found A8 — and
     the gate still passes while the survey is non-clean.
+
+    Rewritten 2026-09-18. It used to assert the identity survey was non-clean,
+    relying on a mismatch this repository happened to be carrying, and carried a
+    note to assert the scope directly once the survey came clean. It has: all 17
+    artifacts match. So the mismatch is now INJECTED — a real artifact with a
+    deliberately wrong recorded hash — which pins the scope without depending on
+    the repository staying broken.
     """
-    report = run("--json")
-    assert report.returncode == 0, report.stderr
-    identity = json.loads(report.stdout)["identity"]
+    directory = REPO / "ml" / "rl_models"
+    manifest = directory / "model_checksums.json"
+    probe = directory / "identity_probe.pkl"
+    original = manifest.read_text(encoding="utf-8")
+    assert not probe.exists(), "a leftover probe from an earlier run — remove it before trusting this"
 
-    verdicts = {r["verdict"] for r in identity}
-    assert verdicts - {"ok"}, (
-        "the identity survey is entirely clean, so this test proves nothing about scope; "
-        "if that is now true of the repository, assert it directly instead"
-    )
+    try:
+        probe.write_bytes(b"bytes that will not match")
+        recorded = json.loads(original)
+        recorded[probe.name] = "0" * 64
+        manifest.write_text(json.dumps(recorded, indent=2) + "\n", encoding="utf-8")
 
-    assert run("--check").returncode == 0, (
-        "the ratchet blocked on an identity verdict — it is scoped to ungated loaders and "
-        "unlisted artifacts, and identity belongs to _verify_checksum and the manifest gate"
-    )
+        report = run("--json")
+        assert report.returncode == 0, report.stderr
+        identity = json.loads(report.stdout)["identity"]
+        verdicts = {r["path"]: r["verdict"] for r in identity}
+        assert verdicts["ml/rl_models/identity_probe.pkl"] == "MISMATCH", (
+            "the injection did not produce a MISMATCH, so this proves nothing about scope"
+        )
+
+        assert run("--check").returncode == 0, (
+            "the ratchet blocked on an identity verdict — it is scoped to ungated loaders and "
+            "unlisted artifacts, and identity belongs to _verify_checksum and the manifest gate"
+        )
+    finally:
+        probe.unlink(missing_ok=True)
+        manifest.write_text(original, encoding="utf-8")
+
+    assert run("--check").returncode == 0, "the injection was not cleaned up"
 
 
 def test_the_a8_mismatches_stay_fixed():

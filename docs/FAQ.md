@@ -413,7 +413,7 @@ Yes, on Enterprise and Elite. Professional supports up to 3 broker accounts. Sta
 
 ### How does the kill switch work?
 
-The kill switch immediately halts all trading and blocks new orders. It persists to `risk/halt_state.json` and survives application restarts.
+The kill switch immediately halts all trading and blocks new orders. It persists to `kill_switch.state.json` — written beside the kill-switch flag file, whose location is set by `KILL_SWITCH_FLAG_FILE` — and survives application restarts.
 
 Activate:
 ```bash

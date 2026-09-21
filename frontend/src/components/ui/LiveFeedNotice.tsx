@@ -15,6 +15,7 @@
  */
 
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 export function LiveFeedNotice({
   live,
@@ -40,7 +41,7 @@ export function LiveFeedNotice({
         className
       }
     >
-      <span aria-hidden="true">⚠</span>
+      <AlertTriangle size={14} aria-hidden="true" />
       <span>
         The live feed isn&apos;t delivering — {what} are not arriving right now.
         Anything below is the last thing we received and may have moved since.

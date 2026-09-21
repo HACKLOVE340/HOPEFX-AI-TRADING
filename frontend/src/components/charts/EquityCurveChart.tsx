@@ -178,7 +178,7 @@ export function EquityCurveChart() {
           key={r}
           onClick={() => setRange(r)}
           style={{
-            padding: '2px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+            padding: '2px 7px', borderRadius: 4, fontSize: 'var(--fs-micro)', fontWeight: 700,
             fontFamily: 'monospace', cursor: 'pointer', letterSpacing: 0.5,
             border: `1px solid ${range === r ? '#3b82f6' : '#1e293b'}`,
             background: range === r ? 'rgba(59,130,246,0.15)' : 'transparent',

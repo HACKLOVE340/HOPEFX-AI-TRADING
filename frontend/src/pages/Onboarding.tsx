@@ -15,8 +15,7 @@ import { api } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
 import type { UserRole } from '../store';
-import { BarChart3, Play, Shield, TrendingUp, Zap } from 'lucide-react';
-
+import { BarChart3, Check, Play, Shield, TrendingUp, X, Zap } from 'lucide-react';
 function resolvePostOnboardingPath(role: UserRole | undefined): string {
   if (role === 'superadmin') return '/superadmin';
   if (role === 'admin') return '/audit';
@@ -257,19 +256,19 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
         </button>
       ) : (
         <div style={s.resultBox}>
-          <div style={{ color: 'var(--gain)', fontWeight: 600, marginBottom: 12 }}>✓ Backtest complete</div>
+          <div style={{ color: 'var(--gain)', fontWeight: 600, marginBottom: 12 }}><Check size="1em" aria-hidden /> Backtest complete</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, textAlign: 'center' }}>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.return_pct.toFixed(1)}%</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Return</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Return</div>
             </div>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.trades}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Trades</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Trades</div>
             </div>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)' }}>{result.win_rate.toFixed(0)}%</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Win Rate</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Win Rate</div>
             </div>
           </div>
         </div>
@@ -309,7 +308,7 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
         </button>
       ) : (
         <div style={{ ...s.resultBox, border: '1px solid #14532d', background: '#052e16' }}>
-          <div style={{ color: 'var(--gain)', fontWeight: 600 }}>✓ Paper trading active!</div>
+          <div style={{ color: 'var(--gain)', fontWeight: 600 }}><Check size="1em" aria-hidden /> Paper trading active!</div>
           <div style={{ fontSize: 'var(--fs-body)', color: '#86efac', marginTop: 4 }}>
             Head to the Dashboard to watch your first AI signals.
           </div>
@@ -406,7 +405,7 @@ const Onboarding: React.FC = () => {
             <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--warn)', margin: '0 0 4px' }}>HOPEFX Setup</h1>
             <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', margin: 0 }}>Step {step + 1} of {STEPS.length}</p>
           </div>
-          <button onClick={skip} style={s.skipBtn}>✕ Skip</button>
+          <button onClick={skip} style={s.skipBtn}><X size="1em" aria-hidden /> Skip</button>
         </div>
 
         <StepIndicator current={step} total={STEPS.length} />
@@ -452,7 +451,7 @@ const s: Record<string, React.CSSProperties> = {
   stepSub:    { fontSize: 14, color: 'var(--text-muted)', margin: '0 0 20px' },
   optionBtn:  { width: '100%', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.15s' },
   infoBox:    { background: '#0c1a2e', border: '1px solid #1e3a5f', borderRadius: 8, padding: '10px 14px', fontSize: 'var(--fs-body)', color: '#93c5fd', marginTop: 12 },
-  code:       { background: 'var(--raised)', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 12 },
+  code:       { background: 'var(--raised)', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 'var(--fs-body)'},
   primaryBtn: { width: '100%', background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 'var(--fs-value)', fontWeight: 700, cursor: 'pointer', padding: '14px 0' },
   resultBox:  { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 16 },
   errorBox:   { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '8px 12px', fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: 12 },

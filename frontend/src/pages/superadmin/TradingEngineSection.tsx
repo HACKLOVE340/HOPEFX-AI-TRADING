@@ -162,15 +162,15 @@ const TradingEngineSection: React.FC = () => {
             <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: textColor }}>
               Engine {label}
             </span>
-            <span style={{ fontSize: 12, color: 'var(--text-faint)', marginLeft: 4 }}>{status.mode}</span>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginLeft: 4 }}>{status.mode}</span>
           </div>
           {[
             { label: 'Uptime',         value: `${Math.floor(status.uptime_seconds / 3600)}h ${Math.floor((status.uptime_seconds % 3600) / 60)}m` },
             { label: 'Open Positions', value: status.positions_open },
             { label: 'Last Signal',    value: status.last_signal_at ? new Date(status.last_signal_at).toLocaleTimeString() : 'N/A' },
-            { label: 'Heartbeat',      value: status.heartbeat_ok ? '✅ OK' : '❌ Miss' },
+            { label: 'Heartbeat',      value: status.heartbeat_ok ? 'OK' : 'Miss' },
           ].map(s => (
-            <div key={s.label} style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            <div key={s.label} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               <span style={{ color: 'var(--text-faint)' }}>{s.label}: </span>
               <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{s.value}</span>
             </div>
@@ -180,7 +180,7 @@ const TradingEngineSection: React.FC = () => {
           {status.last_signal_direction && status.last_signal_direction !== 'hold' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 4 }}>
               <span style={{
-                fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
+                fontSize: 'var(--fs-label)', fontWeight: 800, padding: '2px 8px', borderRadius: 4,
                 background: status.last_signal_direction === 'buy' ? '#052e1688' : '#450a0a88',
                 color: status.last_signal_direction === 'buy' ? 'var(--gain)' : 'var(--loss)',
                 border: `1px solid ${status.last_signal_direction === 'buy' ? '#16a34a' : '#dc2626'}`,
@@ -198,7 +198,7 @@ const TradingEngineSection: React.FC = () => {
                       borderRadius: 3,
                     }} />
                   </div>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                     {Math.round(status.last_signal_confidence * 100)}%
                   </span>
                 </div>
@@ -211,7 +211,7 @@ const TradingEngineSection: React.FC = () => {
 
       {confirm === 'kill' && (
         <ConfirmDialog
-          title={cfg.kill_switch_active ? 'Deactivate Kill Switch' : '⚠️ Activate Kill Switch'}
+          title={cfg.kill_switch_active ? 'Deactivate Kill Switch' : 'Activate Kill Switch'}
           message={cfg.kill_switch_active
             ? 'This will resume all trading activity. Ensure market conditions are safe before proceeding.'
             : 'This will IMMEDIATELY halt ALL trading across the entire platform. All open orders will be cancelled. This affects every user.'}
@@ -240,10 +240,10 @@ const TradingEngineSection: React.FC = () => {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>🛑</span>
+            <span style={{ fontSize: 20 }}><OctagonAlert size="1em" aria-hidden /></span>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--loss)' }}>KILL SWITCH ACTIVE</div>
-              <div style={{ fontSize: 12, color: '#fca5a5' }}>All trading is halted across the entire platform</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: '#fca5a5' }}>All trading is halted across the entire platform</div>
             </div>
           </div>
           <ActionBtn label="Resume Trading" onClick={() => setConfirm('kill')} variant="success" icon={<Play size={18} aria-hidden />} loading={saving} />
@@ -270,7 +270,8 @@ const TradingEngineSection: React.FC = () => {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <StatusBadge status={cfg.engine_status} />
           <ActionBtn
-            label={cfg.kill_switch_active ? '🛑 Kill Switch ACTIVE' : 'Activate Kill Switch'}
+            label={cfg.kill_switch_active ? 'Kill Switch ACTIVE' : 'Activate Kill Switch'}
+          icon={cfg.kill_switch_active ? <OctagonAlert size="1em" aria-hidden /> : undefined}
             onClick={() => setConfirm('kill')}
             variant={cfg.kill_switch_active ? 'success' : 'danger'}
             loading={saving}
@@ -374,7 +375,7 @@ const DecisionEnginePanel: React.FC = () => {
       <SectionCard title="Decision Engine Pipeline" icon={<Zap size={18} aria-hidden />} accent="#f59e0b">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
-          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
+          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)'}}>
             {loading ? '…' : '↻'}
           </button>
         </div>
@@ -382,12 +383,12 @@ const DecisionEnginePanel: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {phases.map(p => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--link)', flexShrink: 0 }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--fs-body)', fontWeight: 800, color: 'var(--link)', flexShrink: 0 }}>
                 {p.id}
               </div>
               <div>
                 <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{p.desc}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>{p.desc}</div>
               </div>
             </div>
           ))}
@@ -396,7 +397,7 @@ const DecisionEnginePanel: React.FC = () => {
           <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
             {Object.entries(status as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
               <div key={key} style={{ background: 'var(--raised)', borderRadius: 6, padding: '8px 12px' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
                 <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
               </div>
             ))}
@@ -414,15 +415,15 @@ const DecisionEnginePanel: React.FC = () => {
           {gatekeeperChecks.map((check, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)' }}>
               <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>•</span>
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{check}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{check}</span>
             </div>
           ))}
         </div>
         <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 6 }}>Decision Outcomes</div>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 6 }}>Decision Outcomes</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {['NO_SIGNAL', 'ML_FILTERED', 'RISK_BLOCKED', 'SIZING_REJECTED', 'EXECUTED', 'EXECUTION_ERROR'].map(o => (
-              <span key={o} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--raised)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{o}</span>
+              <span key={o} style={{ fontSize: 'var(--fs-label)', padding: '3px 8px', borderRadius: 4, background: 'var(--raised)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{o}</span>
             ))}
           </div>
         </div>

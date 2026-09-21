@@ -7,10 +7,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-  Zap, Brain, Eye, BookOpen, Shield,
-
-} from 'lucide-react';
+import { AlertTriangle, BookOpen, Brain, Eye, NotebookPen, OctagonX, Shield, Zap } from 'lucide-react';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -199,11 +196,11 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus, fe
       {/* Quick nav */}
       <button onClick={() => navigate('/journal')}
         className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[var(--border)] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
-        📓 Journal
+        <NotebookPen size="1em" aria-hidden /> Journal
       </button>
       <button onClick={() => navigate('/risk-calculator')}
         className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[var(--border)] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
-        🛡 Risk Calc
+        <Shield size="1em" aria-hidden /> Risk Calc
       </button>
 
       {/* WS status */}
@@ -527,10 +524,10 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         )}
         <div className="flex-1" />
         <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer select-none">
-          <input type="checkbox" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} className="accent-[#3b82f6]" /> Vol
+          <input type="checkbox" aria-labelledby="trading-show-volume-label" checked={showVolume} onChange={(e) => setShowVolume(e.target.checked)} className="accent-[#3b82f6]" /> <span id="trading-show-volume-label">Vol</span>
         </label>
         <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer select-none">
-          <input type="checkbox" checked={showMA} onChange={(e) => setShowMA(e.target.checked)} className="accent-[#3b82f6]" /> MA20
+          <input type="checkbox" aria-labelledby="trading-show-ma20-label" checked={showMA} onChange={(e) => setShowMA(e.target.checked)} className="accent-[#3b82f6]" /> <span id="trading-show-ma20-label">MA20</span>
         </label>
       </div>
       <div className="relative">
@@ -541,7 +538,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         )}
         {chartError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-20 bg-[#060d18]">
-            <span className="text-[var(--bear)] text-[12px]">⚠ {chartError}</span>
+            <span className="text-[var(--bear)] text-[12px]"><AlertTriangle size="1em" aria-hidden /> {chartError}</span>
             <span className="text-slate-600 text-[10px]">Connect a broker or load historical data</span>
           </div>
         )}
@@ -835,7 +832,7 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
             'disabled:opacity-40 disabled:cursor-not-allowed',
           )}
         >
-          {loading ? 'Analysing…' : '⚡ Run AI Analysis'}
+          {loading ? 'Analysing…' : <><Zap size="1em" aria-hidden /> Run AI Analysis</>}
         </button>
 
         {error && (
@@ -946,7 +943,9 @@ function EmergencyStopButton() {
             : 'bg-[var(--bear)]/10 border-[var(--bear)]/40 text-[var(--bear)] hover:bg-[var(--bear)]/20',
         )}
       >
-        {loading ? 'Stopping…' : confirming ? '⚠ CONFIRM EMERGENCY STOP' : '🛑 Emergency Stop'}
+        {loading ? 'Stopping…'
+          : confirming ? <><AlertTriangle size="1em" aria-hidden /> CONFIRM EMERGENCY STOP</>
+          : <><OctagonX size="1em" aria-hidden /> Emergency Stop</>}
       </button>
       {confirming && (
         <button onClick={() => setConfirming(false)} className="text-[10px] text-slate-500 hover:text-slate-300 text-center">

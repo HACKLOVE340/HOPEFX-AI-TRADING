@@ -197,7 +197,7 @@ const ChargebacksPanel: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User','Amount','Provider','Reason','Status','Opened','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -206,14 +206,14 @@ const ChargebacksPanel: React.FC = () => {
                 <tr key={c.chargeback_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{c.username}</td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: '#fb923c' }}>{fmtMoney2(c.amount, c.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{c.provider}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{c.provider}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: CB_COLOR[c.status] ?? 'var(--text-dim)', background: `${CB_COLOR[c.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: CB_COLOR[c.status] ?? 'var(--text-dim)', background: `${CB_COLOR[c.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {c.status.replace(/_/g, ' ')}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(c.opened_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDateShort(c.opened_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {c.status === 'open' || c.status === 'pending_evidence' ? (
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -319,7 +319,7 @@ const TaxReportsPanel: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Period','Jurisdiction','Revenue','Taxable','Rate','Tax Owed','Due Date','Status','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -332,9 +332,9 @@ const TaxReportsPanel: React.FC = () => {
                   <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.taxable_amount, r.currency)}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{Number.isFinite(r.tax_rate_pct) ? r.tax_rate_pct.toFixed(1) : '—'}%</td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: r.status === 'overdue' ? 'var(--loss)' : 'var(--warn)' }}>{fmtMoney(r.tax_owed, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: r.status === 'overdue' ? 'var(--loss)' : 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(r.due_date)}</td>
+                  <td style={{ padding: '10px 12px', color: r.status === 'overdue' ? 'var(--loss)' : 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDateShort(r.due_date)}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: TAX_COLOR[r.status] ?? 'var(--text-dim)', background: `${TAX_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: TAX_COLOR[r.status] ?? 'var(--text-dim)', background: `${TAX_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {r.status}
                     </span>
                   </td>
@@ -461,7 +461,7 @@ const ReconciliationPanel: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Period','Provider','Expected','Actual','Discrepancy','Status','Created','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -476,11 +476,11 @@ const ReconciliationPanel: React.FC = () => {
                     {r.discrepancy > 0 ? '+' : ''}{fmtMoney(r.discrepancy, r.currency)}
                   </td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: RECON_COLOR[r.status] ?? 'var(--text-dim)', background: `${RECON_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: RECON_COLOR[r.status] ?? 'var(--text-dim)', background: `${RECON_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {r.status}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(r.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDateShort(r.created_at)}</td>
                   <td style={{ padding: '10px 12px', minWidth: 220 }}>
                     {r.status === 'discrepancy' && (
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -488,7 +488,7 @@ const ReconciliationPanel: React.FC = () => {
                           placeholder="Resolution notes…"
                           value={notes[r.recon_id] ?? ''}
                           onChange={e => setNotes(n => ({ ...n, [r.recon_id]: e.target.value }))}
-                          style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 12 }}
+                          style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 'var(--fs-body)'}}
                         />
                         <ActionBtn label="Resolve" onClick={() => resolve(r.recon_id)} variant="success" size="sm" loading={busy === r.recon_id} />
                       </div>
@@ -551,7 +551,7 @@ const AffiliatePanel: React.FC = () => {
       {/* Top affiliates */}
       {stats.top_affiliates && stats.top_affiliates.length > 0 && (
         <>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
             Top Affiliates
           </div>
           <div style={{ overflowX: 'auto' }}>
@@ -559,7 +559,7 @@ const AffiliatePanel: React.FC = () => {
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   {['#','Username','Referrals','Conversions','Earned','Pending'].map((h, i) => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -567,7 +567,7 @@ const AffiliatePanel: React.FC = () => {
                 {stats.top_affiliates.map((a, idx) => (
                   <tr key={a.affiliate_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? 'var(--warn)' : idx === 1 ? 'var(--text-dim)' : '#78350f', fontWeight: 700 }}>
-                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                      {idx + 1}
                     </td>
                     <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{a.username}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{a.referrals.toLocaleString()}</td>
@@ -686,15 +686,18 @@ const RefundPolicyPanel: React.FC = () => {
 
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend style={{
-          fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+          fontSize: 'var(--fs-label)', fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
           color: 'var(--text-muted)', marginBottom: 10, padding: 0,
         }}>
           Recovery method
         </legend>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {options.map(opt => {
+          {options.map((opt, optIndex) => {
             const active = selected === opt.value;
+            // The policy values come from the API, so they are not safe to
+            // splice into an id; the index is.
+            const labelId = `refund-policy-${optIndex}-label`;
             const isSaved = saved === opt.value;
             return (
               <label
@@ -712,6 +715,7 @@ const RefundPolicyPanel: React.FC = () => {
               >
                 <input
                   type="radio"
+                  aria-labelledby={labelId}
                   name="refund-policy"
                   value={opt.value}
                   checked={active}
@@ -724,10 +728,10 @@ const RefundPolicyPanel: React.FC = () => {
                 />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-strong)' }}>{opt.label}</span>
+                    <span id={labelId} style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-strong)' }}>{opt.label}</span>
                     {opt.recommended === 'true' && (
                       <span style={{
-                        fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                        fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
                         color: '#22c55e', background: '#22c55e1a', border: '1px solid #22c55e3a',
                         borderRadius: 999, padding: '2px 8px',
                       }}>
@@ -738,7 +742,7 @@ const RefundPolicyPanel: React.FC = () => {
                       // Not colour alone: the word "Current" carries the meaning.
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4,
-                        fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                        fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
                         color: 'var(--link)', background: '#60a5fa1a', border: '1px solid #60a5fa3a',
                         borderRadius: 999, padding: '2px 8px',
                       }}>
@@ -936,7 +940,7 @@ const FinancialSection: React.FC = () => {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
                       {Object.entries(revenue.plan_breakdown).map(([plan, amount]) => (
                         <div key={plan} style={{ background: 'var(--raised)', borderRadius: 8, padding: '14px 16px', borderLeft: `3px solid ${PLAN_COLORS[plan as Plan] ?? '#475569'}` }}>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{PLAN_LABELS[plan as Plan] ?? plan}</div>
+                          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>{PLAN_LABELS[plan as Plan] ?? plan}</div>
                           <div style={{ fontSize: 18, fontWeight: 700, color: PLAN_COLORS[plan as Plan] ?? 'var(--text-dim)' }}>{fmtMoney(amount, revenue.currency)}</div>
                         </div>
                       ))}
@@ -952,7 +956,7 @@ const FinancialSection: React.FC = () => {
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         {['User','Amount','Plan','Provider','Status','Date',''].map(h => (
-                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -962,13 +966,13 @@ const FinancialSection: React.FC = () => {
                           <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{p.username}</td>
                           <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--gain)' }}>{fmtMoney(p.amount, p.currency)}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[p.plan as Plan] ?? 'var(--text-dim)' }}>{PLAN_LABELS[p.plan as Plan] ?? p.plan}</span>
+                            <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: PLAN_COLORS[p.plan as Plan] ?? 'var(--text-dim)' }}>{PLAN_LABELS[p.plan as Plan] ?? p.plan}</span>
                           </td>
-                          <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{p.provider}</td>
+                          <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{p.provider}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: p.status === 'completed' ? 'var(--gain)' : p.status === 'refunded' ? 'var(--loss)' : 'var(--warn)' }}>{p.status}</span>
+                            <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: p.status === 'completed' ? 'var(--gain)' : p.status === 'refunded' ? 'var(--loss)' : 'var(--warn)' }}>{p.status}</span>
                           </td>
-                          <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(p.created_at)}</td>
+                          <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(p.created_at)}</td>
                           <td style={{ padding: '10px 12px' }}>
                             {p.status === 'completed' && (
                               <>
@@ -978,10 +982,10 @@ const FinancialSection: React.FC = () => {
                                       placeholder="Reason…"
                                       value={refundReason}
                                       onChange={e => setRefundReason(e.target.value)}
-                                      style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 12, width: 120 }}
+                                      style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 'var(--fs-body)', width: 120 }}
                                     />
                                     <ActionBtn label="Confirm" onClick={doRefund} variant="danger" size="sm" loading={busy} />
-                                    <ActionBtn label="✕" onClick={() => { setRefundTarget(null); setRefundReason(''); }} variant="ghost" size="sm" />
+                                    <ActionBtn label="Cancel" onClick={() => { setRefundTarget(null); setRefundReason(''); }} variant="ghost" size="sm" />
                                   </div>
                                 ) : (
                                   <ActionBtn label="Refund" onClick={() => setRefundTarget(p)} variant="danger" size="sm" />

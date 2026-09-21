@@ -100,8 +100,11 @@ curl http://localhost:8000/api/signals/latest \
 
 ### Password Hashing
 
-Passwords are hashed with `bcrypt` (cost factor 12). The `fake_hash_password`
-backdoor that existed in earlier versions has been removed. See `auth/routes.py`.
+Passwords are hashed with `bcrypt` (cost factor 12), with a BLAKE2b pre-hash so
+bcrypt never sees more than 72 bytes — see `hash_password` in `auth/jwt.py`. The
+`fake_hash_password` backdoor that existed in earlier versions was deleted along
+with the module that held it (`routes.py` under `auth/`);
+`tests/unit/test_security_ext.py` fails if that module ever reappears.
 
 Pinned versions:
 ```

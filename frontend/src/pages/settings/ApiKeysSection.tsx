@@ -8,8 +8,7 @@ import { Card, SectionHeader, Field, Input, Button, StatusBadge } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useStore, selectUser } from '../../store';
-import { KeyRound } from 'lucide-react';
-
+import { CheckCircle2, ClipboardList, KeyRound, XCircle } from 'lucide-react';
 const ApiKeysSection: React.FC = () => {
   const confirm = useConfirm();
   const toast   = useToast();
@@ -113,7 +112,7 @@ const ApiKeysSection: React.FC = () => {
           borderRadius: 12, marginBottom: 20,
         }}>
           <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: '#22c55e', marginBottom: 8 }}>
-            ✅ API key created — copy it now. It will not be shown again.
+            <CheckCircle2 size="1em" aria-hidden /> API key created — copy it now. It will not be shown again.
           </div>
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-body)', color: 'var(--text-strong)',
@@ -128,7 +127,7 @@ const ApiKeysSection: React.FC = () => {
               size="sm"
               onClick={() => navigator.clipboard.writeText(revealedKey.api_key)}
             >
-              📋 Copy
+              <ClipboardList size="1em" aria-hidden /> Copy
             </Button>
             <Button
               variant="ghost"
@@ -174,7 +173,7 @@ const ApiKeysSection: React.FC = () => {
             ))}
           </div>
         </Field>
-        {createError && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: 10 }}>❌ {createError}</div>}
+        {createError && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: 10 }}><XCircle size="1em" aria-hidden /> {createError}</div>}
         <Button
           onClick={handleCreate}
           loading={creating}
@@ -206,10 +205,10 @@ const ApiKeysSection: React.FC = () => {
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{key.name}</span>
                   <StatusBadge status="info" label={key.scopes.join(', ')} />
                 </div>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 2 }}>
                   {key.key_prefix}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
                   Created {new Date(key.created_at).toLocaleDateString()}
                   {key.last_used && ` · Last used ${new Date(key.last_used).toLocaleDateString()}`}
                 </div>

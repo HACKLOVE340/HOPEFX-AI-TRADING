@@ -20,6 +20,7 @@ import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
 import { fmtPrice, fmtPnl, fmtDateTime, cn, sameSymbol, positionSide, describeCloseAll, describeSubmitFailure } from '../../lib/utils';
 import type { Position } from '../../types';
+import { AlertTriangle, Hourglass, Inbox } from 'lucide-react';
 
 // ── Inline confirmation dialog ────────────────────────────────────────────────
 
@@ -153,7 +154,7 @@ function EmptyPositions({
   if (!positionsKnown) {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
-        <span className="text-2xl opacity-40">⚠️</span>
+        <span className="text-2xl opacity-40"><AlertTriangle size="1em" aria-hidden /></span>
         <span className="text-[12px] text-[#ffb800]">Can&apos;t confirm positions</span>
         <span className="text-[11px] text-slate-500">
           The live feed is not up to date, so this list may be incomplete. Check your
@@ -165,7 +166,7 @@ function EmptyPositions({
   if (brokerReady === false) {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
-        <span className="text-2xl opacity-40">⏳</span>
+        <span className="text-2xl opacity-40"><Hourglass size="1em" aria-hidden /></span>
         <span className="text-[12px] text-[#ffb800]">Broker initialising</span>
         <span className="text-[11px] text-slate-500">
           The paper trading engine is starting up. Positions will appear here once ready.
@@ -175,7 +176,7 @@ function EmptyPositions({
   }
   return (
     <div className="flex flex-col items-center justify-center py-10 gap-2">
-      <span className="text-2xl opacity-30">📭</span>
+      <span className="text-2xl opacity-30"><Inbox size="1em" aria-hidden /></span>
       <span className="text-[12px] text-slate-500">No open positions</span>
     </div>
   );

@@ -78,7 +78,10 @@ with before/after ratings and specific changes.
 **Before:** Hardcoded `SECRET_KEY='your_secret_key'`, `fake_hash_password` backdoor, `allow_origins=["*"]` with credentials, unpinned crypto packages.
 
 **After:**
-- `auth/routes.py` hardcoded secret and backdoor deleted
+- `routes.py` under `auth/` — which held the hardcoded secret and the
+  `fake_hash_password` backdoor — deleted outright; the live auth routes are
+  `auth/router.py` and hashing is `auth/jwt.py`.
+  `tests/unit/test_security_ext.py` fails if the module ever comes back
 - CORS: `allow_origins=["*"]` replaced with env-driven allowlist (`MOBILE_CORS_ORIGINS`), `allow_credentials=False`
 - `bcrypt==4.1.3`, `PyJWT==2.8.0`, `cryptography==42.0.8` pinned exactly
 - `config/vault.py`: `except: pass` replaced with `VaultError`; `_fernet` zeroed in `finally`
@@ -169,7 +172,7 @@ with before/after ratings and specific changes.
 **After:**
 - `risk/pre_trade_gate.py`: 8 sequential checks, `TradeBlocked`/`RiskManagerError` — zero fallback
 - CVaR pre-trade gate runs independently of `assess_risk()` — CVaR breach always blocks
-- Kill switch persists halt state to `risk/halt_state.json` — survives restarts
+- Kill switch persists halt state to `kill_switch.state.json` — survives restarts
 - VaR: historical, parametric, Monte Carlo, `calculate_var_multiday` (no sqrt(t)), `calculate_var_ewma` (RiskMetrics)
 - `ENFORCE_MULTIDAY_VAR=True` blocks historical/parametric for time_horizon > 1
 - Kelly criterion with safety caps (`kelly_fraction` configurable)
@@ -202,7 +205,7 @@ with before/after ratings and specific changes.
 
 ### New Files Created
 - `docs/GRAFANA_SETUP.md` — 419 lines: all 4 dashboards, 30+ metrics, alert rules, Nginx/K8s deploy, troubleshooting
-- `docs/MASTER_DIAGNOSIS.md` (archive) — complete inventory of all 80+ archive docs
+- `docs/archive/MASTER_DIAGNOSIS.md` — complete inventory of all 80+ archive docs
 
 ### Files Fully Rewritten
 - `docs/FAQ.md` — 600 lines: 11 sections, no free tier references, full paid tier FAQ

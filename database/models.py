@@ -800,6 +800,25 @@ class WalletTransaction(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=_utcnow, index=True)
 
+    __table_args__ = (
+        # One external payment moves money once.
+        #
+        # Stripe delivers webhooks AT LEAST once — retries and replays are
+        # normal — so a repeated `payment_intent.succeeded` must not credit
+        # twice. `transaction_id` is unique but generated per call, so it
+        # deduplicates nothing; the key that identifies the PAYMENT is the
+        # provider's id, carried here as `reference` (e.g. "stripe:pi_123").
+        #
+        # This is a database constraint rather than a read-then-write check in
+        # Python because that check races: two concurrent deliveries of the same
+        # event both read "not present" and both credit. See ADR 0021.
+        #
+        # NULL references stay unconstrained — every internal movement has one,
+        # and both PostgreSQL and SQLite treat NULLs as distinct — so this
+        # applies only to rows that name an external payment.
+        UniqueConstraint("user_id", "reference", name="uq_wallet_txn_user_reference"),
+    )
+
 
 class AuditLogEntry(Base):
     """Persistent, append-only audit log — replaces in-memory list."""

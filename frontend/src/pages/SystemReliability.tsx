@@ -12,7 +12,7 @@ import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { CircleDot, Microscope, Search, Shield, Stethoscope, Wrench, Zap } from 'lucide-react';
-
+import { StatusDot } from '../components/ui/StatusDot';
 const SR_CROSS_LINKS = [
   { label: 'Super Admin',         href: '/superadmin',         icon: Zap, color: '#f87171' },
   { label: 'System Status',       href: '/status',             icon: CircleDot, color: '#4ade80' },
@@ -54,16 +54,16 @@ const SystemReliability: React.FC = () => (
             { label: 'Super Admin', href: '/superadmin' },
             { label: 'System Reliability' },
           ]}
-          badge={<Badge variant="info" style={{ fontSize: 11 }}>🔬 Live</Badge>}
+          badge={<Badge variant="info" style={{ fontSize: 'var(--fs-label)'}}><Microscope size="1em" aria-hidden /> Live</Badge>}
           actions={
             <div style={{ display: 'flex', gap: 8 }}>
               <Link to="/superadmin"
-                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                ⚡ Super Admin
+                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Zap size="1em" aria-hidden /> Super Admin
               </Link>
               <Link to="/status"
-                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                🟢 Status
+                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <StatusDot status="ok" /> Status
               </Link>
             </div>
           }

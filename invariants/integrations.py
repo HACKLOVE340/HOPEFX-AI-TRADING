@@ -72,6 +72,98 @@ def verify_notification_delivered(sent: int, delivered: int, max_failures: int) 
     return []
 
 
+def _bad_count(value: Any) -> bool:
+    """True when *value* cannot be a count.
+
+    Written out rather than inlined because the failure it guards is silent: a
+    NaN compared with ``>`` is False on every side, so a broken counter sails
+    through every threshold below and the ladder reports health.
+    """
+    return not _is_finite_number(value) or value < 0
+
+
+def verify_alert_evidence_ladder(
+    fired: int,
+    delivered: int,
+    accepted: int | None = None,
+    *,
+    expected_fired: int | None = None,
+    name: str = "alert",
+) -> list[Violation]:
+    """AOS-EVID-046 — firing, delivery and acceptance are three separate rungs.
+
+    An alert that FIRED reached the log. One that was DELIVERED was handed to a
+    channel. One that was ACCEPTED was acknowledged by something outside this
+    process. Collapsing those into one boolean is how an alerting pipeline
+    reports health while notifying nobody, which has happened here twice: F159
+    (the delivery guard and the delivery were the same branch, so every alert
+    stopped at the log line) and F248 (three call sites passed arguments the
+    target rejects, so a tripped circuit breaker, a model rollback and a
+    position-drift halt each notified no one).
+
+    ``accepted=None`` means NOT OBSERVED and is reported as such. It is
+    deliberately NOT defaulted to ``delivered``: a rung nobody measured is not a
+    rung that passed, and assuming otherwise is the precise conflation this
+    invariant exists to forbid.
+
+    ``expected_fired`` closes the hole that ``verify_notification_delivered``
+    cannot: (0 fired, 0 delivered) is arithmetically perfect and is also exactly
+    what a completely dead pipeline looks like. When the caller knows alerts were
+    due, silence is the failure. Left unset, a quiet period stays clean — a
+    predicate that cries wolf is one operators learn to ignore.
+    """
+    out: list[Violation] = []
+
+    for label, value in (("fired", fired), ("delivered", delivered)):
+        if _bad_count(value):
+            return [_v(_RULE, CRITICAL, f"{name} {label} count is not a usable number ({value!r})")]
+    if accepted is not None and _bad_count(accepted):
+        return [_v(_RULE, CRITICAL, f"{name} accepted count is not a usable number ({accepted!r})")]
+
+    # Rung 0 — was there anything to measure at all?
+    if expected_fired is not None:
+        if _bad_count(expected_fired):
+            return [_v(_RULE, CRITICAL, f"{name} expected_fired is not a usable number ({expected_fired!r})")]
+        if fired < expected_fired:
+            out.append(
+                _v(
+                    _RULE,
+                    CRITICAL,
+                    f"{name}s expected {expected_fired} but only {fired} fired — silence is being read as health",
+                )
+            )
+
+    # Rung 1 — fired -> delivered.
+    if delivered > fired:
+        out.append(_v(_RULE, CRITICAL, f"{name} counting is broken: {delivered} delivered exceeds {fired} fired"))
+    elif fired > 0 and delivered == 0:
+        out.append(_v(_RULE, CRITICAL, f"{name}s reached the log only: {fired} fired, {delivered} delivered"))
+    elif delivered < fired:
+        out.append(
+            _v(_RULE, CRITICAL, f"{name} delivery lost {fired - delivered}: {fired} fired, {delivered} delivered")
+        )
+
+    # Rung 2 — delivered -> accepted.
+    if accepted is None:
+        if delivered > 0:
+            out.append(
+                _v(
+                    _RULE,
+                    WARNING,
+                    f"{name} acceptance was never observed for {delivered} delivered — "
+                    "not observed is not the same as accepted",
+                )
+            )
+    elif accepted > delivered:
+        out.append(_v(_RULE, CRITICAL, f"{name} counting is broken: {accepted} accepted exceeds {delivered} delivered"))
+    elif accepted < delivered:
+        out.append(
+            _v(_RULE, CRITICAL, f"{name} delivery was not acknowledged for {delivered - accepted} of {delivered}")
+        )
+
+    return out
+
+
 def verify_storage_durable(replicas: int, min_replicas: int, name: str = "object") -> list[Violation]:
     """Stored objects must meet the minimum replication for durability."""
     if replicas < min_replicas:

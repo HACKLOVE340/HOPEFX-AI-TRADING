@@ -28,8 +28,7 @@ import { PageHeader } from '../components/PageHeader';
 import QRCode from '../components/QRCode';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { extractApiError } from '../lib/utils';
-import { ShieldCheck } from 'lucide-react';
-
+import { AlertTriangle, ArrowDownToLine, BarChart3, Camera, CheckCircle2, Key, Lock, LockOpen, Settings, ShieldCheck, User, Wrench } from 'lucide-react';
 // ── CSRF retry helper ─────────────────────────────────────────────────────────
 
 async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -262,7 +261,7 @@ const TwoFactorSetup: React.FC = () => {
           ]}
         />
         <div style={{ ...s.card, textAlign: 'center', padding: '48px 32px' }}>
-          <div style={{ fontSize: 40, marginBottom: 16 }}>🔧</div>
+          <div style={{ fontSize: 40, marginBottom: 16 }}><Wrench size="1em" aria-hidden /></div>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
             2FA is not available
           </div>
@@ -312,7 +311,7 @@ const TwoFactorSetup: React.FC = () => {
         background: status.enabled ? '#14532d' : 'var(--raised)',
         border: '1px solid ' + (status.enabled ? '#166534' : '#334155'),
       }}>
-        <span style={{ fontSize: 22 }}>{status.enabled ? '🔒' : '🔓'}</span>
+        <span style={{ fontSize: 22 }}>{status.enabled ? <Lock size="1em" aria-label="Two-factor enabled" /> : <LockOpen size="1em" aria-label="Two-factor disabled" />}</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, color: status.enabled ? 'var(--gain)' : 'var(--text-dim)' }}>
             2FA is {status.enabled ? 'ENABLED' : 'DISABLED'}
@@ -324,7 +323,7 @@ const TwoFactorSetup: React.FC = () => {
           </div>
         </div>
         {status.enabled && status.backup_codes_remaining > 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'right' }}>
             <div style={{ color: 'var(--text-dim)', fontWeight: 600 }}>{status.backup_codes_remaining}</div>
             <div>backup codes</div>
           </div>
@@ -388,8 +387,8 @@ const TwoFactorSetup: React.FC = () => {
                   borderRadius: 8, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center', padding: 12, gap: 8,
                 }}>
-                  <span style={{ fontSize: 32 }}>📷</span>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+                  <span style={{ fontSize: 32 }}><Camera size="1em" aria-hidden /></span>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'center' }}>
                     QR image unavailable — use manual entry below
                   </div>
                 </div>
@@ -402,14 +401,14 @@ const TwoFactorSetup: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span style={s.secretLabel}>Manual entry secret</span>
               <button onClick={handleCopySecret} style={s.copyBtn}>
-                {copiedSecret ? '✅ Copied' : 'Copy'}
+                {copiedSecret ? <><CheckCircle2 size="1em" aria-hidden /> Copied</> : 'Copy'}
               </button>
             </div>
             <code style={s.secretCode}>{setupData.secret}</code>
           </div>
 
           {/* Issuer info */}
-          <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 20 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginBottom: 20 }}>
             Issuer: <strong style={{ color: 'var(--text-muted)' }}>HOPEFX</strong> ·
             Algorithm: SHA1 · Digits: 6 · Period: 30s
           </div>
@@ -434,7 +433,7 @@ const TwoFactorSetup: React.FC = () => {
       {step === 'active' && (
         <div style={s.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-            <span style={{ fontSize: 'var(--fs-hero)'}}>✅</span>
+            <span style={{ fontSize: 'var(--fs-hero)'}}><CheckCircle2 size="1em" aria-hidden /></span>
             <div>
               <div style={{ fontWeight: 700, color: 'var(--gain)', fontSize: 16 }}>2FA Activated!</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>Your account is now protected.</div>
@@ -460,7 +459,7 @@ const TwoFactorSetup: React.FC = () => {
           <h2 style={s.cardTitle}>Backup Codes</h2>
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
             padding: '10px 14px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
-            ⚠️ Save these codes now. They will not be shown again.
+            <AlertTriangle size="1em" aria-hidden /> Save these codes now. They will not be shown again.
             Each code can only be used once.
           </div>
           <div style={s.codesGrid}>
@@ -473,7 +472,7 @@ const TwoFactorSetup: React.FC = () => {
               onClick={() => downloadBackupCodes(backupCodes, user?.id ?? user?.email ?? 'user')}
               style={{ ...s.btn, flex: 1, background: '#1d4ed8' }}
             >
-              ⬇ Download codes
+              <ArrowDownToLine size="1em" aria-hidden /> Download codes
             </button>
             <button
               onClick={async () => {
@@ -517,10 +516,10 @@ const TwoFactorSetup: React.FC = () => {
       )}
 
       <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-        { label: '⚙️ Settings',  href: '/settings',  color: '#60a5fa' },
-        { label: '👤 Profile',   href: '/profile',   color: '#a78bfa' },
-        { label: '🔑 API Keys',  href: '/settings?tab=api-keys', color: '#fbbf24' },
-        { label: '📊 Dashboard', href: '/dashboard', color: '#34d399' },
+        { label: 'Settings', icon: Settings,  href: '/settings',  color: '#60a5fa' },
+        { label: 'Profile', icon: User,   href: '/profile',   color: '#a78bfa' },
+        { label: 'API Keys', icon: Key,  href: '/settings?tab=api-keys', color: '#fbbf24' },
+        { label: 'Dashboard', icon: BarChart3, href: '/dashboard', color: '#34d399' },
       ]}/>
     </PageShell>
   );
@@ -546,18 +545,18 @@ const s: Record<string, React.CSSProperties> = {
   qrContainer:  { display: 'flex', justifyContent: 'center', margin: '16px 0' },
   secretBox:    { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8,
     padding: '10px 14px', marginBottom: 16 },
-  secretLabel:  { fontSize: 12, color: 'var(--text-faint)' },
+  secretLabel:  { fontSize: 'var(--fs-body)', color: 'var(--text-faint)' },
   secretCode:   { fontSize: 'var(--fs-body)', color: 'var(--link)', letterSpacing: 2, wordBreak: 'break-all',
     display: 'block', marginTop: 4 },
   copyBtn:      { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
-    color: 'var(--text-dim)', fontSize: 12, padding: '3px 10px', cursor: 'pointer' },
+    color: 'var(--text-dim)', fontSize: 'var(--fs-body)', padding: '3px 10px', cursor: 'pointer' },
   codesGrid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '16px 0' },
   backupCode:   { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 6,
     padding: '10px 12px', fontSize: 'var(--fs-value)', color: 'var(--text-dim)', textAlign: 'center',
     letterSpacing: 3, fontFamily: 'monospace' },
   errorBox:     { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
     padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
-  appLink:      { fontSize: 12, color: 'var(--link)', textDecoration: 'none',
+  appLink:      { fontSize: 'var(--fs-body)', color: 'var(--link)', textDecoration: 'none',
     padding: '4px 10px', border: '1px solid #1e3a5f', borderRadius: 6,
     background: 'var(--surface)' },
   crossLink:    { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none' },

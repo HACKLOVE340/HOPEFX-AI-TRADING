@@ -182,7 +182,7 @@ const SecuritySection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Severity', 'Type', 'Detail', 'IP', 'User', 'Time'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -192,11 +192,11 @@ const SecuritySection: React.FC = () => {
               {events.slice(0, 50).map(ev => (
                 <tr key={ev.event_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 12px' }}><SeverityBadge severity={ev.severity} /></td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{ev.event_type}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{ev.event_type}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12, fontFamily: 'monospace' }}>{ev.ip_address}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{ev.user_id ?? '—'}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-faint)', fontSize: 12 }}>{timeAgo(ev.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)', fontFamily: 'monospace' }}>{ev.ip_address}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{ev.user_id ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>{timeAgo(ev.created_at)}</td>
                 </tr>
               ))}
             </tbody>
@@ -220,7 +220,7 @@ const SecuritySection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['IP Address', 'Reason', 'Blocked By', 'Blocked At', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {h}
                   </th>
                 ))}
@@ -231,8 +231,8 @@ const SecuritySection: React.FC = () => {
                 <tr key={b.ip} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: 'var(--loss)' }}>{b.ip}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{b.reason}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{b.blocked_by}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(b.blocked_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{b.blocked_by}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(b.blocked_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <ActionBtn
                       label="Unblock"
@@ -259,7 +259,7 @@ const SecuritySection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'IP', 'Device', 'Started', 'Last Active', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -269,10 +269,10 @@ const SecuritySection: React.FC = () => {
               {sessions.map(s => (
                 <tr key={s.session_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{s.username}</td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: 'var(--text-dim)', fontSize: 12 }}>{s.ip}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{s.device}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{timeAgo(s.last_active)}</td>
+                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{s.ip}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{s.device}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(s.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{timeAgo(s.last_active)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <ActionBtn

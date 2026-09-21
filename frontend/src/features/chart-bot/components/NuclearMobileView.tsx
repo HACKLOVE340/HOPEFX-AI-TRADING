@@ -12,6 +12,7 @@ import { fmtPrice, fmtPctRaw, fmtPnl } from '../../../lib/utils';
 import { severityColor, actionColor } from '../types/nuclear';
 import NuclearCandleChart from './NuclearCandleChart';
 import NuclearAlertOverlay from './NuclearAlertOverlay';
+import { BarChart3, Lock } from 'lucide-react';
 
 // ─── Mobile gauge strip ───────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ const MobileExplainAccordion = memo(() => {
           <p style={ms.explainText}>{nuclear.explanation}</p>
           {nuclear.historical_analog && (
             <div style={ms.analogBox}>
-              <span style={ms.analogLabel}>📊 HISTORICAL ANALOG</span>
+              <span style={ms.analogLabel}><BarChart3 size={11} aria-hidden style={{ verticalAlign: '-1px' }} /> HISTORICAL ANALOG</span>
               <p style={ms.analogText}>{nuclear.historical_analog}</p>
             </div>
           )}
@@ -163,7 +164,7 @@ const NuclearMobileView = memo(() => {
 
       {protectedView && (
         <div style={ms.protectedBar}>
-          🔒 PROTECTED VIEW — Trading halted
+          <Lock size={12} aria-hidden style={{ verticalAlign: '-1px' }} /> PROTECTED VIEW — Trading halted
         </div>
       )}
 
@@ -198,12 +199,12 @@ const ms: Record<string, React.CSSProperties> = {
     borderBottom: '1px solid #0a1628', flexShrink: 0,
   },
   statusDot: { width: 6, height: 6, borderRadius: '50%' },
-  statusText: { fontSize: 10, fontWeight: 700, letterSpacing: 1 },
-  statusNote: { fontSize: 10, color: 'var(--text-faint)', marginLeft: 'auto' },
+  statusText: { fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: 1 },
+  statusNote: { fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginLeft: 'auto' },
   protectedBar: {
     padding: '6px 12px', background: 'rgba(255,0,51,0.15)',
     borderBottom: '1px solid #ff0033',
-    fontSize: 11, color: '#fca5a5', fontWeight: 700, flexShrink: 0,
+    fontSize: 'var(--fs-label)', color: '#fca5a5', fontWeight: 700, flexShrink: 0,
   },
   gaugeStrip: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -218,7 +219,7 @@ const ms: Record<string, React.CSSProperties> = {
   gaugeCenter: { flex: 1, display: 'flex', flexDirection: 'column', gap: 4 },
   gaugeTrack: { height: 4, background: '#1a2e4a', borderRadius: 2, overflow: 'hidden' },
   gaugeFill: { height: '100%', borderRadius: 2, transition: 'width 0.6s ease' },
-  gaugeLabel: { fontSize: 10, fontWeight: 700, letterSpacing: 1 },
+  gaugeLabel: { fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: 1 },
   actionBadge: {
     fontSize: 9, fontWeight: 800, padding: '3px 6px',
     border: '1px solid', borderRadius: 3, flexShrink: 0,
@@ -227,9 +228,9 @@ const ms: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', gap: 10,
     padding: '8px 12px', borderBottom: '1px solid #0a1628', flexShrink: 0,
   },
-  symbol: { fontSize: 12, fontWeight: 800, color: '#f59e0b' },
+  symbol: { fontSize: 'var(--fs-body)', fontWeight: 800, color: '#f59e0b' },
   price:  { fontSize: 22, fontWeight: 900, color: 'var(--text-strong)', flex: 1 },
-  change: { fontSize: 12, fontWeight: 700 },
+  change: { fontSize: 'var(--fs-body)', fontWeight: 700 },
   chartWrap: { height: 280, flexShrink: 0, position: 'relative' },
   accordion: {
     borderBottom: '1px solid #0a1628', flexShrink: 0,
@@ -238,18 +239,18 @@ const ms: Record<string, React.CSSProperties> = {
     width: '100%', display: 'flex', justifyContent: 'space-between',
     alignItems: 'center', padding: '10px 12px',
     background: 'transparent', border: 'none', color: 'var(--text-dim)',
-    cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: 1.5,
+    cursor: 'pointer', fontSize: 'var(--fs-label)', fontWeight: 700, letterSpacing: 1.5,
   },
   accordionTitle: { letterSpacing: 2 },
-  accordionChevron: { fontSize: 10, color: 'var(--text-faint)' },
+  accordionChevron: { fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' },
   accordionBody: { padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 },
-  explainText: { fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7, margin: 0 },
+  explainText: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.7, margin: 0 },
   analogBox: {
     background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)',
     borderRadius: 6, padding: '8px 10px',
   },
   analogLabel: { fontSize: 9, color: 'var(--warn)', letterSpacing: 2, fontWeight: 700, display: 'block', marginBottom: 4 },
-  analogText: { fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.6, margin: 0 },
+  analogText: { fontSize: 'var(--fs-label)', color: 'var(--text-dim)', lineHeight: 1.6, margin: 0 },
   riskGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 },
   riskCell: { display: 'flex', flexDirection: 'column', gap: 2 },
   riskLabel: { fontSize: 9, color: 'var(--text-faint)', letterSpacing: 1 },
@@ -260,8 +261,8 @@ const ms: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', gap: 10,
     padding: '6px 0', borderBottom: '1px solid #0a1628',
   },
-  signalDir:   { fontSize: 11, fontWeight: 800, width: 40 },
-  signalModel: { fontSize: 10, color: 'var(--text-muted)', flex: 1 },
-  signalConf:  { fontSize: 11, fontFamily: 'monospace', color: 'var(--text-dim)' },
-  signalEntry: { fontSize: 11, fontFamily: 'monospace', color: 'var(--text-strong)' },
+  signalDir:   { fontSize: 'var(--fs-label)', fontWeight: 800, width: 40 },
+  signalModel: { fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', flex: 1 },
+  signalConf:  { fontSize: 'var(--fs-label)', fontFamily: 'monospace', color: 'var(--text-dim)' },
+  signalEntry: { fontSize: 'var(--fs-label)', fontFamily: 'monospace', color: 'var(--text-strong)' },
 };

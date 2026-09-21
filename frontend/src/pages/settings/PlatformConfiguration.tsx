@@ -10,8 +10,7 @@ import {
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { AlertTriangle, ArrowLeftRight, BarChart3, Bot, Brain, Bug, CandlestickChart, ClipboardList, Construction, Container, Database, FileText, Flag, FlaskConical, Gamepad2, Globe, Globe2, Hammer, Hash, HeartPulse, IdCard, Inbox, KeyRound, Landmark, Lightbulb, Link2, Lock, Mail, Map as MapIcon, Megaphone, Microscope, Monitor, OctagonAlert, Package, Plug, Puzzle, Radio, RefreshCw, Repeat, Ruler, Scale, Scroll, Search, Settings, Shield, Shuffle, Siren, Stethoscope, Target, Timer, TrafficCone, TrendingDown, TrendingUp, Trophy, Users, Wrench, Zap } from 'lucide-react';
-
+import { AlertTriangle, ArrowLeftRight, BarChart3, Bell, Bot, Brain, Bug, CandlestickChart, ClipboardList, Construction, Container, Database, FileText, Flag, FlaskConical, Gamepad2, Gauge, Globe, Globe2, Hammer, Hash, HeartPulse, IdCard, Inbox, KeyRound, Landmark, Lightbulb, Link2, Lock, Mail, Map as MapIcon, Megaphone, Microscope, Monitor, OctagonAlert, Package, Plug, Puzzle, CircleCheck, CircleX, Loader2, Trash2, Radio, RadioTower, RefreshCw, Repeat, Ruler, Scale, Scroll, Search, Settings, Shield, Shuffle, Siren, Stethoscope, Target, Timer, TrafficCone, TrendingDown, TrendingUp, Trophy, Users, Wrench, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PlatformConfig {
@@ -801,41 +800,41 @@ const Tog: React.FC<{
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'platform',       label: '🌐 Platform',        },
-  { id: 'database',       label: '🗄️ Database & Cache', },
-  { id: 'security',       label: '🔒 Security',         },
-  { id: 'ml',             label: '🧠 ML / AI',          },
-  { id: 'lstm',           label: '🔁 LSTM',             },
-  { id: 'brain',          label: '💡 AI Brain',         },
-  { id: 'allocator',      label: '📊 Allocator',        },
-  { id: 'anomaly',        label: '🚨 Anomaly',          },
-  { id: 'macro',          label: '🌍 Macro',            },
-  { id: 'online',         label: '📡 Online Learner',   },
-  { id: 'sharpe',         label: '📈 Sharpe CB',        },
-  { id: 'regime',         label: '🗺️ Regime',           },
-  { id: 'signal_engine',  label: '⚡ Signal Engine',    },
-  { id: 'tca',            label: '💹 TCA',              },
-  { id: 'backtest',       label: '🔄 Backtest',         },
-  { id: 'feature_flags',  label: '🚩 Feature Flags',    },
-  { id: 'llm',            label: '🤖 LLM / AI',         },
-  { id: 'drawdown',       label: '📉 Drawdown',         },
-  { id: 'prop_firm',      label: '🏆 Prop Firm',        },
-  { id: 'position_sizing',label: '📐 Position Sizing',  },
-  { id: 'decision',       label: '🎯 Decision Engine',  },
-  { id: 'risk',           label: '⚖️ Risk Engine',      },
-  { id: 'execution',      label: '⚡ Execution',        },
-  { id: 'brokers',        label: '🏦 Brokers',          },
-  { id: 'paper',          label: '📄 Paper Trading',    },
-  { id: 'ratelimit',      label: '🚦 Rate Limiting',    },
-  { id: 'notify',         label: '🔔 Notifications',    },
-  { id: 'smtp',           label: '📧 SMTP / Email',     },
-  { id: 'monitoring',     label: '📊 Monitoring',       },
-  { id: 'celery',         label: '⚙️ Task Queue',       },
-  { id: 'compliance',     label: '⚖️ Compliance',       },
-  { id: 'killswitch',     label: '🛑 Kill Switch',      },
-  { id: 'healing',        label: '🩺 Auto-Healing',     },
-  { id: 'infrastructure', label: '🏗️ Infrastructure',   },
-  { id: 'diagnostics',    label: '🔬 Diagnostics',      },
+  { id: 'platform',       label: 'Platform', icon: Globe,        },
+  { id: 'database',       label: 'Database & Cache', icon: Database, },
+  { id: 'security',       label: 'Security', icon: Lock,         },
+  { id: 'ml',             label: 'ML / AI', icon: Brain,          },
+  { id: 'lstm',           label: 'LSTM', icon: Repeat,             },
+  { id: 'brain',          label: 'AI Brain', icon: Lightbulb,         },
+  { id: 'allocator',      label: 'Allocator', icon: BarChart3,        },
+  { id: 'anomaly',        label: 'Anomaly', icon: Siren,          },
+  { id: 'macro',          label: 'Macro', icon: Globe,            },
+  { id: 'online',         label: 'Online Learner', icon: RadioTower,   },
+  { id: 'sharpe',         label: 'Sharpe CB', icon: TrendingUp,        },
+  { id: 'regime',         label: 'Regime', icon: MapIcon,           },
+  { id: 'signal_engine',  label: 'Signal Engine', icon: Zap,    },
+  { id: 'tca',            label: 'TCA', icon: TrendingUp,              },
+  { id: 'backtest',       label: 'Backtest', icon: RefreshCw,         },
+  { id: 'feature_flags',  label: 'Feature Flags', icon: Flag,    },
+  { id: 'llm',            label: 'LLM / AI', icon: Bot,         },
+  { id: 'drawdown',       label: 'Drawdown', icon: TrendingDown,         },
+  { id: 'prop_firm',      label: 'Prop Firm', icon: Trophy,        },
+  { id: 'position_sizing',label: 'Position Sizing', icon: Ruler,  },
+  { id: 'decision',       label: 'Decision Engine', icon: Target,  },
+  { id: 'risk',           label: 'Risk Engine', icon: Scale,      },
+  { id: 'execution',      label: 'Execution', icon: Zap,        },
+  { id: 'brokers',        label: 'Brokers', icon: Landmark,          },
+  { id: 'paper',          label: 'Paper Trading', icon: FileText,    },
+  { id: 'ratelimit',      label: 'Rate Limiting', icon: Gauge,    },
+  { id: 'notify',         label: 'Notifications', icon: Bell,    },
+  { id: 'smtp',           label: 'SMTP / Email', icon: Mail,     },
+  { id: 'monitoring',     label: 'Monitoring', icon: BarChart3,       },
+  { id: 'celery',         label: 'Task Queue', icon: Settings,       },
+  { id: 'compliance',     label: 'Compliance', icon: Scale,       },
+  { id: 'killswitch',     label: 'Kill Switch', icon: OctagonAlert,      },
+  { id: 'healing',        label: 'Auto-Healing', icon: Stethoscope,     },
+  { id: 'infrastructure', label: 'Infrastructure', icon: Construction,   },
+  { id: 'diagnostics',    label: 'Diagnostics', icon: Microscope,      },
 ];
 
 const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ active, onChange }) => (
@@ -849,12 +848,12 @@ const TabBar: React.FC<{ active: string; onChange: (t: string) => void }> = ({ a
         onClick={() => onChange(t.id)}
         style={{
           padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
-          fontSize: 12, fontWeight: active === t.id ? 700 : 500,
+          fontSize: 'var(--fs-body)', fontWeight: active === t.id ? 700 : 500,
           background: active === t.id ? '#1e3a5f' : 'var(--raised)',
           color: active === t.id ? 'var(--link)' : 'var(--text-dim)',
           transition: 'all 0.15s',
         }}
-      >{t.label}</button>
+      ><t.icon size="1em" aria-hidden /> {t.label}</button>
     ))}
   </div>
 );
@@ -1309,7 +1308,7 @@ const KillSwitchTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformCo
     <SectionHeader icon={<OctagonAlert size={18} aria-hidden />} title="Global Kill Switch" desc="kill_switch.py — immediately halts all trading across all pods" />
     <div style={{ marginBottom: 12, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
       <div style={{ fontSize: 'var(--fs-body)', color: '#fca5a5', fontWeight: 600 }}>
-        ⚠️ Activating the kill switch immediately stops all live trading, cancels pending orders, and blocks new order submission across all running pods.
+        <AlertTriangle size="1em" aria-hidden /> Activating the kill switch immediately stops all live trading, cancels pending orders, and blocks new order submission across all running pods.
       </div>
     </div>
     <Tog id="ks" label="ACTIVATE GLOBAL KILL SWITCH" desc="HOPEFX_KILL_SWITCH — sets env var and propagates via Redis + K8s ConfigMap" checked={cfg.hopefx_kill_switch} onChange={(v) => set({ hopefx_kill_switch: v })} />
@@ -1377,7 +1376,7 @@ const HealingTab: React.FC<{
           <SectionHeader icon={<BarChart3 size={18} aria-hidden />} title="Live Healer Status" />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 8 }}>
             {[
-              { label: 'Running',          value: healerStatus.running ? '✅ Yes' : '❌ No' },
+              { label: 'Running',          value: healerStatus.running ? 'Yes' : 'No' },
               { label: 'Baseline Files',   value: healerStatus.baseline_files },
               { label: 'Drift Events',     value: healerStatus.drift_events },
               { label: 'Patches Applied',  value: healerStatus.patches_applied },
@@ -1386,16 +1385,16 @@ const HealingTab: React.FC<{
               { label: 'Last Test Failed', value: healerStatus.last_test_failed ?? '—' },
             ].map((kpi) => (
               <div key={kpi.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kpi.label}</div>
+                <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{kpi.label}</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-strong)', marginTop: 4 }}>{kpi.value}</div>
               </div>
             ))}
           </div>
           {healerStatus.last_scan && (
-            <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4 }}>Last scan: {healerStatus.last_scan}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginTop: 4 }}>Last scan: {healerStatus.last_scan}</div>
           )}
           {healerStatus.last_test_run && (
-            <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Last test run: {healerStatus.last_test_run}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Last test run: {healerStatus.last_test_run}</div>
           )}
         </Card>
       )}
@@ -1435,7 +1434,13 @@ const HealingTab: React.FC<{
       <Card>
         <SectionHeader icon={<Shield size={18} aria-hidden />} title="Protected Paths" desc="Files matching these paths are never auto-patched — comma-separated prefixes" />
         <Field label="Protected Paths" description="e.g. live_trading.py,risk_manager.py,ml/models/,config/secrets/">
+          {/* `Field` wraps its children in a <label>, which names this textarea
+              at runtime — but the wrapping text lives in settings/ui.tsx and
+              `Field`'s `label` prop is a plain string, so there is no element
+              here to point `aria-labelledby` at. The name is spelled out to
+              match the label two lines above it, verbatim (WCAG 2.5.3). */}
           <textarea
+            aria-label="Protected Paths"
             value={healer.protected_paths}
             onChange={(e) => setHealer({ protected_paths: e.target.value })}
             rows={4}
@@ -1457,7 +1462,7 @@ const HealingTab: React.FC<{
         <Tog id="par_tests" label="Run Tests in Parallel" desc="parallel_tests — uses pytest-xdist" checked={healer.parallel_tests} onChange={(v) => setHealer({ parallel_tests: v })} />
         <Num label="Scheduled Test Interval (min)" desc="test_schedule_interval_min — 0 = disabled" value={healer.test_schedule_interval_min} min={0} onChange={(v) => setHealer({ test_schedule_interval_min: v })} />
         <Divider />
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Test Execution Triggers
         </div>
         {['after_patch', 'on_drift', 'on_schedule', 'on_startup'].map((s) => (
@@ -1469,11 +1474,11 @@ const HealingTab: React.FC<{
           />
         ))}
         <Divider />
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Test Categories
         </div>
         {testIndex && (
-          <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginBottom: 10 }}>
             {testIndex.total} tests discovered across {Object.keys(testIndex.by_category).length} categories
           </div>
         )}
@@ -1484,10 +1489,10 @@ const HealingTab: React.FC<{
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.accent, display: 'inline-block' }} />
                 {cat.label}
                 {testIndex?.by_category[cat.key] !== undefined && (
-                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>({testIndex.by_category[cat.key]} tests)</span>
+                  <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>({testIndex.by_category[cat.key]} tests)</span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{cat.desc}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>{cat.desc}</div>
             </div>
             <Toggle
               id={`cat_${cat.key}`} label="" checked={!!healer.test_categories[cat.key]}
@@ -1496,7 +1501,7 @@ const HealingTab: React.FC<{
           </div>
         ))}
         <Divider />
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Require Manual Approval Before Patching
         </div>
         {['nuclear', 'e2e', 'security', 'risk'].map((s) => (
@@ -1891,10 +1896,10 @@ const ChainLegRow: React.FC<{
     padding: '10px 0', borderTop: index === 0 ? 'none' : '1px solid var(--border)',
   }}>
     <div style={{ minWidth: 82 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {index === 0 ? 'Primary' : `Fallback ${index}`}
       </div>
-      <div style={{ fontSize: 11, color: reachable === undefined ? 'var(--text-faint)' : reachable ? '#22c55e' : 'var(--loss)', marginTop: 2 }}>
+      <div style={{ fontSize: 'var(--fs-label)', color: reachable === undefined ? 'var(--text-faint)' : reachable ? '#22c55e' : 'var(--loss)', marginTop: 2 }}>
         {reachable === undefined ? 'unknown' : reachable ? 'credential present' : 'no credential'}
       </div>
     </div>
@@ -1919,7 +1924,9 @@ const ChainLegRow: React.FC<{
           and an operator who cannot type one of those is worse off than one
           who had no listing at all. */}
       <datalist id={modelListId}>
-        {modelOptions.map((m) => <option key={m} value={m} />)}
+        {/* A datalist suggestion is announced by its value; naming it with the
+            same binding that supplies that value cannot drift from it. */}
+        {modelOptions.map((m) => <option key={m} value={m} aria-label={m} />)}
       </datalist>
     </div>
     <div style={{ display: 'flex', gap: 6 }}>
@@ -2034,10 +2041,10 @@ const ModelChainEditor: React.FC<{
               <StatusBadge status={isOverridden(role) ? 'info' : 'ok'}
                 label={isOverridden(role) ? 'custom' : 'platform default'} />
             </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: 11, margin: '4px 0 6px', lineHeight: 1.6, maxWidth: '72ch' }}>{note}</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)', margin: '4px 0 6px', lineHeight: 1.6, maxWidth: '72ch' }}>{note}</p>
 
             {legs.length === 0 ? (
-              <p style={{ color: 'var(--loss)', fontSize: 12, margin: '6px 0' }}>
+              <p style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)', margin: '6px 0' }}>
                 No legs configured for this role. Add one, or the committed default applies.
               </p>
             ) : legs.map((leg, index) => (
@@ -2250,11 +2257,11 @@ const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
         <Tog id="smtp_tls" label="Use TLS (STARTTLS)" desc="SMTP_TLS" checked={cfg.smtp_tls} onChange={(v) => set({ smtp_tls: v })} />
         <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
           <Button onClick={testSmtp} disabled={testing} variant="secondary">
-            {testing ? 'Testing…' : '🔌 Test SMTP Connection'}
+            {testing ? 'Testing…' : <><Plug size="1em" aria-hidden /> Test SMTP Connection</>}
           </Button>
           {testResult && (
             <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: testResult === 'ok' ? '#22c55e' : '#ef4444' }}>
-              {testResult === 'ok' ? '✓' : '✗'} {testMsg}
+              {testResult === 'ok' ? <CircleCheck size="1em" aria-hidden /> : <CircleX size="1em" aria-hidden />} {testMsg}
             </span>
           )}
         </div>
@@ -2424,15 +2431,15 @@ const InfrastructureTab: React.FC = () => {
                   background: 'var(--surface)', border: `1px solid ${statusColor(s)}33`,
                   borderRadius: 8, padding: '12px 14px',
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                  <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
                     {key.replace(/_/g, ' ')}
                   </div>
                   <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: statusColor(s) }}>{s.toUpperCase()}</div>
                   {val.latency_ms !== undefined && (
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{val.latency_ms}ms</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>{val.latency_ms}ms</div>
                   )}
                   {val.detail && (
-                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {val.detail}
                     </div>
                   )}
@@ -2456,7 +2463,7 @@ const InfrastructureTab: React.FC = () => {
               { label: 'Commands/sec', value: String(cacheStats.instantaneous_ops_per_sec ?? '—') },
             ].map((m) => (
               <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)' }}>{m.value}</div>
               </div>
             ))}
@@ -2471,7 +2478,7 @@ const InfrastructureTab: React.FC = () => {
             />
           </Field>
           <Button onClick={requestFlush} disabled={flushing} variant="danger" style={{ marginBottom: 20 }}>
-            {flushing ? 'Flushing…' : '🗑️ Flush Cache'}
+            {flushing ? 'Flushing…' : <><Trash2 size="1em" aria-hidden /> Flush Cache</>}
           </Button>
         </div>
         {confirmFlushAll && (
@@ -2506,7 +2513,7 @@ const InfrastructureTab: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {Object.entries(dbStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
               <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
               </div>
             ))}
@@ -2520,7 +2527,7 @@ const InfrastructureTab: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {Object.entries(queueStats as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
               <div key={key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4 }}>{key.replace(/_/g, ' ')}</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
               </div>
             ))}
@@ -2650,7 +2657,7 @@ const DiagnosticsTab: React.FC = () => {
             ].map((m) => (
               <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', textAlign: 'center', minWidth: 80 }}>
                 <div style={{ fontSize: 20, fontWeight: 800, color: m.color }}>{m.value}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{m.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>{m.label}</div>
               </div>
             ))}
           </div>
@@ -2662,8 +2669,8 @@ const DiagnosticsTab: React.FC = () => {
           {(summary.top_issues as Array<Record<string,string>>).map((issue, i) => (
             <div key={i} style={{ padding: '10px 14px', borderRadius: 8, background: '#450a0a', border: '1px solid #dc262633', marginBottom: 8 }}>
               <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: '#fca5a5' }}>{issue.check_name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{issue.message}</div>
-              {issue.remediation && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Fix: {issue.remediation}</div>}
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4 }}>{issue.message}</div>
+              {issue.remediation && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 }}>Fix: {issue.remediation}</div>}
             </div>
           ))}
         </Card>
@@ -2671,7 +2678,7 @@ const DiagnosticsTab: React.FC = () => {
       {report && (
         <Card>
           <SectionHeader icon={<ClipboardList size={18} aria-hidden />} title="Last Diagnostic Report" />
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
             Completed: {String(report.completed_at ?? 'N/A')}
           </div>
           {(report.results as Array<Record<string,string>> ?? []).map((r, i) => (
@@ -2683,9 +2690,9 @@ const DiagnosticsTab: React.FC = () => {
             }}>
               <div>
                 <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{r.check_name}</span>
-                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{r.message}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{r.message}</div>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444', textTransform: 'uppercase', flexShrink: 0, marginLeft: 12 }}>
+              <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: r.status === 'ok' ? '#22c55e' : r.status === 'warning' ? '#f59e0b' : '#ef4444', textTransform: 'uppercase', flexShrink: 0, marginLeft: 12 }}>
                 {r.status}
               </span>
             </div>
@@ -2882,7 +2889,7 @@ const PlatformConfiguration: React.FC = () => {
           description="Every setting, parameter, threshold, and flag across the entire HOPEFX platform. Super Admin only."
         />
         <Button onClick={handleValidate} disabled={validating} variant="secondary" style={{ marginTop: 4, flexShrink: 0 }}>
-          {validating ? '⏳ Validating…' : '✅ Validate Config'}
+          {validating ? <><Loader2 size="1em" aria-hidden /> Validating…</> : <><CircleCheck size="1em" aria-hidden /> Validate Config</>}
         </Button>
       </div>
 
@@ -2896,14 +2903,16 @@ const PlatformConfiguration: React.FC = () => {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: validationResult.issues.length > 0 ? 10 : 0 }}>
             <span style={{ fontWeight: 700, fontSize: 'var(--fs-body)', color: validationResult.valid ? 'var(--gain)' : 'var(--loss)' }}>
-              {validationResult.valid ? '✓ Config valid' : `✗ ${validationResult.error_count} error(s), ${validationResult.warning_count} warning(s)`}
+              {validationResult.valid
+                ? <><CircleCheck size="1em" aria-hidden /> Config valid</>
+                : <><CircleX size="1em" aria-hidden /> {validationResult.error_count} error(s), {validationResult.warning_count} warning(s)</>}
             </span>
             <button onClick={() => setValidationResult(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>×</button>
           </div>
           {validationResult.issues.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {validationResult.issues.map((issue, i) => (
-                <div key={i} style={{ fontSize: 12, color: issue.severity === 'error' ? '#fca5a5' : '#fde68a' }}>
+                <div key={i} style={{ fontSize: 'var(--fs-body)', color: issue.severity === 'error' ? '#fca5a5' : '#fde68a' }}>
                   <span style={{ fontWeight: 700, textTransform: 'uppercase', marginRight: 6 }}>[{issue.severity}]</span>
                   <span style={{ color: 'var(--text-dim)', marginRight: 4 }}>{issue.field}:</span>
                   {issue.message}

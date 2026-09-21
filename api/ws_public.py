@@ -154,9 +154,17 @@ YF_MIN_INTERVAL_SECONDS: float = float(os.getenv("WS_PUBLIC_YF_INTERVAL", "15.0"
 # Symbol → yfinance ticker. Used only as a last-resort fallback so the public
 # ticker still shows indicative (delayed) prices when no broker feed / Redis is
 # configured (e.g. a fresh install with no API keys).
+#
+# XAU_USD and XAG_USD intentionally have NO entry here. Yahoo delisted spot
+# metals (verified 2026-07-26 — see config/multi_source_feed.yaml), and their
+# futures contracts (GC=F, SI=F) are a DIFFERENT instrument with a real,
+# varying basis to spot. Serving one under the "XAU_USD"/"XAG_USD" symbol
+# here would be an undisclosed instrument substitution: this public ticker
+# tags the tick "source": "delayed" (a freshness claim) but has no field that
+# says the number is a futures price, not spot. CLAUDE.md: "Do not put a
+# yfinance ticker back." `_fetch_yf_sync` below returns None for these
+# symbols rather than resolving them to a futures ticker.
 _YF_TICKER_MAP: dict[str, str] = {
-    "XAU_USD": "GC=F",
-    "XAG_USD": "SI=F",
     "EUR_USD": "EURUSD=X",
     "GBP_USD": "GBPUSD=X",
     "USD_JPY": "JPY=X",

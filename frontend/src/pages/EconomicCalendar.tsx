@@ -15,7 +15,7 @@
  *   GET  /api/data-layer/macro         — MacroResponse (via useMacro hook)
  */
 
-import { CalendarDays } from 'lucide-react';
+import { AlertTriangle, BarChart3, Calendar, CalendarDays, Pause, Play, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +25,7 @@ import { useMacro } from '../hooks/useOrchestratorData';
 import { useStore, selectMacro } from '../store';
 import { MacroCalendar } from '../components/panels/MacroCalendar';
 import { PanelSkeleton } from '../components/ui/Skeleton';
+import { StatusDot } from '../components/ui/StatusDot';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,16 +58,27 @@ const IMPORTANCE_COLOR: Record<string, string> = {
   low:      '#22c55e',
 };
 
+// The coloured dot that used to prefix each of these restated IMPORTANCE_COLOR
+// above, and was the ONLY severity signal in the row: the label rendered at
+// `var(--text-muted)` regardless. The colour now reaches the whole word, which
+// is both more legible and able to follow the theme — a glyph's colour is fixed
+// by the font.
 const IMPORTANCE_LABEL: Record<string, string> = {
-  critical: '🔴 Critical',
-  high:     '🟠 High',
-  medium:   '🟡 Medium',
-  low:      '🟢 Low',
+  critical: 'Critical',
+  high:     'High',
+  medium:   'Medium',
+  low:      'Low',
 };
 
-const FLAG: Record<string, string> = {
-  US: '🇺🇸', EU: '🇪🇺', UK: '🇬🇧', JP: '🇯🇵', CA: '🇨🇦',
-  AU: '🇦🇺', NZ: '🇳🇿', CH: '🇨🇭', CN: '🇨🇳',
+// Country CODE, not a flag. Lucide ships no flags, and a regional-indicator
+// pair already renders as bare letters on Windows — so the letters are what a
+// good share of users see anyway, and they render identically everywhere.
+// The full name rides along as the accessible name, which the emoji could not
+// carry: a badge reading "EU" is announced "European Union".
+const COUNTRY_NAME: Record<string, string> = {
+  US: 'United States', EU: 'European Union', UK: 'United Kingdom',
+  JP: 'Japan',         CA: 'Canada',         AU: 'Australia',
+  NZ: 'New Zealand',   CH: 'Switzerland',    CN: 'China',
 };
 
 /**
@@ -108,7 +120,7 @@ function formatDate(iso: string): string {
 
 const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = ({ event: ev, onPlanTrade }) => {
   const color = IMPORTANCE_COLOR[ev.importance] ?? '#64748b';
-  const flag  = FLAG[ev.country] ?? '🌐';
+  const country = ev.country || 'GLOBAL';
   const mins  = minutesUntil(ev);
   const isHighImpact = ev.importance === 'high' || ev.importance === 'critical';
 
@@ -116,19 +128,19 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
     <div style={{ ...s.eventRow, borderLeft: `3px solid ${color}` }}>
       <div style={s.eventTime}>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{formatTime(ev.scheduled_time)}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{formatCountdown(mins)}</div>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>{formatCountdown(mins)}</div>
       </div>
 
       <div style={s.eventMain}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 16 }}>{flag}</span>
+          <span style={s.countryBadge} aria-label={COUNTRY_NAME[country] ?? country}>{country}</span>
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{ev.title}</span>
           {ev.currency && <span style={s.currencyBadge}>{ev.currency}</span>}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-          {IMPORTANCE_LABEL[ev.importance]}
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
+          <span style={{ color, fontWeight: 600 }}>{IMPORTANCE_LABEL[ev.importance]}</span>
           {mins <= 60 && mins > 0 && (
-            <span style={{ color: '#f97316', marginLeft: 8 }}>⚠ Approaching</span>
+            <span style={{ color: '#f97316', marginLeft: 8 }}><AlertTriangle size="1em" aria-hidden /> Approaching</span>
           )}
         </div>
       </div>
@@ -169,7 +181,7 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
             >
               {ev.actual}
               {ev.forecast !== null && ev.actual !== ev.forecast && (
-                <span style={{ color: 'var(--text-dim)', marginLeft: 4, fontSize: 11 }}>
+                <span style={{ color: 'var(--text-dim)', marginLeft: 4, fontSize: 'var(--fs-label)'}}>
                   {ev.actual > ev.forecast ? '▲' : '▼'}
                 </span>
               )}
@@ -182,12 +194,12 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
             style={{
               padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
               background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-              color: 'var(--link)', fontSize: 10, fontWeight: 700, fontFamily: 'inherit',
+              color: 'var(--link)', fontSize: 'var(--fs-micro)', fontWeight: 700, fontFamily: 'inherit',
               whiteSpace: 'nowrap',
             }}
             title="Navigate to Trade page to plan a trade around this event"
           >
-            ⚡ Plan Trade
+            <Zap size="1em" aria-hidden /> Plan Trade
           </button>
         )}
       </div>
@@ -294,6 +306,8 @@ const EconomicCalendar: React.FC = () => {
             <button
               onClick={handleToggleAutoPause}
               disabled={savingPause}
+              aria-pressed={autoPause.enabled}
+              aria-label={autoPause.enabled ? 'Auto-pause is on — turn it off' : 'Auto-pause is off — turn it on'}
               style={{
                 ...s.toggleBtn,
                 background: autoPause.enabled ? '#166534' : 'var(--surface-hover)',
@@ -301,16 +315,18 @@ const EconomicCalendar: React.FC = () => {
                 opacity:    savingPause ? 0.6 : 1,
               }}
             >
-              {autoPause.enabled ? '⏸ ON' : '▶ OFF'}
+              {autoPause.enabled
+                ? <><Pause size="1em" aria-hidden /> ON</>
+                : <><Play size="1em" aria-hidden /> OFF</>}
             </button>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
               {autoPause.enabled
                 ? `Pauses ${autoPause.minutes_before}min before ${autoPause.min_importance}+ events`
                 : 'Enable to auto-pause before high-impact events'}
             </span>
           </div>
           {pauseErr && (
-            <div style={{ fontSize: 12, color: 'var(--loss)', marginTop: 6 }}>{pauseErr}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 6 }}>{pauseErr}</div>
           )}
         </div></>}
     >
@@ -325,9 +341,9 @@ const EconomicCalendar: React.FC = () => {
           display: 'flex', alignItems: 'center', gap: 10,
           color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600,
         }}>
-          🔴 Trading Blackout Active — high-impact event imminent. Order submission is paused.
+          <StatusDot status="error" /> Trading Blackout Active — high-impact event imminent. Order submission is paused.
           {macro.impact_score != null && (
-            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 400, color: '#fca5a5' }}>
+            <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-body)', fontWeight: 400, color: '#fca5a5' }}>
               Impact score: {(macro.impact_score * 100).toFixed(0)}%
             </span>
           )}
@@ -342,7 +358,9 @@ const EconomicCalendar: React.FC = () => {
             onClick={() => setTab(t)}
             style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
           >
-            {t === 'calendar' ? '📅 Calendar' : '📊 Macro Data Layer'}
+            {t === 'calendar'
+              ? <><Calendar size="1em" aria-hidden /> Calendar</>
+              : <><BarChart3 size="1em" aria-hidden /> Macro Data Layer</>}
           </button>
         ))}
       </div>
@@ -358,7 +376,7 @@ const EconomicCalendar: React.FC = () => {
                 onClick={() => setFilter(f)}
                 style={{ ...s.tab, ...(filter === f ? s.tabActive : {}) }}
               >
-                {f === 'all' ? 'All Events (7 days)' : '🔴 High Impact Only'}
+                {f === 'all' ? 'All Events (7 days)' : <><StatusDot status="error" /> High Impact Only</>}
               </button>
             ))}
           </div>
@@ -369,12 +387,12 @@ const EconomicCalendar: React.FC = () => {
             <div style={s.errorBox}>{fetchErr}</div>
           ) : events.length === 0 ? (
             <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 36 }}>📅</div>
+              <div style={{ fontSize: 36 }}><Calendar size="1em" aria-hidden /></div>
               <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>No events found</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Try adjusting your filters or check back later.</div>
               <button onClick={() => navigate('/trade')}
                 style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-                ⚡ Go to Trade
+                <Zap size="1em" aria-hidden /> Go to Trade
               </button>
             </div>
           ) : (
@@ -419,9 +437,10 @@ const s: Record<string, React.CSSProperties> = {
   eventMain:     { flex: 1 },
   eventData:     { display: 'flex', gap: 16 },
   dataItem:      { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 60 },
-  dataLabel:     { fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dataLabel:     { fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.5 },
   dataValue:     { fontSize: 14, fontWeight: 600, color: 'var(--text-strong)', marginTop: 2 },
-  currencyBadge: { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '1px 6px' },
+  currencyBadge: { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 'var(--fs-label)', padding: '1px 6px' },
+  countryBadge:  { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-muted)', fontSize: 'var(--fs-label)', fontWeight: 700, letterSpacing: 0.5, padding: '1px 6px' },
   empty:         { textAlign: 'center', color: 'var(--text-faint)', padding: 40 },
   errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
 };

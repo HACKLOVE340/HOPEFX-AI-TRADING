@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { UserRound } from 'lucide-react';
+import { Eye, Trophy, User, UserRound, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -181,7 +181,7 @@ const Profile: React.FC = () => {
   if (!profile) return (
     <PageShell {...shell}>
       <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>👤</div>
+        <div style={{ fontSize: 48, marginBottom: 16 }}><User size="1em" aria-hidden /></div>
         <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>
           Profile not found
         </div>
@@ -232,12 +232,12 @@ const Profile: React.FC = () => {
         </div>
         <div style={s.headerActions}>
           <button onClick={() => navigate('/trade')}
-            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ⚡ Trade
+            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+            <Zap size="1em" aria-hidden /> Trade
           </button>
           <button onClick={() => navigate('/leaderboard')}
-            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🏆 Leaderboard
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+            <Trophy size="1em" aria-hidden /> Leaderboard
           </button>
           {isOwn ? (
             <>
@@ -248,7 +248,7 @@ const Profile: React.FC = () => {
                 style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: 'var(--link)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-body)'}}
                 title="See how your profile looks to other traders"
               >
-                👁 View Public Profile
+                <Eye size="1em" aria-hidden /> View Public Profile
               </a>
               <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
             </>
@@ -289,7 +289,7 @@ const Profile: React.FC = () => {
           {label:'Total P&L',    value:fmtPctRaw(st.total_return_pct, 1), positive: (st.total_return_pct ?? 0) >= 0},
         ].map(({label,value,positive})=>(
           <div key={label} style={s.statCard}>
-            <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:4}}>{label}</div>
+            <div style={{fontSize: 'var(--fs-body)',color:'var(--text-muted)',marginBottom:4}}>{label}</div>
             <div style={{fontSize:20,fontWeight:700,color:positive===undefined?'var(--text-strong)':positive?'var(--gain)':'var(--loss)'}}>{value}</div>
           </div>
         ))}
@@ -339,7 +339,7 @@ const s: Record<string,React.CSSProperties> = {
   header:{display:'flex',gap:20,alignItems:'flex-start',marginBottom:28,background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:12,padding:'24px'},
   avatarWrap:{position:'relative',flexShrink:0},
   avatar:{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-strong)'},
-  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid var(--border-strong)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:700,color:'var(--link)'},
+  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid var(--border-strong)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'var(--fs-display-sm)',fontWeight:700,color:'var(--link)'},
   avatarEditBtn:{position:'absolute',bottom:0,right:0,background:'var(--surface-hover)',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'},
   headerInfo:{flex:1},
   name:{fontSize:22,fontWeight:700,color:'var(--text-strong)',margin:'0 0 4px'},
@@ -355,8 +355,8 @@ const s: Record<string,React.CSSProperties> = {
   label:{display:'block',fontSize: 'var(--fs-body)',color:'var(--text-dim)',marginBottom:6},
   input:{width:'100%',background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box'},
   textarea:{width:'100%',background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-strong)',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'},
-  inlineError:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:6,padding:'6px 10px',fontSize:12,color:'var(--loss)',marginTop:8},
-  successMsg:{background:'rgba(74,222,128,0.1)',border:'1px solid var(--gain)',borderRadius:6,padding:'6px 10px',fontSize:12,color:'var(--gain)',marginTop:8},
+  inlineError:{background:'rgba(248,113,113,0.1)',border:'1px solid var(--loss)',borderRadius:6,padding:'6px 10px',fontSize: 'var(--fs-body)',color:'var(--loss)',marginTop:8},
+  successMsg:{background:'rgba(74,222,128,0.1)',border:'1px solid var(--gain)',borderRadius:6,padding:'6px 10px',fontSize: 'var(--fs-body)',color:'var(--gain)',marginTop:8},
   saveBtn:{background:'#3b82f6',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize: 'var(--fs-body)',fontWeight:600,padding:'9px 20px'},
   cancelBtn:{background:'transparent',border:'1px solid var(--border-strong)',borderRadius:8,color:'var(--text-dim)',cursor:'pointer',fontSize: 'var(--fs-body)',padding:'9px 16px'},
   statsGrid:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:12,marginBottom:20},
@@ -364,7 +364,7 @@ const s: Record<string,React.CSSProperties> = {
   card:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:10,padding:'20px 24px',marginBottom:16},
   stratRow:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid var(--hairline)'},
   table:{width:'100%',borderCollapse:'collapse'},
-  th:{textAlign:'left',fontSize:12,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid var(--border-strong)'},
+  th:{textAlign:'left',fontSize: 'var(--fs-body)',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid var(--border-strong)'},
   tr:{borderBottom:'1px solid var(--border)'},
   td:{padding:'10px 12px',fontSize:14,color:'var(--text-dim)'},
   errorBox:{background:'#450a0a',border:'1px solid #dc2626',borderRadius:10,padding:'20px 24px',color:'#fca5a5'},

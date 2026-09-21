@@ -26,17 +26,18 @@ import {
 } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
+import { Bot, Calendar, ClipboardList, Mail, MessageSquare, Package, Phone, Star, Target, Ticket, TrendingUp, Trophy, Wrench } from 'lucide-react';
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
 const s = {
   page:    { padding: '32px 40px', maxWidth: 1100, margin: '0 auto' } as React.CSSProperties,
-  heading: { fontSize: 26, fontWeight: 800, color: '#f59e0b', marginBottom: 4 } as React.CSSProperties,
+  heading: { fontSize: 'var(--fs-hero)', fontWeight: 800, color: '#f59e0b', marginBottom: 4 } as React.CSSProperties,
   sub:     { fontSize: 14, color: 'var(--text-dim)', marginBottom: 32 } as React.CSSProperties,
   grid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 } as React.CSSProperties,
   card:    { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24 } as React.CSSProperties,
   cardH:   { fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 } as React.CSSProperties,
-  label:   { fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block' } as React.CSSProperties,
+  label:   { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 4, display: 'block' } as React.CSSProperties,
   input:   { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none', boxSizing: 'border-box' } as React.CSSProperties,
   textarea:{ width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none', resize: 'vertical', minHeight: 100, boxSizing: 'border-box' } as React.CSSProperties,
   select:  { width: '100%', padding: '9px 12px', background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text)', fontSize: 'var(--fs-body)', outline: 'none' } as React.CSSProperties,
@@ -105,7 +106,7 @@ function AccountManagerCard() {
 
   return (
     <div style={s.card}>
-      <div style={s.cardH}>🎯 Your Dedicated Account Manager</div>
+      <div style={s.cardH}><Target size="1em" aria-hidden /> Your Dedicated Account Manager</div>
       {loading ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading…</div>
       ) : !am ? (
@@ -115,19 +116,19 @@ function AccountManagerCard() {
           <div style={{ fontSize: 18, fontWeight: 700, color: '#f59e0b', marginBottom: 16 }}>{am.name}</div>
           {am.email && (
             <div style={s.amRow}>
-              <span>📧</span>
+              <span><Mail size="1em" aria-hidden /></span>
               <span style={s.amVal}>{am.email}</span>
             </div>
           )}
           {am.phone && (
             <div style={s.amRow}>
-              <span>📞</span>
+              <span><Phone size="1em" aria-hidden /></span>
               <span style={s.amVal}>{am.phone}</span>
             </div>
           )}
           {am.calendar_url && (
             <div style={s.amRow}>
-              <span>📅</span>
+              <span><Calendar size="1em" aria-hidden /></span>
               <a href={am.calendar_url} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', fontSize: 'var(--fs-body)'}}>
                 Book a call
               </a>
@@ -135,20 +136,20 @@ function AccountManagerCard() {
           )}
           {am.slack_channel && (
             <div style={s.amRow}>
-              <span>💬</span>
+              <span><MessageSquare size="1em" aria-hidden /></span>
               <span style={s.amVal}>{am.slack_channel}</span>
             </div>
           )}
           <div style={{ marginTop: 16, padding: '12px', background: 'var(--raised)', borderRadius: 8 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>RESPONSE SLA</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>RESPONSE SLA</div>
             {Object.entries(am.response_sla ?? {}).map(([priority, time]) => (
-              <div key={priority} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+              <div key={priority} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-body)', marginBottom: 4 }}>
                 <span style={badgeStyle(PRIORITY_COLORS[priority] ?? 'var(--text-muted)')}>{priority}</span>
                 <span style={{ color: 'var(--text-dim)' }}>{time}</span>
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+          <div style={{ marginTop: 12, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             Support hours: <span style={{ color: 'var(--text)' }}>{am.support_hours}</span>
           </div>
         </>
@@ -186,7 +187,7 @@ function SupportTicketForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <div style={s.card}>
-      <div style={s.cardH}>🎫 Submit Support Ticket</div>
+      <div style={s.cardH}><Ticket size="1em" aria-hidden /> Submit Support Ticket</div>
       {msg && <div style={msg.type === 'ok' ? s.success : s.error}>{msg.text}</div>}
       <form onSubmit={submit}>
         <div style={s.field}>
@@ -273,7 +274,7 @@ function TicketList({ refresh }: { refresh: number }) {
 
   return (
     <div style={s.card}>
-      <div style={s.cardH}>📋 My Support Tickets</div>
+      <div style={s.cardH}><ClipboardList size="1em" aria-hidden /> My Support Tickets</div>
       {loading ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading…</div>
       ) : tickets.length === 0 ? (
@@ -286,12 +287,12 @@ function TicketList({ refresh }: { refresh: number }) {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={badgeStyle(PRIORITY_COLORS[t.priority] ?? 'var(--text-muted)')}>{t.priority}</span>
                 <span style={badgeStyle(STATUS_COLORS[t.status] ?? 'var(--text-muted)')}>{t.status}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{t.category}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{t.category}</span>
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{t.ticket_id}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>{t.ticket_id}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>
                 {new Date(t.created_at).toLocaleDateString()}
               </div>
             </div>
@@ -347,8 +348,8 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <div style={s.card}>
-      <div style={s.cardH}>🛠️ Custom Development Request</div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+      <div style={s.cardH}><Wrench size="1em" aria-hidden /> Custom Development Request</div>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>
         Request bespoke strategies, indicators, broker integrations, or API extensions.
         Our team will provide a scoping estimate within 2 business days.
       </div>
@@ -421,7 +422,7 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
             placeholder="Describe your requirements in detail: entry/exit logic, risk parameters, data sources, expected outputs…"
             required
           />
-          <div style={{ fontSize: 11, color: form.description.length < 50 ? '#ef4444' : 'var(--text-muted)', marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--fs-label)', color: form.description.length < 50 ? '#ef4444' : 'var(--text-muted)', marginTop: 4 }}>
             {form.description.length}/50 minimum characters
           </div>
         </div>
@@ -460,7 +461,7 @@ function CustomDevList({ refresh }: { refresh: number }) {
 
   return (
     <div style={s.card}>
-      <div style={s.cardH}>📦 My Development Requests</div>
+      <div style={s.cardH}><Package size="1em" aria-hidden /> My Development Requests</div>
       {loading ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading…</div>
       ) : reqs.length === 0 ? (
@@ -474,13 +475,13 @@ function CustomDevList({ refresh }: { refresh: number }) {
                 <span style={badgeStyle('#8b5cf6')}>{r.request_type}</span>
                 <span style={badgeStyle(STATUS_COLORS[r.status] ?? 'var(--text-muted)')}>{r.status}</span>
                 {r.budget_usd != null && (
-                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>${r.budget_usd.toLocaleString()}</span>
+                  <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>${r.budget_usd.toLocaleString()}</span>
                 )}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{r.request_id}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>{r.request_id}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 2 }}>
                 {new Date(r.created_at).toLocaleDateString()}
               </div>
             </div>
@@ -507,7 +508,7 @@ const EliteDashboard: React.FC = () => {
   if (!isElite) {
     return (
       <div style={s.gate}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>⭐</div>
+        <div style={{ fontSize: 48, marginBottom: 16 }}><Star size="1em" aria-hidden /></div>
         <div style={{ fontSize: 22, fontWeight: 800, color: '#f59e0b', marginBottom: 8 }}>
           Elite Plan Required
         </div>
@@ -528,19 +529,19 @@ const EliteDashboard: React.FC = () => {
   return (
     <PageShell title="Elite Hub" width="standard">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 4 }}>
-        <div style={s.heading}>⭐ Elite Dashboard</div>
+        <div style={s.heading}><Star size="1em" aria-hidden /> Elite Dashboard</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => navigate('/walk-forward')}
-            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            📈 Walk-Forward
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+            <TrendingUp size="1em" aria-hidden /> Walk-Forward
           </button>
           <button onClick={() => navigate('/ai-strategy')}
-            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🤖 AI Strategy
+            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+            <Bot size="1em" aria-hidden /> AI Strategy
           </button>
           <button onClick={() => navigate('/leaderboard')}
-            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🏆 Leaderboard
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+            <Trophy size="1em" aria-hidden /> Leaderboard
           </button>
         </div>
       </div>

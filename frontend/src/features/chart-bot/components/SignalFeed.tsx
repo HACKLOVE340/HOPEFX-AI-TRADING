@@ -13,6 +13,7 @@ import {
   regimeLabel, regimeColor, formatRelativeTime,
 } from '../utils/formatters';
 import type { MLSignal } from '../types';
+import { Check, X } from 'lucide-react';
 
 // ─── Signal Card ──────────────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ const TradeToast = memo(({ message, success }: { message: string; success: boole
     border: `1px solid ${success ? COLORS.profit.border : COLORS.loss.border}`,
     color: success ? COLORS.profit.base : COLORS.loss.base,
   }}>
-    {success ? '✓' : '✕'} {message}
+    {success ? <Check size={12} aria-hidden /> : <X size={12} aria-hidden />} {message}
   </div>
 ));
 TradeToast.displayName = 'TradeToast';
@@ -323,8 +324,8 @@ const sc: Record<string, React.CSSProperties> = {
     userSelect: 'none',
   },
   topRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
-  dirArrow: { fontSize: 10 },
-  dirText: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em' },
+  dirArrow: { fontSize: 'var(--fs-micro)'},
+  dirText: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: '0.06em' },
   confSection: { flex: 1, display: 'flex', flexDirection: 'column', gap: 3 },
   confBarBg: { height: 3, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },
   confBarFill: { height: '100%', borderRadius: 2, transition: 'width 400ms ease' },
@@ -333,13 +334,13 @@ const sc: Record<string, React.CSSProperties> = {
   priceRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' },
   priceLevel: { display: 'flex', flexDirection: 'column', gap: 1 },
   priceLevelLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 7, color: COLORS.text.muted, letterSpacing: '0.1em' },
-  priceLevelVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700 },
+  priceLevelVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-label)', fontWeight: 700 },
   metaRow: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   regimePill: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, letterSpacing: '0.06em' },
   modelLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted },
   timeLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, marginLeft: 'auto' },
   expanded: { marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid ${COLORS.bg.border}`, paddingTop: 8 },
-  reasoning: { fontFamily: '"Inter", sans-serif', fontSize: 11, color: COLORS.text.secondary, lineHeight: 1.5 },
+  reasoning: { fontFamily: '"Inter", sans-serif', fontSize: 'var(--fs-label)', color: COLORS.text.secondary, lineHeight: 1.5 },
   features: { display: 'flex', flexDirection: 'column', gap: 4 },
   featuresLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, letterSpacing: '0.1em', marginBottom: 2 },
   featureRow: { display: 'flex', alignItems: 'center', gap: 6 },
@@ -348,7 +349,7 @@ const sc: Record<string, React.CSSProperties> = {
   featureBarFill: { height: '100%', borderRadius: 2 },
   featureVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, fontWeight: 700, width: 24, textAlign: 'right' },
   tradeRow: { display: 'flex', gap: 6 },
-  tradeBtn: { flex: 1, border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700, padding: '8px 0', letterSpacing: '0.06em', transition: 'opacity 150ms ease' },
+  tradeBtn: { flex: 1, border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '8px 0', letterSpacing: '0.06em', transition: 'opacity 150ms ease' },
   buyBtn:  { background: COLORS.profit.muted, color: COLORS.profit.strong },
   sellBtn: { background: COLORS.loss.muted,   color: COLORS.loss.strong   },
 };
@@ -357,15 +358,15 @@ const sf: Record<string, React.CSSProperties> = {
   wrapper: { background: COLORS.bg.surface, border: `1px solid ${COLORS.bg.border}`, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 8px', borderBottom: `1px solid ${COLORS.bg.border}` },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 8 },
-  title: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, fontWeight: 700, color: COLORS.text.muted, letterSpacing: '0.12em' },
+  title: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', fontWeight: 700, color: COLORS.text.muted, letterSpacing: '0.12em' },
   activeBadge: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, fontWeight: 700, color: COLORS.profit.base, background: COLORS.profit.bg, border: `1px solid ${COLORS.profit.border}`, padding: '1px 6px', borderRadius: 3, letterSpacing: '0.06em' },
   totalCount: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted },
   filterBar: { display: 'flex', gap: 0, borderBottom: `1px solid ${COLORS.bg.border}` },
   filterBtn: { flex: 1, background: 'transparent', border: 'none', borderRight: `1px solid ${COLORS.bg.border}`, color: COLORS.text.muted, cursor: 'pointer', fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 600, padding: '6px 0', letterSpacing: '0.08em', transition: 'all 100ms ease' },
   filterBtnActive: { background: COLORS.bg.elevated, color: COLORS.neon.cyan },
   list: { overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', maxHeight: 600 },
-  empty: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: COLORS.text.muted, padding: '20px', textAlign: 'center' },
-  toast: { margin: '6px 10px', padding: '7px 12px', borderRadius: 5, fontFamily: '"JetBrains Mono", monospace', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em' },
+  empty: { fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', color: COLORS.text.muted, padding: '20px', textAlign: 'center' },
+  toast: { margin: '6px 10px', padding: '7px 12px', borderRadius: 5, fontFamily: '"JetBrains Mono", monospace', fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: '0.06em' },
 };
 
 export default memo(SignalFeed);

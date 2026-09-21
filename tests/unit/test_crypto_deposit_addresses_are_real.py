@@ -47,6 +47,16 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
+# requirements.txt no longer demands hdwallet on win32 (2026-09-21: it pulls in
+# ed25519-blake2b, which has no Windows wheel and no default Windows C++
+# toolchain to build one). A hard failure here on a Windows contributor's
+# machine would read as this suite catching a new bug, when the real story is
+# an unrelated optional dependency they were never going to have. CI
+# (requirements-ci.txt) pins hdwallet independently and unconditionally, so the
+# real-address verification below still runs on every push regardless of this
+# skip — see tests/unit/test_hdwallet_marker_skips_windows.py.
+pytest.importorskip("hdwallet", reason="requires a C++ toolchain to build ed25519-blake2b; not installed on Windows")
+
 # The standard BIP39 test mnemonic. Its derived addresses are published in the
 # BIP specifications and reproduced by every HD wallet implementation, which is
 # what makes them usable as ground truth here.

@@ -48,7 +48,7 @@ const panel: React.CSSProperties = {
 };
 
 const label: React.CSSProperties = {
-  color: COLOR.muted, fontSize: 10, fontWeight: 800,
+  color: COLOR.muted, fontSize: 'var(--fs-micro)', fontWeight: 800,
   letterSpacing: '.09em', textTransform: 'uppercase',
 };
 
@@ -56,7 +56,7 @@ const button: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 7, justifyContent: 'center',
   minHeight: 44, padding: '0 14px', borderRadius: 8,
   background: '#172740', border: '1px solid #2c4c7a', color: '#c9dcfb',
-  fontSize: 12, fontWeight: 800, cursor: 'pointer',
+  fontSize: 'var(--fs-body)', fontWeight: 800, cursor: 'pointer',
 };
 
 export interface GenerationJob {
@@ -107,7 +107,7 @@ const StateChip: React.FC<{ state: GenerationJob['state'] }> = ({ state }) => {
     <span
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        color, fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap',
+        color, fontSize: 'var(--fs-label)', fontWeight: 800, whiteSpace: 'nowrap',
       }}
     >
       <Icon size={12} aria-hidden />
@@ -132,19 +132,19 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
         </span>
       </header>
 
-      <p style={{ margin: 0, color: COLOR.dim, fontSize: 12, lineHeight: 1.5, wordBreak: 'break-word' }}>
+      <p style={{ margin: 0, color: COLOR.dim, fontSize: 'var(--fs-body)', lineHeight: 1.5, wordBreak: 'break-word' }}>
         {job.prompt}
       </p>
 
       {/* Progress, not a spinner. An operator can see which step it reached. */}
       {live && job.progress.length > 0 && (
-        <ol style={{ margin: 0, paddingLeft: 16, color: COLOR.muted, fontSize: 11, lineHeight: 1.6 }}>
+        <ol style={{ margin: 0, paddingLeft: 16, color: COLOR.muted, fontSize: 'var(--fs-label)', lineHeight: 1.6 }}>
           {job.progress.map((note, i) => <li key={`${note}-${i}`}>{note}</li>)}
         </ol>
       )}
 
       {job.state === 'queued' && (
-        <p style={{ margin: 0, color: COLOR.muted, fontSize: 11 }}>
+        <p style={{ margin: 0, color: COLOR.muted, fontSize: 'var(--fs-label)'}}>
           Every slot is busy. This starts as soon as one frees up.
         </p>
       )}
@@ -152,7 +152,7 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
       {/* A failure states itself here rather than letting a neighbour's success
           imply this one worked. */}
       {(job.state === 'failed' || job.state === 'timed_out') && job.error && (
-        <p role="alert" style={{ margin: 0, color: COLOR.bad, fontSize: 11, lineHeight: 1.5 }}>
+        <p role="alert" style={{ margin: 0, color: COLOR.bad, fontSize: 'var(--fs-label)', lineHeight: 1.5 }}>
           {job.error}
         </p>
       )}
@@ -172,7 +172,7 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
           aria-busy={live}
           style={{
             background: 'var(--surface)', border: '1px solid #1e2d44', borderRadius: 8,
-            padding: 10, color: COLOR.text, fontSize: 12, lineHeight: 1.6,
+            padding: 10, color: COLOR.text, fontSize: 'var(--fs-body)', lineHeight: 1.6,
             maxHeight: 260, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
             boxSizing: 'border-box',
           }}
@@ -192,7 +192,7 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
           <div
             style={{
               background: 'var(--surface)', border: '1px solid #1e2d44', borderRadius: 8,
-              padding: 10, color: COLOR.text, fontSize: 12, lineHeight: 1.6,
+              padding: 10, color: COLOR.text, fontSize: 'var(--fs-body)', lineHeight: 1.6,
               maxHeight: 260, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
             }}
           >
@@ -215,7 +215,7 @@ const JobPanel: React.FC<{ job: GenerationJob; onCancel: (id: string) => void; b
           disabled={busy}
           style={{ ...button, alignSelf: 'flex-start', opacity: busy ? 0.6 : 1 }}
         >
-          <Ban size={13} aria-hidden /> Stop this one
+          <Ban size="1em" aria-hidden /> Stop this one
         </button>
       )}
     </article>
@@ -336,7 +336,7 @@ export const GenerationWorkbench: React.FC = () => {
             onChange={(e) => setRole(e.target.value)}
             style={{
               minHeight: 44, background: 'var(--surface)', border: '1px solid #1e2d44',
-              borderRadius: 8, color: COLOR.text, fontSize: 12, padding: '0 10px',
+              borderRadius: 8, color: COLOR.text, fontSize: 'var(--fs-body)', padding: '0 10px',
               cursor: 'pointer',
             }}
           >
@@ -350,25 +350,25 @@ export const GenerationWorkbench: React.FC = () => {
             disabled={!canSubmit}
             style={{ ...button, opacity: canSubmit ? 1 : 0.55, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
           >
-            {submit.isPending ? <Loader2 size={13} aria-hidden /> : <Send size={13} aria-hidden />}
+            {submit.isPending ? <Loader2 size="1em" aria-hidden /> : <Send size="1em" aria-hidden />}
             Start generating
           </button>
         </div>
 
         {notice && (
-          <p role="alert" style={{ margin: 0, color: COLOR.warn, fontSize: 12 }}>{notice}</p>
+          <p role="alert" style={{ margin: 0, color: COLOR.warn, fontSize: 'var(--fs-body)'}}>{notice}</p>
         )}
       </div>
 
       {/* ── panels ── */}
       {snapshot.isError && (
-        <div role="alert" style={{ ...panel, color: COLOR.bad, fontSize: 12 }}>
+        <div role="alert" style={{ ...panel, color: COLOR.bad, fontSize: 'var(--fs-body)'}}>
           The job list could not be loaded, so what is shown below may be out of date.
         </div>
       )}
 
       {jobs.length === 0 ? (
-        <div style={{ ...panel, color: COLOR.muted, fontSize: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ ...panel, color: COLOR.muted, fontSize: 'var(--fs-body)', display: 'flex', gap: 8, alignItems: 'center' }}>
           <Play size={14} aria-hidden />
           Nothing running yet. Submit above — then submit again without waiting, and both run together.
         </div>

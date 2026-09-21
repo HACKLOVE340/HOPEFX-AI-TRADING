@@ -21,6 +21,14 @@
  * platform stated the surface visible to this user, and it is empty. A timeout
  * or a 500 is not, and must still be reported. That is the distinction these
  * two tests hold apart; without the second one, "swallow the error" would pass.
+ *
+ * NOTE (2026-09-19): the premise above changed. The presence is no longer
+ * mounted for every authenticated user on every page -- `hub/presenceSummons.ts`
+ * keeps it down until something calls it, the platform speaks, the mic opens,
+ * or the severity is urgent. What these tests check is unchanged and still
+ * matters, so they now summon it first and assert the same behaviour. Deleting
+ * them because the component renders null by default would have removed the
+ * only guard on the 403-is-not-an-outage rule.
  */
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -28,12 +36,16 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PresenceAnywhereMount } from '../hub/PresenceAnywhereMount';
+import { summonPresence, dismissPresence } from '../hub/presenceSummons';
 
 const mountWith = async (init: { ok: boolean; status: number }) => {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({ ...init, json: async () => ({ capabilities: [] }) }),
   );
+  // The presence is summoned, not ambient. Call it, or the component renders
+  // null and every assertion below passes over nothing.
+  summonPresence('test: exercising the capability surface');
   await act(async () => {
     render(
       <MemoryRouter>
@@ -49,7 +61,7 @@ const mountWith = async (init: { ok: boolean; status: number }) => {
   expect(screen.getByText(/what i can read here/i)).toBeTruthy();
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); dismissPresence(); });
 
 describe('the presence overlay tells a refusal from an outage', () => {
   it('says nothing is wrong when the platform refuses an admin-only surface', async () => {

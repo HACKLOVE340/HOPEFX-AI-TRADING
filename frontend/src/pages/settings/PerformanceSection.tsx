@@ -6,8 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../hooks/useApi';
 import { Card, SectionHeader, Button, StatusBadge } from './ui';
 import { extractApiError } from '../../lib/utils';
-import { BarChart3 } from 'lucide-react';
-
+import { AlertTriangle, BarChart3, XCircle } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CpuMetrics {
@@ -133,17 +132,17 @@ const MetricRow: React.FC<{ label: string; value: string; sub?: string; color?: 
   label, value, sub, color,
 }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{label}</span>
     <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: color ?? 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>
       {value}
-      {sub && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{sub}</span>}
+      {sub && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginLeft: 6 }}>{sub}</span>}
     </span>
   </div>
 );
 
 const StatTile: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color }) => (
   <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
-    <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 16, fontWeight: 700, color: color ?? 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
   </div>
 );
@@ -229,12 +228,12 @@ const PerformanceSection: React.FC = () => {
           ↻ Refresh now
         </Button>
         {lastRefresh && (
-          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
             Last updated: {lastRefresh.toLocaleTimeString()}
           </span>
         )}
         {error && (
-          <span style={{ fontSize: 12, color: 'var(--warn)' }}>⚠ {error}</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--warn)' }}><AlertTriangle size="1em" aria-hidden /> {error}</span>
         )}
       </div>
 
@@ -253,7 +252,7 @@ const PerformanceSection: React.FC = () => {
         <Card>
           <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>CPU</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Utilisation</span>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Utilisation</span>
             <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: pctColor(cpu.percent), fontFamily: 'monospace' }}>
               {cpu.percent}%
             </span>
@@ -277,7 +276,7 @@ const PerformanceSection: React.FC = () => {
         <Card>
           <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Memory</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>System RAM</span>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>System RAM</span>
             <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: pctColor(mem.percent), fontFamily: 'monospace' }}>
               {mem.used_mb.toLocaleString()} / {mem.total_mb.toLocaleString()} MB ({mem.percent}%)
             </span>
@@ -312,7 +311,7 @@ const PerformanceSection: React.FC = () => {
         <Card>
           <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 12 }}>Disk</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usage</span>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Usage</span>
             <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: pctColor(disk.percent, 75, 90), fontFamily: 'monospace' }}>
               {disk.used_gb} / {disk.total_gb} GB ({disk.percent}%)
             </span>
@@ -368,7 +367,7 @@ const PerformanceSection: React.FC = () => {
             </div>
           ) : (
             <div style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)'}}>
-              ❌ Not connected{redis.error ? ` — ${redis.error}` : ''}
+              <XCircle size="1em" aria-hidden /> Not connected{redis.error ? ` — ${redis.error}` : ''}
             </div>
           )}
         </Card>
@@ -424,7 +423,7 @@ const PerformanceSection: React.FC = () => {
                   )}
                 </div>
                 <span style={{
-                  fontSize: 12,
+                  fontSize: 'var(--fs-body)',
                   fontFamily: 'JetBrains Mono, monospace',
                   color: c.latency_ms == null ? 'var(--text-faint)'
                     : c.latency_ms < 10 ? 'var(--gain)'

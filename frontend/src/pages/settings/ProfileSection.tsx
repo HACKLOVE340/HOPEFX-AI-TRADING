@@ -8,8 +8,7 @@ import { TIMEZONES, LANGUAGES } from './types';
 import { Field, Input, Select, Toggle, Card, SectionHeader, SaveBar, Button } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { Globe, Mail, User } from 'lucide-react';
-
+import { Eye, Globe, Library, Mail, Rocket, User } from 'lucide-react';
 const DEFAULT: ProfileSettings = {
   username: '', email: '', bio: '', avatar_url: '',
   website: '', is_public: true, timezone: 'UTC', language: 'en',
@@ -125,12 +124,12 @@ const ProfileSection: React.FC = () => {
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
               {form.username || 'Your Name'}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{form.email}</div>
+            <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 10 }}>{form.email}</div>
             <Input
               placeholder="https://example.com/avatar.jpg"
               value={form.avatar_url}
               onChange={(e) => { update({ avatar_url: e.target.value }); setAvatarPreview(e.target.value); }}
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 'var(--fs-body)'}}
             />
           </div>
         </div>
@@ -169,7 +168,7 @@ const ProfileSection: React.FC = () => {
               fontFamily: 'inherit',
             }}
           />
-          <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
+          <div style={{ textAlign: 'right', fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 4 }}>
             {form.bio.length}/500
           </div>
         </Field>
@@ -214,7 +213,7 @@ const ProfileSection: React.FC = () => {
       {/* Quick actions */}
       <Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
             Quick Actions
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -228,7 +227,7 @@ const ProfileSection: React.FC = () => {
                 fontFamily: 'inherit',
               }}
             >
-              👁 View Public Profile
+              <Eye size="1em" aria-hidden /> View Public Profile
             </button>
             <button
               onClick={() => {
@@ -242,7 +241,7 @@ const ProfileSection: React.FC = () => {
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >
-              🚀 Restart Onboarding
+              <Rocket size="1em" aria-hidden /> Restart Onboarding
             </button>
             <a
               href="/docs"
@@ -253,7 +252,7 @@ const ProfileSection: React.FC = () => {
                 display: 'inline-flex', alignItems: 'center', gap: 6,
               }}
             >
-              📚 Documentation
+              <Library size="1em" aria-hidden /> Documentation
             </a>
           </div>
         </div>

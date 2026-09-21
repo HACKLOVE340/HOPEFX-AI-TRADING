@@ -15,8 +15,7 @@ import { createChart, LineSeries, type UTCTimestamp } from 'lightweight-charts';
 import { indicatorsApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
-import { BarChart3, Bot, Ruler, Search, ShoppingCart, TrendingUp } from 'lucide-react';
-
+import { BarChart3, Bot, Hourglass, Ruler, Search, ShoppingCart, TrendingUp } from 'lucide-react';
 interface Indicator { id: string; name: string; formula: string; symbol: string; color: string; created_at: string; }
 interface PreviewPoint { index: number; value: number; }
 
@@ -203,20 +202,20 @@ const CustomIndicators: React.FC = () => {
         actions={
           <div style={{ display:'flex', gap:8, alignItems:'center' }}>
             <Link to="/ai-chart"
-              style={{ background:'rgba(59,130,246,0.12)', border:'1px solid rgba(59,130,246,0.35)', borderRadius:7, color:'var(--link)', fontSize:12, fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
-              📈 AI Charts
+              style={{ background:'rgba(59,130,246,0.12)', border:'1px solid rgba(59,130,246,0.35)', borderRadius:7, color:'var(--link)', fontSize: 'var(--fs-body)', fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
+              <TrendingUp size="1em" aria-hidden /> AI Charts
             </Link>
             <Link to="/ai-strategy"
-              style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:7, color:'var(--ai-model)', fontSize:12, fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
-              🤖 AI Strategy
+              style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:7, color:'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
+              <Bot size="1em" aria-hidden /> AI Strategy
             </Link>
             <Link to="/walk-forward"
-              style={{ background:'rgba(96,165,250,0.12)', border:'1px solid rgba(96,165,250,0.35)', borderRadius:7, color:'var(--link)', fontSize:12, fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
-              📊 Walk-Forward
+              style={{ background:'rgba(96,165,250,0.12)', border:'1px solid rgba(96,165,250,0.35)', borderRadius:7, color:'var(--link)', fontSize: 'var(--fs-body)', fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
+              <BarChart3 size="1em" aria-hidden /> Walk-Forward
             </Link>
             <Link to="/pattern-detector"
-              style={{ background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.35)', borderRadius:7, color:'var(--warn)', fontSize:12, fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
-              🔍 Patterns
+              style={{ background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.35)', borderRadius:7, color:'var(--warn)', fontSize: 'var(--fs-body)', fontWeight:600, padding:'6px 12px', textDecoration:'none' }}>
+              <Search size="1em" aria-hidden /> Patterns
             </Link>
           </div>
         }
@@ -228,13 +227,14 @@ const CustomIndicators: React.FC = () => {
           <div style={s.cardTitle}>Formula Editor</div>
           {/* Auto-preview toggle */}
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-            <div style={{ fontSize:11, color:'var(--text-muted)' }}>
+            <div style={{ fontSize: 'var(--fs-label)', color:'var(--text-muted)' }}>
               Syntax: <span style={{ color:'var(--link)' }}>FUNC</span> · <span style={{ color:'var(--gain)' }}>data</span> · <span style={{ color:'#f59e0b' }}>number</span> · <span style={{ color:'var(--ai-model)' }}>operator</span>
             </div>
-            <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:11, color:'var(--text-muted)' }}>
-              <input type="checkbox" checked={autoPreview} onChange={e => setAutoPreview(e.target.checked)}
+            <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize: 'var(--fs-label)', color:'var(--text-muted)' }}>
+              <input type="checkbox" aria-labelledby="customindicators-auto-preview-label"
+                checked={autoPreview} onChange={e => setAutoPreview(e.target.checked)}
                 style={{ accentColor:'#3b82f6' }} />
-              Auto-preview
+              <span id="customindicators-auto-preview-label">Auto-preview</span>
             </label>
           </div>
 
@@ -254,7 +254,7 @@ const CustomIndicators: React.FC = () => {
           />
           {/* Syntax-highlighted preview of formula */}
           <FormulaHighlight formula={formula} />
-          <div style={{ fontSize:11, color:'#475569', marginTop:6 }}>
+          <div style={{ fontSize: 'var(--fs-label)', color:'#475569', marginTop:6 }}>
             Functions: <span style={{ color:'var(--link)' }}>EMA SMA RSI MACD ATR BB</span> · Data: <span style={{ color:'var(--gain)' }}>close open high low volume</span>
           </div>
           {error && <div style={s.error}>{error}</div>}
@@ -280,14 +280,14 @@ const CustomIndicators: React.FC = () => {
         <div style={s.card}>
           <div style={s.cardTitle}>Preview — {symbol}</div>
           {loading && (
-            <div style={{ textAlign:'center', padding:'20px 0', color:'var(--text-muted)', fontSize: 'var(--fs-body)'}}>⏳ Computing…</div>
+            <div style={{ textAlign:'center', padding:'20px 0', color:'var(--text-muted)', fontSize: 'var(--fs-body)'}}><Hourglass size="1em" aria-hidden /> Computing…</div>
           )}
           {!loading && preview.length > 0
             ? <PreviewChart data={preview} color={color} />
             : !loading && <div style={s.placeholder}>{autoPreview ? 'Type a formula above — preview updates automatically.' : 'Click ▶ Preview to plot the indicator on live ' + symbol + ' data.'}</div>
           }
           {preview.length > 0 && (
-            <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:8 }}>
+            <div style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)', marginTop:8 }}>
               {preview.length} data points · min {(() => { const v = preview.map(d=>d.value).filter(Number.isFinite); return v.length ? Math.min(...v).toFixed(4) : '—'; })()} · max {(() => { const v = preview.map(d=>d.value).filter(Number.isFinite); return v.length ? Math.max(...v).toFixed(4) : '—'; })()}
             </div>
           )}
@@ -304,9 +304,9 @@ const CustomIndicators: React.FC = () => {
               <div style={{ width:12, height:12, borderRadius:'50%', background:ind.color, flexShrink:0 }} />
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:14 }}>{ind.name}</div>
-                <div style={{ fontSize:12, color:'var(--text-muted)', fontFamily:'monospace' }}>{ind.formula}</div>
+                <div style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)', fontFamily:'monospace' }}>{ind.formula}</div>
               </div>
-              <span style={{ fontSize:12, color:'var(--text-muted)' }}>{ind.symbol}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color:'var(--text-muted)' }}>{ind.symbol}</span>
               <button style={s.delBtn} onClick={() => del(ind.id)}>Delete</button>
             </div>
           ))}
@@ -325,10 +325,8 @@ const CustomIndicators: React.FC = () => {
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight:'100vh', background:'#0f172a', color:'#f8fafc', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
-  header: { marginBottom:24, display:'flex', justifyContent:'space-between', alignItems:'flex-start' },
-  title: { fontSize:28, fontWeight:700, margin:0 },
-  subtitle: { fontSize:14, color:'#94a3b8', marginTop:4 },
+  // `page`, `header`, `title` and `subtitle` were deleted on 2026-09-18 —
+  // unread since this page moved to PageShell, which draws its own header.
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20, marginBottom:20 },
   card: { background:'#1e293b', borderRadius:12, padding:24, border:'1px solid #334155', marginBottom:20 },
   cardTitle: { fontSize:13, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:16 },

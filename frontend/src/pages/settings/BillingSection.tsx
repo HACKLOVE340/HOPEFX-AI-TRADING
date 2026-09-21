@@ -6,8 +6,7 @@ import type { BillingInfo } from './types';
 import { Card, SectionHeader, Button, StatusBadge, Divider } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { CreditCard } from 'lucide-react';
-
+import { Check, CreditCard } from 'lucide-react';
 interface Transaction {
   id: string;
   amount: number;
@@ -151,7 +150,7 @@ const BillingSection: React.FC = () => {
                 )}
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Wallet balance</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 4 }}>Wallet balance</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: '#22c55e', fontFamily: 'JetBrains Mono, monospace' }}>
                   {billing.currency} {billing.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
                 </div>
@@ -164,7 +163,7 @@ const BillingSection: React.FC = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                   {billing.features.map((f) => (
                     <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
-                      <span style={{ color: '#22c55e', fontSize: 12 }}>✓</span> {f}
+                      <Check size="1em" aria-hidden style={{ color: '#22c55e', verticalAlign: '-2px' }} /> {f}
                     </div>
                   ))}
                 </div>
@@ -208,7 +207,7 @@ const BillingSection: React.FC = () => {
               {highlight && (
                 <div style={{
                   position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
-                  background: '#3b82f6', color: '#fff', fontSize: 10, fontWeight: 700,
+                  background: '#3b82f6', color: '#fff', fontSize: 'var(--fs-micro)', fontWeight: 700,
                   padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
                 }}>
                   MOST POPULAR
@@ -216,11 +215,11 @@ const BillingSection: React.FC = () => {
               )}
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>{name}</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: PLAN_COLORS[id] ?? 'var(--text-dim)', marginBottom: 10 }}>
-                {price}<span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>/mo</span>
+                {price}<span style={{ fontSize: 'var(--fs-label)', fontWeight: 400, color: 'var(--text-muted)' }}>/mo</span>
               </div>
               {features.map((f) => (
-                <div key={f} style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 3, display: 'flex', gap: 5 }}>
-                  <span style={{ color: '#22c55e' }}>✓</span> {f}
+                <div key={f} style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', marginBottom: 3, display: 'flex', gap: 5 }}>
+                  <Check size="1em" aria-hidden style={{ color: '#22c55e', verticalAlign: '-2px' }} /> {f}
                 </div>
               ))}
               <Button
@@ -260,7 +259,7 @@ const BillingSection: React.FC = () => {
             }}>
               <div>
                 <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{tx.description}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 2 }}>
                   {new Date(tx.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
               </div>

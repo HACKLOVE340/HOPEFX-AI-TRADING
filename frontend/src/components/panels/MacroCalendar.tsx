@@ -77,7 +77,7 @@ function EventRow({ event, onPlanTrade }: { event: MacroEvent; onPlanTrade?: () 
               className="text-[9px] font-bold px-1.5 py-0.5 rounded"
               style={{ background: 'rgba(255,184,0,0.12)', border: '1px solid rgba(255,184,0,0.3)', color: '#ffb800', cursor: 'pointer' }}
             >
-              ⚡ Plan
+              <Zap size={10} aria-hidden style={{ verticalAlign: '-1px' }} /> Plan
             </button>
           )}
           <Badge variant={impactVariant} dot>{event.impact}</Badge>
@@ -130,7 +130,7 @@ export function MacroCalendar() {
     <div className="flex items-center gap-3">
       {isBlackout && (
         <span className="text-[10px] font-semibold text-[#ff3b5c] uppercase tracking-wider animate-pulse">
-          ⚠ BLACKOUT
+          <AlertTriangle size={11} aria-hidden style={{ verticalAlign: '-1px' }} /> BLACKOUT
         </span>
       )}
       <div className="flex items-center gap-1.5">
@@ -193,4 +193,5 @@ export function MacroCalendar() {
 
 // ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
 import { withPanelGuard } from '../ui/withPanelGuard';
+import { AlertTriangle, Zap } from 'lucide-react';
 export const MacroCalendarGuarded = withPanelGuard(MacroCalendar, 'Macro Calendar', 4);

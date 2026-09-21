@@ -313,6 +313,14 @@ def test_integrations():
     assert integ.verify_webhook_not_replayed("e1", ["e1"])
     assert integ.verify_notification_delivered(100, 100, 5) == []
     assert integ.verify_notification_delivered(100, 50, 5)
+    # AOS-EVID-046 — the three rungs kept apart. The line above answers only
+    # "did delivery lose messages?", and returns [] for (0, 0, n): a dead
+    # pipeline and a quiet one are the same number to it. Full cases and the
+    # evidence live in tests/unit/test_alert_evidence_ladder.py.
+    assert integ.verify_alert_evidence_ladder(fired=10, delivered=10, accepted=10) == []
+    assert integ.verify_alert_evidence_ladder(fired=7, delivered=0, accepted=0)
+    assert integ.verify_alert_evidence_ladder(fired=0, delivered=0, accepted=0, expected_fired=4)
+    assert integ.verify_alert_evidence_ladder(fired=5, delivered=5, accepted=None)
     assert integ.verify_storage_durable(3, 2) == []
     assert integ.verify_storage_durable(1, 2)
     assert integ.verify_storage_checksum("abc", "abc") == []

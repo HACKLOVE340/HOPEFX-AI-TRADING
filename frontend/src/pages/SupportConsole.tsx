@@ -193,17 +193,17 @@ export default function SupportConsole(): React.ReactElement {
         <span
           data-testid="live-source"
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12,
+            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)',
             color: L.colour, border: `1px solid ${C.border}`, borderRadius: 99, padding: '3px 10px',
           }}
         >
-          <L.Icon size={13} aria-hidden="true" />
+          <L.Icon size="1em" aria-hidden="true" />
           {L.text}
         </span>
         <button
           type="button"
           onClick={() => void qc.invalidateQueries({ queryKey: ['support'] })}
-          style={{ marginLeft: 'auto', ...panel, color: C.muted, fontSize: 12, padding: '5px 11px', cursor: 'pointer' }}
+          style={{ marginLeft: 'auto', ...panel, color: C.muted, fontSize: 'var(--fs-body)', padding: '5px 11px', cursor: 'pointer' }}
         >
           <RefreshCw size={12} aria-hidden="true" style={{ marginRight: 5 }} />Refresh
         </button>
@@ -213,11 +213,11 @@ export default function SupportConsole(): React.ReactElement {
         {/* ── queue ─────────────────────────────────────────────────────── */}
         <section style={{ ...panel, overflow: 'hidden' }} aria-label="Operator queue">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: `1px solid ${C.border}` }}>
-            <h2 style={{ margin: 0, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: C.dim }}>
+            <h2 style={{ margin: 0, fontSize: 'var(--fs-label)', letterSpacing: '.08em', textTransform: 'uppercase', color: C.dim }}>
               Waiting on a person
             </h2>
             {queue.data ? (
-              <span style={{ fontSize: 12, color: C.waiting, border: `1px solid ${C.border}`, borderRadius: 99, padding: '0 8px' }}>
+              <span style={{ fontSize: 'var(--fs-body)', color: C.waiting, border: `1px solid ${C.border}`, borderRadius: 99, padding: '0 8px' }}>
                 {queue.data.count}
               </span>
             ) : null}
@@ -226,7 +226,7 @@ export default function SupportConsole(): React.ReactElement {
               onClick={() => setUnassignedOnly((v) => !v)}
               aria-pressed={unassignedOnly}
               style={{
-                marginLeft: 'auto', fontSize: 11, cursor: 'pointer', padding: '3px 9px', borderRadius: 6,
+                marginLeft: 'auto', fontSize: 'var(--fs-label)', cursor: 'pointer', padding: '3px 9px', borderRadius: 6,
                 border: `1px solid ${unassignedOnly ? C.accent : C.border}`,
                 color: unassignedOnly ? C.accent : C.muted, background: 'transparent',
               }}
@@ -270,7 +270,7 @@ export default function SupportConsole(): React.ReactElement {
                     >
                       <span style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                         <span style={{ flex: 1, minWidth: 0, fontWeight: 500, overflowWrap: 'anywhere' }}>{t.subject}</span>
-                        <span style={{ fontSize: 11, color: C.dim }}>{age(t.created_at)}</span>
+                        <span style={{ fontSize: 'var(--fs-label)', color: C.dim }}>{age(t.created_at)}</span>
                       </span>
                       <span style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap', fontSize: 'var(--fs-micro)', color: C.muted }}>
                         <span style={{ border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 6px' }}>{t.id}</span>

@@ -20,7 +20,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CrossLinkBar } from '../components';
-import { Banknote, BarChart3, BookOpen, Briefcase, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
+import { AlertTriangle, Banknote, BarChart3, BookOpen, Briefcase, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, X, Zap } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
@@ -290,13 +290,13 @@ const TradeHistory: React.FC = () => {
       {/* Date range */}
       <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle}
              title="From date" aria-label="From date" />
-      <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>→</span>
+      <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}>→</span>
       <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle}
              title="To date" aria-label="To date" />
       {(dateFrom || dateTo) && (
         <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{
-          background: 'transparent', border: 'none', color: 'var(--text-faint)', fontSize: 10, cursor: 'pointer', padding: '0 2px',
-        }} title="Clear date filter">✕</button>
+          background: 'transparent', border: 'none', color: 'var(--text-faint)', fontSize: 'var(--fs-micro)', cursor: 'pointer', padding: '0 2px',
+        }} title="Clear date filter"><X size="1em" aria-hidden /></button>
       )}
       <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
       {/* Search */}
@@ -324,7 +324,7 @@ const TradeHistory: React.FC = () => {
         </button>
       ))}
       {filtered.length > 0 && (
-        <span style={{ fontSize: 10, color: totalPnl >= 0 ? 'var(--bull)' : 'var(--bear)', fontFamily: 'monospace', fontWeight: 700 }}>
+        <span style={{ fontSize: 'var(--fs-micro)', color: totalPnl >= 0 ? 'var(--bull)' : 'var(--bear)', fontFamily: 'monospace', fontWeight: 700 }}>
           {Number.isFinite(totalPnl) ? `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}` : '—'} ({wins}/{filtered.length})
         </span>
       )}
@@ -727,7 +727,7 @@ const Portfolio: React.FC = () => {
 
       {equityQuery.isError && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[var(--bear)]/10 border border-[var(--bear)]/30 text-[var(--bear)] text-[12px]">
-          <span>⚠</span>
+          <span><AlertTriangle size="1em" aria-hidden /></span>
           <span>
             Equity curve unavailable — {extractApiError(equityQuery.error, 'check your connection')}
           </span>

@@ -201,7 +201,7 @@ const ComplianceSection: React.FC = () => {
             onClick={() => setTab(id)}
             style={{
               padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
-              fontSize: 12, fontWeight: 600,
+              fontSize: 'var(--fs-body)', fontWeight: 600,
               background: tab === id ? 'var(--accent-soft)' : 'transparent',
               border: `1px solid ${tab === id ? 'var(--accent)' : 'var(--border)'}`,
               color: tab === id ? 'var(--accent)' : 'var(--text-dim)',
@@ -239,7 +239,7 @@ const ComplianceSection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Status', 'Document', 'Country', 'Submitted', 'Reviewed', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -250,17 +250,17 @@ const ComplianceSection: React.FC = () => {
                   <tr key={k.user_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 12px' }}>
                       <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{k.username}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{k.email}</div>
+                      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{k.email}</div>
                     </td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: sc.color, background: sc.bg, border: `1px solid ${sc.color}33`, borderRadius: 4, padding: '2px 7px' }}>
+                      <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: sc.color, background: sc.bg, border: `1px solid ${sc.color}33`, borderRadius: 4, padding: '2px 7px' }}>
                         {k.kyc_status.replace('_', ' ').toUpperCase()}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{k.document_type ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{k.country ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(k.submitted_at)}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(k.reviewed_at)}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{k.document_type ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{k.country ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(k.submitted_at)}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(k.reviewed_at)}</td>
                     <td style={{ padding: '10px 12px' }}>
                       {['pending', 'submitted', 'under_review'].includes(k.kyc_status) && (
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -291,7 +291,7 @@ const ComplianceSection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Type', 'Severity', 'Amount', 'Description', 'Status', 'Date', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -299,12 +299,12 @@ const ComplianceSection: React.FC = () => {
               {aml.map(a => (
                 <tr key={a.alert_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{a.username}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{a.alert_type}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{a.alert_type}</td>
                   <td style={{ padding: '10px 12px' }}><SeverityBadge severity={a.severity} /></td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--loss)' }}>{a.amount.toLocaleString()} {a.currency}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</td>
                   <td style={{ padding: '10px 12px' }}><StatusBadge status={a.status} size="sm" /></td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(a.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(a.created_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {a.status === 'open' && (
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -335,7 +335,7 @@ const ComplianceSection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'List', 'Match Score', 'Status', 'Date', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -343,7 +343,7 @@ const ComplianceSection: React.FC = () => {
               {sanctions.map(s => (
                 <tr key={s.hit_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{s.username}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{s.list_name}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{s.list_name}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {/* The bar carried the whole meaning of this cell and
@@ -356,11 +356,11 @@ const ComplianceSection: React.FC = () => {
                       >
                         <div style={{ height: '100%', width: `${s.match_score * 100}%`, background: s.match_score > 0.8 ? '#ef4444' : s.match_score > 0.6 ? '#f59e0b' : '#22c55e', borderRadius: 3 }} />
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: s.match_score > 0.8 ? 'var(--loss)' : 'var(--warn)' }}>{(s.match_score * 100).toFixed(0)}%</span>
+                      <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: s.match_score > 0.8 ? 'var(--loss)' : 'var(--warn)' }}>{(s.match_score * 100).toFixed(0)}%</span>
                     </div>
                   </td>
                   <td style={{ padding: '10px 12px' }}><StatusBadge status={s.status} size="sm" /></td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(s.created_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {s.status === 'pending' && (
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -386,9 +386,9 @@ const ComplianceSection: React.FC = () => {
       {shows('reports') && (
       <SectionCard title="Regulatory Reporting" icon={<Scroll size={18} aria-hidden />} accent="#8b5cf6"
         subtitle="CFTC / MiFID II / CAT filing status"
-        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={13} aria-hidden />} size="sm" />}>
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size="1em" aria-hidden />} size="sm" />}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
-          <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
             Report
             <Select
               value={regType}
@@ -402,7 +402,7 @@ const ComplianceSection: React.FC = () => {
               style={{ width: 170, marginTop: 4 }}
             />
           </label>
-          <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
             Period
             <Input
               type="month"
@@ -427,7 +427,7 @@ const ComplianceSection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Report', 'Type', 'Period', 'Status', 'Generated', 'File'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-muted)', fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -438,11 +438,11 @@ const ComplianceSection: React.FC = () => {
                 </td></tr>
               ) : regReports.map(r => (
                 <tr key={r.report_id} style={{ borderBottom: '1px solid var(--hairline)' }}>
-                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 12 }}>{r.report_id}</td>
+                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 'var(--fs-body)'}}>{r.report_id}</td>
                   <td style={{ padding: '8px 10px', textTransform: 'uppercase' }}>{r.type}</td>
                   <td style={{ padding: '8px 10px', fontFamily: 'monospace' }}>{r.period}</td>
                   <td style={{ padding: '8px 10px' }}><StatusBadge status={r.status} /></td>
-                  <td style={{ padding: '8px 10px', color: 'var(--text-dim)', fontFamily: 'monospace', fontSize: 12 }}>
+                  <td style={{ padding: '8px 10px', color: 'var(--text-dim)', fontFamily: 'monospace', fontSize: 'var(--fs-body)'}}>
                     {r.generated_at ? new Date(r.generated_at).toLocaleString() : '—'}
                   </td>
                   <td style={{ padding: '8px 10px' }}>
@@ -472,7 +472,7 @@ const ComplianceSection: React.FC = () => {
               onChange={e => setConsentUserId(e.target.value)}
               style={{ width: 190 }}
             />
-            <ActionBtn label="Refresh" onClick={loadConsent} icon={<RefreshCw size={13} aria-hidden />} size="sm" />
+            <ActionBtn label="Refresh" onClick={loadConsent} icon={<RefreshCw size="1em" aria-hidden />} size="sm" />
           </div>
         }>
         <div style={{ overflowX: 'auto' }}>
@@ -480,7 +480,7 @@ const ComplianceSection: React.FC = () => {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Event', 'When', 'Details'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-muted)', fontSize: 'var(--fs-label)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -493,9 +493,9 @@ const ComplianceSection: React.FC = () => {
                 </td></tr>
               ) : consentLog.map((c, i) => (
                 <tr key={`${c.user_id}-${c.timestamp}-${i}`} style={{ borderBottom: '1px solid var(--hairline)' }}>
-                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 12 }}>{c.user_id}</td>
+                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 'var(--fs-body)'}}>{c.user_id}</td>
                   <td style={{ padding: '8px 10px' }}>{c.event}</td>
-                  <td style={{ padding: '8px 10px', color: 'var(--text-dim)', fontFamily: 'monospace', fontSize: 12 }}>
+                  <td style={{ padding: '8px 10px', color: 'var(--text-dim)', fontFamily: 'monospace', fontSize: 'var(--fs-body)'}}>
                     {c.timestamp ? new Date(c.timestamp).toLocaleString() : '—'}
                   </td>
                   <td style={{ padding: '8px 10px', color: 'var(--text-dim)' }}>{c.details || '—'}</td>

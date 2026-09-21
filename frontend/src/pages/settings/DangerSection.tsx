@@ -17,8 +17,7 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 import { Card, SectionHeader, Button, Divider } from './ui';
 import { extractApiError } from '../../lib/utils';
-import { AlertTriangle } from 'lucide-react';
-
+import { AlertTriangle, OctagonAlert, XCircle } from 'lucide-react';
 const DangerSection: React.FC = () => {
   const navigate = useNavigate();
   const clearAuth = useStore((s) => s.clearAuth);
@@ -28,7 +27,7 @@ const DangerSection: React.FC = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [emergencyLoading, setEmergencyLoading] = useState(false);
   // Server-reported halt state, not local optimism. A sticky local flag meant
-  // that once the button was pressed the page read "✅ Trading halted" for the
+  // that once the button was pressed the page read "Trading halted" (with a tick) for the
   // rest of the session and the control disappeared — so if trading resumed
   // (supervisor restart, another operator, partial failure) the screen kept
   // asserting a halt that no longer held, with no way to retry.
@@ -151,10 +150,10 @@ const DangerSection: React.FC = () => {
               lapsed. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {tradingHalted === true && (
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 600 }}>🛑 Trading halted</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', fontWeight: 600 }}><OctagonAlert size="1em" aria-hidden /> Trading halted</span>
             )}
             {tradingHalted === null && (
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Status unavailable</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>Status unavailable</span>
             )}
             <Button variant="danger" onClick={handleEmergencyStop} loading={emergencyLoading}>
               {tradingHalted === true ? 'Halt again' : 'Emergency stop'}
@@ -238,7 +237,7 @@ const DangerSection: React.FC = () => {
           </Button>
         </div>
         {deleteError && (
-          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 8 }}>❌ {deleteError}</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 8 }}><XCircle size="1em" aria-hidden /> {deleteError}</div>
         )}
       </Card>
     </div>

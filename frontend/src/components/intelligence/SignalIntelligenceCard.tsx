@@ -10,6 +10,7 @@
 
 import React from 'react';
 import type { EngineSignal, SignalStrength } from '../../types';
+import { Clock, Settings, TrendingUp } from 'lucide-react';
 
 // ── Strength styling ──────────────────────────────────────────────────────────
 const STRENGTH_META: Record<SignalStrength, { label: string; color: string }> = {
@@ -35,10 +36,10 @@ const ConfidenceMeter: React.FC<{ value: number; raw?: number }> = ({ value, raw
   return (
     <div style={{ minWidth: 0, flex: 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+        <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
           Confidence
         </span>
-        <span style={{ fontSize: 12, fontWeight: 700, color }}>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color }}>
           {(calibrated * 100).toFixed(0)}%
           {raw != null && Number.isFinite(raw) && (
             <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}> · raw {(raw * 100).toFixed(0)}%</span>
@@ -62,7 +63,7 @@ const ConfidenceMeter: React.FC<{ value: number; raw?: number }> = ({ value, raw
 
 const Chip: React.FC<{ children: React.ReactNode; title?: string; color?: string }> = ({ children, title, color }) => (
   <span title={title} style={{
-    fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 5,
+    fontSize: 'var(--fs-micro)', fontWeight: 600, padding: '2px 7px', borderRadius: 5,
     background: 'rgba(148,163,184,0.08)', border: '1px solid var(--border)',
     color: color ?? 'var(--text-dim)', whiteSpace: 'nowrap',
   }}>
@@ -90,20 +91,20 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <span style={{ fontSize: 'var(--fs-value)', fontWeight: 800, color: 'var(--text-strong)' }}>{signal.symbol}</span>
         <span style={{
-          fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
+          fontSize: 'var(--fs-label)', fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           color: dir.color, background: `${dir.color}1a`, border: `1px solid ${dir.color}40`,
         }}>
           {dir.arrow} {dir.label}
         </span>
         <span title="Categorical signal strength tier" style={{
-          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5,
+          fontSize: 'var(--fs-micro)', fontWeight: 700, padding: '2px 7px', borderRadius: 5,
           color: strength.color, background: `${strength.color}14`, border: `1px solid ${strength.color}33`,
           textTransform: 'uppercase', letterSpacing: '0.04em',
         }}>
           {strength.label}
         </span>
         {stale && <Chip color="#f87171" title="Signal past its expiry">expired</Chip>}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
           {signal.timeframe} · {new Date(signal.timestamp).toLocaleTimeString()}
         </span>
       </div>
@@ -121,12 +122,12 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
           ['Target',signal.take_profit, '#22c55e'],
         ] as const).map(([label, val, color]) => (
           <div key={label} style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{label}</div>
+            <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{label}</div>
             <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color }}>{num(val)}</div>
           </div>
         ))}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>R:R</div>
+          <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>R:R</div>
           <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: signal.risk_reward_ratio >= 1.5 ? '#22c55e' : 'var(--warn)' }}>
             {num(signal.risk_reward_ratio, 2)}
           </div>
@@ -136,10 +137,10 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
       {/* Model consensus bar */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-          <span style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+          <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
             Model consensus
           </span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#93c5fd' }}>
+          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: '#93c5fd' }}>
             {signal.strategies_agreeing.length}/{signal.total_strategies} agree
           </span>
         </div>
@@ -155,9 +156,9 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
 
       {/* Context chips */}
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-        {signal.regime  && <Chip title="Market regime at signal time">📈 {signal.regime}</Chip>}
-        {signal.session && <Chip title="Trading session">🕐 {signal.session}</Chip>}
-        {modelVersion   && <Chip title="Model version that produced this signal" color="#93c5fd">⚙ {modelVersion}</Chip>}
+        {signal.regime  && <Chip title="Market regime at signal time"><TrendingUp size="1em" aria-hidden /> {signal.regime}</Chip>}
+        {signal.session && <Chip title="Trading session"><Clock size="1em" aria-hidden /> {signal.session}</Chip>}
+        {modelVersion   && <Chip title="Model version that produced this signal" color="#93c5fd"><Settings size="1em" aria-hidden /> {modelVersion}</Chip>}
       </div>
     </div>
   );

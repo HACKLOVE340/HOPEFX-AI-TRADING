@@ -183,19 +183,23 @@ const NuclearEquityPanel = memo(() => {
     nuclearEvents
       .filter((ev) => ev.severity >= 5)
       .forEach((ev) => {
-        const actionEmoji = {
-          nuclear_mode:      '☢️',
-          hedge_mode:        '🛡️',
-          pause_new_entries: '⏸️',
-          normal:            '✅',
-        }[ev.action] ?? '⚠️';
+        // A word, not an icon: this goes into a lightweight-charts marker's
+        // `text` field, which is painted on a CANVAS. A canvas takes a string —
+        // it cannot hold an SVG element, and it is not the cascade. The glyphs
+        // also read ambiguously at marker size; the action is now named.
+        const actionLabel = {
+          nuclear_mode:      'NUCLEAR',
+          hedge_mode:        'HEDGE',
+          pause_new_entries: 'PAUSE',
+          normal:            'NORMAL',
+        }[ev.action] ?? 'ALERT';
 
         markers.push({
           time: toUTC(Math.floor(ev.ts / 1000)) as Time,
           position: 'aboveBar' as const,
           color: severityColor(ev.severity),
           shape: ev.severity >= 9 ? 'arrowDown' as const : 'circle' as const,
-          text: `${actionEmoji} SEV${ev.severity}`,
+          text: `${actionLabel} SEV${ev.severity}`,
           size: ev.severity >= 7 ? 2 : 1,
         });
       });

@@ -149,7 +149,7 @@ export function SentimentGauge() {
           }}
           title={`Strong ${score > 0 ? 'bullish' : 'bearish'} sentiment — consider a ${extremeDir} trade`}
         >
-          ⚡ {extremeDir}
+          <Zap size={11} aria-hidden style={{ verticalAlign: '-1px' }} /> {extremeDir}
         </button>
       )}
       <Badge variant={labelVariant} dot>{label}</Badge>
@@ -220,4 +220,5 @@ export function SentimentGauge() {
 
 // ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
 import { withPanelGuard } from '../ui/withPanelGuard';
+import { Zap } from 'lucide-react';
 export const SentimentGaugeGuarded = withPanelGuard(SentimentGauge, 'Sentiment', 3);

@@ -30,6 +30,7 @@ import NuclearAlertOverlay       from './NuclearAlertOverlay';
 import NuclearMobileView         from './NuclearMobileView';
 import GeopoliticalPanel         from './GeopoliticalPanel';
 import { useStore }              from '../../../store';
+import { Brain, Lock } from 'lucide-react';
 
 // ─── Responsive breakpoint hook ───────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ const WsStatusBar = memo(({ status }: { status: string }) => {
 
 const ProtectedViewBanner = memo(() => (
   <div className="nuclear-glow" style={s.protectedBanner}>
-    <span style={s.protectedIcon}>🔒</span>
+    <Lock size={16} aria-hidden style={s.protectedIcon} />
     <span style={s.protectedText}>
       PROTECTED VIEW — Nuclear mode active. All trading halted. Awaiting manual resume.
     </span>
@@ -160,11 +161,11 @@ const NuclearDashboard = memo(() => {
             background: showExplainPanel ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.04)',
             border: `1px solid ${showExplainPanel ? '#8b5cf6' : '#1e293b'}`,
             color: showExplainPanel ? 'var(--ai-model)' : 'var(--text-muted)',
-            fontSize: 11, cursor: 'pointer', fontFamily: 'monospace',
+            fontSize: 'var(--fs-label)', cursor: 'pointer', fontFamily: 'monospace',
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
-          🧠 AI Explain Panel {showExplainPanel ? '◀ Hide' : '▶ Show'}
+          <Brain size="1em" aria-hidden style={{ verticalAlign: '-2px' }} /> AI Explain Panel {showExplainPanel ? '◀ Hide' : '▶ Show'}
         </button>
       </div>
 
@@ -213,11 +214,11 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'background 0.3s ease',
   },
   wsLabel: {
-    fontSize: 10, fontWeight: 700, letterSpacing: 1.5,
+    fontSize: 'var(--fs-micro)', fontWeight: 700, letterSpacing: 1.5,
     transition: 'color 0.3s ease',
   },
   wsNote: {
-    fontSize: 10, color: 'var(--text-faint)', marginLeft: 'auto',
+    fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginLeft: 'auto',
   },
   protectedBanner: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -228,7 +229,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   protectedIcon: { fontSize: 16 },
   protectedText: {
-    fontSize: 12, color: '#fca5a5', fontWeight: 700, letterSpacing: 0.5,
+    fontSize: 'var(--fs-body)', color: '#fca5a5', fontWeight: 700, letterSpacing: 0.5,
   },
   contentArea: {
     flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,

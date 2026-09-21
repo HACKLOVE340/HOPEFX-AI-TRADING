@@ -13,7 +13,7 @@
  *   professional+: api-keys, trading
  */
 
-import { SlidersHorizontal } from 'lucide-react';
+import { NotebookPen, Search, SlidersHorizontal } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -228,7 +228,7 @@ const UpgradeNotice: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => 
     padding: '48px 32px', textAlign: 'center',
     background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14,
   }}>
-    <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+    <div style={{ fontSize: 40, marginBottom: 16 }}><Lock size="1em" aria-hidden /></div>
     <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
       {requiredPlan.charAt(0).toUpperCase() + requiredPlan.slice(1)} Plan Required
     </div>
@@ -375,16 +375,16 @@ const Settings: React.FC = () => {
         actions={(
           <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
-                style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                ⚡ Trade
+                style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+                <Zap size="1em" aria-hidden /> Trade
               </button>
               <button onClick={() => navigate('/journal')}
-                style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 7, color: '#10b981', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                📓 Journal
+                style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 7, color: '#10b981', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+                <NotebookPen size="1em" aria-hidden /> Journal
               </button>
               <button onClick={() => navigate('/wallet')}
-                style={{ padding: '6px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                💰 Wallet
+                style={{ padding: '6px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+                <Banknote size="1em" aria-hidden /> Wallet
               </button>
           </div>
         )}
@@ -398,7 +398,7 @@ const Settings: React.FC = () => {
                 background: 'var(--raised)', border: '1px solid var(--border-strong)',
                 borderRadius: 8, padding: '7px 10px',
               }}>
-                <span style={{ fontSize: 12, color: 'var(--text-faint)', flexShrink: 0 }}>🔍</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', flexShrink: 0 }}><Search size="1em" aria-hidden /></span>
                 <input aria-label="Search settings"
                   type="text"
                   placeholder="Search settings…"
@@ -424,13 +424,13 @@ const Settings: React.FC = () => {
                 <div style={S.groupLabel}>Quick Access</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0 8px' }}>
                   {[
-                    { id: 'profile' as SettingsTab,        label: '👤 Profile' },
-                    { id: 'security' as SettingsTab,       label: '🔒 Security' },
-                    { id: 'broker' as SettingsTab,         label: '🏦 Broker' },
-                    { id: 'notifications' as SettingsTab,  label: '🔔 Alerts' },
-                    { id: 'billing' as SettingsTab,        label: '💳 Billing' },
-                    { id: 'danger' as SettingsTab,         label: '⚠️ Danger' },
-                  ].map(({ id, label }) => (
+                    { id: 'profile' as SettingsTab,        icon: User,          label: 'Profile' },
+                    { id: 'security' as SettingsTab,       icon: Lock,          label: 'Security' },
+                    { id: 'broker' as SettingsTab,         icon: Landmark,      label: 'Broker' },
+                    { id: 'notifications' as SettingsTab,  icon: Bell,          label: 'Alerts' },
+                    { id: 'billing' as SettingsTab,        icon: CreditCard,    label: 'Billing' },
+                    { id: 'danger' as SettingsTab,         icon: AlertTriangle, label: 'Danger' },
+                  ].map(({ id, icon: Icon, label }) => (
                     <button
                       key={id}
                       onClick={() => selectTab(id)}
@@ -440,11 +440,11 @@ const Settings: React.FC = () => {
                         border: `1px solid ${activeTab === id ? '#3b82f6' : '#1e293b'}`,
                         borderRadius: 6,
                         color: activeTab === id ? 'var(--link)' : 'var(--text-muted)',
-                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                        fontSize: 'var(--fs-label)', cursor: 'pointer', fontFamily: 'inherit',
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {label}
+                      <Icon size="1em" aria-hidden /> {label}
                     </button>
                   ))}
                 </div>
@@ -496,7 +496,7 @@ const Settings: React.FC = () => {
                       >
                         <span style={S.tabIcon}>{tab.icon}</span>
                         <span style={{ flex: 1 }}>{tab.label}</span>
-                        {locked && <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>🔒</span>}
+                        {locked && <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)' }}><Lock size="1em" aria-hidden /></span>}
                         {isSA && <span style={S.saBadgeSmall}>SA</span>}
                         {tab.adminOnly && !isSA && <span style={S.adminBadge}>ADM</span>}
                       </button>
@@ -529,7 +529,7 @@ const S: Record<string, React.CSSProperties> = {
   header:    { maxWidth: 1400, margin: '0 auto 28px' },
   heading:   { fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)', margin: 0, letterSpacing: '-0.02em' },
   subheading: { fontSize: 14, color: 'var(--text-muted)', marginTop: 6, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  saBadge:   { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
+  saBadge:   { fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
   layout:    { maxWidth: 1400, margin: '0 auto', display: 'flex', gap: 28, alignItems: 'flex-start' },
   sidebar: {
     width: 230, flexShrink: 0, background: 'var(--surface)', borderRadius: 12,
@@ -538,14 +538,14 @@ const S: Record<string, React.CSSProperties> = {
     maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' as const,
   },
   groupLabel: {
-    fontSize: 10, fontWeight: 700, color: 'var(--text-faint)',
+    fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)',
     textTransform: 'uppercase' as const, letterSpacing: '0.08em',
     padding: '8px 16px 3px',
   },
   tabBtn: {
     display: 'flex', alignItems: 'center', gap: 8, width: '100%',
     padding: '7px 14px', border: 'none', borderLeft: '3px solid transparent',
-    background: 'transparent', cursor: 'pointer', fontSize: 12,
+    background: 'transparent', cursor: 'pointer', fontSize: 'var(--fs-body)',
     textAlign: 'left' as const, transition: 'background 0.15s, color 0.15s', borderRadius: 0,
   },
   tabIcon:     { fontSize: 'var(--fs-body)', flexShrink: 0, width: 16, textAlign: 'center' as const },

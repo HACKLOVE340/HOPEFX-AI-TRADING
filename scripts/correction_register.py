@@ -981,21 +981,72 @@ def _p_f175() -> tuple[str, str]:
     )
 
 
+def _derivation_probe() -> tuple[bool, str]:
+    """Run the catch-all's ownership rule against a throwaway app.
+
+    Executed rather than grepped. A probe that greps for `_registered_paths`
+    measures how the module is written; this one builds three routes and asks
+    the derivation what it concludes, so it fails if the walk stops descending
+    into an included router — the exact way the previous
+    `_claimed_by_a_real_route` check was dead while reading as correct.
+    """
+    try:
+        from fastapi import APIRouter, FastAPI
+
+        from core.page_routes import server_namespaces
+    except Exception as exc:  # pragma: no cover - reported, never swallowed
+        return False, f"could not import the derivation: {exc}"
+
+    app = FastAPI()
+    router = APIRouter(prefix="/probe-namespace")
+
+    @router.get("/thing")
+    async def _thing() -> dict[str, bool]:
+        return {"ok": True}
+
+    app.include_router(router)
+    namespaces = server_namespaces(app)
+
+    if "/probe-namespace" not in namespaces:
+        return False, "the route walk cannot see a route inside an included router"
+    if "/probe-namespace/thing" in namespaces:
+        # The asymmetry that IS F198: a registered leaf makes the paths BELOW
+        # its parent the server's, and never the leaf itself.
+        return False, "a registered leaf was treated as a namespace of its own"
+    return True, "derived from the route table"
+
+
 def _p_f198() -> tuple[str, str]:
     """`/kyc` and `/mobile` returned raw JSON 404 on direct navigation."""
     page = _code("core/page_routes.py")
-    proven = _exists("tests/unit/test_every_spa_route_serves_the_app.py")
-    fixed_by_route_table = "_claimed_by_a_real_route" in page
-    if not (proven and fixed_by_route_table):
-        return OPEN, "the catch-all still refuses page paths on a prefix string alone"
+    if not page:
+        # Fail closed. `hand_list_gone` below is a NOT-in test, and an empty
+        # read satisfies it — a probe that read nothing would otherwise report
+        # the list gone because it never looked (F255/F257).
+        return UNVERIFIED, "core/page_routes.py not found"
+    proven = _exists("tests/unit/test_every_spa_route_serves_the_app.py") and _exists(
+        "tests/unit/test_the_catchall_derives_api_ownership.py"
+    )
+    hand_list_gone = "_passthrough_prefixes" not in page
+    derived, why = _derivation_probe()
+    if not (proven and derived):
+        return OPEN, f"the catch-all does not derive path ownership from the route table ({why})"
+    if not hand_list_gone:
+        return OPEN, "the hand-maintained prefix list is still what the catch-all consults"
     return PARTIAL, (
-        "/kyc serves the SPA again — nothing claimed it, and only the string in "
-        "_passthrough_prefixes was refusing it. /mobile remains a genuine collision: "
-        "App.tsx declares the page AND router_registry mounts the mobile API "
-        "sub-application at the same path (measured: one exact route, one Mount). "
-        "Serving the SPA there would shadow a live API, so resolving it means renaming "
-        "the page or moving the mount to /api/mobile — a product choice, pinned by a "
-        "test so the exemption cannot quietly become permanent"
+        "the SHAPE is fixed: the catch-all reads the route table instead of a "
+        "hand-maintained prefix list — a path is the server's when something is "
+        "registered at it, at it + '/', or strictly below it, and the React router's "
+        "when nothing is, under a stated floor of /api/ and /ws/ so a router that fails "
+        "to register cannot become an HTML 200 on every API path. /kyc serves the SPA "
+        "because nothing claims it, and /kyc/webhooks/sumsub still reaches its handler "
+        "because something does; a router added at a brand-new prefix needs no edit "
+        "here in either direction. What REMAINS is /mobile, and it is a product "
+        "decision rather than a wiring one: App.tsx declares the page AND "
+        "router_registry mounts the mobile API sub-application at the same path, so "
+        "serving the SPA there would shadow a live API. Resolving it means renaming the "
+        "page or moving the mount to /api/mobile — pinned by a test so the exemption "
+        "cannot quietly become permanent"
     )
 
 
@@ -1013,8 +1064,10 @@ def _p_f199() -> tuple[str, str]:
         return UNVERIFIED, "core/page_routes.py not found"
     proven = _exists("tests/unit/test_every_spa_route_serves_the_app.py")
     # The bare-name entries in _passthrough_prefixes used to 404 a page path
-    # purely on a string match, with no route behind it.
-    asks_the_route_table = "_claimed_by_a_real_route" in page
+    # purely on a string match, with no route behind it. The list is gone; what
+    # is measured now is that the replacement can see a route at all, executed
+    # rather than grepped.
+    asks_the_route_table, _why = _derivation_probe()
     if proven and asks_the_route_table:
         return FIXED, (
             "the catch-all passes a bare page path through only when a route or mount "
@@ -2811,6 +2864,73 @@ S_DOC = "doc-freshness-review"
 # ── Frontend correctness, found by driving the app rather than reading it ───
 
 
+def _p_zero_balance_does_not_raise() -> tuple[str, str]:
+    """Does a broker balance of ZERO still fall through to a mapping lookup?
+
+    `getattr(account, name, 0) or account.get(name, 0)` conflates "missing" with
+    "zero", because 0.0 is falsy. Measured from the source rather than asserted.
+    """
+    src = _read("api/billing.py")
+    if not src:
+        return UNVERIFIED, "api/billing.py could not be read here"
+    if 'getattr(account, "balance", 0) or account.get(' in src:
+        return OPEN, "the falsy-or is still there: a zero balance falls through to .get()"
+    if "_account_field" not in src:
+        return UNVERIFIED, "neither the old falsy-or nor the _account_field helper is present"
+    return FIXED, "_account_field reads the attribute, then the mapping, without conflating zero"
+
+
+def _p_balance_source_split() -> tuple[str, str]:
+    """Does /billing/balance show the same number a withdrawal is checked against?
+
+    Three outcomes, because "reports the disagreement" and "has no disagreement"
+    are not the same state and must not read alike:
+
+      FIXED    the shown balance is DERIVED from the wallet ledger
+      PARTIAL  the split still exists but the response says so, and reports both
+      OPEN     two numbers, one shown, nothing saying they differ
+
+    The first version of this probe asked only whether `wallet_manager` appeared
+    in the body. Reporting the ledger alongside the broker figure would have
+    flipped it to FIXED while the sources still disagreed — a measurement that
+    stops being able to fail, which is the shape (F176) this register exists to
+    refuse.
+
+    Read through `_read` so the starvation harness can empty it.
+    """
+    src = _read("api/billing.py")
+    if not src:
+        return UNVERIFIED, "api/billing.py could not be read here"
+
+    marker = "async def get_balance"
+    if marker not in src:
+        return UNVERIFIED, "get_balance is not in api/billing.py on this tree"
+
+    body = src[src.index(marker) : src.index(marker) + 6000]
+    reads_broker = 'getattr(app_state, "broker"' in body or 'app_state, "broker"' in body
+    reports_split = "ledger_balance" in body and "sources_agree" in body
+    # The shown number comes from the ledger only if `balance` is assigned from it.
+    derives_from_ledger = "balance = " in body and "wallet_manager.get_balance" in body.split("ledger_balance")[0]
+
+    if derives_from_ledger:
+        return FIXED, "the shown balance is derived from the wallet ledger"
+    if reports_split:
+        return (
+            PARTIAL,
+            "the response now reports the ledger alongside the shown balance and whether they "
+            "agree, so the split is visible and measurable — but the shown number still comes "
+            "from the broker or the subscription manager, not the ledger a withdrawal is "
+            "refused against. Reconciliation is an owner decision, not a refactor",
+        )
+    if reads_broker:
+        return (
+            OPEN,
+            "get_balance promises 'wallet balance' and reads the broker account; the "
+            "ledger the withdrawal path debits is a different number, and nothing says so",
+        )
+    return UNVERIFIED, "get_balance neither reads the broker nor reports a ledger comparison"
+
+
 def _p_suite_does_not_rewrite_models() -> tuple[str, str]:
     """Does the suite still overwrite a checksum-verified model artifact?
 
@@ -3109,6 +3229,78 @@ def _p_chart_gate_vacuous() -> tuple[str, str]:
     )
 
 
+def _p_env_example_documents_dead_keys() -> tuple[str, str]:
+    """Does .env.example document a knob the code does not read?
+
+    A key an operator can set that changes nothing is worse than an undocumented
+    one, because it reads as a control. Counted the way the test counts it: a
+    literal that appears in no source file cannot be read by anything. Markdown
+    is excluded — a key named in a document is documented, not read.
+    """
+    example = _read(".env.example")
+    if not example:
+        return ("UNKNOWN", ".env.example is not present")
+
+    declared = set(re.findall(r"^\s*([A-Z][A-Z0-9_]*)\s*=", example, re.M))
+    if not declared:
+        return ("UNVERIFIED", "no keys parsed from .env.example")
+
+    exts = {".py", ".ts", ".tsx", ".sh", ".yml", ".yaml", ".json", ".template", ".toml", ".tf", ".conf"}
+    skip = {".venv", "node_modules", ".git", "static", "dashboard", "htmlcov"}
+    guard = ROOT / "tests" / "unit" / "test_env_example_documents_real_variables.py"
+    blob: list[str] = []
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path.suffix not in exts:
+            continue
+        if any(s in path.parts for s in skip) or path.name.startswith(".env") or path == guard:
+            continue
+        try:
+            blob.append(path.read_text(encoding="utf-8", errors="ignore"))
+        except OSError:
+            continue
+    source = "\n".join(blob)
+
+    dead = sorted(k for k in declared if k not in source)
+    if not dead:
+        return ("FIXED", f"all {len(declared)} documented keys appear in the source")
+    return ("OPEN", f"{len(dead)} of {len(declared)} documented keys appear in no source file: {', '.join(dead[:8])}")
+
+
+def _p_leakage_guard_checked_nothing() -> tuple[str, str]:
+    """Does the calibration-leakage guard assert against code that exists?
+
+    It patched `sklearn.calibration.CalibratedClassifierCV` and read the `cv=`
+    argument. `cv='prefit'` was removed in scikit-learn 1.4 and the code moved
+    to `_calibrate_prefit`, which fits an `IsotonicRegression` on the base
+    model's output — so nothing constructed a `CalibratedClassifierCV`, the
+    tracking list was always empty, and every `for cv_arg in ...` loop ran zero
+    times.
+    """
+    test = _read("tests/unit/test_mtf_ensemble_leakage.py")
+    if not test:
+        return ("UNKNOWN", "tests/unit/test_mtf_ensemble_leakage.py is not present")
+
+    source = _read("scripts/retrain_mtf_accuracy.py")
+    still_uses_cccv = "CalibratedClassifierCV(" in source
+    guard_patches_cccv = 'patch("sklearn.calibration.CalibratedClassifierCV"' in test
+    asserts_one_fit = "must not re-fit it" in test
+    asserts_it_measured = "so nothing was checked" in test
+
+    if guard_patches_cccv and not still_uses_cccv:
+        return (
+            "OPEN",
+            "the guard patches CalibratedClassifierCV, which retrain_mtf_accuracy no longer "
+            "constructs \u2014 the tracking list is always empty and the assertions run zero times",
+        )
+    if asserts_one_fit and asserts_it_measured:
+        return (
+            "FIXED",
+            "the guard asserts the base model is fitted exactly once and that it observed a "
+            "fit at all, against _calibrate_prefit as it is actually written",
+        )
+    return ("PARTIAL", "the guard no longer chases CalibratedClassifierCV but does not assert it measured anything")
+
+
 def _p_density_cannot_reach() -> tuple[str, str]:
     """Is the density control able to reach the interface it is stamped on?
 
@@ -3139,6 +3331,44 @@ def _p_density_cannot_reach() -> tuple[str, str]:
         f"{token_uses} token-reading utilities against {literal_sizes} inline fontSize "
         f"and {literal_space} numeric spacing utilities — {unreachable} sizes the density "
         f"control cannot reach",
+    )
+
+
+def _p_docker_build_crashed_on_optional_peers() -> tuple[str, str]:
+    """Could the production image be built at all?
+
+    Reads the Dockerfile and the test that claims to run what it runs. It does
+    NOT run `npm ci` — that needs the network and twelve seconds, and a probe
+    that does either is a probe nobody runs. So this measures the fix, not the
+    upstream bug: the flag being present and the test being bound to it.
+    """
+    dockerfile = _read(ROOT / "Dockerfile")
+    if not dockerfile:
+        return ("UNKNOWN", "Dockerfile is not present")
+
+    m = re.search(r"^RUN\s+npm\s+ci\b(?P<flags>.*)$", dockerfile, re.MULTILINE)
+    if not m:
+        return ("UNKNOWN", "Dockerfile has no `RUN npm ci` line")
+    has_flag = "--legacy-peer-deps" in m.group("flags")
+
+    test = _read(ROOT / "tests" / "unit" / "test_frontend_lockfile_installs_cleanly.py")
+    bound = "_dockerfile_npm_ci_flags()" in test
+
+    if has_flag and bound:
+        return (
+            "FIXED",
+            "Dockerfile runs `npm ci --legacy-peer-deps` and the lockfile test derives its "
+            "flags from that line, so the two cannot diverge",
+        )
+    if has_flag:
+        return (
+            "PARTIAL",
+            "the workaround is in the Dockerfile but the test hard-codes its own argv — "
+            "it is no longer running what the image runs",
+        )
+    return (
+        "OPEN",
+        "Dockerfile runs a bare `npm ci`; if npm still crashes loading optional peer sets, no image can be built",
     )
 
 
@@ -3174,6 +3404,60 @@ def _p_field_has_no_label() -> tuple[str, str]:
 
 
 FINDINGS: list[Finding] = [
+    Finding(
+        "BALANCE-ZERO-RAISES",
+        "A broker balance of exactly zero crashed the balance lookup, silently",
+        "P2",
+        "Money",
+        "This session, 2026-09-18 — surfaced by a test asserting a real zero is not a failed lookup",
+        "`api/billing.py::get_balance` read the broker account as "
+        '`float(getattr(account, "balance", 0) or account.get("balance", 0))`. The `or` '
+        'conflates "the attribute is missing" with "the attribute is ZERO", because 0.0 is '
+        "falsy. A broker reporting a genuine zero therefore fell through to the mapping "
+        "branch, and an object-style account has no `.get`, so it raised AttributeError — "
+        "into an `except Exception` that logged at DEBUG, which is off in production. The "
+        "user was shown whatever the next source produced, and nothing recorded why. Fixed "
+        "by `_account_field`, which tries the attribute, then the mapping, and treats None "
+        "rather than falsiness as absence. The same `except` now logs at WARNING: the "
+        "difference between an operator seeing why a balance was wrong and seeing nothing.",
+        "`tests/unit/test_the_balance_says_where_it_came_from.py::"
+        "test_a_zero_balance_does_not_crash_the_broker_read`, parametrised over an "
+        "object-style and a mapping-style account because the fix has two branches and one "
+        "that works only for the shape the test uses is not a fix. Red on the pre-fix tree "
+        "for the object-style case.",
+        "python scripts/correction_register.py --id BALANCE-ZERO-RAISES",
+        _p_zero_balance_does_not_raise,
+        [S_MONEY, S_TDD],
+    ),
+    Finding(
+        "BALANCE-SOURCE-SPLIT",
+        "The balance a user is shown and the balance a withdrawal checks are different numbers",
+        "P1",
+        "Money",
+        "This session, 2026-09-18 — surfaced while planning the withdrawal debit (ADR 0021)",
+        '`api/billing.py::get_balance` says in its own docstring "Return the authenticated '
+        "user's wallet balance\" and then reads the BROKER account, falling back to the "
+        "subscription manager. It never reads `wallet_transactions`. Meanwhile ADR 0021 makes "
+        "the fiat wallet the ledger a withdrawal debits, and `_apply_movement` refuses when "
+        "`before < amount`. So the number the UI shows and the number the refusal is computed "
+        "from come from two different sources, and the ledger carries no history — nothing "
+        "wrote it before deposits began crediting it. This is why "
+        "`WITHDRAWAL_DEBITS_LEDGER` ships default-FALSE: with it on today, a user the UI says "
+        "has funds is refused 402, which is an outage that looks like a money bug, and the "
+        "pressure to fix it falls on the balance check, which is a real gate. The fix is "
+        "reconciliation, not a wider tolerance and not a removed check: decide what is "
+        "authoritative, and make `get_balance` read that, or seed the ledger from it. "
+        "Deleting the docstring's promise instead would leave two numbers and no statement "
+        "that they disagree.",
+        "Assert that the value `/billing/balance` returns and the value a withdrawal is "
+        "checked against come from the same source. It fails today at the point where one "
+        "reads the broker and the other reads the ledger. Until then, "
+        "`test_withdrawal_debits_the_wallet_ledger.py::test_the_flag_defaults_to_off_and_"
+        "nothing_is_debited` pins the safe default.",
+        "python scripts/correction_register.py --id BALANCE-SOURCE-SPLIT",
+        _p_balance_source_split,
+        [S_MONEY, S_VBC],
+    ),
     Finding(
         "SUITE-REWRITES-MODEL",
         "Running the test suite overwrote a model artifact production verifies fail-closed",
@@ -3371,6 +3655,111 @@ FINDINGS: list[Finding] = [
         [S_TDD, S_VBC, S_DEAD],
     ),
     Finding(
+        "DOCKER-NPM-PEER-CRASH",
+        "npm ci crashed loading optional peer sets, so no image could be built",
+        "P0",
+        "Deployment",
+        "Reproduced 2026-09-18 from a clean directory on npm 10.9.7 and npm 10.8.2",
+        "`Dockerfile:4` builds the frontend on `node:20-alpine` and stage 1 is "
+        "`COPY frontend/package.json frontend/package-lock.json ./` then `RUN npm ci`. "
+        "npm's arborist loads the OPTIONAL peer sets of packages named in the lockfile even "
+        "for `ci`, which resolves nothing and should not need the registry at all. That walk "
+        "reached `@vitest/browser-playwright@5.0.1` — an optional peer of the locked "
+        "`vitest@4.1.11` — which peers on `vitest@*`, resolving to the newly published vitest 5, "
+        "whose `@vitejs/devtools-*@^0.7.5` peers sent it into a recursion that dereferences "
+        "null: `Cannot read properties of null (reading 'edgesOut')` at `#loadPeerSet "
+        "(build-ideal-tree.js:1289)`. Nothing in this repository changed — the trigger was a "
+        "registry publish — and the lockfile is sound: `npm ci --legacy-peer-deps` installs 738 "
+        "packages at 0 version mismatches and 0 packages absent from the lock, which is exactly "
+        "the locked tree. The flag is therefore a WORKAROUND and is commented as one; remove it "
+        "when npm ships the fix and let the slow test prove it is safe to. Found by the repo's "
+        "own gate while verifying an unrelated frontend change, on a tree whose full suite had "
+        "been green hours earlier — which is the whole argument for a gate that starts from two "
+        "files and an empty directory rather than from a populated `node_modules`.",
+        "tests/unit/test_frontend_lockfile_installs_cleanly.py::"
+        "test_npm_ci_succeeds_from_a_clean_directory fails with the arborist crash on the "
+        "pre-fix tree — verified against a detached worktree at the previous commit, not just "
+        "against the edited one — and passes in 12s after it. Its sibling "
+        "test_the_install_command_is_read_from_the_dockerfile holds the binding: the slow test "
+        "now READS the Dockerfile's `npm ci` flags rather than repeating them, so a test that "
+        "claims to run what the image runs cannot quietly stop doing so.",
+        "python scripts/correction_register.py --id DOCKER-NPM-PEER-CRASH",
+        _p_docker_build_crashed_on_optional_peers,
+        [S_VBC, S_TDD],
+    ),
+    Finding(
+        "ENV-EXAMPLE-DEAD-KNOBS",
+        "Three risk limits an operator could set, and nothing read any of them",
+        "P1",
+        "Configuration",
+        "Measured 2026-09-18 by comparing every key against the whole source tree",
+        "`.env.example` is the only description of this platform's configuration an operator "
+        "has, and 26 of its 969 keys appeared in NO source file. They were not random rot \u2014 "
+        "almost every one was a near-miss of a live name: `SELF_HEAL_ENABLED` for "
+        "`SELF_HEALER_ENABLED`, `SPREAD_SPIKE_THRESHOLD` for `SPREAD_SPIKE_MULTIPLIER`, "
+        "`TWAP_DURATION_S` for `TWAP_DEFAULT_SECS`, `PAPER_SPREAD_BPS` for "
+        "`PAPER_FALLBACK_SPREAD_PCT`. Three sat under a heading reading `# Risk limits` on a "
+        "money-moving system: `RISK_DAILY_LOSS_LIMIT=500` (the live knob is "
+        "`RISK_MAX_DAILY_LOSS_PCT`, a fraction rather than dollars), `RISK_MAX_LEVERAGE=10` "
+        "(`MAX_LEVERAGE_RATIO`) and `RISK_PER_TRADE_PCT=0.01` (`MAX_RISK_PCT_PER_TRADE`). The "
+        "last is the worst of them: 0.01 is also the DEFAULT of the live name, so an operator "
+        "halving it to 0.005 saw a file that agreed with the risk actually in force and had no "
+        "way to tell it had changed nothing. Each dead line is now a comment naming the live "
+        "key, so the old spelling stays searchable. Two keys going the other way \u2014 `JWT_SECRET` "
+        "and `REQUIRE_EMAIL_VERIFICATION`, written into every generated `.env` by "
+        "`scripts/bootstrap_dev.py` \u2014 were documented for the first time; `JWT_SECRET` signs "
+        "white-label tenant tokens and is now placeholder-guarded at startup.",
+        "tests/unit/test_env_example_documents_real_variables.py fails with all 26 named and "
+        "line-numbered on the pre-fix tree. Its rule is deliberately weak in the safe "
+        "direction \u2014 a key must appear as a literal SOMEWHERE in the source \u2014 because the "
+        'first version scanned for `os.getenv("X")` and would have reported eleven live '
+        "trading-strategy knobs as dead: this codebase reads env through helpers "
+        '(`_env_float("EDGE_SELECTOR_MAX_LOT", 0.01)`) and declarative tables '
+        '(`_FeatureDef("FEATURE_COPY_TRADING", ...)`). The checker also excludes ITSELF: its '
+        "docstring names seven dead keys to explain them, and on the first run that table was "
+        "the only place they appeared, so it passed them \u2014 F257 committed by the checker "
+        "written to prevent it.",
+        "python scripts/correction_register.py --id ENV-EXAMPLE-DEAD-KNOBS",
+        _p_env_example_documents_dead_keys,
+        [S_DEAD, S_VBC],
+    ),
+    Finding(
+        "LEAKAGE-GUARD-CHECKED-NOTHING",
+        "The calibration-leakage guard asserted a mechanism the code no longer has",
+        "P1",
+        "ML",
+        "Proven by injection 2026-09-18, after a 120s timeout drew attention to the test",
+        "`tests/unit/test_mtf_ensemble_leakage.py` exists because "
+        "`CalibratedClassifierCV(cv=3)` re-trained the stacking ensemble's base learners on "
+        "sub-splits of the test fold and produced ~99% walk-forward accuracy that was not "
+        "there. The guard patched `sklearn.calibration.CalibratedClassifierCV`, collected the "
+        "`cv=` argument of every construction, and asserted each was `'prefit'`. "
+        "**`cv='prefit'` was removed in scikit-learn 1.4**, and the code was rewritten to fit an "
+        "`IsotonicRegression` on the base model's output (`_calibrate_prefit`). Nothing has "
+        "constructed a `CalibratedClassifierCV` since, so the tracking list was always empty "
+        "and `for cv_arg in captured_cv_args` ran zero times \u2014 the F176 shape, a measurement "
+        "that cannot fail, on the control protecting the number this model is judged by. "
+        "The `except Exception: pass` around the call hid the other half: on a machine without "
+        "xgboost the guard was green having called nothing. Both were found because the test "
+        "took 131s against a 120s `pytest-timeout` \u2014 it was flaky whenever the machine was "
+        "busy, which is when CI runs, and CI has never run (F95). "
+        "Rewritten to assert the PROPERTY against the mechanism that is there: the estimator "
+        "the returned wrapper carries is the same object that was fitted, it was fitted exactly "
+        "once, and the isotonic layer is handed a 1-D probability vector rather than the "
+        "feature matrix \u2014 which is what makes a re-fit impossible by construction. Clamping "
+        "`n_estimators` to 5 (it has nothing to do with the assertion) took the file from 131s "
+        "to 2.4s.",
+        "Proven by injection, not by reading: `_calibrate_prefit` was deleted from "
+        "`train_xgboost` so it returned an uncalibrated model, and the OLD file stayed green "
+        "\u2014 twice, at full runtime. The same injection turns the new "
+        "`test_train_xgboost_does_not_refit_the_base_model` red, and every assertion is "
+        "preceded by one that the test observed anything at all (`so nothing was checked`), "
+        "because an empty list satisfies a `for` loop.",
+        "python scripts/correction_register.py --id LEAKAGE-GUARD-CHECKED-NOTHING",
+        _p_leakage_guard_checked_nothing,
+        [S_DEAD, S_TDD, S_VBC],
+    ),
+    Finding(
         "DENSITY-CANNOT-REACH",
         "The density control is stamped on every route and can reach almost nothing",
         "P2",
@@ -3388,7 +3777,22 @@ FINDINGS: list[Finding] = [
         "codemod and a ratchet, which is the precedent for closing this one. NOT fixed by making "
         "density a user preference: that made the control settable, which is a different thing "
         "from making it effective, and shipping the control without recording this would have "
-        "been shipping a second dead control on top of the first.",
+        "been shipping a second dead control on top of the first. "
+        "The band ABOVE the scale is now closed. 44 sizes sat at or above 28px, beyond "
+        "`--fs-hero` (26px at `ultra`), and the obvious move — a `--fs-display` tier the codemod "
+        "could bulk-convert — was wrong for most of them: 31 were sizing an EMOJI, where "
+        "`fontSize` is the only lever a glyph has, and each disappears when "
+        "`frontend_emoji_ratchet.py` turns it into an SVG sized by `width`/`height`. 13 sized "
+        "type; two of those were dead style entries left behind by the `PageShell` migration and "
+        "were deleted, and the remaining 11 were converted BY HAND to "
+        "`--fs-display-sm` / `--fs-display` / `--fs-display-lg`, each assigned by role. The "
+        "ultra values are byte-identical to the literals they replaced, so nothing moved at the "
+        "tier `densityPref` gives a person by default. Those three sizes are deliberately "
+        "ABSENT from the codemod's substitution tables — a bulk rewrite sees `fontSize: 32` and "
+        "cannot tell a price from an emoji — and "
+        "`tests/unit/test_size_codemod_only_touches_css.py` fails if one is ever added. "
+        "`python scripts/frontend_size_ratchet.py --check` prints the split on every run, so it "
+        "is measured rather than remembered from this sentence; it now reads 31 glyph, 0 type.",
         "frontend/src/test/density_is_not_a_dead_control.test.ts proves the three tiers are "
         "specified, monotonic and separated by a real margin rather than a rounding one — parsed "
         "from index.css, because the tiers live inside `@layer base`, which jsdom's CSSOM drops "
@@ -3977,22 +4381,47 @@ FINDINGS: list[Finding] = [
         "P1",
         "Frontend",
         "docs/audit/REMEDIATION_PLAN.md — Phase 6",
-        "Half done. `/kyc` serves the SPA again: measured, nothing claimed that path at "
-        "all — zero exact routes, zero sub-routes — and the only thing refusing it was the "
-        "string `kyc` in the catch-all's `_passthrough_prefixes`. A user following a "
+        "The symptom was fixed first and the SHAPE second. `/kyc` was refused by one "
+        "string in a hand-maintained tuple of prefixes the catch-all consulted to decide "
+        "whether a path was the API's or the React router's — a user following a "
         'verification email got `{"detail":"No route for GET /kyc"}` on a regulatory '
-        "gate. Sub-paths still pass through on the prefix, so `/kyc/webhooks/sumsub` keeps "
-        "reaching its handler — answering a provider webhook with the SPA shell would be "
-        "worse than 404ing it. **`/mobile` is a real collision and stays open**: App.tsx "
-        "declares the page and `core/router_registry.py` mounts the mobile API "
-        "sub-application at the same path, so serving the SPA there would shadow a live "
-        "API. Renaming the page or moving the mount to `/api/mobile` is a product choice.",
-        "tests/unit/test_every_spa_route_serves_the_app.py found both routes "
-        "independently, without being told the finding existed, by asking whether a direct "
-        "GET returns HTML. `/mobile` is exempted with its reason and pinned by "
-        "test_the_mobile_collision_is_still_a_collision, so the exemption fails the day it "
-        "stops being true.",
-        "pytest tests/unit/test_every_spa_route_serves_the_app.py -q",
+        "gate. Editing that string fixed `/kyc` and left the mechanism, and the mechanism "
+        "was wrong in BOTH directions, measured: `/replay/<session>` and `/decision/<id>` "
+        "— declared pages with nothing mounted under them — were 404'd as raw JSON on the "
+        "listed string alone, while a router at a namespace nobody had added to the list "
+        "answered `200 text/html` for every path inside it that had no route. The second "
+        "is the dangerous one here: a JSON client gets HTML and a 200, so a missing "
+        "endpoint reads as a parse error three layers from the cause. **The list is now "
+        "gone.** Ownership is derived from `app.routes` at request time: the server's if "
+        "something is registered at the path, at the path + `/`, or strictly BELOW it; "
+        "the React router's if nothing is. That last asymmetry is the whole finding — "
+        "`/kyc/applicants` makes `/kyc/*` the server's without taking `/kyc` from the "
+        "page. Under it sits ONE stated floor, `/api/` and `/ws/`, because derivation "
+        "cannot describe a namespace that failed to register and 'the routers did not "
+        "load' must not present as an HTML 200 on every API path. The walk it reads is "
+        "not optional: this FastAPI records each `include_router` as an opaque "
+        "`_IncludedRouter`, and the previous `_claimed_by_a_real_route` check read "
+        "`.path` straight off `app.routes` — so it answered 'nothing claims /kyc' while "
+        "six `/kyc/*` routes were registered, and the half-fix was correct by accident. "
+        "**`/mobile` is a real collision and stays open**: App.tsx declares the page and "
+        "`core/router_registry.py` mounts the mobile API sub-application at the same "
+        "path, so serving the SPA there would shadow a live API. Renaming the page or "
+        "moving the mount to `/api/mobile` is a product choice.",
+        "tests/unit/test_the_catchall_derives_api_ownership.py — twelve, five red on the "
+        "pre-fix tree, and it covers both directions because a catch-all that swallows an "
+        "API path is worse than the bug it fixes: a page sub-path nothing is mounted "
+        "under serves the app, and a namespace invented inside the test file (so it "
+        "cannot be in any list) still answers its own route, still 404s JSON for a path "
+        "it does not have, and is never answered with the SPA shell. Two guard the "
+        "measurement rather than the result, per hopefx-dead-controls: one asserts the "
+        "route walk can see inside an included router at all (it would otherwise report "
+        "'nothing is registered' and the catch-all would serve HTML everywhere, which is "
+        "exactly how the previous check was dead), and one holds it against "
+        "`core.router_registry.iter_api_routes` so the two walks cannot diverge. "
+        "tests/unit/test_every_spa_route_serves_the_app.py still fetches every path "
+        "App.tsx declares.",
+        "pytest tests/unit/test_the_catchall_derives_api_ownership.py "
+        "tests/unit/test_every_spa_route_serves_the_app.py -q",
         _p_f198,
         [S_UI, S_TDD],
     ),

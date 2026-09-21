@@ -9,8 +9,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { Bug, ClipboardList, Folder, KeyRound, RefreshCw, Shield, Wrench } from 'lucide-react';
-
+import { AlertTriangle, Bug, ClipboardList, Folder, KeyRound, RefreshCw, Shield, Wrench } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -229,18 +228,18 @@ const SecurityInfraSection: React.FC = () => {
                 { label: 'Violations',      value: healer.violations?.length ?? 0,   color: healer.violations?.length ? '#f87171' : '#22c55e' },
               ].map(item => (
                 <div key={item.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px' }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: item.color, marginTop: 4 }}>{String(item.value)}</div>
                 </div>
               ))}
             </div>
             {healer.violations?.length > 0 && (
               <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>⚠️ Integrity Violations</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}><AlertTriangle size="1em" aria-hidden /> Integrity Violations</div>
                 {healer.violations.map((v, i) => (
                   <div key={i} style={{ background: 'rgba(248,113,113,0.05)', border: '1px solid #7f1d1d', borderRadius: 6, padding: '8px 12px', marginBottom: 6 }}>
-                    <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--loss)' }}>{v.file}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{v.reason} · {fmtDate(v.detected_at)}</div>
+                    <div style={{ fontSize: 'var(--fs-body)', fontFamily: 'monospace', color: 'var(--loss)' }}>{v.file}</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', marginTop: 2 }}>{v.reason} · {fmtDate(v.detected_at)}</div>
                   </div>
                 ))}
               </div>
@@ -269,7 +268,7 @@ const SecurityInfraSection: React.FC = () => {
               { label: 'YARA Rules',      value: av.yara_rules_loaded ?? '—',                   color: '#a78bfa' },
             ].map(item => (
               <div key={item.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: item.color, marginTop: 4 }}>{String(item.value)}</div>
               </div>
             ))}
@@ -300,11 +299,11 @@ const SecurityInfraSection: React.FC = () => {
               <tbody>
                 {(hsm.keys ?? []).map(k => (
                   <tr key={k.key_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: 'var(--ai-model)' }}>{k.key_id}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(k.created_at)}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{k.size_bytes} B</td>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 'var(--fs-body)', color: 'var(--ai-model)' }}>{k.key_id}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{fmtDate(k.created_at)}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>{k.size_bytes} B</td>
                     <td style={{ padding: '10px 16px' }}>
-                      <span style={{ color: k.active ? 'var(--gain)' : 'var(--loss)', fontSize: 12, fontWeight: 700 }}>
+                      <span style={{ color: k.active ? 'var(--gain)' : 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 700 }}>
                         {k.active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
@@ -337,11 +336,11 @@ const SecurityInfraSection: React.FC = () => {
                   background: entry.severity === 'critical' ? 'var(--loss)' : entry.severity === 'warning' ? 'var(--warn)' : 'var(--gain)',
                 }} />
                 <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)' }}>[{entry.component}]</span>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-dim)' }}>[{entry.component}]</span>
                   {' '}
-                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{entry.event}</span>
+                  <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{entry.event}</span>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(entry.timestamp)}</div>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(entry.timestamp)}</div>
               </div>
             ))
           )}
@@ -369,7 +368,7 @@ const SecurityInfraSection: React.FC = () => {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['Type', 'Indicator', 'Severity', 'Source', 'First Seen', 'Last Seen', 'Blocked'].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -379,17 +378,17 @@ const SecurityInfraSection: React.FC = () => {
                     return (
                       <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                         <td style={{ padding: '8px 12px' }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: 'var(--raised)', color: 'var(--link)', textTransform: 'uppercase' }}>{ti.type}</span>
+                          <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: 'var(--raised)', color: 'var(--link)', textTransform: 'uppercase' }}>{ti.type}</span>
                         </td>
-                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-strong)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ti.value}>{ti.value}</td>
+                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 'var(--fs-body)', color: 'var(--text-strong)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ti.value}>{ti.value}</td>
                         <td style={{ padding: '8px 12px' }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: sevColor }}>{ti.severity.toUpperCase()}</span>
+                          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: sevColor }}>{ti.severity.toUpperCase()}</span>
                         </td>
-                        <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)' }}>{ti.source}</td>
-                        <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(ti.first_seen)}</td>
-                        <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(ti.last_seen)}</td>
+                        <td style={{ padding: '8px 12px', fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{ti.source}</td>
+                        <td style={{ padding: '8px 12px', fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(ti.first_seen)}</td>
+                        <td style={{ padding: '8px 12px', fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(ti.last_seen)}</td>
                         <td style={{ padding: '8px 12px' }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: ti.blocked ? 'var(--gain)' : 'var(--loss)' }}>{ti.blocked ? '✅ Yes' : '❌ No'}</span>
+                          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: ti.blocked ? 'var(--gain)' : 'var(--loss)' }}>{ti.blocked ? '✅ Yes' : '❌ No'}</span>
                         </td>
                       </tr>
                     );

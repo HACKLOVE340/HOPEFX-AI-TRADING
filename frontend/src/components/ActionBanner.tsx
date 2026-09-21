@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 /**
  * ActionBanner — result of an operator action.
@@ -46,7 +47,7 @@ export const ActionBanner: React.FC<{
         gap: 12,
       }}
     >
-      <span>{ok ? '' : '⚠️ '}{message}</span>
+      <span>{ok ? null : <AlertTriangle size={14} aria-hidden style={{ marginRight: 6, verticalAlign: '-2px' }} />}{message}</span>
       {onDismiss && (
         <button
           onClick={onDismiss}

@@ -3,8 +3,7 @@
  */
 
 import React from 'react';
-import { AlertTriangle, Info } from 'lucide-react';
-
+import { AlertTriangle, Info, X } from 'lucide-react';
 type Level = 'error' | 'warning' | 'info' | 'success';
 
 export interface ErrorBannerProps {
@@ -64,7 +63,7 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({
             padding: 2,
           }}
         >
-          ✕
+          <X size="1em" aria-hidden />
         </button>
       )}
     </div>

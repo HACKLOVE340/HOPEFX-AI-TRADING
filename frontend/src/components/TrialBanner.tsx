@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, selectTrial, selectTrialDaysRemaining } from '../store';
+import { AlertTriangle, PartyPopper } from 'lucide-react';
 
 const DISMISS_KEY = 'hopefx_trial_banner_dismissed';
 
@@ -46,7 +47,7 @@ const TrialBanner: React.FC = () => {
       color: urgency ? '#fca5a5' : '#93c5fd',
     }}>
       <span>
-        {urgency ? '⚠️' : '🎉'}{' '}
+        {urgency ? <AlertTriangle size={14} aria-hidden /> : <PartyPopper size={14} aria-hidden />}{' '}
         <strong style={{ color: urgency ? '#fef2f2' : '#eff6ff' }}>
           {daysRemaining !== null
             ? daysRemaining === 0
@@ -66,7 +67,7 @@ const TrialBanner: React.FC = () => {
             borderRadius: 6,
             color: '#fff',
             cursor: 'pointer',
-            fontSize: 12,
+            fontSize: 'var(--fs-body)',
             fontWeight: 600,
             padding: '5px 14px',
           }}

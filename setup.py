@@ -32,7 +32,9 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
     ],
-    python_requires=">=3.10",
+    # Kept identical to pyproject.toml's requires-python — see the comment there
+    # and tests/unit/test_python_pin_matches_the_runtime.py, which asserts they match.
+    python_requires=">=3.10,<3.13",
     install_requires=requirements,
     entry_points={
         "console_scripts": [

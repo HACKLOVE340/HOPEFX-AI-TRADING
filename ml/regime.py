@@ -96,6 +96,21 @@ class RegimeDetector:
     async def load(self) -> None:
         """Load or train model."""
         if self.model_path.exists():
+            from ml import _verify_checksum
+
+            if not _verify_checksum(self.model_path):
+                # _verify_checksum has already logged CRITICAL with the specifics.
+                # Existence was checked above, so False here can only mean REFUSED,
+                # never absent. Leaving `_is_fitted` False is the fail-closed
+                # outcome: `detect()` returns MarketRegime.UNKNOWN with zero
+                # confidence rather than answering from an unverified model.
+                logger.error(
+                    "REFUSING to load regime model %s: it failed its integrity check. "
+                    "Regime detection stays unfitted — it will report UNKNOWN until a "
+                    "model that matches its recorded sha256 is available.",
+                    self.model_path,
+                )
+                return
             saved = joblib.load(self.model_path)
             self.hmm = saved["hmm"]
             self.vol_gmm = saved["vol_gmm"]

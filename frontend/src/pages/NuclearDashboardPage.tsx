@@ -6,16 +6,16 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Globe, Newspaper, Radiation, Sparkles, Zap } from 'lucide-react';
+import { BarChart3, Globe, Microscope, Newspaper, Radiation, Sparkles, Zap } from 'lucide-react';
 import { NuclearDashboard } from '../features/chart-bot';
 import { PageShell } from '../components/system/PageShell';
 
 const CROSS_LINKS = [
-  { label: '🌍 Geopolitical', to: '/geopolitical', color: '#f59e0b' },
-  { label: '📊 Correlation',  to: '/correlation',  color: '#60a5fa' },
-  { label: '🔬 Research',     to: '/research',     color: '#a78bfa' },
-  { label: '☢ Nuclear Risk',  to: '/geopolitical', color: '#ef4444' },
-  { label: '⚡ Trade XAU',    to: '/trade',        color: '#4ade80' },
+  { label: 'Geopolitical', icon: Globe, to: '/geopolitical', color: '#f59e0b' },
+  { label: 'Correlation', icon: BarChart3,  to: '/correlation',  color: '#60a5fa' },
+  { label: 'Research', icon: Microscope,     to: '/research',     color: '#a78bfa' },
+  { label: 'Nuclear Risk', icon: Radiation,  to: '/geopolitical', color: '#ef4444' },
+  { label: 'Trade XAU', icon: Zap,    to: '/trade',        color: '#4ade80' },
 ];
 
 /*
@@ -28,7 +28,7 @@ const CROSS_LINKS = [
  *
  * The hand-rolled header strip is gone and nothing it carried is: the title,
  * the icon, the subtitle, the breadcrumbs, the LIVE badge and the four cross
- * links are all `PageShell` props now. The ☢ in the title went with it — the
+ * links are all `PageShell` props now. The radiation glyph in the title went with it — the
  * `icon={Radiation}` beside it said the same thing, and one of the two was an
  * emoji standing in for an icon.
  */
@@ -47,7 +47,7 @@ const NuclearDashboardPage: React.FC = () => (
     ]}
     badge={
       <span style={{
-        fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10,
+        fontSize: 'var(--fs-micro)', fontWeight: 800, padding: '2px 8px', borderRadius: 10,
         background: 'rgba(239,68,68,0.15)', color: '#ef4444',
         border: '1px solid rgba(239,68,68,0.35)', letterSpacing: 1,
       }}>
@@ -66,7 +66,7 @@ const NuclearDashboardPage: React.FC = () => (
               border: `1px solid ${color}35`,
               borderRadius: 6,
               color,
-              fontSize: 11,
+              fontSize: 'var(--fs-label)',
               fontWeight: 600,
               textDecoration: 'none',
               transition: 'background 0.15s',

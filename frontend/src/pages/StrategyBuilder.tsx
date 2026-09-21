@@ -13,6 +13,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { nocodeApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { Rocket } from 'lucide-react';
 
 interface Template {
   id: string; name: string; category?: string; description?: string;
@@ -81,7 +82,7 @@ const StrategyBuilder: React.FC = () => {
     <PageShell title="Strategy Builder" width="standard">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
 
-        <button onClick={() => setShowCatalog((v) => !v)} style={{ padding: '6px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+        <button onClick={() => setShowCatalog((v) => !v)} style={{ padding: '6px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
           {showCatalog ? 'Hide' : 'Show'} node catalogue
         </button>
       </div>
@@ -95,10 +96,10 @@ const StrategyBuilder: React.FC = () => {
         <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 14, marginBottom: 20 }}>
           {Object.entries(nodeTypes).map(([group, items]) => (
             <div key={group} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{group.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{group.replace(/_/g, ' ')}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {items.map((it) => (
-                  <span key={it.id} title={(it.params ?? []).join(', ')} style={{ fontSize: 12, padding: '3px 9px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6 }}>{it.name}</span>
+                  <span key={it.id} title={(it.params ?? []).join(', ')} style={{ fontSize: 'var(--fs-body)', padding: '3px 9px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6 }}>{it.name}</span>
                 ))}
               </div>
             </div>
@@ -115,10 +116,10 @@ const StrategyBuilder: React.FC = () => {
             <button key={t.id} onClick={() => pick(t)} style={{ textAlign: 'left', cursor: 'pointer', background: selected?.id === t.id ? '#1c2438' : 'var(--raised)', border: `1px solid ${selected?.id === t.id ? '#3b82f6' : '#334155'}`, borderRadius: 10, padding: '14px 16px', color: 'inherit' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <span style={{ fontWeight: 700 }}>{t.name}</span>
-                {t.complexity && <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: COMPLEXITY_COLOR[t.complexity] ?? 'var(--text-dim)' }}>{t.complexity}</span>}
+                {t.complexity && <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, textTransform: 'uppercase', color: COMPLEXITY_COLOR[t.complexity] ?? 'var(--text-dim)' }}>{t.complexity}</span>}
               </div>
-              {t.category && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t.category}</div>}
-              {t.description && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6 }}>{t.description}</div>}
+              {t.category && <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>{t.category}</div>}
+              {t.description && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 6 }}>{t.description}</div>}
             </button>
           ))}
         </div>
@@ -143,8 +144,9 @@ const StrategyBuilder: React.FC = () => {
             </label>
             {Object.entries(params).map(([key, val]) => (
               <label key={key}>
-                <span style={labelStyle}>{key.replace(/_/g, ' ')}</span>
+                <span id={`strategy-param-${key}-label`} style={labelStyle}>{key.replace(/_/g, ' ')}</span>
                 <input
+                  aria-labelledby={`strategy-param-${key}-label`}
                   value={String(val)}
                   type={typeof val === 'number' ? 'number' : 'text'}
                   step="any"
@@ -160,7 +162,7 @@ const StrategyBuilder: React.FC = () => {
           )}
 
           <button onClick={deploy} disabled={deploying} style={{ padding: '10px 20px', background: deploying ? '#1e3a5f' : '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: deploying ? 'default' : 'pointer' }}>
-            {deploying ? 'Deploying…' : '🚀 Deploy Strategy'}
+            {deploying ? 'Deploying…' : <><Rocket size={14} aria-hidden /> Deploy Strategy</>}
           </button>
         </div>
       )}

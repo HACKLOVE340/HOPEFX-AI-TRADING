@@ -119,7 +119,7 @@ curl http://localhost:8000/health | python3 -m json.tool
 | `redis` | Redis not running | `sudo systemctl start redis-server` or `docker compose up redis -d` |
 | `ml_model` | `advanced_oos.pkl` missing or corrupt | Run `python ml/train_advanced.py --smoke` |
 | `broker` | Broker credentials invalid or expired | Check `OANDA_API_KEY`; run `python scripts/validate_oanda.py` |
-| `kill_switch` | Kill switch is active | Check `risk/halt_state.json`; investigate cause before clearing |
+| `kill_switch` | Kill switch is active | Check `kill_switch.state.json`; investigate cause before clearing |
 | `online_learner` | `ML_HOURLY_ENABLED=false` | Enable if needed, or ignore if not using online learning |
 | `license` | License key invalid or expired | Check `HOPEFX_LICENSE_KEY` in `.env`; renew subscription |
 
@@ -156,7 +156,7 @@ Common causes:
 | Cause | How to confirm | Fix |
 |-------|---------------|-----|
 | ML model abstaining (normal) | `abstain_rate` in `/api/ml/health` | Normal — model abstains on ~27.5% of bars |
-| Kill switch active | `kill_switch: active` in `/health` | Investigate halt reason in `risk/halt_state.json` |
+| Kill switch active | `kill_switch: active` in `/health` | Investigate halt reason in `kill_switch.state.json` |
 | Broker data feed stale | `last_price_age_seconds > 60` in `/api/broker/status` | Restart broker connector |
 | Market closed | `is_open: false` in `/api/calendar/today` | Wait for market open |
 | Confidence below threshold | `confidence < ML_ABSTAIN_THRESHOLD` | Lower threshold or wait for clearer setup |
@@ -333,7 +333,7 @@ resets daily at 23:45 ET — reconnection is automatic.
 
 ```bash
 # Check halt state
-cat risk/halt_state.json
+cat kill_switch.state.json
 
 # Check risk status
 curl http://localhost:8000/api/risk/status \
@@ -975,7 +975,7 @@ docker compose logs -f app | grep -E "signal|BUY|SELL|NEUTRAL|abstain"
 docker compose logs -f app | grep -E "order|fill|TradeBlocked|CVaR"
 
 # Check kill switch state
-cat risk/halt_state.json 2>/dev/null || echo "Kill switch not active"
+cat kill_switch.state.json 2>/dev/null || echo "Kill switch not active"
 
 # Check current drawdown
 curl -s http://localhost:8000/api/trading/risk-metrics \

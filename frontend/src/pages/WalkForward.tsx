@@ -11,7 +11,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
-import { LineChart } from 'lucide-react';
+import { BarChart3, Bot, LineChart } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { api } from '../hooks/useApi';
 
@@ -139,11 +139,11 @@ const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
         alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: 20, fontWeight: 800, color }}>{nf(score, 0)}</span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>/ 100</span>
+        <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-muted)' }}>/ 100</span>
       </div>
       <div>
         <div style={{ fontSize: 16, fontWeight: 700, color }}>{label}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 180 }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', maxWidth: 180 }}>
           Consistency of returns across all folds
         </div>
       </div>
@@ -240,7 +240,7 @@ const WalkForward: React.FC = () => {
     return (
       <PageShell {...shell}>
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: 'var(--text-dim)', textAlign: 'center' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}><BarChart3 size="1em" aria-hidden /></div>
           <div style={{ fontSize: 16, color: 'var(--text)', marginBottom: 8 }}>
             {apiError ?? 'No walk-forward data available.'}
           </div>
@@ -252,7 +252,7 @@ const WalkForward: React.FC = () => {
               ↻ Retry
             </button>
             <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: 'var(--text-dim)', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
-              📊 Go to Backtesting
+              <BarChart3 size="1em" aria-hidden /> Go to Backtesting
             </button>
           </div>
         </div>
@@ -278,10 +278,10 @@ const WalkForward: React.FC = () => {
             style={{
               padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
               background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-              color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 700, fontFamily: 'inherit',
             }}
           >
-            🤖 Generate Strategy
+            <Bot size="1em" aria-hidden /> Generate Strategy
           </button>
           <div style={s.searchRow}>
             <input aria-label="Run ID"
@@ -402,7 +402,7 @@ const MetricCard: React.FC<{ label: string; value: string; color: string }> = ({
 
 const MCCard: React.FC<{ label: string; value: string; color: string }> = ({ label, value, color }) => (
   <div style={s.mcCard}>
-    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
   </div>
 );
@@ -410,20 +410,11 @@ const MCCard: React.FC<{ label: string; value: string; color: string }> = ({ lab
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    background: '#0f172a',
-    color: '#f8fafc',
-    fontFamily: "'Inter', system-ui, sans-serif",
-    padding: '24px',
-  },
+  // `page`, `header`, `title` and `subtitle` were deleted on 2026-09-18: this
+  // page renders inside PageShell, which draws the header from a `title` PROP,
+  // and nothing had read them since that migration. They were counted as size
+  // and colour debt with nothing to convert.
   loading: { color: '#94a3b8', padding: 48, textAlign: 'center' },
-  header: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: 24, flexWrap: 'wrap', gap: 16,
-  },
-  title:    { fontSize: 28, fontWeight: 700, margin: 0 },
-  subtitle: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
   searchRow: { display: 'flex', gap: 8 },
   searchInput: {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
@@ -443,7 +434,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #334155',
   },
   metricLabel: { fontSize: 12, color: '#94a3b8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' },
-  metricValue: { fontSize: 28, fontWeight: 800 },
+  metricValue: { fontSize: 'var(--fs-hero)', fontWeight: 800 },
   card: {
     background: '#1e293b', borderRadius: 12, padding: 24,
     border: '1px solid #334155', marginBottom: 24,

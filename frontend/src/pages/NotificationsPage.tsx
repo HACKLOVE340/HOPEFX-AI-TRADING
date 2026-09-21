@@ -9,7 +9,7 @@
  *   WS   /ws/notifications           — real-time push
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Bot, Check, CreditCard, Lock, Settings, Siren, TrendingUp, Users, Volume1, Volume2, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
@@ -19,6 +19,7 @@ import { openAuthenticatedWebSocket } from '../lib/ws';
 import { ActionBanner } from '../components/ActionBanner';
 import { useVoice } from '../hooks/useVoice';
 import { useVoiceAlerts } from '../lib/voicePrefs';
+import type { LucideIcon } from 'lucide-react';
 
 interface Notification {
   id: string;
@@ -30,14 +31,16 @@ interface Notification {
   link?: string;
 }
 
-const TYPE_ICON: Record<string, string> = {
-  trade:    '📈',
-  alert:    '🚨',
-  system:   '⚙️',
-  social:   '👥',
-  billing:  '💳',
-  security: '🔒',
-  ai:       '🤖',
+// Components, not characters: a glyph could not take the row's colour and was
+// announced literally beside a label that already names the type.
+const TYPE_ICON: Record<string, LucideIcon> = {
+  trade:    TrendingUp,
+  alert:    Siren,
+  system:   Settings,
+  social:   Users,
+  billing:  CreditCard,
+  security: Lock,
+  ai:       Bot,
 };
 
 const PAGE_SIZE = 20;
@@ -169,14 +172,14 @@ const NotificationsPage: React.FC = () => {
                 padding: '6px 13px',
                 background: voiceAlerts ? 'rgba(96,165,250,0.14)' : 'rgba(100,116,139,0.12)',
                 border: `1px solid ${voiceAlerts ? 'rgba(96,165,250,0.5)' : 'rgba(100,116,139,0.35)'}`,
-                borderRadius: 7, color: voiceAlerts ? 'var(--link)' : 'var(--text-dim)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                borderRadius: 7, color: voiceAlerts ? 'var(--link)' : 'var(--text-dim)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer',
               }}>
-              {voiceAlerts ? '🔊 Spoken alerts on' : '🔈 Spoken alerts off'}
+              {voiceAlerts ? <><Volume2 size="1em" aria-hidden /> Spoken alerts on</> : <><Volume1 size="1em" aria-hidden /> Spoken alerts off</>}
             </button>
           )}
           <button onClick={() => navigate('/settings')}
-            style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: 'var(--text-dim)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ⚙️ Settings
+            style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: 'var(--text-dim)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
+            <Settings size="1em" aria-hidden /> Settings
           </button>
           {(['all', 'unread'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
@@ -192,7 +195,7 @@ const NotificationsPage: React.FC = () => {
             background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8,
             color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 14px',
           }}>
-            {markingAll ? '…' : '✓ Mark all read'}
+            {markingAll ? '…' : <><Check size="1em" aria-hidden /> Mark all read</>}
           </button>
         </div>
       )}
@@ -205,7 +208,7 @@ const NotificationsPage: React.FC = () => {
       )}
       {!loading && items.length === 0 && !err && (
         <div style={{ textAlign: 'center', color: 'var(--text-faint)', padding: 64 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🔔</div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}><Bell size="1em" aria-hidden /></div>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-muted)' }}>No notifications</div>
           <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginTop: 4 }}>You're all caught up!</div>
         </div>
@@ -224,14 +227,14 @@ const NotificationsPage: React.FC = () => {
           }}
         >
           <div style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>
-            {TYPE_ICON[n.type] ?? '🔔'}
+            {(() => { const Icon = TYPE_ICON[n.type] ?? Bell; return <Icon size="1em" aria-hidden />; })()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
               <div style={{ fontWeight: n.read ? 500 : 700, color: 'var(--text-strong)', fontSize: 14 }}>{n.title}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 {!n.read && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />}
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtDateTime(n.created_at)}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{fmtDateTime(n.created_at)}</span>
                 <button
                   onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}
@@ -242,16 +245,16 @@ const NotificationsPage: React.FC = () => {
             <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
               {n.link && (
-                <a href={n.link} style={{ fontSize: 12, color: '#3b82f6', display: 'inline-block' }}>
+                <a href={n.link} style={{ fontSize: 'var(--fs-body)', color: '#3b82f6', display: 'inline-block' }}>
                   View details →
                 </a>
               )}
               {(n.type === 'trade' || n.type === 'alert' || n.type === 'ai') && (
                 <button
                   onClick={e => { e.stopPropagation(); navigate('/trade'); }}
-                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
+                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                 >
-                  ⚡ Trade
+                  <Zap size="1em" aria-hidden /> Trade
                 </button>
               )}
             </div>

@@ -16,10 +16,7 @@ import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import {
-  Sparkles, FlaskConical, Cpu, LineChart,
-  Microscope,
-} from 'lucide-react';
+import { Bot, Cpu, FlaskConical, LineChart, Microscope, Sparkles, X } from 'lucide-react';
 import { researchApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -86,7 +83,7 @@ const DIRECTION_COLORS: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   return (
     <span style={{
-      padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+      padding: '2px 8px', borderRadius: 4, fontSize: 'var(--fs-label)', fontWeight: 600,
       background: `${STATUS_COLORS[status] ?? 'var(--text-muted)'}22`,
       color: STATUS_COLORS[status] ?? 'var(--text-muted)',
       border: `1px solid ${STATUS_COLORS[status] ?? 'var(--text-muted)'}44`,
@@ -110,14 +107,14 @@ function SignalCard({ signal }: { signal: Signal }) {
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{signal.type}</span>
-          <span style={{ fontSize: 11, color: DIRECTION_COLORS[signal.direction] ?? 'var(--text-dim)', fontWeight: 600 }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: DIRECTION_COLORS[signal.direction] ?? 'var(--text-dim)', fontWeight: 600 }}>
             {signal.direction.toUpperCase()}
           </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginLeft: 'auto' }}>
             {Number.isFinite(signal.confidence) ? (signal.confidence * 100).toFixed(0) : '—'}% confidence
           </span>
         </div>
-        <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: 0 }}>{signal.description}</p>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: 0 }}>{signal.description}</p>
       </div>
     </div>
   );
@@ -132,7 +129,7 @@ function MetricsGrid({ metrics }: { metrics: Record<string, number> }) {
         <div key={key} style={{
           background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px',
         }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'capitalize' }}>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'capitalize' }}>
             {key.replace(/_/g, ' ')}
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
@@ -176,13 +173,13 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
           New Research Notebook
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-            Title
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. XAUUSD Weekly Analysis"
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
+            <span id="research-notebook-title-label">Title</span>
+            <input aria-labelledby="research-notebook-title-label" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. XAUUSD Weekly Analysis"
               style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                 borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)', boxSizing: 'border-box' }} />
           </label>
-          <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
             Template
             <select value={template} onChange={e => setTemplate(e.target.value)}
               style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
@@ -191,7 +188,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
             </select>
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               Symbol
               <select value={symbol} onChange={e => setSymbol(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
@@ -199,7 +196,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
-            <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
               Timeframe
               <select value={timeframe} onChange={e => setTimeframe(e.target.value)}
                 style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
@@ -208,9 +205,9 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
               </select>
             </label>
           </div>
-          <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-            Description (optional)
-            <textarea value={description} onChange={e => setDesc(e.target.value)} rows={2}
+          <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
+            <span id="research-notebook-description-label">Description (optional)</span>
+            <textarea aria-labelledby="research-notebook-description-label" value={description} onChange={e => setDesc(e.target.value)} rows={2}
               style={{ display: 'block', width: '100%', marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                 borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: 'var(--fs-body)', resize: 'vertical', boxSizing: 'border-box' }} />
           </label>
@@ -303,10 +300,10 @@ const ResearchPage: React.FC = () => {
               padding: 40, textAlign: 'center' }}>
               <Microscope size={30} strokeWidth={1.5} aria-hidden style={{ marginBottom: 12, color: 'var(--text-faint)' }} />
               <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No research notebooks yet</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Create one to start AI-powered market analysis</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 16 }}>Create one to start AI-powered market analysis</div>
               <button onClick={() => navigate('/ai-strategy')}
                 style={{ padding: '7px 18px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 8, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer' }}>
-                🤖 AI Strategy
+                <Bot size="1em" aria-hidden /> AI Strategy
               </button>
             </div>
           )}
@@ -324,7 +321,7 @@ const ResearchPage: React.FC = () => {
                   <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{nb.title}</span>
                   <StatusBadge status={nb.status} />
                 </div>
-                <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', gap: 8, fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
                   <span>{nb.symbol}</span>
                   <span>·</span>
                   <span>{nb.timeframe}</span>
@@ -342,7 +339,7 @@ const ResearchPage: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
                 <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{selected.title}</h2>
-                <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', gap: 8, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
                   <span>{selected.symbol}</span><span>·</span>
                   <span>{selected.timeframe}</span><span>·</span>
                   <StatusBadge status={selected.status} />
@@ -353,7 +350,7 @@ const ResearchPage: React.FC = () => {
                   onClick={() => runMut.mutate(selected.notebook_id)}
                   disabled={runMut.isPending || selected.status === 'running'}
                   style={{ padding: '7px 14px', background: '#22c55e', color: '#fff', border: 'none',
-                    borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                     opacity: (runMut.isPending || selected.status === 'running') ? 0.5 : 1 }}>
                   {selected.status === 'running' ? '⏳ Running…' : '▶ Run'}
                 </button>
@@ -361,13 +358,13 @@ const ResearchPage: React.FC = () => {
                   onClick={() => deleteMut.mutate(selected.notebook_id)}
                   disabled={deleteMut.isPending}
                   style={{ padding: '7px 14px', background: '#ef444422', color: '#ef4444', border: '1px solid #ef444444',
-                    borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                    borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
                   Delete
                 </button>
                 <button onClick={() => setSelected(null)}
                   style={{ padding: '7px 10px', background: 'var(--surface-hover)', color: 'var(--text-dim)', border: 'none',
-                    borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
-                  ✕
+                    borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
+                  <X size="1em" aria-hidden />
                 </button>
               </div>
             </div>
@@ -380,7 +377,7 @@ const ResearchPage: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {/* Summary */}
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Summary
                   </div>
                   <p style={{ margin: 0, fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6 }}>{selected.results.summary}</p>
@@ -389,7 +386,7 @@ const ResearchPage: React.FC = () => {
                 {/* Metrics */}
                 {Object.keys(selected.results.metrics).length > 0 && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       Metrics
                     </div>
                     <MetricsGrid metrics={selected.results.metrics} />
@@ -400,7 +397,7 @@ const ResearchPage: React.FC = () => {
                 {selected.results.signals.length > 0 && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Signals ({selected.results.signals.length})
                       </div>
                       <button
@@ -408,7 +405,7 @@ const ResearchPage: React.FC = () => {
                         style={{
                           padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
                           background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
-                          color: 'var(--ai-model)', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                          color: 'var(--ai-model)', fontSize: 'var(--fs-label)', fontWeight: 700, fontFamily: 'inherit',
                         }}
                         title="Use these research signals to generate a trading strategy"
                       >
@@ -421,7 +418,7 @@ const ResearchPage: React.FC = () => {
                   </div>
                 )}
 
-                <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'right' }}>
+                <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', textAlign: 'right' }}>
                   Generated {new Date(selected.results.generated_at).toLocaleString()}
                 </div>
               </div>

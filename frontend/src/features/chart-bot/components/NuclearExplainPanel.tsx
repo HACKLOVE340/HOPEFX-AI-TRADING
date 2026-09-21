@@ -13,6 +13,7 @@ import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor } from '../types/nuclear';
 import type { NuclearState, NuclearRiskData, NuclearEvent } from '../types/nuclear';
 import NuclearDecisionTrace from './NuclearDecisionTrace';
+import { Shield } from 'lucide-react';
 
 /** Guard .toFixed against undefined/NaN risk fields (partial WS payloads). */
 const safeFixed = (v: number | null | undefined, dec: number): string =>
@@ -240,7 +241,7 @@ const NuclearExplainPanel = memo(() => {
           </>
         ) : (
           <div style={s.emptyState}>
-            <div style={s.emptyIcon}>🛡️</div>
+            <Shield size={32} strokeWidth={1.5} aria-hidden />
             <div style={s.emptyText}>No nuclear events detected</div>
             <div style={s.emptySubtext}>System monitoring active</div>
           </div>
@@ -272,7 +273,7 @@ const s: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   panelTitle: {
-    fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-dim)',
+    fontSize: 'var(--fs-label)', fontWeight: 800, letterSpacing: 2, color: 'var(--text-dim)',
   },
   panelSubtitle: {
     fontSize: 9, color: 'var(--text-faint)', letterSpacing: 1.5,
@@ -290,7 +291,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
   },
   explainText: {
-    fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7,
+    fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.7,
   },
   card: {
     background: 'rgba(255,255,255,0.02)',
@@ -309,7 +310,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--text-faint)',
   },
   rlBadge: {
-    fontSize: 10, fontWeight: 800, padding: '2px 8px',
+    fontSize: 'var(--fs-micro)', fontWeight: 800, padding: '2px 8px',
     borderRadius: 4, fontFamily: 'monospace',
   },
   decisionGrid: {
@@ -331,7 +332,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', gap: 8,
   },
   featureLabel: {
-    fontSize: 10, color: 'var(--text-muted)', width: 90, flexShrink: 0,
+    fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', width: 90, flexShrink: 0,
     textTransform: 'capitalize',
   },
   featureTrack: {
@@ -341,7 +342,7 @@ const s: Record<string, React.CSSProperties> = {
     height: '100%', borderRadius: 2, transition: 'width 0.4s ease',
   },
   featureValue: {
-    fontSize: 10, fontFamily: 'monospace', width: 36, textAlign: 'right', flexShrink: 0,
+    fontSize: 'var(--fs-micro)', fontFamily: 'monospace', width: 36, textAlign: 'right', flexShrink: 0,
   },
   termList: {
     display: 'flex', flexDirection: 'column', gap: 6,
@@ -354,7 +355,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', gap: 1,
   },
   termText: {
-    fontSize: 11, fontWeight: 600, fontFamily: 'monospace',
+    fontSize: 'var(--fs-label)', fontWeight: 600, fontFamily: 'monospace',
   },
   termCat: {
     fontSize: 9, color: 'var(--text-faint)', textTransform: 'capitalize',
@@ -366,7 +367,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--text-faint)', fontFamily: 'monospace',
   },
   termContrib: {
-    fontSize: 11, fontWeight: 700, fontFamily: 'monospace',
+    fontSize: 'var(--fs-label)', fontWeight: 700, fontFamily: 'monospace',
   },
   riskGrid: {
     display: 'flex', flexDirection: 'column', gap: 4,
@@ -376,10 +377,10 @@ const s: Record<string, React.CSSProperties> = {
     padding: '3px 0', borderBottom: '1px solid #0a1628',
   },
   riskLabel: {
-    fontSize: 10, color: 'var(--text-faint)',
+    fontSize: 'var(--fs-micro)', color: 'var(--text-faint)',
   },
   riskValue: {
-    fontSize: 11, fontFamily: 'monospace', fontWeight: 600,
+    fontSize: 'var(--fs-label)', fontFamily: 'monospace', fontWeight: 600,
   },
   killBadge: {
     fontSize: 9, fontWeight: 800, color: '#ff0033',
@@ -396,7 +397,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3,
   },
   eventSeverity: {
-    fontSize: 10, fontWeight: 800, fontFamily: 'monospace',
+    fontSize: 'var(--fs-micro)', fontWeight: 800, fontFamily: 'monospace',
   },
   eventAction: {
     fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1,
@@ -405,13 +406,12 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--text-faint)', marginLeft: 'auto', fontFamily: 'monospace',
   },
   eventText: {
-    fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5,
+    fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', lineHeight: 1.5,
   },
   emptyState: {
     display: 'flex', flexDirection: 'column', alignItems: 'center',
     padding: '32px 16px', gap: 8,
   },
-  emptyIcon: { fontSize: 32 },
   emptyText: { fontSize: 'var(--fs-body)', color: 'var(--text-faint)', fontWeight: 600 },
-  emptySubtext: { fontSize: 11, color: 'var(--text-faint)' },
+  emptySubtext: { fontSize: 'var(--fs-label)', color: 'var(--text-faint)' },
 };

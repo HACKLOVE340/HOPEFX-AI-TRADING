@@ -4001,7 +4001,7 @@ inside an executor, so against an async broker the future resolved to a
 coroutine, the balance read came back `None`, and the check reported the broker
 **ok** having read nothing.
 
-All four now use `execution/broker_call.call_broker`, which awaits a coroutine
+All four now use `execution/broker_call.py::call_broker`, which awaits a coroutine
 function and runs a sync one in an executor — correct against either shape.
 
 **Verified NOT bugs and left alone rather than churned:**
@@ -4306,7 +4306,7 @@ by a different mechanism it brought itself:
 So spot-checking rate limiting found a working limiter every time, while ML
 inference, backtest submission and every LLM-backed route were unmetered.
 
-`core/middleware.DefaultRateLimitMiddleware` now supplies the documented
+`core/middleware.py::DefaultRateLimitMiddleware` now supplies the documented
 default, registered in `register_all()`. Keyed per bearer token when present,
 falling back to client IP — keying on IP alone would put an office behind one
 NAT address into a single bucket, which is a denial of service against paying
@@ -4902,7 +4902,8 @@ the tracked one, and the throwaway was deleted afterwards.
 
 ### S-06 — a dead order panel that could not authenticate and swallowed failures — REMOVED
 
-`dashboard/src/components/OrderPanel.tsx` posted to `/api/trading/order` with:
+`OrderPanel.tsx` — since deleted, it sat under `dashboard/src/components/` —
+posted to `/api/trading/order` with:
 
 ```ts
 'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -5329,7 +5330,7 @@ the same class of error as the phantom success being fixed, so the two explicit
 forms are required and the error names them. Nothing breaks: no alert created
 by the old code path exists to migrate.
 
-Found on the way: `api/alerts._get_engine` did `request.app.state` with no None
+Found on the way: `api/alerts.py::_get_engine` did `request.app.state` with no None
 check, so it raised `AttributeError` when called without a FastAPI request. The
 REST routes always have one; the GraphQL mutation does not. Step 3 of that
 function already lazy-initialises an engine precisely so a missing one is not
@@ -5514,7 +5515,7 @@ manager anywhere in the repo, so threading it through had a small blast radius:
   `user_id`. When given, they only see and act on that user's orders.
   `get_order` returns None and `cancel_order` returns False for someone else's
   order — indistinguishable from "no such order", so ids cannot be enumerated,
-  the same choice `api/alerts._get_owned_alert` makes.
+  the same choice `api/alerts.py::_get_owned_alert` makes.
 * `user_id=None` still matches everything, because the price-monitor loops have
   no user context. Request-facing callers must pass one; all six data endpoints
   now do.
@@ -6058,7 +6059,7 @@ Python 3.11 and 3.12 in CI while passing locally:
     FAILED test_a_zero_or_negative_price_is_not_accepted_as_live
       AssertionError: assert 8.3715 is None
 
-Both stubbed level 3 of `api/risk_calculator._get_live_price` by pointing
+Both stubbed level 3 of `api/risk_calculator.py::_get_live_price` by pointing
 `_yahoo_ticker` at the string `"NOPE"` and assuming Yahoo does not list it,
 with a comment reading "orchestrator and yfinance both unavailable in the test
 environment". NOPE *is* a listed ticker. On a runner with network access
@@ -6158,7 +6159,7 @@ has to confirm it really authenticates the caller.
 
 ### S-37 — the risk calculator's middle price source never ran (MEDIUM) — FIXED
 
-Found while fixing S-35, in the same function. `api/risk_calculator._get_live_price`
+Found while fixing S-35, in the same function. `api/risk_calculator.py::_get_live_price`
 has three levels; level 2 opened with
 
 ```python
@@ -6653,7 +6654,7 @@ was deleted, which is the loop working as designed.
 
 ### S-47 — the admin performance page has never shown a component latency — FIXED
 
-`api/settings_new_endpoints.get_performance_metrics` builds a "components"
+`api/settings_new_endpoints.py::get_performance_metrics` builds a "components"
 block from
 
 ```python
@@ -7120,7 +7121,7 @@ their code changed.
 
 ### S-56 — Sentry scrubbed three regions and left the three with the most text — FIXED
 
-`monitoring/sentry_config._before_send` scrubbed `request.data`,
+`monitoring/sentry_config.py::_before_send` scrubbed `request.data`,
 `request.headers` and `extra`. It did not touch:
 
 * **`logentry`** — the log message and its interpolation params. Every

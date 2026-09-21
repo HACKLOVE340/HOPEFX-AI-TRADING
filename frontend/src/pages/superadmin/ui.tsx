@@ -1,7 +1,6 @@
 // superadmin/ui.tsx — shared UI primitives for all superadmin sections
 import React from 'react';
-import { Inbox } from 'lucide-react';
-
+import { AlertTriangle, Inbox } from 'lucide-react';
 // ── KPI Tile ──────────────────────────────────────────────────────────────────
 
 interface KpiTileProps {
@@ -60,7 +59,7 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     onMouseLeave={e => onClick && ((e.currentTarget as HTMLDivElement).style.borderColor = '#1e293b')}
   >
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
         {label}
       </div>
       {icon && <span style={{ fontSize: 18, opacity: 0.7 }}>{icon}</span>}
@@ -71,13 +70,13 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
       {trend && trendValue && (
         <span style={{
-          fontSize: 11, fontWeight: 600,
+          fontSize: 'var(--fs-label)', fontWeight: 600,
           color: trend === 'up' ? 'var(--gain)' : trend === 'down' ? 'var(--loss)' : 'var(--text-dim)',
         }}>
           {trend === 'up' ? '▲' : trend === 'down' ? '▼' : '—'} {trendValue}
         </span>
       )}
-      {sub && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{sub}</span>}
+      {sub && <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>{sub}</span>}
     </div>
   </div>
 );
@@ -86,7 +85,11 @@ export const KpiTile: React.FC<KpiTileProps> = ({
 
 interface SectionCardProps {
   title: string;
-  subtitle?: string;
+  // ReactNode for the same reason `icon` below is: a subtitle that has to say
+  // "ACTIVE" needs to carry a warning SVG, and an emoji in a string cannot be
+  // one. Widening is backward compatible — every existing caller passes a
+  // string, which is already a ReactNode.
+  subtitle?: React.ReactNode;
   // ReactNode, not string: a section heading should be able to carry an SVG
   // icon rather than an emoji glyph. Widening is backward compatible — every
   // existing caller passes a string, which is already a ReactNode.
@@ -126,7 +129,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         )}
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 1 }}>{subtitle}</div>}
+          {subtitle && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', marginTop: 1 }}>{subtitle}</div>}
         </div>
       </div>
       {actions && <div style={{ display: 'flex', gap: 8 }}>{actions}</div>}
@@ -199,7 +202,7 @@ export const SeverityBadge: React.FC<{ severity: string }> = ({ severity }) => {
       background: s.bg, color: s.color,
       border: `1px solid ${s.color}44`,
       borderRadius: 4, padding: '2px 7px',
-      fontSize: 10, fontWeight: 700,
+      fontSize: 'var(--fs-micro)', fontWeight: 700,
       textTransform: 'uppercase', letterSpacing: '0.05em',
     }}>
       {severity}
@@ -291,7 +294,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export const Input: React.FC<InputProps> = ({ label, style, ...rest }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    {label && <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>{label}</label>}
+    {label && <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontWeight: 500 }}>{label}</label>}
     <input
       {...rest}
       style={{
@@ -313,7 +316,7 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select: React.FC<SelectProps> = ({ label, options, style, ...rest }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    {label && <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>{label}</label>}
+    {label && <label style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontWeight: 500 }}>{label}</label>}
     <select
       {...rest}
       style={{
@@ -369,7 +372,7 @@ export const Toggle: React.FC<ToggleProps> = ({ label, description, checked, onC
   }}>
     <div>
       <div id={labelId} style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 500 }}>{label}</div>
-      {description && <div id={descId} style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>}
+      {description && <div id={descId} style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>}
     </div>
     <div
       role="switch"
@@ -419,7 +422,9 @@ export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> =
   message,
 }) => (
   <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-faint)' }}>
-    <div style={{ fontSize: 32, marginBottom: 10 }}>{icon}</div>
+    {/* No fontSize: the icon is an SVG sized by its own `size` prop, so a font
+        size here reaches nothing — it was what sized the emoji this replaced. */}
+    <div style={{ marginBottom: 10 }}>{icon}</div>
     <div style={{ fontSize: 'var(--fs-body)'}}>{message}</div>
   </div>
 );
@@ -428,12 +433,12 @@ export const EmptyState: React.FC<{ icon?: React.ReactNode; message: string }> =
 
 export const ErrorState: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (
   <div style={{ textAlign: 'center', padding: '32px 20px' }}>
-    <div style={{ fontSize: 'var(--fs-hero)', marginBottom: 8 }}>⚠️</div>
+    <div style={{ marginBottom: 8 }}><AlertTriangle size={26} aria-hidden /></div>
     <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: onRetry ? 16 : 0 }}>{message}</div>
     {onRetry && (
       <button onClick={onRetry} style={{
         background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 7,
-        color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '6px 14px',
+        color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 14px',
       }}>
         Retry
       </button>

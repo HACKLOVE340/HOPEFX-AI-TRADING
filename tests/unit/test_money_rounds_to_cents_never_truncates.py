@@ -161,7 +161,15 @@ def test_a_fiat_deposit_does_not_undercharge(monkeypatch):
 
     from api.payments import FiatDepositRequest, _fiat_deposit_impl
 
-    asyncio.run(_fiat_deposit_impl(FiatDepositRequest(amount=10.999, method="card")))
+    # `user` is required since WALLET-DEAD: a deposit that cannot be attributed
+    # cannot be credited to a wallet when it succeeds. This test is about the
+    # cent conversion, so any authenticated subject will do.
+    asyncio.run(
+        _fiat_deposit_impl(
+            FiatDepositRequest(amount=10.999, method="card"),
+            SimpleNamespace(sub="user-rounding-test"),
+        )
+    )
 
     assert calls, "Stripe was never called; the test never reached the conversion"
     assert calls["amount"] == 1100, (

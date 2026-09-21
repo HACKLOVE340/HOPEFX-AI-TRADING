@@ -34,6 +34,7 @@ import { severityColor } from '../types/nuclear';
 import type { OHLCVBar } from '../types/nuclear';
 import { toUTCSeconds as toUTC } from '../../../lib/chartTime';
 import { assessBars } from '../../../lib/barQuality';
+import { AlertTriangle } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -320,7 +321,7 @@ const NuclearCandleChart = memo(() => {
       {/* Beside the chart, not over it. The legend and the alert overlay both
           sit on the canvas already; a third thing over it would bury two. */}
       {barNotice && (
-        <div role="status" style={{ padding: '2px 12px 4px', fontSize: 10, lineHeight: 1.4, color: 'var(--warn)' }}>
+        <div role="status" style={{ padding: '2px 12px 4px', fontSize: 'var(--fs-micro)', lineHeight: 1.4, color: 'var(--warn)' }}>
           {barNotice}
         </div>
       )}
@@ -342,7 +343,7 @@ const NuclearCandleChart = memo(() => {
         </span>
         {isAlert && (
           <span style={{ ...s.legendItem, color: '#ff0033' }}>
-            ⚠ Nuclear Cone Active
+            <AlertTriangle size={11} aria-hidden style={{ verticalAlign: '-1px' }} /> Nuclear Cone Active
           </span>
         )}
       </div>

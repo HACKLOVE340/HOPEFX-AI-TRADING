@@ -252,7 +252,7 @@ const DocsPage: React.FC = () => {
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 background: '#00ff8810', border: '1px solid #00ff8830',
-                color: '#00ff88', fontSize: 12, fontWeight: 600,
+                color: '#00ff88', fontSize: 'var(--fs-body)', fontWeight: 600,
                 padding: '4px 12px', borderRadius: 20,
               }}>
                 <Activity size={11} />

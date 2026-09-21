@@ -3,7 +3,7 @@
  * Tabs: Browse · My Listings
  */
 import { PageShell } from '../components/system/PageShell';
-import { Store, Bot } from 'lucide-react';
+import { Bot, PenLine, ShoppingCart, Star, Store, X } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
@@ -44,12 +44,12 @@ const StrategyCard: React.FC<{strategy:Strategy;onSelect:(s:Strategy)=>void}> = 
     <div style={st.card} onClick={()=>onSelect(strategy)}>
       <div style={st.cardTop}>
         <div style={st.cardMeta}><span style={st.categoryTag}>{strategy.category.replace('_',' ')}</span>{strategy.tags.slice(0,2).map(t=><span key={t} style={st.tag}>{t}</span>)}</div>
-        <div style={st.priceTag}>{strategy.price===0?<span style={{color:'var(--gain)',fontWeight:700}}>Free</span>:<span style={{color:'var(--text-strong)',fontWeight:700}}>${strategy.price}<span style={{color:'var(--text-muted)',fontWeight:400,fontSize:12}}>/mo</span></span>}</div>
+        <div style={st.priceTag}>{strategy.price===0?<span style={{color:'var(--gain)',fontWeight:700}}>Free</span>:<span style={{color:'var(--text-strong)',fontWeight:700}}>${strategy.price}<span style={{color:'var(--text-muted)',fontWeight:400,fontSize: 'var(--fs-body)'}}>/mo</span></span>}</div>
       </div>
       <h3 style={st.cardTitle}>{strategy.name}</h3>
       <p style={st.cardDesc}>{strategy.description}</p>
       {p&&<div style={st.perfRow}>{p.total_return_pct!=null&&<PerfBadge label="Return" value={fmtPctRaw(p.total_return_pct, 1)} positive={p.total_return_pct>=0}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe" value={fmt(p.sharpe_ratio)} positive={p.sharpe_ratio>=0}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max DD" value={`-${fmt(Math.abs(p.max_drawdown_pct))}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
-      <div style={st.cardFooter}><div style={{display:'flex',alignItems:'center',gap:6}}><Stars rating={strategy.rating}/><span style={{fontSize: 'var(--fs-body)',color:'var(--text-dim)'}}>{fmt(strategy.rating)} ({strategy.review_count})</span></div><span style={{fontSize:12,color:'var(--text-muted)'}}>{strategy.subscriber_count} subscribers</span></div>
+      <div style={st.cardFooter}><div style={{display:'flex',alignItems:'center',gap:6}}><Stars rating={strategy.rating}/><span style={{fontSize: 'var(--fs-body)',color:'var(--text-dim)'}}>{fmt(strategy.rating)} ({strategy.review_count})</span></div><span style={{fontSize: 'var(--fs-body)',color:'var(--text-muted)'}}>{strategy.subscriber_count} subscribers</span></div>
     </div>
   );
 };
@@ -66,10 +66,10 @@ const ReviewModal: React.FC<{strategyId:string;onClose:()=>void;onSubmitted:()=>
   return(
     <div style={st.overlay} onClick={onClose}>
       <div style={{...st.modal,maxWidth:480}} onClick={e=>e.stopPropagation()}>
-        <button onClick={onClose} style={st.closeBtn}>✕</button>
+        <button onClick={onClose} style={st.closeBtn} aria-label="Close"><X size="1em" aria-hidden /></button>
         <h2 style={{fontSize:18,fontWeight:700,color:'var(--text-strong)',marginBottom:16}}>Write a Review</h2>
         <label style={st.label}>Rating</label>
-        <div style={{display:'flex',gap:6,marginBottom:12}}>{[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:24,color:n<=rating?'#f59e0b':'var(--text-faint)'}}>★</button>)}</div>
+        <div style={{display:'flex',gap:6,marginBottom:12}}>{[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:24,color:n<=rating?'#f59e0b':'var(--text-faint)'}}><Star size="1em" aria-hidden /></button>)}</div>
         <label style={st.label}>Title</label>
         <input aria-label="Summary of your experience" value={title} onChange={e=>setTitle(e.target.value)} style={st.input} placeholder="Summary of your experience"/>
         <label style={{...st.label,marginTop:10}}>Review</label>
@@ -86,20 +86,20 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
   return(
     <div style={st.overlay} onClick={onClose}>
       <div style={st.modal} onClick={e=>e.stopPropagation()}>
-        <button onClick={onClose} style={st.closeBtn}>✕</button>
+        <button onClick={onClose} style={st.closeBtn} aria-label="Close"><X size="1em" aria-hidden /></button>
         <div style={st.modalHeader}>
           <div><div style={{display:'flex',gap:8,marginBottom:8}}><span style={st.categoryTag}>{strategy.category.replace('_',' ')}</span>{strategy.tags.map(t=><span key={t} style={st.tag}>{t}</span>)}</div><h2 style={st.modalTitle}>{strategy.name}</h2><div style={{display:'flex',alignItems:'center',gap:8,marginTop:6}}><Stars rating={strategy.rating} size={16}/><span style={{color:'var(--text-dim)',fontSize:14}}>{fmt(strategy.rating)} · {strategy.review_count} reviews · {strategy.subscriber_count} subscribers</span></div></div>
-          <div style={st.modalPrice}>{strategy.price===0?<span style={{color:'var(--gain)',fontSize: 'var(--fs-hero)',fontWeight:800}}>Free</span>:<><span style={{fontSize:32,fontWeight:800,color:'var(--text-strong)'}}>${strategy.price}</span><span style={{color:'var(--text-muted)',fontSize:14}}>/{strategy.license_type==='one_time'?'one-time':'mo'}</span></>}</div>
+          <div style={st.modalPrice}>{strategy.price===0?<span style={{color:'var(--gain)',fontSize: 'var(--fs-hero)',fontWeight:800}}>Free</span>:<><span style={{fontSize:'var(--fs-display-sm)',fontWeight:800,color:'var(--text-strong)'}}>${strategy.price}</span><span style={{color:'var(--text-muted)',fontSize:14}}>/{strategy.license_type==='one_time'?'one-time':'mo'}</span></>}</div>
         </div>
         <p style={{color:'var(--text-dim)',fontSize: 'var(--fs-value)',lineHeight:1.7,marginBottom:20}}>{strategy.description}</p>
         {p&&<div style={{...st.perfRow,marginBottom:24}}>{p.total_return_pct!=null&&<PerfBadge label="Total return" value={fmtPctRaw(p.total_return_pct, 1)} positive={p.total_return_pct>=0}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe ratio" value={fmt(p.sharpe_ratio)} positive={p.sharpe_ratio>=0}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max drawdown" value={`-${fmt(Math.abs(p.max_drawdown_pct))}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
         <div style={{display:'flex',gap:10,marginBottom:16}}>
           <button onClick={()=>onSubscribe(strategy)} disabled={subscribed} style={{...st.subscribeBtn,flex:1,opacity:subscribed?0.6:1}}>{subscribed?'✅ Subscribed':strategy.price===0?'Add to my strategies':`Subscribe — $${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}</button>
-          {subscribed&&<button onClick={onReview} style={{...st.subscribeBtn,background:'var(--surface-hover)',flex:'0 0 auto',padding:'14px 16px'}}>✍ Review</button>}
+          {subscribed&&<button onClick={onReview} style={{...st.subscribeBtn,background:'var(--surface-hover)',flex:'0 0 auto',padding:'14px 16px'}}><PenLine size="1em" aria-hidden /> Review</button>}
         </div>
         {purchaseError&&<div style={st.purchaseError}>{purchaseError}</div>}
         {reviewsErr&&<div style={{...st.purchaseError,marginTop:12}}>{reviewsErr}</div>}
-        {reviews.length>0&&<div style={{marginTop:28}}><h3 style={st.reviewsTitle}>Reviews</h3>{reviews.map(r=><div key={r.review_id} style={st.reviewCard}><div style={st.reviewHeader}><Stars rating={r.rating}/><strong style={{color:'var(--text)',marginLeft:8}}>{r.title}</strong><span style={{color:'var(--text-faint)',fontSize:12,marginLeft:'auto'}}>{new Date(r.created_at).toLocaleDateString()}</span></div><p style={{color:'var(--text-dim)',fontSize:14,margin:'6px 0 0'}}>{r.content}</p></div>)}</div>}
+        {reviews.length>0&&<div style={{marginTop:28}}><h3 style={st.reviewsTitle}>Reviews</h3>{reviews.map(r=><div key={r.review_id} style={st.reviewCard}><div style={st.reviewHeader}><Stars rating={r.rating}/><strong style={{color:'var(--text)',marginLeft:8}}>{r.title}</strong><span style={{color:'var(--text-faint)',fontSize: 'var(--fs-body)',marginLeft:'auto'}}>{new Date(r.created_at).toLocaleDateString()}</span></div><p style={{color:'var(--text-dim)',fontSize:14,margin:'6px 0 0'}}>{r.content}</p></div>)}</div>}
       </div>
     </div>
   );
@@ -158,7 +158,7 @@ const Marketplace: React.FC = () => {
 
   useEffect(() => { loadStrategies(); }, [loadStrategies]);
   useEffect(() => { if (mainTab === 'my-listings') loadMyListings(); }, [mainTab, loadMyListings]);
-  // Hydrate the "✅ Subscribed" markers from the user's existing subscriptions
+  // Hydrate the "Subscribed" markers from the user's existing subscriptions
   // so they reflect server state on load rather than resetting each refresh.
   useEffect(() => {
     let mounted = true;
@@ -249,7 +249,7 @@ const Marketplace: React.FC = () => {
           </div>
           <div style={st.categoryRow}>{CATEGORIES.map(c=><button key={c} onClick={()=>setCategory(c)} style={{...st.categoryPill,background:category===c?'#3b82f6':'var(--raised)',color:category===c?'#fff':'var(--text-dim)',border:`1px solid ${category===c?'#3b82f6':'#334155'}`}}>{c==='all'?'All':c.replace('_',' ')}</button>)}</div>
           {loadErr&&<div style={st.errorBox}>{loadErr}</div>}
-          {loading?<p style={{color:'var(--text-muted)',padding:'40px 0'}}>Loading strategies…</p>:!loadErr&&visible.length===0?(<div style={{padding:'40px 0',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}><div style={{fontSize:36}}>🛒</div><p style={{color:'var(--text-dim)',fontSize: 'var(--fs-value)',fontWeight:600,margin:0}}>No strategies match your filters.</p><p style={{color:'var(--text-muted)',fontSize: 'var(--fs-body)',margin:0}}>Try clearing your filters or browse all categories.</p><button onClick={()=>{setSearch('');setCategory('all');}} style={{padding:'7px 18px',background:'rgba(59,130,246,0.15)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:8,color:'var(--link)',fontSize: 'var(--fs-body)',fontWeight:700,cursor:'pointer',marginTop:4}}>Clear Filters</button></div>):(
+          {loading?<p style={{color:'var(--text-muted)',padding:'40px 0'}}>Loading strategies…</p>:!loadErr&&visible.length===0?(<div style={{padding:'40px 0',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}><div style={{fontSize:36}}><ShoppingCart size="1em" aria-hidden /></div><p style={{color:'var(--text-dim)',fontSize: 'var(--fs-value)',fontWeight:600,margin:0}}>No strategies match your filters.</p><p style={{color:'var(--text-muted)',fontSize: 'var(--fs-body)',margin:0}}>Try clearing your filters or browse all categories.</p><button onClick={()=>{setSearch('');setCategory('all');}} style={{padding:'7px 18px',background:'rgba(59,130,246,0.15)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:8,color:'var(--link)',fontSize: 'var(--fs-body)',fontWeight:700,cursor:'pointer',marginTop:4}}>Clear Filters</button></div>):(
             <div style={st.grid}>{visible.map(s=><StrategyCard key={s.strategy_id} strategy={s} onSelect={handleSelect}/>)}</div>
           )}
         </>
@@ -292,14 +292,14 @@ const st: Record<string,React.CSSProperties> = {
   card:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:12,padding:20,cursor:'pointer'},
   cardTop:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10},
   cardMeta:{display:'flex',gap:6,flexWrap:'wrap'},
-  categoryTag:{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,background:'#1e3a5f',color:'var(--link)',textTransform:'capitalize'},
-  tag:{fontSize:11,padding:'2px 8px',borderRadius:4,background:'var(--raised)',color:'var(--text-muted)',border:'1px solid var(--border-strong)'},
+  categoryTag:{fontSize: 'var(--fs-label)',fontWeight:600,padding:'2px 8px',borderRadius:4,background:'#1e3a5f',color:'var(--link)',textTransform:'capitalize'},
+  tag:{fontSize: 'var(--fs-label)',padding:'2px 8px',borderRadius:4,background:'var(--raised)',color:'var(--text-muted)',border:'1px solid var(--border-strong)'},
   priceTag:{fontSize: 'var(--fs-value)',whiteSpace:'nowrap'},
   cardTitle:{fontSize:16,fontWeight:700,color:'var(--text-strong)',margin:'0 0 8px'},
   cardDesc:{fontSize: 'var(--fs-body)',color:'var(--text-dim)',lineHeight:1.6,margin:'0 0 14px',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'},
   perfRow:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:14},
   perfBadge:{background:'var(--surface)',border:'1px solid var(--border-strong)',borderRadius:6,padding:'6px 10px',textAlign:'center',minWidth:64},
-  perfValue:{fontSize:14,fontWeight:700},perfLabel:{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.3},
+  perfValue:{fontSize:14,fontWeight:700},perfLabel:{fontSize: 'var(--fs-micro)',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.3},
   cardFooter:{display:'flex',justifyContent:'space-between',alignItems:'center'},
   overlay:{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16},
   modal:{background:'var(--raised)',border:'1px solid var(--border-strong)',borderRadius:14,padding:'28px',maxWidth:680,width:'100%',maxHeight:'90vh',overflowY:'auto',position:'relative'},

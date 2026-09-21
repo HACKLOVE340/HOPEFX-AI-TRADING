@@ -14,7 +14,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useStore } from '../store';
 import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { Eye, EyeOff, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Activity, AlertCircle, Check, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import AppBackground from '../components/AppBackground';
 
 // ── Plan badge ────────────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ function PasswordStrengthBar({ password }: { password: string }) {
         ))}
       </div>
       {strength.label && (
-        <span style={{ fontSize: 11, color: strength.color, fontWeight: 600 }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: strength.color, fontWeight: 600 }}>
           {strength.label}
         </span>
       )}
@@ -389,7 +389,7 @@ const Register: React.FC = () => {
               </div>
               {confirm && confirm === password && (
                 <span style={{ ...s.fieldHint, color: '#22c55e', marginTop: 4 }}>
-                  ✓ Passwords match
+                  <Check size={12} aria-hidden style={{ verticalAlign: '-1px' }} /> Passwords match
                 </span>
               )}
             </div>
@@ -483,15 +483,15 @@ const s: Record<string, React.CSSProperties> = {
   logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
   tagline: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 16px' },
   planBadge: {
-    fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+    fontSize: 'var(--fs-body)', fontWeight: 700, letterSpacing: 0.5,
     borderRadius: 20, padding: '4px 14px',
     width: 'fit-content', margin: '0 auto 24px',
     display: 'flex', justifyContent: 'center',
   } as React.CSSProperties,
   form:      { display: 'flex', flexDirection: 'column', gap: 14 },
   field:     { display: 'flex', flexDirection: 'column' },
-  label:     { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
-  fieldHint: { fontSize: 11, color: 'var(--text-muted)', marginTop: 4 },
+  label:     { fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  fieldHint: { fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 4 },
   input: {
     background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     padding: '12px 14px',
@@ -520,7 +520,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   refBadge: {
     background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)',
-    borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#93c5fd',
+    borderRadius: 8, padding: '8px 12px', fontSize: 'var(--fs-body)', color: '#93c5fd',
   },
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
@@ -531,7 +531,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     touchAction: 'manipulation',
   },
-  terms:  { fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', lineHeight: 1.6, margin: 0 },
+  terms:  { fontSize: 'var(--fs-label)', color: 'var(--text-faint)', textAlign: 'center', lineHeight: 1.6, margin: 0 },
   footer: { textAlign: 'center', marginTop: 20, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
   link:   { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };

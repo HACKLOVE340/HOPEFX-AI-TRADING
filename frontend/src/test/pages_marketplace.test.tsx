@@ -493,7 +493,7 @@ describe('Marketplace — detail modal', () => {
     await waitFor(() => screen.getByText('Gold Momentum'));
     fireEvent.click(screen.getByText('Gold Momentum'));
     await waitFor(() => screen.getByText(/add to my strategies/i));
-    fireEvent.click(screen.getByText('✕'));
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
     await waitFor(() => expect(screen.queryByText(/add to my strategies/i)).not.toBeInTheDocument());
   });
 

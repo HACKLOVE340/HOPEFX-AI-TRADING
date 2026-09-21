@@ -161,3 +161,91 @@ def test_every_mapping_in_the_table_actually_applies(number: str, token: str):
     out, counts = rewrite(f"<p style={{{{ fontSize: {number} }}}}>x</p>", allow_declarations=True)
     assert f"fontSize: 'var({token})'" in out
     assert counts == {token: 1}
+
+
+# ── the ultra anchor ─────────────────────────────────────────────────────────
+#
+# The table above is anchored to `:root`, which declares the PROMAX values
+# (10.5 / 11.5 / 13). The three commonest literals in the tree — `fontSize: 12`
+# ×638, `11` ×532, `10` ×257 — are byte-exact at the ULTRA tier and match
+# nothing at `:root`, so the codemod could not see 1,436 of the sites it exists
+# to convert. `frontend/src/lib/densityPref.ts` defaults a person to `ultra`,
+# and `PageSurface` stamps it on every data surface.
+
+
+def test_the_ultra_table_is_byte_identical_to_the_ultra_tier():
+    """Same contract as the root table: exact, or out of the table."""
+    from frontend_size_codemod import selftest_ultra
+
+    assert selftest_ultra() == 0
+
+
+def test_no_literal_maps_to_two_different_tokens_across_anchors():
+    """The rule that keeps the two anchors from disagreeing about one number.
+
+    `15` is `--fs-value` at `:root` and `--fs-title` at ultra. A tree where some
+    `fontSize: 15` sites were converted under one anchor and some under the
+    other has the same literal meaning two different things, and no reader can
+    tell which was intended. Any value exact at BOTH anchors is therefore
+    excluded from the ultra table rather than resolved by precedence.
+    """
+    from frontend_size_codemod import EXACT_ULTRA
+
+    overlap = set(EXACT) & set(EXACT_ULTRA)
+    assert overlap == set(), (
+        f"{sorted(overlap)} is exact at both anchors, so converting it under either one "
+        "makes the tree inconsistent — drop it from the ultra table"
+    )
+
+
+def test_the_ultra_anchor_rewrites_a_size_that_is_exact_at_ultra():
+    from frontend_size_codemod import EXACT_ULTRA
+
+    out, counts = rewrite("<div style={{ fontSize: 12 }} />", False, table=EXACT_ULTRA)
+    assert "fontSize: 'var(--fs-body)'" in out
+    assert counts == {"--fs-body": 1}
+
+
+def test_the_default_anchor_still_leaves_twelve_alone():
+    """The control. If the default changed, 763 already-converted sites moved."""
+    out, counts = rewrite("<div style={{ fontSize: 12 }} />", False)
+    assert out == "<div style={{ fontSize: 12 }} />"
+    assert counts == {}
+
+
+def test_the_ultra_anchor_does_not_touch_a_size_beyond_the_scale():
+    """`--fs-hero` is 26px at ultra. Snapping `fontSize: 56` to it loses 30px.
+
+    The scale simply has no token above 26, so display sizes are out of its
+    reach. Silently shrinking them would be the codemod exceeding its remit.
+    """
+    from frontend_size_codemod import EXACT_ULTRA
+
+    out, counts = rewrite("<div style={{ fontSize: 56 }} />", False, table=EXACT_ULTRA)
+    assert out == "<div style={{ fontSize: 56 }} />"
+    assert counts == {}
+
+
+def test_the_codemod_tables_never_reach_the_display_tier():
+    """`--fs-display-*` exists, and the codemod must not be able to apply it.
+
+    The display steps were added on 2026-09-18 for the eleven sites that size
+    TYPE above the old top of the scale. 31 other literals in the same band size
+    an EMOJI, and `fontSize` is the only lever a glyph has. A bulk substitution
+    cannot tell the two apart — it sees `fontSize: 32` either way — so putting
+    32, 36 or 48 in a table would convert `<div style={{ fontSize: 32 }}>📋</div>`
+    to a typographic token, freezing the emoji into the design system at the
+    moment `frontend_emoji_ratchet.py` is trying to retire it.
+
+    Those eleven were therefore converted by hand, each one read. This is the
+    guard that keeps the next `--apply` from undoing that judgement.
+    """
+    from frontend_size_codemod import EXACT_ULTRA
+
+    display = {"32", "36", "48", "34", "38", "52", "40", "44", "58"}
+    for table, name in ((EXACT, "EXACT"), (EXACT_ULTRA, "EXACT_ULTRA")):
+        clash = display & set(table)
+        assert clash == set(), (
+            f"{name} maps {sorted(clash)} — sizes in the display band, where the same "
+            "number is an emoji as often as it is type. Convert those by hand."
+        )

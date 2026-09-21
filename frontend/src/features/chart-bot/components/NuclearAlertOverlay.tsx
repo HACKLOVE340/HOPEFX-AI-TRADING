@@ -13,6 +13,7 @@ import React, { memo, useEffect } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor } from '../types/nuclear';
 import type { NuclearAlertMessage } from '../types/nuclear';
+import { BarChart3, Lock, Radiation, X } from 'lucide-react';
 
 // ─── Inject keyframes once ────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ const AlertPanel = memo(({ alert, onDismiss, isNuclearMode }: AlertPanelProps) =
       <div style={s.alertHeader}>
         <div style={s.alertHeaderLeft}>
           <span className="nuclear-alert-blink" style={{ ...s.alertIcon, color }}>
-            ☢️
+            <Radiation size="1em" aria-hidden />
           </span>
           <div>
             <div style={{ ...s.alertTitle, color }}>
@@ -104,7 +105,7 @@ const AlertPanel = memo(({ alert, onDismiss, isNuclearMode }: AlertPanelProps) =
           </div>
         </div>
         {!isNuclearMode && (
-          <button style={s.dismissBtn} onClick={onDismiss}>✕</button>
+          <button style={s.dismissBtn} onClick={onDismiss} aria-label="Dismiss alert"><X size="1em" aria-hidden /></button>
         )}
       </div>
 
@@ -117,7 +118,7 @@ const AlertPanel = memo(({ alert, onDismiss, isNuclearMode }: AlertPanelProps) =
       {/* Historical analog */}
       {alert.historical_analog && (
         <div style={s.analogBox}>
-          <div style={s.analogLabel}>📊 HISTORICAL ANALOG</div>
+          <div style={s.analogLabel}><BarChart3 size="1em" aria-hidden /> HISTORICAL ANALOG</div>
           <div style={s.analogText}>{alert.historical_analog}</div>
         </div>
       )}
@@ -125,7 +126,7 @@ const AlertPanel = memo(({ alert, onDismiss, isNuclearMode }: AlertPanelProps) =
       {/* Nuclear mode lock notice */}
       {isNuclearMode && (
         <div style={s.lockNotice}>
-          <span style={s.lockIcon}>🔒</span>
+          <span style={s.lockIcon}><Lock size="1em" aria-hidden /></span>
           <span style={s.lockText}>
             PROTECTED VIEW ACTIVE — All trading halted. Manual resume required via /api/nuclear/resume
           </span>
@@ -224,7 +225,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
   },
   alertSubtitle: {
-    fontSize: 12, fontWeight: 700, letterSpacing: 1.5, marginTop: 2,
+    fontSize: 'var(--fs-body)', fontWeight: 700, letterSpacing: 1.5, marginTop: 2,
     fontFamily: 'monospace',
   },
   dismissBtn: {
@@ -252,7 +253,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 9, color: 'var(--warn)', letterSpacing: 2, fontWeight: 700, marginBottom: 6,
   },
   analogText: {
-    fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6,
+    fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.6,
   },
   lockNotice: {
     display: 'flex', alignItems: 'center', gap: 8,
@@ -262,7 +263,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   lockIcon: { fontSize: 16 },
   lockText: {
-    fontSize: 11, color: '#fca5a5', fontFamily: 'monospace', lineHeight: 1.5,
+    fontSize: 'var(--fs-label)', color: '#fca5a5', fontFamily: 'monospace', lineHeight: 1.5,
   },
   countdownTrack: {
     height: 3, background: '#1a2e4a', borderRadius: 2, overflow: 'hidden',

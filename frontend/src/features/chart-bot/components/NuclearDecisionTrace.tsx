@@ -201,7 +201,7 @@ const s: Record<string, React.CSSProperties> = {
     position: 'absolute', bottom: '100%', left: 0, right: 0,
     background: '#0f1f35', border: '1px solid #1a2e4a',
     borderRadius: 4, padding: '6px 8px',
-    fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.5,
+    fontSize: 'var(--fs-micro)', color: 'var(--text-dim)', lineHeight: 1.5,
     zIndex: 10, pointerEvents: 'none',
     whiteSpace: 'normal',
   },
@@ -214,7 +214,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'border-color 0.3s ease',
   },
   traceText: {
-    fontSize: 10, lineHeight: 1.6, fontFamily: 'monospace',
+    fontSize: 'var(--fs-micro)', lineHeight: 1.6, fontFamily: 'monospace',
   },
   confGrid: {
     display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6,
@@ -226,7 +226,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 8, color: 'var(--text-faint)', letterSpacing: 1, textTransform: 'capitalize',
   },
   confValue: {
-    fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
+    fontSize: 'var(--fs-body)', fontWeight: 700, fontFamily: 'monospace',
   },
   narrativeBox: {
     border: '1px solid', borderRadius: 6, padding: '8px 10px',
@@ -234,13 +234,13 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'border-color 0.4s ease',
   },
   narrativeText: {
-    fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.7, margin: 0,
+    fontSize: 'var(--fs-label)', color: 'var(--text-dim)', lineHeight: 1.7, margin: 0,
   },
   adviceBox: {
     border: '1px solid', borderRadius: 6, padding: '8px 10px',
     transition: 'all 0.4s ease',
   },
   adviceText: {
-    fontSize: 11, color: 'var(--text)', lineHeight: 1.7, margin: 0,
+    fontSize: 'var(--fs-label)', color: 'var(--text)', lineHeight: 1.7, margin: 0,
   },
 };

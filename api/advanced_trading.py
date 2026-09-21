@@ -865,6 +865,47 @@ def _returns_from_closes(closes: list[float]) -> list[float]:
     return [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0]
 
 
+# Symbols with NO legitimate yfinance spot ticker: Yahoo delisted spot metals
+# (verified 2026-07-26 — see config/multi_source_feed.yaml), and the futures
+# contract (GC=F) is a DIFFERENT instrument with a real, varying basis to
+# spot. The correlation matrix below labels a series by its canonical symbol
+# with no field disclosing an instrument swap, so substituting futures here
+# would be undisclosed. CLAUDE.md: "Do not put a yfinance ticker back."
+_NO_YFINANCE_SPOT_TICKER: frozenset[str] = frozenset({"XAU_USD", "XAUUSD"})
+
+_YF_CORRELATION_TICKER_MAP: dict[str, str] = {
+    "EUR_USD": "EURUSD=X",
+    "EURUSD": "EURUSD=X",
+    "GBP_USD": "GBPUSD=X",
+    "GBPUSD": "GBPUSD=X",
+    "USD_JPY": "JPY=X",
+    "USDJPY": "JPY=X",
+    "BTC_USD": "BTC-USD",
+    "BTCUSD": "BTC-USD",
+    "USD_CHF": "CHF=X",
+    "USDCHF": "CHF=X",
+    "AUD_USD": "AUDUSD=X",
+    "AUDUSD": "AUDUSD=X",
+    "NZD_USD": "NZDUSD=X",
+    "NZDUSD": "NZDUSD=X",
+    "USD_CAD": "CAD=X",
+    "USDCAD": "CAD=X",
+}
+
+
+def _yfinance_correlation_ticker(symbol: str) -> str | None:
+    """Resolve *symbol* to a yfinance ticker for the correlation fallback.
+
+    Returns None when no legitimate spot ticker exists (gold/silver), so the
+    caller can skip the symbol rather than silently substitute a futures
+    contract for spot.
+    """
+    upper = symbol.upper()
+    if upper in _NO_YFINANCE_SPOT_TICKER:
+        return None
+    return _YF_CORRELATION_TICKER_MAP.get(upper, symbol.replace("_", "") + "=X")
+
+
 async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int) -> dict[str, list[float]]:
     """Fetch return series for each symbol via price engine → CSV → yfinance."""
     import asyncio
@@ -945,32 +986,19 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
     # ── 3. yfinance fallback for symbols still missing ────────────────────────
     missing = [s for s in sym_list if s not in series]
     if missing:
-        # Map internal symbol names to yfinance tickers
-        _YF_MAP: dict[str, str] = {
-            "XAU_USD": "GC=F",
-            "XAUUSD": "GC=F",
-            "EUR_USD": "EURUSD=X",
-            "EURUSD": "EURUSD=X",
-            "GBP_USD": "GBPUSD=X",
-            "GBPUSD": "GBPUSD=X",
-            "USD_JPY": "JPY=X",
-            "USDJPY": "JPY=X",
-            "BTC_USD": "BTC-USD",
-            "BTCUSD": "BTC-USD",
-            "USD_CHF": "CHF=X",
-            "USDCHF": "CHF=X",
-            "AUD_USD": "AUDUSD=X",
-            "AUDUSD": "AUDUSD=X",
-            "NZD_USD": "NZDUSD=X",
-            "NZDUSD": "NZDUSD=X",
-            "USD_CAD": "CAD=X",
-            "USDCAD": "CAD=X",
-        }
         try:
             import yfinance as _yf
 
             for sym in missing:
-                ticker = _YF_MAP.get(sym.upper(), sym.replace("_", "") + "=X")
+                ticker = _yfinance_correlation_ticker(sym)
+                if ticker is None:
+                    logger.debug(
+                        "correlation: no yfinance spot ticker for %s — Yahoo delisted "
+                        "spot metals and the futures contract must not be substituted "
+                        "(see CLAUDE.md); leaving as missing data",
+                        sym,
+                    )
+                    continue
                 try:
                     df = _yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
                     if df is not None and not df.empty and "Close" in df.columns:

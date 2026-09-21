@@ -1060,7 +1060,7 @@ is the baseline, new violations block, and the baseline may only fall.
 | Stale references in living documents | 41 | `scripts/docs_freshness.py` |
 | Live capabilities with no production caller | 37 flagged of 154 | `scripts/capability_callers.py` |
 | Contested document subjects | 3 | named in `docs/REGISTRY.toml` |
-| Modules with recorded coverage debt | 223 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
+| Modules with recorded coverage debt | 219 | `docs/COVERAGE_UNMEASURABLE.txt` · `scripts/pre_commit_coverage.py` |
 
 **The 223 is not 223 untested modules.** Every entry was recorded because
 measurement returned `None`, and until §E20 measurement returned `None` for
@@ -6024,7 +6024,7 @@ which does this platform already enforce?**
 
 ### The answer
 
-    26 AOS invariants · 3 covered · 13 partial · 10 absent
+    26 AOS invariants · 3 covered · 14 partial · 9 absent
 
 *As first mapped on 2026-09-10 this read `2 covered ... 11 absent`. The figure
 above is the current one, because this is a living document and the check in
@@ -6096,7 +6096,7 @@ nothing is mis-wired. It is a trap for the next person who greps.
 
 `scripts/doc_metrics.py` now measures the four AOS figures, so a document
 stating them is checked against the register on every commit. Each pattern
-requires the separator the report line uses (`3 covered · 13 partial`), because
+requires the separator the report line uses (`3 covered · 14 partial`), because
 "covered", "partial" and "absent" are ordinary English — the same narrowing
 `gates_total` needed after it read "8 gates left" as a total.
 
@@ -6258,7 +6258,7 @@ governance decision, not a code change.
 when the register was built on 2026-09-10 — is now COVERED by
 `spatial.verify_epistemic_monotonicity`. AOS-STATE-019 gained two predicates.
 
-    26 AOS invariants · 3 covered · 13 partial · 10 absent
+    26 AOS invariants · 3 covered · 14 partial · 9 absent
 
 The spatial work needed that invariant first and hardest, which is why it is the
 one that got built. The register updated itself the moment the predicates

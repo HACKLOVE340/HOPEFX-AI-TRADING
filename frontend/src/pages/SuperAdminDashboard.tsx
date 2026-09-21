@@ -5,7 +5,7 @@
  */
 
 import React, { useState, Suspense, lazy, Component, useEffect, useCallback, useRef } from 'react';
-import { Banknote, BarChart3, Bell, BookOpen, Brain, Building2, CircleDot, ClipboardList, Flag, Globe, Landmark, Laptop, Link2, Lock, Microscope, OctagonAlert, OctagonX, Play, RefreshCw, Scale, Search, Settings, Shield, Stethoscope, Tag, TrendingUp, Users, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, Banknote, BarChart3, Bell, BookOpen, Brain, Building2, CircleDot, ClipboardList, Flag, Globe, Landmark, Laptop, Link2, Lock, LockOpen, Microscope, OctagonAlert, OctagonX, Play, RefreshCw, Scale, Search, Settings, Shield, Stethoscope, Tag, TrendingUp, Users, Wrench, Zap } from 'lucide-react';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
 import VoiceTradingPanel from '../components/voice/VoiceTradingPanel';
@@ -105,7 +105,7 @@ const KillSwitchConfirm: React.FC<{
       <div className={`bg-[var(--surface)] border-2 rounded-xl p-6 sm:p-8 w-full max-w-sm shadow-2xl ${
         currentlyActive ? 'border-green-500' : 'border-red-500'
       }`}>
-        <div className="text-4xl text-center mb-3">{currentlyActive ? '🔓' : '🛑'}</div>
+        <div className="text-4xl text-center mb-3">{currentlyActive ? <LockOpen size="1em" aria-label="Trading active" /> : <OctagonX size="1em" aria-label="Kill switch active" />}</div>
         <div className={`text-lg font-black text-center mb-2 ${currentlyActive ? 'text-green-400' : 'text-red-400'}`}>
           {currentlyActive ? 'Resume Trading?' : 'Activate Kill Switch?'}
         </div>
@@ -146,7 +146,9 @@ const KillSwitchConfirm: React.FC<{
                 ? currentlyActive ? 'bg-green-700 hover:bg-green-600 text-white' : 'bg-red-700 hover:bg-red-600 text-white'
                 : 'bg-terminal-raised text-slate-600'
             }`}>
-            {currentlyActive ? '▶ Resume Trading' : '🛑 Activate Kill Switch'}
+            {currentlyActive
+              ? <><Play size="1em" aria-hidden /> Resume Trading</>
+              : <><OctagonX size="1em" aria-hidden /> Activate Kill Switch</>}
           </button>
         </div>
       </div>
@@ -168,7 +170,7 @@ class SectionErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <div className="flex flex-col gap-3 py-10">
-          <span className="text-red-400 font-semibold text-sm">⚠ Section "{this.props.tab}" failed to load</span>
+          <span className="text-red-400 font-semibold text-sm"><AlertTriangle size="1em" aria-hidden /> Section "{this.props.tab}" failed to load</span>
           <span className="text-slate-500 text-xs">{this.state.message}</span>
           <button onClick={() => this.setState({ hasError: false, message: '' })}
             className="self-start px-4 py-2 bg-terminal-raised border border-terminal-border rounded-lg text-slate-400 text-xs cursor-pointer hover:border-slate-500 transition-colors">
@@ -409,7 +411,7 @@ const SuperAdminDashboard: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
                     style={{ background: 'linear-gradient(135deg,#450a0a,#7f1d1d)', border: '2px solid #dc2626' }}>
-                    ⚡
+                    <Zap size="1em" aria-hidden />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -548,9 +550,10 @@ const SuperAdminDashboard: React.FC = () => {
 
                     <div className="flex items-center gap-1.5 bg-terminal-bg border border-terminal-border rounded-lg px-2.5 py-1.5">
                       <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
+                        <input type="checkbox" aria-labelledby="superadmin-auto-refresh-label"
+                          checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
                           className="w-3 h-3 accent-blue-500" />
-                        <span className="text-slate-500 text-2xs">Auto</span>
+                        <span id="superadmin-auto-refresh-label" className="text-slate-500 text-2xs">Auto</span>
                       </label>
                       {autoRefresh && (
                         <span className="text-slate-600 text-2xs font-mono min-w-[20px]">{countdown}s</span>

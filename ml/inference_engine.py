@@ -551,10 +551,25 @@ class InferenceEngine:
         cal_path = _saved("isotonic_calibrator.pkl")
         if not cal_path.exists():
             return None
+        from ml import _verify_checksum
+
+        if not _verify_checksum(cal_path):
+            # _verify_checksum has already logged CRITICAL with the specifics.
+            # `cal_path.exists()` was checked above, so False here means REFUSED
+            # rather than absent — logged at ERROR because an uncalibrated engine
+            # and a tampered calibrator are not the same event.
+            logger.error(
+                "REFUSING the isotonic calibrator at %s: it failed its integrity check. "
+                "Predictions stay uncalibrated rather than being shaped by an artifact "
+                "whose bytes do not match their recorded sha256.",
+                cal_path,
+            )
+            return None
+
         try:
             import joblib
 
-            self._calibrator = joblib.load(cal_path)  # nosec B301 - cal_path derived from saved_models
+            self._calibrator = joblib.load(cal_path)  # nosec B301 - integrity-checked immediately above
             logger.debug("InferenceEngine: isotonic calibrator loaded")
             return self._calibrator
         except Exception as exc:

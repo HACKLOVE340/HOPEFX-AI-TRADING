@@ -1700,3 +1700,24 @@ tier = "T3"
 subject = "slice2_manifest"
 owner = "hacklove340"
 state = "active"
+
+[[document]]
+path = "docs/audit/plans/2026-09-18-wallet-becomes-the-ledger.md"
+tier = "T3"
+subject = "wallet_ledger_plan"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/0021-the-fiat-wallet-is-the-ledger-the-money-path-writes-through.md"
+tier = "T3"
+subject = "decision-0021"
+owner = "hacklove340"
+state = "active"
+
+[[document]]
+path = "docs/decisions/outcomes/0021.md"
+tier = "T3"
+subject = "outcome-0021"
+owner = "hacklove340"
+state = "active"

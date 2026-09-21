@@ -55,16 +55,42 @@ def _read(name: str) -> str:
         return f"<html><body><h1>HOPEFX</h1><p>Page template '{name}' not found.</p></body></html>"
 
 
+#: Shown wherever a page is requested but the React bundle was never built.
+#: It names the command rather than a destination: the operator is the only one
+#: who can resolve this, and the person in the browser needs to know that the
+#: page is missing rather than that they are lost.
+_BUILD_REQUIRED_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HOPEFX - Frontend Not Built</title></head>
+<body style="background:#0a0f1c;color:#e2e8f0;font-family:system-ui,sans-serif;padding:48px;line-height:1.6">
+<h1 style="margin:0 0 8px">Frontend not built</h1>
+<p style="color:#94a3b8;margin:0 0 24px">The API is running. The React bundle is missing, so no page can be served.</p>
+<pre style="background:#111827;border:1px solid #1f2937;border-radius:8px;padding:16px;overflow-x:auto"><code>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</code></pre>
+<p style="color:#94a3b8">If that command fails, its output is the real error. Do not restart the server expecting this to clear.</p>
+</body></html>"""
+
+
 def _spa() -> FileResponse | HTMLResponse:
-    """Serve the React SPA index.html, falling back to a minimal redirect."""
+    """Serve the React SPA index.html, or say plainly that it is not built.
+
+    This used to meta-refresh to ``/docs`` when the bundle was missing, which
+    sent a person who clicked Login to the Swagger UI. Reported as "it takes me
+    to documents", and it is not describable as a login failure by the person
+    seeing it, so it does not get reported as one either.
+
+    Two things changed. The destination is gone, and the status is 503 rather
+    than 200: an unbuilt frontend is the server being unable to serve the page,
+    and answering 200 tells every probe, cache and uptime check that it could.
+    """
     if _SPA_INDEX.exists():
         return FileResponse(str(_SPA_INDEX))
-    # SPA not built yet — redirect to API docs as a fallback
-    return HTMLResponse(
-        content='<html><head><meta http-equiv="refresh" content="0;url=/docs"></head>'
-        "<body>Redirecting to API docs…</body></html>",
-        status_code=200,
+    logger.error(
+        "Frontend bundle missing at %s - serving the build-required page. "
+        "Build it with: cd frontend && npm install && npm run build",
+        _SPA_INDEX,
     )
+    return HTMLResponse(content=_BUILD_REQUIRED_HTML, status_code=503)
 
 
 # ── Shared JS assets ─────────────────────────────────────────────────────────

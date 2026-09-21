@@ -18,9 +18,7 @@ import { Link } from 'react-router-dom';
 import { CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Activity, AlertTriangle, ChevronLeft, ChevronRight, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp,
-} from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Briefcase, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, NotebookPen, RefreshCw, Shield, TrendingDown, TrendingUp, Zap } from 'lucide-react';
 import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { pnlApi } from '../hooks/useApi';
@@ -317,7 +315,7 @@ const LiveEquityBadge: React.FC<{ equity: number | undefined }> = ({ equity }) =
     <span
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
-        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+        padding: '2px 8px', borderRadius: 6, fontSize: 'var(--fs-label)', fontWeight: 700,
         background: flash !== 'transparent' ? flash : 'rgba(0,230,118,0.08)',
         color: 'var(--bull)', border: '1px solid rgba(0,230,118,0.2)',
         transition: 'background 0.4s ease',
@@ -813,11 +811,11 @@ const PnLDashboard: React.FC = () => {
               <span className="text-slate-500 text-sm">Loading trade log…</span>
             ) : (
               <div className="flex flex-col items-center gap-3">
-                <span className="text-3xl opacity-30">📋</span>
+                <span className="text-3xl opacity-30"><ClipboardList size="1em" aria-hidden /></span>
                 <p className="text-slate-400 text-sm font-medium">No fills yet</p>
                 <p className="text-slate-600 text-xs max-w-xs">The trade log populates after your first executed order.</p>
                 <Link to="/trade" className="mt-1 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-600/30 transition-colors" style={{ textDecoration: 'none' }}>
-                  ⚡ Place First Trade
+                  <Zap size="1em" aria-hidden /> Place First Trade
                 </Link>
               </div>
             )}
@@ -917,12 +915,12 @@ const PnLDashboard: React.FC = () => {
         )}
 
         <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
-          { label: '📊 Performance',    href: '/performance',     color: '#4ade80' },
-          { label: '💼 Portfolio',       href: '/portfolio',       color: '#60a5fa' },
-          { label: '📊 TCA',            href: '/tca',             color: '#a78bfa' },
-          { label: '📓 Trade Journal',  href: '/journal',         color: '#fbbf24' },
-          { label: '⚡ Trade',          href: '/trade',           color: '#34d399' },
-          { label: '🛡️ Prop Tracker',  href: '/prop-firm',       color: '#f97316' },
+          { label: 'Performance', icon: BarChart3,    href: '/performance',     color: '#4ade80' },
+          { label: 'Portfolio', icon: Briefcase,       href: '/portfolio',       color: '#60a5fa' },
+          { label: 'TCA', icon: BarChart3,            href: '/tca',             color: '#a78bfa' },
+          { label: 'Trade Journal', icon: NotebookPen,  href: '/journal',         color: '#fbbf24' },
+          { label: 'Trade', icon: Zap,          href: '/trade',           color: '#34d399' },
+          { label: 'Prop Tracker', icon: Shield,  href: '/prop-firm',       color: '#f97316' },
         ]}/>
       </div>
     </PageShell>

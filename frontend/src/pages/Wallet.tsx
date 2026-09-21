@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageShell } from '../components/system/PageShell';
 import { RelatedPages } from '../components';
-import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, ClipboardList, CreditCard, Receipt, Send, ShieldCheck, Star, Wallet as WalletIcon } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, Check, ClipboardList, CreditCard, Handshake, IdCard, Receipt, Send, Settings, ShieldCheck, Star, Wallet as WalletIcon, Zap } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -307,22 +307,22 @@ const Wallet: React.FC = () => {
           <div className="flex gap-2 flex-wrap">
             <Link to="/trade"
               className="px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-xs font-bold no-underline hover:bg-green-500/20 transition-colors">
-              ⚡ Trade
+              <Zap size="1em" aria-hidden /> Trade
             </Link>
             <Link to="/pricing"
               className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-bold no-underline hover:bg-amber-500/20 transition-colors">
-              ⭐ Upgrade
+              <Star size="1em" aria-hidden /> Upgrade
             </Link>
           </div>
         }
     >
 
       <CrossLinkBar links={[
-        { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
-        { label: '🪪 KYC',       href: '/kyc',        color: '#60a5fa' },
-        { label: '⚙️ Settings', href: '/settings',   color: '#a78bfa' },
-        { label: '📋 Pricing',   href: '/pricing',    color: '#fbbf24' },
-        { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
+        { label: 'Affiliate', icon: Handshake, href: '/affiliate', color: '#4ade80' },
+        { label: 'KYC', icon: IdCard,       href: '/kyc',        color: '#60a5fa' },
+        { label: 'Settings', icon: Settings, href: '/settings',   color: '#a78bfa' },
+        { label: 'Pricing', icon: ClipboardList,   href: '/pricing',    color: '#fbbf24' },
+        { label: 'Portfolio', icon: Briefcase, href: '/portfolio',  color: '#34d399' },
       ]} className="mb-5" />
 
       {balanceErr && <ErrorBanner message={balanceErr} onDismiss={() => setBalanceErr('')} />}
@@ -529,7 +529,7 @@ const Wallet: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                   {subscription.features?.map(f => (
                     <div key={f} className="flex items-center gap-2 text-slate-400 text-sm">
-                      <span className="text-green-400 flex-shrink-0">✓</span> {f}
+                      <span className="text-green-400 flex-shrink-0"><Check size="1em" aria-hidden /></span> {f}
                     </div>
                   ))}
                 </div>
@@ -588,7 +588,7 @@ const Wallet: React.FC = () => {
                   className="flex items-center justify-between gap-3 bg-terminal-raised border border-terminal-border rounded-xl px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-lg bg-blue-950 flex items-center justify-center text-lg flex-shrink-0">
-                      💳
+                      <CreditCard size="1em" aria-hidden />
                     </div>
                     <div>
                       <div className="text-slate-200 text-sm font-semibold capitalize">
@@ -622,11 +622,11 @@ const Wallet: React.FC = () => {
       )}
 
       <CrossLinkBar title="Related" className="mt-8" links={[
-        { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
-        { label: '🪪 KYC',       href: '/kyc',        color: '#60a5fa' },
-        { label: '⭐ Upgrade',   href: '/pricing',    color: '#fbbf24' },
-        { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
-        { label: '⚙️ Settings', href: '/settings',   color: '#94a3b8' },
+        { label: 'Affiliate', icon: Handshake, href: '/affiliate', color: '#4ade80' },
+        { label: 'KYC', icon: IdCard,       href: '/kyc',        color: '#60a5fa' },
+        { label: 'Upgrade', icon: Star,   href: '/pricing',    color: '#fbbf24' },
+        { label: 'Portfolio', icon: Briefcase, href: '/portfolio',  color: '#34d399' },
+        { label: 'Settings', icon: Settings, href: '/settings',   color: '#94a3b8' },
       ]} />
       <RelatedPages
         links={[

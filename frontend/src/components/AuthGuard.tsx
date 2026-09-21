@@ -21,6 +21,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useStore, selectIsAuth } from '../store';
 import { hasRole } from '../lib/subscription';
 import { authApi } from '../hooks/useApi';
+import { Lock } from 'lucide-react';
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -179,7 +180,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
             fontFamily: 'Inter, system-ui, sans-serif', gap: 12,
           }}
         >
-          <span style={{ fontSize: 40 }}>🔒</span>
+          <Lock size={40} strokeWidth={1.5} aria-hidden />
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-strong)' }}>
             Access Denied
           </h2>

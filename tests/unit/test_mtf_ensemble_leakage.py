@@ -60,66 +60,138 @@ def _make_calibrated_mock(proba_val: float = 0.6) -> MagicMock:
     return mock
 
 
-# ── Test: cv='prefit' is used throughout ─────────────────────────────────────
+# ── Test: calibration never re-fits the base model ───────────────────────────
 
 
 class TestCalibrationNeverRefits:
+    """The base model must not be re-fitted while its probabilities are calibrated.
+
+    That is the whole leakage property. `cv=3` re-trained the base learners on
+    sub-splits of the test fold and produced ~99% walk-forward accuracy that was
+    not there.
+
+    **These tests asserted a mechanism that no longer exists.** They patched
+    `sklearn.calibration.CalibratedClassifierCV` and checked the `cv=` argument
+    — but `cv='prefit'` was removed in scikit-learn 1.4 and the code was
+    rewritten to fit an `IsotonicRegression` on the base model's output instead
+    (`_calibrate_prefit`). Nothing has constructed a `CalibratedClassifierCV`
+    since, so the tracking list was always empty, every `for cv_arg in ...` loop
+    ran zero times, and both tests passed having measured nothing.
+
+    Proven rather than argued: `_calibrate_prefit` was deleted from
+    `train_xgboost` entirely — no calibration at all — and this file stayed
+    green. A leakage guard that survives the removal of the thing it guards is
+    the F176 shape (`.claude/skills/hopefx-dead-controls`), sitting on the
+    control that protects the number the model is judged by.
+
+    They now assert the property against the mechanism that is actually there:
+    the estimator carried by the returned wrapper is the SAME OBJECT that was
+    fitted, and it was fitted exactly once.
     """
-    Verify that CalibratedClassifierCV is always constructed with cv='prefit'.
 
-    cv='prefit' means the base estimator is already fitted and the calibrator
-    only fits the isotonic/sigmoid layer — it does NOT re-train the base model.
-    cv=3 (the old default) would re-train the base model on 3 sub-splits of
-    the calibration data, causing leakage when that data overlaps with test data.
+    def test_train_xgboost_does_not_refit_the_base_model(self):
+        import xgboost
 
-    CalibratedClassifierCV is imported locally inside each train_* function,
-    so we patch it at the sklearn.calibration module level.
-    """
-
-    def test_train_xgboost_uses_prefit(self):
-        """train_xgboost must call CalibratedClassifierCV(cv='prefit')."""
         import scripts.retrain_mtf_accuracy as rma
 
         X_train, y_train = _make_xy(200)
         X_test, y_test = _make_xy(50, seed=99)
 
-        captured_cv_args = []
+        fits: list[int] = []
+        built: list[object] = []
 
-        class _TrackingCal(CalibratedClassifierCV):
-            def __init__(self, estimator, *, method="sigmoid", cv=5):
-                captured_cv_args.append(cv)
-                super().__init__(estimator, method=method, cv=cv)
+        _real_xgb = xgboost.XGBClassifier
 
-        with patch("sklearn.calibration.CalibratedClassifierCV", _TrackingCal):
-            try:
-                rma.train_xgboost(X_train, y_train, X_test, y_test)
-            except Exception:
-                pass  # XGBoost import errors are acceptable; we only care about cv arg
+        def _counting_xgb(*a, **kw):
+            kw["n_estimators"] = 5  # 500 is irrelevant here, and cost 131s against a 120s timeout
+            model = _real_xgb(*a, **kw)
+            built.append(model)
+            real_fit = model.fit
 
-        # Every CalibratedClassifierCV instantiation must use cv='prefit'
-        for cv_arg in captured_cv_args:
-            assert cv_arg == "prefit", f"CalibratedClassifierCV called with cv={cv_arg!r} — must be 'prefit'"
+            def _fit(*fa, **fkw):
+                fits.append(1)
+                return real_fit(*fa, **fkw)
 
-    def test_train_random_forest_uses_prefit(self):
-        """train_random_forest must call CalibratedClassifierCV(cv='prefit')."""
+            model.fit = _fit
+            return model
+
+        with patch.object(xgboost, "XGBClassifier", _counting_xgb):
+            calibrated = rma.train_xgboost(X_train, y_train, X_test, y_test)
+
+        assert built, "no XGBClassifier was constructed, so nothing was checked"
+        assert sum(fits) == 1, f"the base model was fitted {sum(fits)} times — calibration must not re-fit it"
+        assert getattr(calibrated, "estimator", None) is built[0], (
+            "the returned model does not carry the estimator that was fitted, so the "
+            "calibration layer replaced it rather than wrapping it"
+        )
+
+    def test_train_random_forest_does_not_refit_the_base_model(self):
+        import sklearn.ensemble
+
         import scripts.retrain_mtf_accuracy as rma
 
         X_train, y_train = _make_xy(200)
-        captured_cv_args = []
 
-        class _TrackingCal(CalibratedClassifierCV):
-            def __init__(self, estimator, *, method="sigmoid", cv=5):
-                captured_cv_args.append(cv)
-                super().__init__(estimator, method=method, cv=cv)
+        fits: list[int] = []
+        built: list[object] = []
+        _real_rf = sklearn.ensemble.RandomForestClassifier
 
-        with patch("sklearn.calibration.CalibratedClassifierCV", _TrackingCal):
-            try:
-                rma.train_random_forest(X_train, y_train)
-            except Exception:
-                pass
+        def _counting_rf(*a, **kw):
+            kw["n_estimators"] = 5  # 300 is irrelevant to this assertion
+            model = _real_rf(*a, **kw)
+            built.append(model)
+            real_fit = model.fit
 
-        for cv_arg in captured_cv_args:
-            assert cv_arg == "prefit", f"train_random_forest: CalibratedClassifierCV cv={cv_arg!r} — must be 'prefit'"
+            def _fit(*fa, **fkw):
+                fits.append(1)
+                return real_fit(*fa, **fkw)
+
+            model.fit = _fit
+            return model
+
+        with patch.object(sklearn.ensemble, "RandomForestClassifier", _counting_rf):
+            calibrated = rma.train_random_forest(X_train, y_train)
+
+        assert built, "no RandomForestClassifier was constructed, so nothing was checked"
+        assert sum(fits) == 1, f"the base model was fitted {sum(fits)} times — calibration must not re-fit it"
+        assert getattr(calibrated, "estimator", None) is built[0]
+
+    def test_the_calibrator_is_fitted_on_the_base_models_output_only(self):
+        """The isotonic layer sees probabilities, never the features.
+
+        This is what makes re-fitting impossible by construction, and it is the
+        sentence `_calibrate_prefit`'s docstring makes. A calibrator handed `X`
+        could refit; one handed a 1-D probability vector cannot.
+        """
+        import scripts.retrain_mtf_accuracy as rma
+
+        X_val, y_val = _make_xy(60, seed=7)
+        base = _make_calibrated_mock(0.6)
+
+        seen: list[tuple[int, ...]] = []
+        import sklearn.isotonic
+
+        _real_iso = sklearn.isotonic.IsotonicRegression
+
+        def _tracking_iso(*a, **kw):
+            iso = _real_iso(*a, **kw)
+            real_fit = iso.fit
+
+            def _fit(X, y, **fkw):
+                seen.append(np.asarray(X).shape)
+                return real_fit(X, y, **fkw)
+
+            iso.fit = _fit
+            return iso
+
+        with patch.object(sklearn.isotonic, "IsotonicRegression", _tracking_iso):
+            rma._calibrate_prefit(base, X_val, y_val)
+
+        assert seen, "the isotonic calibrator was never fitted, so nothing was checked"
+        assert seen[0] == (len(X_val),), (
+            f"the calibrator was fitted on an array of shape {seen[0]} — it must see the "
+            f"base model's probabilities ({len(X_val)},), not the {X_val.shape} feature matrix"
+        )
 
 
 # ── Test: three-way split in train_stacking_ensemble ─────────────────────────
@@ -168,6 +240,11 @@ class TestStackingThreeWaySplit:
             patch.object(rma, "train_lightgbm", side_effect=_track_lgb),
         ):
             rma.train_stacking_ensemble(X_train, y_train, X_cal, y_cal)
+
+        # Same vacuity trap as the two tests above: an empty list satisfies the
+        # loop below, and the list is empty if train_stacking_ensemble stops
+        # calling its base learners at all.
+        assert fit_sizes_seen, "train_stacking_ensemble trained no base learners, so nothing was checked"
 
         # Base learners must be trained on a subset of X_train, not X_cal
         cal_size = len(X_cal)

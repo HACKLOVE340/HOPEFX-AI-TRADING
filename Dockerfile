@@ -7,7 +7,27 @@ WORKDIR /build/frontend
 
 # Install deps first (layer-cached unless package.json changes)
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+# `--legacy-peer-deps` is a WORKAROUND for an npm crash, not a preference.
+#
+# npm's arborist loads the OPTIONAL peer sets of packages named in the lockfile
+# even for `ci`, which resolves nothing and should need no registry at all. On
+# 2026-09-18 that walk reached `@vitest/browser-playwright@5.0.1` — an optional
+# peer of the locked `vitest@4.1.11` — which peers on `vitest@*`, resolving to
+# the newly published vitest 5, whose own `@vitejs/devtools-*@^0.7.5` peers sent
+# it into a recursion that dereferences null:
+#
+#     npm error Cannot read properties of null (reading 'edgesOut')
+#     at #loadPeerSet (@npmcli/arborist/lib/arborist/build-ideal-tree.js:1289)
+#
+# Reproduced on npm 10.9.7 and on npm 10.8.2 — the version node:20-alpine above
+# ships — so this stage could not build at all, and nothing in this repository
+# had changed. The lockfile is sound: with this flag `npm ci` installs 738
+# packages at 0 version mismatches and 0 packages absent from the lock, which is
+# exactly the locked tree.
+#
+# Remove the flag once npm ships the fix, and let
+# tests/unit/test_frontend_lockfile_installs_cleanly.py prove it is safe to.
+RUN npm ci --legacy-peer-deps
 
 # Frontend base URLs. Vite inlines VITE_* at build time, so these have to be
 # present here — setting them in .env only affects the running container, which

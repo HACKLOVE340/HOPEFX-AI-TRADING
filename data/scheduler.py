@@ -10,7 +10,13 @@ Fetches and appends OHLCV bars for all supported timeframes:
   M1, M5, M15, M30, H1, H4, D, W, M
 
 Primary source: OANDA practice REST API (requires OANDA_API_KEY + OANDA_ACCOUNT_ID).
-Fallback source: yfinance (maps XAU_USD → GC=F).
+Fallback source: yfinance, for non-gold symbols with a valid spot ticker.
+XAU_USD/XAUUSD have NO yfinance fallback: Yahoo delisted spot gold (verified
+2026-07-26) and GC=F is gold FUTURES — a different instrument with a real,
+varying basis to spot. These CSVs are read by other endpoints as ground
+truth for XAU/USD, so silently substituting GC=F here would contaminate them
+with an undisclosed instrument swap. See CLAUDE.md: "Do not put a yfinance
+ticker back."
 
 Each timeframe is stored in its own CSV:
   data/XAU_USD_M1.csv, data/XAU_USD_M5.csv, ..., data/XAU_USD_M.csv
@@ -141,16 +147,23 @@ _YF_MAX_LOOKBACK_DAYS: dict[str, int] = {
     "1mo": 36500,
 }
 
-# yfinance symbol map
+# yfinance symbol map.
+#
+# XAU_USD / XAUUSD intentionally have NO entry: Yahoo delisted spot gold
+# (verified 2026-07-26) and the futures ticker GC=F is a DIFFERENT
+# instrument with a real, varying basis to spot. `_fetch_yfinance` below
+# refuses explicitly for these symbols rather than falling through to a
+# fabricated ticker. See CLAUDE.md: "Do not put a yfinance ticker back."
 _YF_SYMBOL_MAP: dict[str, str] = {
-    "XAU_USD": "GC=F",
-    "XAUUSD": "GC=F",
     "EUR_USD": "EURUSD=X",
     "GBP_USD": "GBPUSD=X",
     "USD_JPY": "JPY=X",
     "GBP_JPY": "GBPJPY=X",
     "EUR_JPY": "EURJPY=X",
 }
+
+# Symbols with no legitimate yfinance spot ticker — see the note above.
+_NO_YFINANCE_SPOT_TICKER: frozenset[str] = frozenset({"XAU_USD", "XAUUSD"})
 
 # OANDA returns max 5000 candles per request
 _OANDA_MAX_COUNT = 5_000
@@ -284,7 +297,19 @@ async def _fetch_yfinance(
 
     Maps OANDA granularity codes to yfinance interval strings.
     Intraday data (M1–H4) is limited to 60 days by Yahoo Finance.
+
+    Refuses for gold (XAU_USD/XAUUSD): Yahoo has no spot ticker, and the
+    futures contract GC=F must not be substituted — see CLAUDE.md.
     """
+    if symbol.upper() in _NO_YFINANCE_SPOT_TICKER:
+        logger.warning(
+            "yfinance: no spot ticker for %s — Yahoo delisted the contract and "
+            "the futures contract must not be served as spot (see CLAUDE.md). "
+            "Configure OANDA_API_KEY for live gold data.",
+            symbol,
+        )
+        return []
+
     yf_symbol = _YF_SYMBOL_MAP.get(symbol, symbol)
     interval = _YF_INTERVAL_MAP.get(granularity, "1h")
     period = _YF_PERIOD_MAP.get(granularity, "60d")
@@ -613,7 +638,8 @@ class DataScheduler:
     Timeframes: M1, M5, M15, M30, H1, H4, D, W, M.
 
     Primary source: OANDA practice REST API.
-    Fallback: yfinance (GC=F for XAU_USD).
+    Fallback: yfinance for non-gold symbols with a valid spot ticker.
+    Gold (XAU_USD/XAUUSD) has none — see the module docstring.
     """
 
     def __init__(
@@ -711,7 +737,9 @@ async def backfill(
     ``to_date`` (defaults: 2015-01-01 → now).  Skips bars already in the CSV.
 
     For intraday timeframes (M1–H4), OANDA practice API provides full history.
-    For D/W/M, yfinance provides longer history (GC=F back to ~1974).
+    For D/W/M, yfinance can provide decades of history for non-gold symbols
+    with a valid spot ticker; gold (XAU_USD/XAUUSD) has none — see the module
+    docstring — so a gold backfill without OANDA credentials appends nothing.
 
     Returns total bars appended.
     """

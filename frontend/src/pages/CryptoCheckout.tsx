@@ -33,7 +33,7 @@ import { PLAN_COLORS } from '../lib/subscription';
 import { extractApiError } from '../lib/utils';
 import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
-
+import { AlertTriangle, BarChart3, Camera, Check, CheckCircle2, CreditCard, Gem, Hourglass, Settings } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CryptoOption = 'BTC' | 'ETH' | 'USDT';
@@ -164,19 +164,19 @@ const PlanCard: React.FC<{ plan: Plan; selected: boolean; onSelect: () => void }
       borderRadius: 12, padding: '16px 14px', cursor: 'pointer',
       transition: 'border-color 0.15s, background 0.15s',
     }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: accent,
+      <div style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: accent,
         textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
         {plan.name}
       </div>
       <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-strong)', marginBottom: 8 }}>
         ${plan.price_usd.toLocaleString()}
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>/mo</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontWeight: 400 }}>/mo</span>
       </div>
-      <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7 }}>
+      <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.7 }}>
         {plan.features.slice(0, 3).map(f => <li key={f}>{f}</li>)}
       </ul>
       {selected && (
-        <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: accent }}>✓ Selected</div>
+        <div style={{ marginTop: 8, fontSize: 'var(--fs-label)', fontWeight: 700, color: accent }}><Check size="1em" aria-hidden /> Selected</div>
       )}
     </div>
   );
@@ -196,7 +196,7 @@ const CryptoButton: React.FC<{ currency: CryptoOption; selected: boolean; onSele
       <span style={{ fontSize: 22, color: meta.color }}>{meta.icon}</span>
       <div style={{ textAlign: 'left' }}>
         <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{meta.name}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currency}</div>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{currency}</div>
       </div>
     </button>
   );
@@ -445,7 +445,7 @@ const CryptoCheckout: React.FC = () => {
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Network:</span>
               {(['TRC20', 'ERC20', 'BEP20'] as USDTNetwork[]).map(n => (
                 <button key={n} onClick={() => setUsdtNetwork(n)} style={{
-                  padding: '5px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                  padding: '5px 14px', borderRadius: 6, fontSize: 'var(--fs-body)', cursor: 'pointer',
                   background: usdtNetwork === n ? '#26a17b22' : 'transparent',
                   border: '1px solid ' + (usdtNetwork === n ? '#26a17b' : '#334155'),
                   color: usdtNetwork === n ? '#26a17b' : 'var(--text-dim)',
@@ -490,10 +490,10 @@ const CryptoCheckout: React.FC = () => {
         </div>
 
         <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-          { label: '💳 Wallet',       href: '/wallet',   color: '#60a5fa' },
-          { label: '💎 Pricing',      href: '/pricing',  color: '#a78bfa' },
-          { label: '⚙️ Settings',    href: '/settings', color: '#34d399' },
-          { label: '📊 Dashboard',   href: '/dashboard',color: '#fbbf24' },
+          { label: 'Wallet', icon: CreditCard,       href: '/wallet',   color: '#60a5fa' },
+          { label: 'Pricing', icon: Gem,      href: '/pricing',  color: '#a78bfa' },
+          { label: 'Settings', icon: Settings,    href: '/settings', color: '#34d399' },
+          { label: 'Dashboard', icon: BarChart3,   href: '/dashboard',color: '#fbbf24' },
         ]}/>
       </PageShell>
     );
@@ -508,7 +508,7 @@ const CryptoCheckout: React.FC = () => {
 
         <div style={st.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-            <span style={{ color: meta.color, fontSize: 32 }}>{meta.icon}</span>
+            <span style={{ color: meta.color, fontSize: 'var(--fs-display-sm)' }}>{meta.icon}</span>
             <div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Send exactly</div>
               <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)' }}>
@@ -532,8 +532,8 @@ const CryptoCheckout: React.FC = () => {
                 <div style={{ width: 180, height: 180, background: 'var(--surface)', border: '1px solid var(--border-strong)',
                   borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center',
                   justifyContent: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 32 }}>📷</span>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '0 12px' }}>
+                  <span style={{ fontSize: 32 }}><Camera size="1em" aria-hidden /></span>
+                  <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textAlign: 'center', padding: '0 12px' }}>
                     QR unavailable — copy address below
                   </div>
                 </div>
@@ -544,9 +544,9 @@ const CryptoCheckout: React.FC = () => {
           {/* Address */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
             padding: '12px 14px', marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 6 }}>Deposit address</div>
+            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginBottom: 6 }}>Deposit address</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <code style={{ flex: 1, fontSize: 12, color: 'var(--text-dim)', wordBreak: 'break-all',
+              <code style={{ flex: 1, fontSize: 'var(--fs-body)', color: 'var(--text-dim)', wordBreak: 'break-all',
                 lineHeight: 1.5 }}>{depositInfo.address}</code>
               <button onClick={copyAddress} style={{ ...st.copyBtn, flexShrink: 0 }}>
                 {copied ? '✅' : 'Copy'}
@@ -556,7 +556,7 @@ const CryptoCheckout: React.FC = () => {
 
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
             padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--warn)', marginBottom: 14 }}>
-            ⚠️ Send only <strong>{selectedCrypto}</strong> on the{' '}
+            <AlertTriangle size="1em" aria-hidden /> Send only <strong>{selectedCrypto}</strong> on the{' '}
             <strong>{depositInfo.network.toUpperCase()}</strong> network.
             Sending a different asset will result in permanent loss.
           </div>
@@ -590,14 +590,14 @@ const CryptoCheckout: React.FC = () => {
           className="mb-4"
         />
         <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}><Hourglass size="1em" aria-hidden /></div>
           <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-strong)', marginBottom: 8 }}>
             Waiting for blockchain confirmations
           </div>
           <div style={{ color: 'var(--text-muted)', marginBottom: 24 }}>
             {confirmed} / {required} confirmations
             {paymentStatus?.tx_hash && (
-              <div style={{ fontSize: 12, marginTop: 6, wordBreak: 'break-all' }}>
+              <div style={{ fontSize: 'var(--fs-body)', marginTop: 6, wordBreak: 'break-all' }}>
                 TX: {paymentStatus.tx_hash}
               </div>
             )}
@@ -628,7 +628,7 @@ const CryptoCheckout: React.FC = () => {
       >
 
         <div style={{ ...st.card, textAlign: 'center', padding: '48px 32px' }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
+          <div style={{ fontSize: 56, marginBottom: 16 }}><CheckCircle2 size="1em" aria-hidden /></div>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
             Payment confirmed!
           </h2>
@@ -665,7 +665,7 @@ const CryptoCheckout: React.FC = () => {
       <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
         {addressError ? (
           <>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 32, marginBottom: 12 }}><AlertTriangle size="1em" aria-hidden /></div>
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--loss)', marginBottom: 8 }}>
               Failed to generate deposit address
             </div>
@@ -708,7 +708,7 @@ const st: Record<string, React.CSSProperties> = {
   backBtn:    { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
     color: 'var(--text-dim)', fontSize: 'var(--fs-body)', padding: '6px 14px', cursor: 'pointer' },
   copyBtn:    { background: 'var(--surface-hover)', border: 'none', borderRadius: 6,
-    color: 'var(--text)', fontSize: 12, padding: '5px 12px', cursor: 'pointer' },
+    color: 'var(--text)', fontSize: 'var(--fs-body)', padding: '5px 12px', cursor: 'pointer' },
   headerLink: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none',
     padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6 },
   warnBox:    { background: '#451a03', border: '1px solid #92400e', borderRadius: 8,

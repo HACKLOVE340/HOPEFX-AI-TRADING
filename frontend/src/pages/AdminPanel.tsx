@@ -21,8 +21,7 @@ import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { CircleDot, Search, Shield, Stethoscope, Tag, Zap } from 'lucide-react';
-
+import { AlertTriangle, Check, CircleDot, RadioTower, Search, Settings, Shield, Stethoscope, Tag, Wrench, Zap } from 'lucide-react';
 // ── Maintenance / Broadcast types ─────────────────────────────────────────────
 
 interface MaintenanceStatus {
@@ -112,11 +111,11 @@ const KpiCard: React.FC<{
     background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10,
     padding: '18px 20px', borderTop: accent ? `3px solid ${accent}` : undefined,
   }}>
-    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
       {label}
     </div>
-    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-strong)', lineHeight: 1 }}>{value}</div>
-    {sub && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{sub}</div>}
+    <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, color: 'var(--text-strong)', lineHeight: 1 }}>{value}</div>
+    {sub && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4 }}>{sub}</div>}
   </div>
 );
 
@@ -141,7 +140,7 @@ const QuickAction: React.FC<{
   >
     <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
     <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 2 }}>{label}</div>
-    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</div>
+    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{desc}</div>
   </button>
 );
 
@@ -189,7 +188,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
     try {
       await superadminApi.broadcastMessage(broadcast);
       setBroadcast({ title: '', body: '', type: 'info' });
-      flash('Broadcast sent to all active users ✓');
+      flash('Broadcast sent to all active users');
     } catch {
       flash('Broadcast failed — check superadmin privileges');
     } finally {
@@ -213,13 +212,15 @@ const MaintenanceBroadcastPanel: React.FC = () => {
       <div style={{ background: 'var(--raised)', border: `1px solid ${maint.maintenance_mode ? '#f59e0b' : '#334155'}`, borderRadius: 10, padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>🔧 Maintenance Mode</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-              {maint.maintenance_mode ? '⚠️ ACTIVE — users see downtime page' : 'Platform is live'}
+            <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}><Wrench size="1em" aria-hidden /> Maintenance Mode</div>
+            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2 }}>
+              {maint.maintenance_mode
+                ? <><AlertTriangle size="1em" aria-hidden /> ACTIVE — users see downtime page</>
+                : 'Platform is live'}
             </div>
           </div>
           <div style={{
-            padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+            padding: '3px 10px', borderRadius: 20, fontSize: 'var(--fs-label)', fontWeight: 700,
             background: maint.maintenance_mode ? '#f59e0b20' : '#22c55e20',
             color: maint.maintenance_mode ? '#f59e0b' : '#22c55e',
             border: `1px solid ${maint.maintenance_mode ? '#f59e0b40' : '#22c55e40'}`,
@@ -228,7 +229,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
           </div>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message shown to users</label>
+          <label style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message shown to users</label>
           <input aria-label="We're performing scheduled maintenance. Back shortly"
             style={inputStyle}
             value={maint.maintenance_message}
@@ -246,19 +247,21 @@ const MaintenanceBroadcastPanel: React.FC = () => {
             color: '#fff', opacity: saving ? 0.7 : 1,
           }}
         >
-          {maint.maintenance_mode ? '✅ Disable Maintenance Mode' : '🔧 Enable Maintenance Mode'}
+          {maint.maintenance_mode
+            ? <><Check size="1em" aria-hidden /> Disable Maintenance Mode</>
+            : <><Wrench size="1em" aria-hidden /> Enable Maintenance Mode</>}
         </button>
       </div>
 
       {/* Broadcast */}
       <div style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: 20 }}>
-        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 14 }}>📡 Broadcast Message</div>
+        <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 14 }}><RadioTower size="1em" aria-hidden /> Broadcast Message</div>
         <div style={{ marginBottom: 10 }}>
-          <label id="adminpanel-title-label" htmlFor="adminpanel-title" style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Title</label>
+          <label id="adminpanel-title-label" htmlFor="adminpanel-title" style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Title</label>
           <input id="adminpanel-title" aria-labelledby="adminpanel-title-label" style={inputStyle} value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
         </div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message</label>
+          <label style={{ fontSize: 'var(--fs-label)', color: 'var(--text-dim)', display: 'block', marginBottom: 5 }}>Message</label>
           <textarea aria-label="Message to send to all active users"
             style={{ ...inputStyle, resize: 'vertical' as const }}
             rows={3}
@@ -270,7 +273,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           {(['info', 'warning', 'success', 'error'] as const).map(t => (
             <button key={t} onClick={() => setBroadcast(b => ({ ...b, type: t }))} style={{
-              flex: 1, padding: '5px 0', borderRadius: 5, cursor: 'pointer', fontSize: 10, fontWeight: 700,
+              flex: 1, padding: '5px 0', borderRadius: 5, cursor: 'pointer', fontSize: 'var(--fs-micro)', fontWeight: 700,
               border: `1px solid ${broadcast.type === t ? BROADCAST_COLORS[t] : '#334155'}`,
               background: broadcast.type === t ? `${BROADCAST_COLORS[t]}20` : 'transparent',
               color: broadcast.type === t ? BROADCAST_COLORS[t] : 'var(--text-faint)',
@@ -288,7 +291,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
             opacity: (saving || !broadcast.title || !broadcast.body) ? 0.5 : 1,
           }}
         >
-          📡 Send to All Users
+          <RadioTower size="1em" aria-hidden /> Send to All Users
         </button>
       </div>
 
@@ -373,12 +376,12 @@ const AdminPanel: React.FC = () => {
 
   return (
     <PageShell width="wide"
-        title="🔧 Admin Panel"
+        title="Admin Panel"
         subtitle="Platform operations, user management, and system health"
         actions={
           <button
             onClick={load}
-            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: 'var(--link)', fontSize: 12, cursor: 'pointer', padding: '6px 14px', fontWeight: 600 }}
+            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: 'var(--link)', fontSize: 'var(--fs-body)', cursor: 'pointer', padding: '6px 14px', fontWeight: 600 }}
           >
             ↻ Refresh
           </button>
@@ -405,19 +408,19 @@ const AdminPanel: React.FC = () => {
           {activeAlerts.length > 0 && (
             <div style={sectionStyle}>
               <div style={sectionHeader}>
-                <span>⚠️ Active Alerts</span>
-                <span style={{ fontSize: 11, color: 'var(--loss)' }}>{activeAlerts.length} unresolved</span>
+                <span><AlertTriangle size="1em" aria-hidden /> Active Alerts</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)' }}>{activeAlerts.length} unresolved</span>
               </div>
               {activeAlerts.map(alert => (
                 <div key={alert.id} style={{ ...rowStyle, borderLeft: `3px solid ${severityColor(alert.severity)}`, background: `${severityColor(alert.severity)}08` }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${severityColor(alert.severity)}20`, color: severityColor(alert.severity), textTransform: 'uppercase', flexShrink: 0 }}>
+                  <span style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${severityColor(alert.severity)}20`, color: severityColor(alert.severity), textTransform: 'uppercase', flexShrink: 0 }}>
                     {alert.severity}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{alert.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{alert.message}</div>
+                    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 2 }}>{alert.message}</div>
                   </div>
-                  <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(alert.created_at)}</span>
+                  <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(alert.created_at)}</span>
                 </div>
               ))}
             </div>
@@ -426,8 +429,8 @@ const AdminPanel: React.FC = () => {
           {/* Recent Audit Events */}
           <div style={sectionStyle}>
             <div style={sectionHeader}>
-              <span>🔍 Recent Audit Events</span>
-              <button onClick={() => go('/audit')} style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+              <span><Search size="1em" aria-hidden /> Recent Audit Events</span>
+              <button onClick={() => go('/audit')} style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontSize: 'var(--fs-body)', cursor: 'pointer', fontWeight: 600 }}>
                 View all →
               </button>
             </div>
@@ -436,10 +439,10 @@ const AdminPanel: React.FC = () => {
             ) : auditEvents.map(ev => (
               <div key={ev.event_id} style={rowStyle}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: eventColor(ev.event_type), flexShrink: 0 }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: eventColor(ev.event_type), minWidth: 160, flexShrink: 0 }}>{ev.event_type}</span>
-                <span style={{ flex: 1, color: 'var(--text-dim)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{ev.ip_address}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(ev.created_at)}</span>
+                <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color: eventColor(ev.event_type), minWidth: 160, flexShrink: 0 }}>{ev.event_type}</span>
+                <span style={{ flex: 1, color: 'var(--text-dim)', fontSize: 'var(--fs-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', flexShrink: 0 }}>{ev.ip_address}</span>
+                <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(ev.created_at)}</span>
               </div>
             ))}
           </div>
@@ -447,8 +450,8 @@ const AdminPanel: React.FC = () => {
           {/* Maintenance Mode + Broadcast */}
           <div style={{ margin: '0 24px', marginBottom: 8 }}>
             <div style={{ ...sectionHeader, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: '10px 10px 0 0', padding: '14px 20px' }}>
-              <span>⚙️ Platform Controls</span>
-              <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Maintenance mode & user broadcasts</span>
+              <span><Settings size="1em" aria-hidden /> Platform Controls</span>
+              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>Maintenance mode & user broadcasts</span>
             </div>
           </div>
           <MaintenanceBroadcastPanel />

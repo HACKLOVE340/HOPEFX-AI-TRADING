@@ -31,6 +31,7 @@ import {
 } from '../components/ai/AISupportWidget';
 import { clearLanes, reserveLane, readLanes } from '../hub/floatingLanes';
 import { PresenceAnywhereMount } from '../hub/PresenceAnywhereMount';
+import { summonPresence, dismissPresence } from '../hub/presenceSummons';
 import { dockFor } from '../hub/presenceDock';
 
 const VIEWPORT = { x: 0, y: 0, width: 1440, height: 1000 };
@@ -83,6 +84,9 @@ describe('the presence is told about it', () => {
   it('places itself clear of a reserved lane', async () => {
     reserveLane('support-launcher', launcherRect({ bottom: 20, docked: false }, VIEWPORT));
 
+    // Summoned first: the presence is down by default now, and a null
+    // render would make every placement assertion below vacuous.
+    summonPresence('test: placement');
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
         <PresenceAnywhereMount />
@@ -178,6 +182,9 @@ describe('the dock reserves the box that gets drawn', () => {
 describe('the closed presence panel is wide enough to read', () => {
   it('renders at a width that holds a sentence, not a column of single words', async () => {
     reserveLane('support-launcher', launcherRect({ bottom: 20, docked: false }, VIEWPORT));
+    // Summoned first: the presence is down by default now, and a null
+    // render would make every placement assertion below vacuous.
+    summonPresence('test: placement');
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
         <PresenceAnywhereMount />
@@ -195,6 +202,9 @@ describe('the closed presence panel is wide enough to read', () => {
 
 describe('the panel is placed by what it measures, not what it guessed', () => {
   it('stays inside the viewport once its real height is known', async () => {
+    // Summoned first: the presence is down by default now, and a null
+    // render would make every placement assertion below vacuous.
+    summonPresence('test: placement');
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
         <PresenceAnywhereMount />

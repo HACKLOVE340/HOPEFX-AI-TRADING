@@ -88,7 +88,15 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
         const alert = msg as NuclearAlertMessage;
         setNuclearAlert(alert);
         setLastAlert(alert);
-        // Flash the page title on critical alerts
+        // Flash the page title on critical alerts.
+        //
+        // The radiation glyph below is the one emoji in this file that
+        // `scripts/frontend_emoji_ratchet.py` counts and that CANNOT become an
+        // SVG: `document.title` is a string rendered by the browser's own tab
+        // chrome, where no markup exists. Driving this file to zero would mean
+        // deleting a deliberate attention signal on a severity>=8 nuclear alert
+        // — the case where the operator is most likely to be on another tab.
+        // So this file stays in the baseline at 1, on purpose.
         if (alert.severity >= NUCLEAR_ALERT_SEVERITY) {
           _flashTitle(`☢️ NUCLEAR ALERT — Severity ${alert.severity}/10`);
         }

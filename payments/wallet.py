@@ -161,6 +161,17 @@ class WalletManager:
         else:
             wallet.commission_balance = value
 
+    @property
+    def session_factory(self):
+        """The factory this ledger persists through, or None in in-memory mode.
+
+        Exposed so a caller checking whether a movement has already been
+        recorded queries the SAME database the row would be written to. Reading
+        a different session factory would answer about a different ledger, which
+        is how a duplicate credit gets waved through.
+        """
+        return self._session_factory
+
     def set_session_factory(self, session_factory):
         """Wire in DB session factory after construction."""
         self._session_factory = session_factory

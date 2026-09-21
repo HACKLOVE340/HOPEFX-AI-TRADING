@@ -300,7 +300,7 @@ export const CommandPalette: React.FC = () => {
             background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 8, padding: '6px 10px',
             display: 'flex', alignItems: 'center', gap: 6,
-            cursor: 'pointer', fontSize: 11, color: 'var(--text-faint)',
+            cursor: 'pointer', fontSize: 'var(--fs-label)', color: 'var(--text-faint)',
             boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
             transition: 'border-color 0.15s, color 0.15s',
           }}
@@ -308,7 +308,7 @@ export const CommandPalette: React.FC = () => {
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLDivElement).style.color = '#475569'; }}
         >
           <span style={{ fontSize: 'var(--fs-body)'}}>⌘</span>
-          <kbd style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontFamily: 'monospace' }}>K</kbd>
+          <kbd style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 4, padding: '1px 5px', fontSize: 'var(--fs-micro)', fontFamily: 'monospace' }}>K</kbd>
           <span>Search</span>
         </div>
       </CommandContext.Provider>
@@ -358,7 +358,7 @@ export const CommandPalette: React.FC = () => {
           />
           <kbd style={{
             background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 5,
-            padding: '2px 7px', fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace', flexShrink: 0,
+            padding: '2px 7px', fontSize: 'var(--fs-label)', color: 'var(--text-faint)', fontFamily: 'monospace', flexShrink: 0,
           }}>
             Esc
           </kbd>
@@ -376,7 +376,7 @@ export const CommandPalette: React.FC = () => {
               // when the group header showed its first row's index.
               return (
                 <div key={cat}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '8px 16px 4px' }}>
+                  <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '8px 16px 4px' }}>
                     {cat}
                   </div>
                   {items.map(item => {
@@ -403,17 +403,17 @@ export const CommandPalette: React.FC = () => {
                             <HighlightMatch text={item.label} query={query} />
                           </div>
                           {item.desc && (
-                            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {item.desc}
                             </div>
                           )}
                         </div>
                         {item.shortcut && (
-                          <kbd style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 4, padding: '1px 6px', fontSize: 10, color: 'var(--text-faint)', fontFamily: 'monospace', flexShrink: 0 }}>
+                          <kbd style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 4, padding: '1px 6px', fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', fontFamily: 'monospace', flexShrink: 0 }}>
                             {item.shortcut}
                           </kbd>
                         )}
-                        {isSelected && <span style={{ color: 'var(--text-faint)', fontSize: 12, flexShrink: 0 }}>↵</span>}
+                        {isSelected && <span style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', flexShrink: 0 }}>↵</span>}
                       </div>
                     );
                   })}
@@ -424,7 +424,7 @@ export const CommandPalette: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div style={{ borderTop: '1px solid var(--border)', padding: '8px 16px', display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-faint)' }}>
+        <div style={{ borderTop: '1px solid var(--border)', padding: '8px 16px', display: 'flex', gap: 16, fontSize: 'var(--fs-label)', color: 'var(--text-faint)' }}>
           <span><kbd style={{ background: 'var(--raised)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>↑↓</kbd> navigate</span>
           <span><kbd style={{ background: 'var(--raised)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>↵</kbd> open</span>
           <span><kbd style={{ background: 'var(--raised)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace' }}>Esc</kbd> close</span>

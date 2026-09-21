@@ -10,6 +10,7 @@
  */
 
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 export function StaleDataNotice({
   failed,
@@ -32,7 +33,7 @@ export function StaleDataNotice({
         className
       }
     >
-      <span aria-hidden="true">⚠</span>
+      <AlertTriangle size={14} aria-hidden="true" />
       <span>
         Couldn&apos;t load {what}. What you see below may be out of date — it is not live.
         Check your broker directly before acting on it.

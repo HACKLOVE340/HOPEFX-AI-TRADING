@@ -59,7 +59,7 @@ const AdminGuard: React.FC<Props> = ({ children }) => {
           width: 56, height: 56, borderRadius: '50%',
           background: '#450a0a', border: '2px solid #7f1d1d',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 20px', fontSize: 26,
+          margin: '0 auto 20px', fontSize: 'var(--fs-hero)',
         }}>
           <ShieldAlert size={26} strokeWidth={1.75} aria-hidden />
         </div>

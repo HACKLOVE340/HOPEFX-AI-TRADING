@@ -15,8 +15,7 @@ import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
 import { EmptyState } from '../components/EmptyState';
-import { BarChart3, Bell, Settings, ShieldCheck, Smartphone, User } from 'lucide-react';
-
+import { BarChart3, Bell, Check, Download, Settings, ShieldCheck, Smartphone, User, Zap } from 'lucide-react';
 interface MobileConfig {
   ios_version: string;
   android_version: string;
@@ -65,11 +64,11 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
       borderRadius: 14, padding: '28px 24px', textAlign: 'center',
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
     }}>
-      <div style={{ fontSize: 52, marginBottom: 12 }}>{isIos ? '🍎' : '🤖'}</div>
+      <div style={{ fontSize: 52, marginBottom: 12 }}><Smartphone size="1em" aria-hidden /></div>
       <div style={{ fontSize: 'var(--fs-title)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>
         {isIos ? 'iOS App' : 'Android App'}
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>
+      <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 18 }}>
         {loading ? '…' : `v${version || 'N/A'}`} · {isIos ? 'iPhone & iPad' : 'Android 8+'}
       </div>
 
@@ -82,7 +81,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
       }}>
         {qr
           ? <img src={qr} alt={`${platform} QR`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-          : <span style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', padding: 8 }}>QR code<br />available<br />after login</span>
+          : <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-faint)', textAlign: 'center', padding: 8 }}>QR code<br />available<br />after login</span>
         }
       </div>
 
@@ -100,7 +99,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({ platform, version, url, qr,
           opacity: url ? 1 : 0.5, cursor: url ? 'pointer' : 'not-allowed',
         }}
       >
-        <span style={{ fontSize: 16 }}>{isIos ? '⬇' : '⬇'}</span>
+        <Download size="1em" aria-hidden />
         {isIos ? 'Download on App Store' : 'Get it on Google Play'}
       </a>
     </div>
@@ -124,18 +123,18 @@ const SessionRow: React.FC<{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 18, flexShrink: 0,
     }}>
-      {session.device_os?.toLowerCase().includes('ios') ? '📱' : '🤖'}
+      <Smartphone size="1em" aria-hidden />
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)', display: 'flex', alignItems: 'center', gap: 8 }}>
         {session.device_name || 'Unknown Device'}
         {session.is_current && (
-          <span style={{ fontSize: 10, color: 'var(--gain)', background: '#14532d', border: '1px solid #166534', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>
+          <span style={{ fontSize: 'var(--fs-micro)', color: 'var(--gain)', background: '#14532d', border: '1px solid #166534', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>
             Current
           </span>
         )}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <span>{session.device_os}</span>
         <span>IP: {session.ip_address}</span>
         <span>Last active: {new Date(session.last_active).toLocaleString()}</span>
@@ -150,7 +149,7 @@ const SessionRow: React.FC<{
         border: `1px solid ${session.is_current ? '#1e293b' : '#7f1d1d'}`,
         borderRadius: 7, color: session.is_current ? 'var(--text-faint)' : 'var(--loss)',
         cursor: session.is_current ? 'not-allowed' : 'pointer',
-        fontSize: 12, padding: '5px 12px', flexShrink: 0,
+        fontSize: 'var(--fs-body)', padding: '5px 12px', flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 5,
       }}
     >
@@ -240,7 +239,7 @@ const MobilePage: React.FC = () => {
           { label: 'Account', href: '/profile' },
           { label: 'Mobile App' },
         ]}
-        badge={<Badge variant="info" style={{ fontSize: 11 }}>📱 Available Now</Badge>}
+        badge={<Badge variant="info" style={{ fontSize: 'var(--fs-label)'}}><Smartphone size="1em" aria-hidden /> Available Now</Badge>}
         actions={
           <button
             onClick={load}
@@ -248,7 +247,7 @@ const MobilePage: React.FC = () => {
             style={{
               background: 'transparent', border: '1px solid var(--border-strong)',
               borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
-              fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 'var(--fs-body)', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
             {loading ? <Spinner size="sm" /> : '↻'} Refresh
@@ -279,7 +278,7 @@ const MobilePage: React.FC = () => {
       {/* Features */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
         <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>⚡</span> Mobile Features
+          <span><Zap size="1em" aria-hidden /></span> Mobile Features
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
           {features.map(f => (
@@ -288,8 +287,8 @@ const MobilePage: React.FC = () => {
                 width: 20, height: 20, borderRadius: '50%',
                 background: '#14532d', border: '1px solid #166534',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10, color: 'var(--gain)', flexShrink: 0, fontWeight: 700,
-              }}>✓</span>
+                fontSize: 'var(--fs-micro)', color: 'var(--gain)', flexShrink: 0, fontWeight: 700,
+              }}><Check size="1em" aria-hidden /></span>
               {f}
             </div>
           ))}
@@ -299,7 +298,7 @@ const MobilePage: React.FC = () => {
       {/* Push token registration */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 24 }}>
         <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>🔔</span> Push Notifications
+          <span><Bell size="1em" aria-hidden /></span> Push Notifications
         </h3>
         <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.5 }}>
           Register a device push token to receive trade alerts, signal notifications, and account updates on your mobile device.
@@ -334,7 +333,7 @@ const MobilePage: React.FC = () => {
         </div>
         {tokenMsg && (
           <div style={{
-            marginTop: 10, fontSize: 12, padding: '8px 12px', borderRadius: 7,
+            marginTop: 10, fontSize: 'var(--fs-body)', padding: '8px 12px', borderRadius: 7,
             background: tokenOk ? '#052e16' : '#450a0a',
             border: `1px solid ${tokenOk ? '#166534' : '#7f1d1d'}`,
             color: tokenOk ? 'var(--gain)' : 'var(--loss)',
@@ -348,10 +347,10 @@ const MobilePage: React.FC = () => {
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '20px 24px', marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>📲</span> Active Mobile Sessions
+            <span><Smartphone size="1em" aria-hidden /></span> Active Mobile Sessions
           </h3>
           {sessions.length > 0 && (
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sessions.length} device{sessions.length !== 1 ? 's' : ''}</span>
+            <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{sessions.length} device{sessions.length !== 1 ? 's' : ''}</span>
           )}
         </div>
 

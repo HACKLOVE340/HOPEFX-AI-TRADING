@@ -16,8 +16,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useVoice } from '../hooks/useVoice';
 import { useVoiceAlerts } from '../lib/voicePrefs';
-import { AlertTriangle, Info } from 'lucide-react';
-
+import { AlertTriangle, Check, Info, X } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
@@ -65,8 +64,8 @@ export function useToast(): ToastContextValue {
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const VARIANT_STYLES: Record<ToastVariant, { bg: string; border: string; icon: React.ReactNode; color: string }> = {
-  success: { bg: '#052e16', border: '#166534', icon: '✓', color: 'var(--gain)' },
-  error:   { bg: '#450a0a', border: '#7f1d1d', icon: '✕', color: 'var(--loss)' },
+  success: { bg: '#052e16', border: '#166534', icon: <Check size={16} aria-hidden />, color: 'var(--gain)' },
+  error:   { bg: '#450a0a', border: '#7f1d1d', icon: <X size={16} aria-hidden />, color: 'var(--loss)' },
   warning: { bg: '#431407', border: '#92400e', icon: <AlertTriangle size={16} aria-hidden />, color: '#fb923c' },
   info:    { bg: '#0c1a2e', border: '#1d4ed8', icon: <Info size={16} aria-hidden />, color: 'var(--link)' },
 };
@@ -118,7 +117,7 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
         width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
         background: `${cfg.color}22`, border: `1px solid ${cfg.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 11, fontWeight: 900, color: cfg.color, marginTop: 1,
+        fontSize: 'var(--fs-label)', fontWeight: 900, color: cfg.color, marginTop: 1,
       }}>
         {cfg.icon}
       </div>
@@ -133,7 +132,7 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
             onClick={() => { item.action!.onClick(); dismiss(); }}
             style={{
               marginTop: 6, background: 'transparent', border: 'none',
-              color: cfg.color, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              color: cfg.color, fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer',
               padding: 0, textDecoration: 'underline',
             }}
           >

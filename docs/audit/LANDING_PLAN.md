@@ -1,26 +1,55 @@
-# Landing the audit branch
+# Landing the audit branch — LANDED 2026-09-18
 
-`claude/add-new-skills-lys862` is **665 commits and 1,561 files ahead of `main`**
-(measured 2026-09-14; this read 551 and 1,227 when the plan was written, and 565 and
-1,246 on 2026-09-13). Both figures are now measured by
-`scripts/doc_metrics.py`, which blocks in `pre-commit` when either goes stale —
-until 2026-09-14 nothing measured them, which is exactly why they drifted twice.
-These two move with every commit, so they are **maintained rather than
-policed**: `pre-commit` runs `doc_metrics.py --sync`, which rewrites them and
-then checks every other figure normally. Enforcing them by hand cannot work —
-the hook only fires on documentation changes, so a run of code-only commits
-takes them several commits stale and blocks the next documentation commit
-through no fault of its author, which is how a gate teaches `--no-verify`.
+> **This plan was not used, and the branch landed anyway.** Kept because the
+> evidence it produced is real and the reasons it was abandoned generalise.
+> Read this box before reading anything below it: everything after it is
+> written in the present tense about a state that no longer holds.
 
-Every other figure still fails hard. `gates_total` drifts because something
-real changed, and quietly rewriting it would destroy the only signal that it
-did; the split is deliberate.
-The branch contains all of `main` — `git rev-list --count HEAD..origin/main` is
-**0** — so this is a fast-forward relationship, not a divergence. Nothing on it has been merged, and no CI run has
-ever executed against any of it.
+`claude/add-new-skills-lys862` merged into `main` on **2026-09-18** as PR #315,
+merge commit **9cdc37a** — 666 commits, 1,561 files, in **one merge**, not nine
+slices. The branch is now **41 commits and 295 files ahead of `main`** (measured;
+`scripts/doc_metrics.py --sync` maintains both figures), and that figure is
+follow-up work, not a backlog to land.
 
-This document is how it gets onto `main` without asking anyone to approve
-280,168 lines on trust.
+## Why the nine slices were abandoned
+
+Two slices were cut and proven green in isolation before the approach was
+dropped, and both manifests are real evidence — `SLICE1_MANIFEST.md` (128 files,
+nineteen gates, 554 passed) and `SLICE2_MANIFEST.md` (46 files, 19,164 passed). What
+they proved, between them, is that **the path partition does not match the
+dependency graph**:
+
+* Slice 1's artefacts are whole-repository indices. An index of a partial tree
+  cannot be complete, so several gates could not run at all on their own slice.
+* Slice 2 was scoped as two directories and needed **24 source files drawn from
+  six**, every addition forced by an import error or a failing assertion.
+* `social/` was named in **no slice at all**, and it holds a revenue-split
+  function. A path in no slice lands in no PR.
+
+By slice 5 or 6 the slices would have overlapped enough to stop being
+independent PRs — `core/startup_factories.py` alone is +783 lines and was
+already blocking two of slice 2's tests.
+
+The review the slicing was meant to buy also was not available: greptile refuses
+at 100 files, and nine PRs of ~170 files each get read no more carefully than
+one. The safety argument that replaced it was **execution**: the full fast suite
+green on Python 3.11 **and** 3.12 (25,243 passed, 0 failed, clean tree on both)
+at the merged head, because GitHub Actions had assigned no runner to any job for
+twelve days (F95) and no CI run has ever executed against any of this.
+
+Merging while Actions was down was the safest window rather than the riskiest:
+nothing deployed on the merge, and `main`'s own `deploy.yml` was at that moment
+**ungated** — it fired on every push to `main` and SSHed into the production VPS
+with no CI dependency. The merge replaced it with the branch's CI-gated version.
+
+## What still applies
+
+The recipe in §"The recipe, proven" is sound and worth reusing for any future
+large landing. So are the three rules slice 2 established: a money control
+travels with the money rather than with its directory, a generated document
+travels with the code that generates it, and a test file travels to the latest
+slice it depends on. The slice tables below are a record of an approach, not a
+queue of work.
 
 ---
 

@@ -144,10 +144,22 @@ related_evidence = "docs/ai/MASTER_OUTSTANDING.md §E50; tests/unit/test_audit_p
 
 [AOS-EVID-046]
 title = "Alert Evidence Ladder"
-status = "ABSENT"
-predicates = []
-gap = """Spec §17: alert firing, notification delivery and external acceptance are distinct
-stages. `verify_notification_delivered` exists but collapses the ladder into one boolean."""
+status = "PARTIAL"
+predicates = ["verify_alert_evidence_ladder"]
+gap = """The PREDICATE now exists and keeps the three rungs apart: firing, delivery and
+external acceptance. `accepted=None` means NOT OBSERVED and is reported as such rather than
+defaulted to `delivered`, which would be the exact conflation this invariant forbids, and
+`expected_fired` closes the hole measured in the old predicate — `verify_notification_delivered(0, 0, n)`
+returns NO VIOLATION, so a completely dead pipeline and a healthy quiet one are the same
+number to it.
+
+NOT COVERED, because nothing CALLS it. Measured: 11 of the 12 predicates in
+`invariants/integrations.py` have zero production callers — only `verify_webhook_signature`
+is wired, at 2 sites. `AlertEngine._stats` also counts only `total_alerts_created` and
+`total_triggers`, so there are no fired/delivered/accepted numbers to feed it yet. Marking
+this COVERED would document a defence that does not run, which is the defect class the
+register exists to catch. Closing it needs the counters and a call site, and the third rung
+needs something in the codebase to observe a channel acknowledgement — nothing does today."""
 
 [AOS-EVID-047]
 title = "Multi-Clock Alert Semantics"

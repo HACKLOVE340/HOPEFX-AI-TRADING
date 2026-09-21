@@ -597,10 +597,19 @@ async def fiat_deposit(
     """
 
     # Re-import here to avoid circular at module load time
-    return await _fiat_deposit_impl(req)
+    return await _fiat_deposit_impl(req, user)
 
 
-async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
+async def _fiat_deposit_impl(req: FiatDepositRequest, user: TokenPayload) -> dict:
+    """Create the deposit intent, naming the user the money will belong to.
+
+    `user` is REQUIRED, not defaulted. An optional identity is one a caller can
+    omit in a hurry, and the resulting PaymentIntent is indistinguishable from a
+    correct one until the money arrives and cannot be credited to anybody.
+
+    It comes from the verified token, never from the request body — an identity
+    in the body is an identity the caller chooses (CHAT-SHARED-HISTORY).
+    """
     provider = os.getenv("FIAT_PROVIDER", "manual")
     # UUID-based reference prevents collision when two deposits are initiated
     # in the same second (e.g. double-tap, network retry).
@@ -626,7 +635,12 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
                 amount=to_cents(Decimal(str(req.amount))),
                 currency="usd",
                 payment_method_types=["card"],
-                metadata={"reference": reference},
+                # user_id is what makes the money attributable. Stripe returns
+                # the CUSTOMER id and this reference on payment_intent.succeeded,
+                # and neither resolves to a user_id here — so without this the
+                # webhook knows a payment succeeded and cannot tell whose wallet
+                # to credit. See WALLET-DEAD.
+                metadata={"reference": reference, "user_id": user.sub},
             )
             return {
                 "status": "pending",
@@ -724,6 +738,92 @@ def _screen_withdrawal_for_aml(user: TokenPayload, amount: float) -> None:
         raise HTTPException(status_code=403, detail=f"Withdrawal refused: {decision.reason}")
 
 
+# Every way the ledger can refuse a debit, mapped to a status that says which.
+#
+# Collapsing these into one code hides a ledger-corruption event behind
+# "insufficient funds", and an operator reading 402 for a failed database write
+# debugs the wrong thing. Ordered: the first matching prefix wins.
+_LEDGER_REFUSALS: tuple[tuple[str, int], ...] = (
+    # An operator FROZE this wallet. Deliberate — if it reads as a balance
+    # problem the freeze looks like a bug and someone "fixes" it.
+    ("Wallet is ", 409),
+    ("Wallet not found", 404),
+    ("Insufficient ", 402),
+    ("Withdrawal blocked:", 403),
+    ("Withdrawal temporarily unavailable", 503),
+    # CORRUPTION, not drift. Decimal arithmetic on whole cents is exact, so a
+    # mismatch is a balance that must never be recorded. Never 4xx: nothing the
+    # caller did caused it and nothing they change will fix it.
+    ("Balance did not reconcile", 500),
+    ("Movement refused by invariant", 409),
+    ("Ledger write failed", 503),
+    ("Amount must be", 422),
+    ("Amount is not", 422),
+    ("Invalid wallet type", 500),
+)
+
+
+def _status_for_ledger_refusal(message: str) -> int:
+    """Map a ledger refusal to its HTTP status, defaulting to 500.
+
+    An unrecognised refusal defaults to a SERVER error rather than a client one.
+    A new refusal string added to the ledger is this endpoint's bug, not the
+    caller's, and telling them to change their request cannot help.
+    """
+    for prefix, status in _LEDGER_REFUSALS:
+        if message.startswith(prefix):
+            return status
+    logger.error("Unmapped ledger refusal on the withdrawal path: %r", message)
+    return 500
+
+
+def _debit_wallet_for_withdrawal(user: TokenPayload, amount: float, reference: str) -> None:
+    """Record the withdrawal in the fiat ledger, or raise saying why not.
+
+    Gated on `WITHDRAWAL_DEBITS_LEDGER`, default **false**, and that default is
+    load-bearing rather than cautious. `api/billing.py::get_balance` promises
+    "the authenticated user's wallet balance" and reads the BROKER account,
+    falling back to the subscription manager — never this ledger. The ledger
+    also carries no history: nothing wrote it before deposits started crediting
+    it. With the flag on today, a user the UI says has funds is refused 402,
+    which is an outage that looks like a money bug. Turn it on once balances are
+    reconciled (BALANCE-SOURCE-SPLIT); ADR 0021 has the reasoning.
+
+    Note the AML gate is consulted TWICE on this path, by
+    `_screen_withdrawal_for_aml` above and again inside `debit_wallet`. That is
+    defence in depth, not duplication: the first produces the precise 403 and
+    honours HOPEFX_REQUIRE_AML_STRICT, the second cannot be bypassed by a future
+    caller that forgets the first. Do not delete either.
+    """
+    if os.getenv("WITHDRAWAL_DEBITS_LEDGER", "false").strip().lower() not in ("true", "1", "yes"):
+        return
+
+    from core.app_state import app_state
+
+    wallet_manager = getattr(app_state, "wallet_manager", None)
+    if wallet_manager is None:
+        logger.critical(
+            "WITHDRAWAL_DEBITS_LEDGER is on but no wallet ledger is wired — refusing "
+            "withdrawal for user=%s rather than letting it pass unrecorded.",
+            user.sub,
+        )
+        raise HTTPException(status_code=503, detail="Withdrawal ledger is temporarily unavailable")
+
+    ok, message, _txn = wallet_manager.debit_wallet(
+        user_id=user.sub,
+        # Decimal(str(x)), never Decimal(x): the ledger refuses anything that is
+        # not a whole number of cents, and a float converted directly carries its
+        # binary error into that check.
+        amount=Decimal(str(amount)),
+        transaction_type="withdrawal",
+        reference=reference,
+    )
+    if not ok:
+        status = _status_for_ledger_refusal(message)
+        logger.warning("Withdrawal refused by the ledger for user=%s: %s (HTTP %d)", user.sub, message, status)
+        raise HTTPException(status_code=status, detail=f"Withdrawal refused: {message}")
+
+
 @router.post(
     "/withdraw",
     response_model=None,
@@ -764,6 +864,9 @@ async def fiat_withdraw(
     _screen_withdrawal_for_aml(user, req.amount)
 
     reference = f"WDR-{uuid.uuid4().hex[:16].upper()}"
+    # Record it BEFORE reporting success. A reference returned to a caller for a
+    # movement the ledger refused is a receipt for something that did not happen.
+    _debit_wallet_for_withdrawal(user, req.amount, reference)
     logger.info(
         "Fiat withdrawal initiated (NOT PERSISTED): amount=%.2f dest=%s ref=%s",
         req.amount,

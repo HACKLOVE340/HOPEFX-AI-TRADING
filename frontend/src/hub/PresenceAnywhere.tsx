@@ -322,7 +322,7 @@ export function PresenceAnywhere(props: PresenceAnywhereProps): React.ReactEleme
           onClick={() => setOpen(true)}
           className={`mt-2 flex w-full items-center justify-center gap-1 rounded-lg border border-white/10 px-2 text-xs text-slate-300 transition-colors hover:text-white cursor-pointer ${HIT_AREA} ${FOCUS_RING}`}
         >
-          <MessageSquare size={13} aria-hidden="true" /> Ask about this page
+          <MessageSquare size="1em" aria-hidden="true" /> Ask about this page
         </button>
       )}
 

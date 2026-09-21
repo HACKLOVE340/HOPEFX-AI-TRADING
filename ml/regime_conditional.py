@@ -699,7 +699,17 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
     @classmethod
     def load(cls, path: str) -> RegimeConditionalModel:
         """Load a previously saved RegimeConditionalModel."""
-        payload = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
+        from ml import _verify_checksum
+
+        if not _verify_checksum(Path(path)):
+            # _verify_checksum has already logged CRITICAL with the specifics.
+            raise ValueError(
+                f"RegimeConditionalModel refused '{path}': it failed its integrity check. "
+                "The file is present and its bytes disagree with the sha256 recorded "
+                "in that directory's model_checksums.json.",
+            )
+
+        payload = joblib.load(path)  # nosec B301 - integrity-checked immediately above
         obj = cls(
             hurst_col=payload["hurst_col"],
             adx_col=payload["adx_col"],

@@ -19,10 +19,7 @@ import { useDataFreshness } from '../hooks/useDataFreshness';
 import { StaleDataNotice } from '../components/ui/StaleDataNotice';
 import { Section, RelatedPages } from '../components';
 import { EmptyState } from '../components/EmptyState';
-import {
-  BookOpen, TrendingUp, Shield, Brain, CalendarDays, Download,
-  AlertTriangle, Zap, Target, LineChart,
-} from 'lucide-react';
+import { AlertTriangle, BookOpen, Brain, CalendarDays, Download, LineChart, NotebookPen, Repeat, Shield, Target, TrendingUp, Zap } from 'lucide-react';
 import { extractApiError, fmtPnl } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
 
@@ -70,9 +67,15 @@ type Tab = 'trades' | 'stats' | 'mistakes' | 'emotions' | 'weekly';
 const EMOTION_TAGS = ['patient', 'fomo', 'revenge', 'disciplined', 'hesitant', 'overconfident', 'fearful'];
 const TRADE_TAGS   = ['trend', 'breakout', 'reversal', 'news', 'scalp', 'swing', 'mistake', 'best-trade'];
 
-const EMOTION_EMOJI: Record<string, string> = {
-  patient: '😌', fomo: '😰', revenge: '😤', disciplined: '🎯',
-  hesitant: '😟', overconfident: '😎', fearful: '😨',
+// The emotion is shown as its WORD, not a face. A face is a sentiment scale
+// with no shared reading — the angry face meant "revenge" only to whoever
+// picked it — and it carried no accessible name, so the tag was invisible
+// to a screen reader and to search. The word was already the tooltip; it is
+// now the content.
+const EMOTION_TONE: Record<string, string> = {
+  patient: 'var(--gain)',  disciplined: 'var(--gain)',
+  fomo: 'var(--loss)',     revenge: 'var(--loss)',      fearful: 'var(--loss)',
+  hesitant: 'var(--warn)', overconfident: 'var(--warn)',
 };
 
 function fmt(n: number | null | undefined, d = 2): string {
@@ -332,7 +335,7 @@ const TradeJournal: React.FC = () => {
           {loading ? <div style={s.empty}>Loading…</div> :
            trades.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>📓</div>
+              <div style={{ fontSize: 36, marginBottom: 12 }}><NotebookPen size="1em" aria-hidden /></div>
               <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-dim)', marginBottom: 8 }}>No journal entries yet</div>
               <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
                 Journal entries are created automatically when you close a trade.
@@ -349,8 +352,8 @@ const TradeJournal: React.FC = () => {
                     {entry.side.toUpperCase()}
                   </span>
                   <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{entry.symbol}</span>
-                  {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
-                  {!entry.followed_rules && <span style={s.deviationBadge}>⚠ Rule deviation</span>}
+                  {entry.emotion && <span style={{ ...s.emotionBadge, color: EMOTION_TONE[entry.emotion] ?? 'var(--text-muted)' }}>{entry.emotion}</span>}
+                  {!entry.followed_rules && <span style={s.deviationBadge}><AlertTriangle size="1em" aria-hidden /> Rule deviation</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 18, fontWeight: 700, color: pnlColor(entry.pnl) }}>
@@ -359,10 +362,10 @@ const TradeJournal: React.FC = () => {
                   {entry.closed_at && (
                     <button
                       onClick={() => navigate('/trade', { state: { signal: { symbol: entry.symbol, direction: entry.side === 'long' ? 'BUY' : 'SELL' } } })}
-                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
+                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                       title="Open a new trade with the same symbol and direction"
                     >
-                      🔁 Re-trade
+                      <Repeat size="1em" aria-hidden /> Re-trade
                     </button>
                   )}
                   <button onClick={() => editing === entry.trade_id ? setEditing(null) : startEdit(entry)} style={s.editBtn}>
@@ -396,8 +399,9 @@ const TradeJournal: React.FC = () => {
                       per entry: a constant id would appear as many times as there
                       are open rows, and htmlFor would then point at whichever the
                       browser saw first. */}
-                  <label htmlFor={`journal-notes-${entry.trade_id}`} style={s.label}>Notes</label>
+                  <label id={`journal-notes-${entry.trade_id}-label`} htmlFor={`journal-notes-${entry.trade_id}`} style={s.label}>Notes</label>
                   <textarea id={`journal-notes-${entry.trade_id}`}
+                    aria-labelledby={`journal-notes-${entry.trade_id}-label`}
                     value={editForm.notes ?? ''} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                     style={s.textarea} rows={3} />
 
@@ -416,15 +420,16 @@ const TradeJournal: React.FC = () => {
                     {EMOTION_TAGS.map((em) => (
                       <button key={em} onClick={() => setEditForm({ ...editForm, emotion: em })}
                         style={{ ...s.tagPickerBtn, ...(editForm.emotion === em ? s.tagPickerBtnActive : {}) }}>
-                        {EMOTION_EMOJI[em]} {em}
+                        {em}
                       </button>
                     ))}
                   </div>
 
                   <label style={s.label}>
-                    <input type="checkbox" checked={!editForm.followed_rules}
+                    <input type="checkbox" aria-labelledby={`journal-rule-deviation-${entry.trade_id}-label`}
+                      checked={!editForm.followed_rules}
                       onChange={(e) => setEditForm({ ...editForm, followed_rules: !e.target.checked })} />
-                    {' '}Rule deviation
+                    {' '}<span id={`journal-rule-deviation-${entry.trade_id}-label`}>Rule deviation</span>
                   </label>
                   {!editForm.followed_rules && (
                     <input aria-label="What rule did you break?" value={editForm.rule_deviation ?? ''} onChange={(e) => setEditForm({ ...editForm, rule_deviation: e.target.value })}
@@ -471,13 +476,13 @@ const TradeJournal: React.FC = () => {
                   const color = pct >= 50 ? '#4ade80' : '#f87171';
                   return (
                     <div key={e.tag} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 110, fontSize: 11, color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>
-                        {EMOTION_EMOJI[e.tag] ?? ''} {e.tag}
+                      <span style={{ width: 110, fontSize: 'var(--fs-label)', color: 'var(--text-dim)', textAlign: 'right', flexShrink: 0 }}>
+                        {e.tag}
                       </span>
                       <div style={{ flex: 1, height: 14, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.4s ease' }} />
                       </div>
-                      <span style={{ width: 42, fontSize: 11, color, fontFamily: 'monospace', textAlign: 'right', flexShrink: 0 }}>
+                      <span style={{ width: 42, fontSize: 'var(--fs-label)', color, fontFamily: 'monospace', textAlign: 'right', flexShrink: 0 }}>
                         {pct.toFixed(1)}%
                       </span>
                     </div>
@@ -486,7 +491,7 @@ const TradeJournal: React.FC = () => {
               </div>
             </div>
           )}
-          {(stats.by_emotion ?? []).map((e) => <TagRow key={e.tag} stat={e} emoji={EMOTION_EMOJI[e.tag]} />)}
+          {(stats.by_emotion ?? []).map((e) => <TagRow key={e.tag} stat={e} />)}
         </div>
       )}
 
@@ -494,23 +499,23 @@ const TradeJournal: React.FC = () => {
       {tab === 'mistakes' && (
         <>
           {mistakes.length === 0
-            ? <div style={s.empty}>No rule deviations recorded. Keep it up! 🎯</div>
+            ? <div style={s.empty}>No rule deviations recorded. Keep it up! <Target size="1em" aria-hidden /></div>
             : (
               <>
                 {/* Summary banner */}
                 <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 24 }}>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--loss)', marginBottom: 2 }}>TOTAL DEVIATIONS</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)', marginBottom: 2 }}>TOTAL DEVIATIONS</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>{mistakes.length}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--loss)', marginBottom: 2 }}>COST OF MISTAKES</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)', marginBottom: 2 }}>COST OF MISTAKES</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>
                       ${Math.abs(mistakes.reduce((sum, m) => sum + (m.pnl ?? 0), 0)).toFixed(2)}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--loss)', marginBottom: 2 }}>WIN RATE ON MISTAKES</div>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--loss)', marginBottom: 2 }}>WIN RATE ON MISTAKES</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>
                       {mistakes.length > 0
                         ? `${((mistakes.filter(m => (m.pnl ?? 0) > 0).length / mistakes.length) * 100).toFixed(0)}%`
@@ -524,11 +529,11 @@ const TradeJournal: React.FC = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ ...s.sideBadge, background: '#450a0a', color: 'var(--loss)' }}>{entry.side.toUpperCase()}</span>
                         <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{entry.symbol}</span>
-                        <span style={s.deviationBadge}>⚠ {entry.rule_deviation ?? 'Rule deviation'}</span>
-                        {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
+                        <span style={s.deviationBadge}><AlertTriangle size="1em" aria-hidden /> {entry.rule_deviation ?? 'Rule deviation'}</span>
+                        {entry.emotion && <span style={{ ...s.emotionBadge, color: EMOTION_TONE[entry.emotion] ?? 'var(--text-muted)' }}>{entry.emotion}</span>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(entry.opened_at).toLocaleDateString()}</span>
+                        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{new Date(entry.opened_at).toLocaleDateString()}</span>
                         <span style={{ fontSize: 16, fontWeight: 700, color: pnlColor(entry.pnl) }}>
                           {entry.pnl !== null ? `${entry.pnl >= 0 ? '+' : ''}$${fmt(entry.pnl)}` : 'Open'}
                         </span>
@@ -563,15 +568,15 @@ const TradeJournal: React.FC = () => {
 
 const StatCard: React.FC<{ label: string; value: string; positive?: boolean }> = ({ label, value, positive }) => (
   <div style={s.statCard}>
-    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: 20, fontWeight: 700, color: positive === undefined ? 'var(--text-strong)' : positive ? 'var(--gain)' : 'var(--loss)' }}>{value}</div>
   </div>
 );
 
-const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) => (
+const TagRow: React.FC<{ stat: TagStats }> = ({ stat }) => (
   <div style={s.tagStatRow}>
-    <span style={{ width: 120, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{emoji ? `${emoji} ` : ''}{stat.tag}</span>
-    <span style={{ width: 50, color: 'var(--text-muted)', fontSize: 12 }}>{stat.count}×</span>
+    <span style={{ width: 120, color: 'var(--text-strong)', fontSize: 'var(--fs-body)'}}>{stat.tag}</span>
+    <span style={{ width: 50, color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{stat.count}×</span>
     <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
       <div style={{ width: `${stat.win_rate}%`, height: '100%', background: stat.win_rate >= 50 ? 'var(--gain)' : 'var(--loss)', borderRadius: 4 }} />
     </div>
@@ -594,23 +599,24 @@ const s: Record<string, React.CSSProperties> = {
   select:          { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 14 },
   tradeCard:       { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px', marginBottom: 10 },
   tradeHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  sideBadge:       { borderRadius: 4, fontSize: 11, fontWeight: 700, padding: '2px 8px' },
-  deviationBadge:  { background: '#450a0a', color: 'var(--loss)', fontSize: 11, padding: '2px 8px', borderRadius: 4 },
+  sideBadge:       { borderRadius: 4, fontSize: 'var(--fs-label)', fontWeight: 700, padding: '2px 8px' },
+  deviationBadge:  { background: '#450a0a', color: 'var(--loss)', fontSize: 'var(--fs-label)', padding: '2px 8px', borderRadius: 4 },
+  emotionBadge:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, fontSize: 'var(--fs-label)', fontWeight: 600, padding: '1px 6px', textTransform: 'capitalize' as const },
   priceRow:        { display: 'flex', gap: 16, marginBottom: 8 },
   priceItem:       { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
   tagRow:          { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
-  tag:             { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '2px 8px' },
+  tag:             { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 'var(--fs-label)', padding: '2px 8px' },
   notes:           { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', margin: '4px 0 0', lineHeight: 1.5 },
-  editBtn:         { background: 'var(--surface-hover)', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
+  editBtn:         { background: 'var(--surface-hover)', border: 'none', borderRadius: 6, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 10px' },
   editForm:        { borderTop: '1px solid var(--border-strong)', marginTop: 12, paddingTop: 12 },
   label:           { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
   textarea:        { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 'var(--fs-body)', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
   input:           { width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-strong)', padding: '8px 12px', fontSize: 'var(--fs-body)', boxSizing: 'border-box' },
   tagPicker:       { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
-  tagPickerBtn:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
+  tagPickerBtn:    { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 10px' },
   tagPickerBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
-  saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: 'var(--loss)', marginTop: 8 },
+  saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 6, padding: '6px 10px', fontSize: 'var(--fs-body)', color: 'var(--loss)', marginTop: 8 },
   statsGrid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 },
   statCard:        { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '12px 16px' },
   sectionTitle:    { fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: '20px 0 10px' },

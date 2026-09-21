@@ -117,7 +117,7 @@ const LogsSection: React.FC = () => {
                 display: 'flex', alignItems: 'center', gap: 8,
                 background: 'var(--raised)', borderRadius: 8, padding: '8px 12px',
               }}>
-                <span style={{ fontSize: 12, color: 'var(--text-dim)', minWidth: 120 }}>{logger}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', minWidth: 120 }}>{logger}</span>
                 <select
                   value={level}
                   onChange={e => setLevel(logger, e.target.value)}
@@ -125,7 +125,7 @@ const LogsSection: React.FC = () => {
                   style={{
                     background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 5,
                     color: LEVEL_COLORS[level]?.color ?? 'var(--text-dim)',
-                    fontSize: 12, padding: '4px 8px', cursor: 'pointer',
+                    fontSize: 'var(--fs-body)', padding: '4px 8px', cursor: 'pointer',
                   }}
                 >
                   {['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'].map(l => (
@@ -151,9 +151,10 @@ const LogsSection: React.FC = () => {
         noPad
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
-              Auto-scroll
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-body)', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <input type="checkbox" aria-labelledby="logs-auto-scroll-label"
+                checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
+              <span id="logs-auto-scroll-label">Auto-scroll</span>
             </label>
             <ActionBtn label="Export" onClick={exportLogs} icon={<Download size={18} aria-hidden />} size="sm" />
             <ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />
@@ -195,7 +196,7 @@ const LogsSection: React.FC = () => {
         ) : (
           <div style={{
             height: 520, overflowY: 'auto', fontFamily: 'monospace',
-            fontSize: 12, background: '#020817',
+            fontSize: 'var(--fs-body)', background: '#020817',
           }}>
             {loading && filteredLogs.length === 0 ? (
               <div style={{ padding: 20, color: 'var(--text-faint)' }}>Loading logs…</div>
@@ -227,7 +228,7 @@ const LogsSection: React.FC = () => {
                       {l.message}
                     </span>
                     {l.trace_id && (
-                      <span style={{ color: 'var(--text-faint)', paddingRight: 12, flexShrink: 0, fontSize: 10 }}>
+                      <span style={{ color: 'var(--text-faint)', paddingRight: 12, flexShrink: 0, fontSize: 'var(--fs-micro)'}}>
                         {l.trace_id.slice(0, 8)}
                       </span>
                     )}

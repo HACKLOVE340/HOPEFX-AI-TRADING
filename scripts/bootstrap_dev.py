@@ -5,8 +5,21 @@
 """
 scripts/bootstrap_dev.py
 ========================
-One-shot dev bootstrap: generates .env with ALL secrets from .env.example
-and seeds the three default users (superadmin / admin / trader).
+One-shot dev bootstrap: generates .env from the template below and seeds the
+three default users (superadmin / admin / trader).
+
+It does NOT read .env.example, despite what these lines said until 2026-09-19.
+The template here is a hand-maintained subset: 203 keys against that file's 942.
+The difference is deliberate -- most of the remainder are tunables with a
+working default in code, and writing them all out buries the settings that
+matter. What must be here is every secret whose ABSENCE silently disables a
+control rather than refusing. `DB_ENCRYPTION_KEY` was the counterexample that
+prompted this note: it was missing, so User.totp_secret was stored in plaintext
+on every machine this script set up.
+
+`tests/unit/test_bootstrap_generates_every_fail_open_secret.py` holds that line,
+including which secrets must NOT be generated because their absence fails
+closed.
 
 Run once before starting the server:
     python scripts/bootstrap_dev.py
@@ -16,7 +29,7 @@ Or let app.py call it automatically when APP_ENV=development and .env is absent.
 What it does (idempotent — safe to re-run)
 ------------------------------------------
 1. Generates .env with cryptographically-random values for every secret,
-   token, password, and key found in .env.example.
+   token, password, and key in the template below.
 2. Creates the SQLite database schema.
 3. Seeds three users:
      superadmin@hopefx.io  ->  role=superadmin  ->  /superadmin
@@ -74,8 +87,12 @@ def _password(n: int = 16) -> str:
 
 def _generate_env() -> bool:
     """
-    Write .env with generated secrets for every CHANGE_ME / blank secret
-    found in .env.example.  Returns True if the file was created.
+    Write .env with generated secrets for every secret in the template below.
+    Returns True if the file was created, False if .env already exists.
+
+    Note the False case is a no-op, not a merge: an existing .env is never
+    updated, so a key added to the template after a machine was bootstrapped
+    never reaches it. Regenerate with `rm .env && python scripts/bootstrap_dev.py`.
     """
     if ENV_PATH.exists():
         return False
@@ -106,6 +123,12 @@ JWT_SECRET={_hex(32)}
 JWT_SECRET_KEY={_hex(32)}
 LICENSE_SECRET={_hex(32)}
 HOPEFX_ENCRYPTION_KEY={_urlsafe(32)}
+# Field-level encryption for User.totp_secret (the second-factor seed).
+# MUST decode to exactly 32 bytes -- database/encryption.py::_load_key rejects
+# any other length and returns None, and a None key stores the column as
+# PLAINTEXT with no error and no log line. token_urlsafe(32) is 43 characters
+# that decode to 32 bytes, which is what that loader expects.
+DB_ENCRYPTION_KEY={_urlsafe(32)}
 HOPEFX_MASTER_KEY={_urlsafe(32)}
 WHITELABEL_KEY_HASH_SECRET={_hex(32)}
 AUTH_TOKEN={_urlsafe(24)}
@@ -200,9 +223,7 @@ MT5_PATH=
 MT5_SIGNAL_DIR=data/mt5_signals
 
 # -- cTrader ------------------------------------------------------------------
-CTRADER_CLIENT_ID=
 CTRADER_CLIENT_SECRET=
-CTRADER_ACCOUNT_ID=
 
 # -- Bybit --------------------------------------------------------------------
 BYBIT_API_KEY={_urlsafe(20)}
@@ -347,7 +368,6 @@ ONFIDO_API_TOKEN=
 ONFIDO_WEBHOOK_TOKEN=
 SUMSUB_APP_TOKEN=
 SUMSUB_SECRET_KEY=
-SUMSUB_WEBHOOK_SECRET=
 DTCC_GTR_API_KEY=
 ESMA_API_KEY=
 

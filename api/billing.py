@@ -318,6 +318,130 @@ def _tier_features(tier: str) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Confirmed deposits credit the fiat wallet ledger — ADR 0021
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _already_credited(wallet_manager, user_id: str, reference: str) -> bool:
+    """Has this external payment already moved money for this user?
+
+    Queried against the SAME session factory the ledger writes through, so the
+    answer is about the rows that would actually collide.
+
+    This is the normal path, NOT the guarantee, and that split was measured
+    rather than assumed. With this check removed, a replayed event still writes
+    exactly one row: `uq_wallet_txn_user_reference` refuses the second insert,
+    `_persist_transaction` returns False, and `_apply_movement` rolls the
+    balance back. The database is what makes a replay — and the race between two
+    concurrent deliveries, which this check cannot see — safe.
+
+    What the check buys is an honest answer. Without it a routine Stripe retry
+    reports "Ledger write failed; movement refused" and logs an IntegrityError
+    traceback at ERROR, which reads like a broken ledger rather than a duplicate
+    delivery. Operators who learn to ignore that message will ignore it on the
+    day it means something.
+
+    When there is no database at all — the in-memory mode tests and paper
+    trading use — fall back to the process's own history, which is the only
+    record there is. That fallback has no constraint behind it, so it is best
+    effort by construction; in-memory mode moves no real money.
+    """
+    factory = getattr(wallet_manager, "session_factory", None)
+    if factory is None:
+        history = wallet_manager.get_transaction_history(user_id, limit=500)
+        return any(row.get("reference") == reference for row in history)
+
+    from database.models import WalletTransaction
+
+    with factory() as session:
+        return session.query(WalletTransaction).filter_by(user_id=user_id, reference=reference).first() is not None
+
+
+def _credit_confirmed_deposit(data: dict) -> dict:
+    """Credit the depositor's wallet for a CONFIRMED Stripe payment.
+
+    Called on `payment_intent.succeeded` — the point at which money has actually
+    been received. Creating a PaymentIntent moves nothing, so crediting there
+    would invent funds.
+
+    Returns a result rather than raising, so one failing credit cannot discard
+    the rest of the webhook's work. `retryable` says whether re-delivery could
+    succeed: a missing ledger is a server problem and will pass later, while a
+    payment that names no user will never become attributable by being sent
+    again.
+    """
+    from decimal import Decimal
+
+    from core.app_state import app_state
+
+    pi_id = str(data.get("id") or "")
+    metadata = data.get("metadata") or {}
+    user_id = str(metadata.get("user_id") or "").strip()
+
+    if not user_id:
+        # Fail closed on attribution: never guess whose money this is. The
+        # Stripe customer id is not a user_id here, and mapping it by email or
+        # by "the only recent deposit of that amount" is how money lands in the
+        # wrong account.
+        logger.error(
+            "Confirmed payment %s carries no user_id in its metadata — NOT credited, "
+            "and it cannot be attributed later from this payload alone. "
+            "Deposits set this in api/payments.py::_fiat_deposit_impl.",
+            pi_id,
+        )
+        return {"credited": False, "retryable": False, "reason": "unattributable: no user_id in metadata"}
+
+    wallet_manager = getattr(app_state, "wallet_manager", None)
+    if wallet_manager is None:
+        logger.critical(
+            "Confirmed payment %s for user %s could NOT be credited: no wallet ledger is wired. "
+            "The money was taken and is unrecorded until this delivery is retried.",
+            pi_id,
+            user_id,
+        )
+        return {"credited": False, "retryable": True, "reason": "wallet ledger unavailable"}
+
+    # The provider's own id is the deduplicating key. `transaction_id` is unique
+    # but generated per call, so it identifies the WRITE, not the PAYMENT.
+    reference = f"stripe:{pi_id}"
+
+    try:
+        if _already_credited(wallet_manager, user_id, reference):
+            logger.info("Payment %s was already credited to user %s — replay ignored", pi_id, user_id)
+            return {"credited": False, "already_applied": True, "reason": "already credited"}
+    except Exception:
+        # A failed lookup must not become a second credit. The constraint would
+        # refuse the duplicate write anyway, but proceeding on an unknown answer
+        # is the wrong default on a money path.
+        logger.exception("Could not determine whether payment %s was already credited", pi_id)
+        return {"credited": False, "retryable": True, "reason": "duplicate check failed"}
+
+    # Stripe amounts are INTEGER CENTS. Divide a Decimal by 100 — never
+    # `Decimal(cents / 100)`, which inherits the float's binary error, and never
+    # `float(cents) / 100`, which `_validate_amount` would then reject or, worse,
+    # accept with a sub-cent residue.
+    try:
+        amount = Decimal(int(data.get("amount") or 0)) / Decimal(100)
+    except (TypeError, ValueError, ArithmeticError):
+        logger.error("Confirmed payment %s has an unusable amount %r", pi_id, data.get("amount"))
+        return {"credited": False, "retryable": False, "reason": "unusable amount"}
+
+    ok, message, _txn = wallet_manager.credit_wallet(
+        user_id=user_id,
+        amount=amount,
+        transaction_type="deposit",
+        method="stripe",
+        reference=reference,
+    )
+    if not ok:
+        logger.error("Crediting confirmed payment %s for user %s was refused: %s", pi_id, user_id, message)
+        return {"credited": False, "retryable": True, "reason": message}
+
+    logger.info("Credited %s to user %s for confirmed payment %s", amount, user_id, pi_id)
+    return {"credited": True, "amount": str(amount), "reference": reference}
+
+
 @router.post("/webhook/stripe", include_in_schema=True)
 async def stripe_webhook(request: Request):
     """
@@ -354,6 +478,31 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature")
 
     result = client.handle_webhook_event(event)
+
+    # A confirmed payment credits the depositor's wallet — ADR 0021.
+    #
+    # Done here rather than inside `handle_webhook_event` so the Stripe client
+    # stays a Stripe client and does not grow knowledge of this platform's
+    # ledger. It runs AFTER signature verification, never on an unverified body.
+    if event.get("type") == "payment_intent.succeeded":
+        credit = _credit_confirmed_deposit(event.get("data", {}).get("object", {}) or {})
+        if credit.get("retryable"):
+            # Tell Stripe to deliver again. The money has been taken and is not
+            # yet recorded, so acknowledging this delivery would lose it
+            # silently — at-least-once delivery is the only thing that recovers
+            # it. The credit path is idempotent, so a redelivery that arrives
+            # after the problem clears cannot double-credit.
+            logger.critical(
+                "Stripe webhook %s: the deposit could not be credited (%s) — returning 503 so it is redelivered",
+                event.get("id", "<no id>"),
+                credit.get("reason"),
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Deposit ledger temporarily unavailable; please redeliver this event",
+            )
+        if isinstance(result, dict):
+            result = {**result, "wallet_credit": credit}
 
     # Also forward to legacy subscription manager for backward compat
     try:
@@ -736,16 +885,61 @@ async def flutterwave_status():
 @router.get("/balance")
 async def get_balance(user: TokenPayload = Depends(require_plan("starter"))):
     """
-    Return the authenticated user's wallet balance.
+    Return the balance this platform can show, and say where it came from.
 
-    Reads from the subscription manager's payment records when available;
-    falls back to the paper-trading account balance from the trading engine.
+    Two sources answer this, and NEITHER is the wallet ledger: the **broker**
+    account, then the subscription manager's `wallet_balance`, which overwrites
+    it when present. Meanwhile ADR 0021 makes `wallet_transactions` the ledger a
+    withdrawal is refused against. So the number a user is shown and the number
+    a withdrawal is checked against come from different places.
+
+    This function does not decide which is authoritative — that is
+    reconciliation, and it is the owner's call (`BALANCE-SOURCE-SPLIT`). It
+    makes the disagreement visible instead of hiding it, and reports the ledger
+    alongside so the two can be compared at all.
+
+    The docstring here used to say the subscription manager was read "when
+    available" and the broker was the fallback. The code does the opposite, and
+    has since it was written.
+
+    `balance_known` exists because a failed lookup used to be indistinguishable
+    from an empty account: both sources were wrapped in
+    `except Exception: logger.debug(...)`, DEBUG is off in production, and a user
+    whose broker call timed out was shown `0.00` in a response byte-identical to
+    a real zero.
     """
+    from decimal import ROUND_HALF_UP, Decimal
+
+    def _account_field(account, name: str) -> float:
+        """Read a field from a broker account that may be an object OR a mapping.
+
+        This was `getattr(account, name, 0) or account.get(name, 0)`, and the
+        `or` conflated "the attribute is missing" with "the attribute is ZERO".
+        A broker reporting a genuine zero balance fell through to the mapping
+        branch, and an object-style account has no `.get`, so it raised
+        AttributeError — into an `except` that logged at DEBUG. A real zero
+        balance crashed the lookup and nobody could see why.
+        """
+        value = getattr(account, name, None)
+        if value is None and hasattr(account, "get"):
+            value = account.get(name, 0)
+        return float(value if value is not None else 0)
+
+    def _cents(value) -> float:
+        """Quantize to cents, HALF_UP.
+
+        `round(x, 2)` is banker's rounding: `round(2.675, 2)` is 2.67. On a
+        displayed balance that is a cent, always in the same direction.
+        """
+        return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
     balance = 0.0
     frozen = 0.0
     pending = 0.0
+    source: str | None = None
+    failures: list[str] = []
 
-    # Try trading account balance first (most accurate for paper accounts)
+    # The broker account first — most accurate for paper accounts.
     try:
         from core.app_state import app_state
 
@@ -755,26 +949,61 @@ async def get_balance(user: TokenPayload = Depends(require_plan("starter"))):
 
             account = await asyncio.wait_for(broker.get_account(), timeout=3.0)
             if account:
-                balance = float(getattr(account, "balance", 0) or account.get("balance", 0))
-                margin_used = float(getattr(account, "margin_used", 0) or account.get("margin_used", 0))
-                frozen = margin_used
+                balance = _account_field(account, "balance")
+                frozen = _account_field(account, "margin_used")
+                source = "broker"
+        else:
+            failures.append("broker: not configured")
     except Exception as exc:
-        logger.debug("Broker balance unavailable: %s", exc)
+        # WARNING, not DEBUG. This is the difference between an operator seeing
+        # why a user was shown zero and an operator seeing nothing at all.
+        logger.warning("Balance: broker lookup failed for user=%s: %s", user.sub, exc)
+        failures.append(f"broker: {exc}")
 
-    # Try subscription manager for payment-based balance
+    # The subscription manager OVERWRITES the broker when it has a figure.
     try:
         mgr = _get_subscription_manager()
         sub = mgr.get_user_subscription(user.sub)
         if sub and hasattr(sub, "wallet_balance"):
             balance = float(sub.wallet_balance)
-    except Exception as _exc:
-        logger.debug("Suppressed exception: %s", _exc)
+            source = "subscription_manager"
+    except Exception as exc:
+        logger.warning("Balance: subscription lookup failed for user=%s: %s", user.sub, exc)
+        failures.append(f"subscription_manager: {exc}")
 
+    # The ledger a withdrawal is actually refused against, reported alongside so
+    # the split is measurable rather than merely documented. `None` means "no
+    # wallet", which is not the same as a wallet holding nothing.
+    ledger_balance: float | None = None
+    try:
+        from core.app_state import app_state as _app_state
+
+        wallet_manager = getattr(_app_state, "wallet_manager", None)
+        if wallet_manager is not None and wallet_manager.get_wallet(user.sub) is not None:
+            ledger_balance = _cents(wallet_manager.get_balance(user.sub)["total_balance"])
+    except Exception as exc:
+        logger.warning("Balance: wallet ledger lookup failed for user=%s: %s", user.sub, exc)
+        failures.append(f"wallet_ledger: {exc}")
+
+    if source is None:
+        logger.warning(
+            "Balance: no source could answer for user=%s (%s) — reporting balance_known=false "
+            "rather than a zero that looks like an empty account",
+            user.sub,
+            "; ".join(failures) or "no reason recorded",
+        )
+
+    shown = _cents(balance)
     return {
-        "balance": round(balance, 2),
-        "frozen": round(frozen, 2),
-        "pending": round(pending, 2),
+        "balance": shown,
+        "frozen": _cents(frozen),
+        "pending": _cents(pending),
         "currency": "USD",
+        # Everything below is additive. Existing callers keep reading `balance`.
+        "balance_known": source is not None,
+        "source": source,
+        "ledger_balance": ledger_balance,
+        "sources_agree": None if (ledger_balance is None or source is None) else ledger_balance == shown,
     }
 
 

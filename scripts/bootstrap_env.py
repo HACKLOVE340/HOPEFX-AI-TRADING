@@ -154,6 +154,10 @@ _GENERATORS: dict[str, object] = {
     "DB_ENCRYPTION_KEY": _aes256_key,
     "HOPEFX_KILL_SWITCH_TOKEN": lambda: _hex(32),
     "CRYPTO_WEBHOOK_SECRET": lambda: _hex(32),
+    # The white-label surface signs per-tenant tokens with its own key
+    # (whitelabel/tenant_isolation.py). NOT an alias of SECURITY_JWT_SECRET:
+    # aliasing them would make one leak compromise both.
+    "JWT_SECRET": lambda: _hex(32),  # pragma: allowlist secret — a generator, not a value
     # Infrastructure passwords — embedded in DSNs, so URL-safe only.
     "POSTGRES_PASSWORD": lambda: _urlsafe(32),
     "REDIS_PASSWORD": lambda: _urlsafe(32),

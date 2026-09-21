@@ -181,7 +181,7 @@ const GroupLabel: React.FC<{
       style={{
         display: 'flex', alignItems: 'center', gap: 6, width: '100%',
         background: 'transparent', border: 'none', cursor: 'pointer',
-        fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+        fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
         letterSpacing: '0.08em', padding: '14px 14px 4px', textAlign: 'left',
         fontFamily: 'inherit',
       }}
@@ -325,7 +325,7 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({
         onChange={(e) => onChange(e.target.value)}
         style={{
           background: 'transparent', border: 'none', outline: 'none',
-          color: 'var(--text)', fontSize: 12, width: '100%',
+          color: 'var(--text)', fontSize: 'var(--fs-body)', width: '100%',
           fontFamily: 'inherit',
         }}
       />
@@ -586,13 +586,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
         {/* ── Search results mode ── */}
         {filteredItems && !collapsed ? (
           filteredItems.length === 0 ? (
-            <div style={{ padding: '16px 14px', fontSize: 12, color: 'var(--text-faint)', textAlign: 'center' }}>
+            <div style={{ padding: '16px 14px', fontSize: 'var(--fs-body)', color: 'var(--text-faint)', textAlign: 'center' }}>
               No results for "{search}"
             </div>
           ) : (
             <div>
               <div style={{
-                fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+                fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
                 letterSpacing: '0.08em', padding: '8px 14px 4px',
               }}>
                 {filteredItems.length} result{filteredItems.length !== 1 ? 's' : ''}
@@ -619,7 +619,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
             {!collapsed && favoriteItems.length > 0 && (
               <div>
                 <div style={{
-                  fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+                  fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
                   letterSpacing: '0.08em', padding: '8px 14px 4px',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
@@ -645,7 +645,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
             {!collapsed && recentItems.length > 0 && (
               <div>
                 <div style={{
-                  fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
+                  fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase',
                   letterSpacing: '0.08em', padding: '8px 14px 4px',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
@@ -761,7 +761,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <WsDot />
                   <span style={{
-                    fontSize: 12, color: 'var(--text-dim)',
+                    fontSize: 'var(--fs-body)', color: 'var(--text-dim)',
                     overflow: 'hidden', textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap', flex: 1,
                   }}>
@@ -773,7 +773,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                   onClick={handleSignOut}
                   style={{
                     background: 'transparent', border: '1px solid var(--border-strong)',
-                    borderRadius: 6, color: 'var(--text-muted)', fontSize: 12,
+                    borderRadius: 6, color: 'var(--text-muted)', fontSize: 'var(--fs-body)',
                     cursor: 'pointer', padding: '4px 8px', textAlign: 'left',
                   }}
                 >
@@ -785,7 +785,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                 onClick={() => navigate('/login')}
                 style={{
                   background: '#1e3a5f', border: 'none', borderRadius: 6,
-                  color: 'var(--link)', fontSize: 12, cursor: 'pointer',
+                  color: 'var(--link)', fontSize: 'var(--fs-body)', cursor: 'pointer',
                   padding: '6px 10px', fontWeight: 600,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
@@ -796,14 +796,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
             )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <NavLink to="/" onClick={onNavigate} style={{ fontSize: 12, color: 'var(--text-faint)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <NavLink to="/" onClick={onNavigate} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <ArrowLeft size={12} strokeWidth={2} aria-hidden />
                   Landing
                 </NavLink>
-                <NavLink to="/docs" onClick={onNavigate} style={{ fontSize: 12, color: 'var(--text-faint)', textDecoration: 'none' }} title="Documentation">
+                <NavLink to="/docs" onClick={onNavigate} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', textDecoration: 'none' }} title="Documentation">
                   Docs
                 </NavLink>
-                <NavLink to="/system-status" onClick={onNavigate} style={{ fontSize: 12, color: 'var(--text-faint)', textDecoration: 'none' }} title="System status">
+                <NavLink to="/system-status" onClick={onNavigate} style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)', textDecoration: 'none' }} title="System status">
                   Status
                 </NavLink>
               </div>

@@ -140,8 +140,8 @@ export const Heatmap: React.FC<{
       </div>
       {/* Selective, not a number on every cell: the two ends of the scale. */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-        <span style={{ fontSize: 10, color: INK.muted }}>quiet</span>
-        <span style={{ fontSize: 10, color: INK.muted }}>
+        <span style={{ fontSize: 'var(--fs-micro)', color: INK.muted }}>quiet</span>
+        <span style={{ fontSize: 'var(--fs-micro)', color: INK.muted }}>
           {hovered ? cells.find((c) => `${c.row}/${c.column}` === hovered)?.label : 'busiest'}
         </span>
       </div>
@@ -150,8 +150,8 @@ export const Heatmap: React.FC<{
 };
 
 export const HeatmapTable: React.FC<{ cells: Cell[] }> = ({ cells }) => (
-  <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
-    <caption style={{ textAlign: 'left', color: INK.muted, fontSize: 10, paddingBottom: 4 }}>
+  <table style={{ width: '100%', fontSize: 'var(--fs-label)', borderCollapse: 'collapse' }}>
+    <caption style={{ textAlign: 'left', color: INK.muted, fontSize: 'var(--fs-micro)', paddingBottom: 4 }}>
       The same values, as text
     </caption>
     <tbody>
@@ -256,7 +256,7 @@ export const NetworkGraph: React.FC<{ nodes: Node[]; edges: Edge[]; onDrill?: (l
         </ul>
       )}
       {hovered && (
-        <p style={{ margin: '4px 0 0', fontSize: 11, color: INK.secondary }}>
+        <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-label)', color: INK.secondary }}>
           {nodes.find((n) => n.id === hovered)?.label}
         </p>
       )}
@@ -265,7 +265,7 @@ export const NetworkGraph: React.FC<{ nodes: Node[]; edges: Edge[]; onDrill?: (l
 };
 
 export const NetworkTable: React.FC<{ nodes: Node[]; edges: Edge[] }> = ({ nodes, edges }) => (
-  <div style={{ fontSize: 11, color: INK.secondary }}>
+  <div style={{ fontSize: 'var(--fs-label)', color: INK.secondary }}>
     <ul style={{ margin: 0, paddingLeft: 15 }}>
       {nodes.map((n) => (
         <li key={n.id}>
@@ -345,7 +345,7 @@ export const Timeline: React.FC<{ events: Event[]; onDrill?: (label: string) => 
           );
         })}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: INK.muted }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-micro)', color: INK.muted }}>
         <span>{new Date(first).toLocaleTimeString()}</span>
         <span>{new Date(last).toLocaleTimeString()}</span>
       </div>
@@ -357,7 +357,7 @@ export const Timeline: React.FC<{ events: Event[]; onDrill?: (label: string) => 
 };
 
 export const TimelineTable: React.FC<{ events: Event[] }> = ({ events }) => (
-  <ol style={{ margin: 0, paddingLeft: 15, fontSize: 11, color: INK.secondary, display: 'grid', gap: 3 }}>
+  <ol style={{ margin: 0, paddingLeft: 15, fontSize: 'var(--fs-label)', color: INK.secondary, display: 'grid', gap: 3 }}>
     {events.map((e, i) => (
       <li key={`${e.at}-${i}`}>
         <time dateTime={new Date(e.at).toISOString()} style={{ color: INK.muted }}>
@@ -421,7 +421,7 @@ export const Surface3D: React.FC<{ grid: SurfaceGrid; width?: number; height?: n
 
   if (!verdict.warranted) {
     return (
-      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: INK.secondary }} data-surface3d="refused">
+      <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 1.6, color: INK.secondary }} data-surface3d="refused">
         {describeSurface(grid, [])}
       </p>
     );
@@ -453,7 +453,7 @@ export const Surface3D: React.FC<{ grid: SurfaceGrid; width?: number; height?: n
           />
         ))}
       </svg>
-      <figcaption style={{ fontSize: 11, lineHeight: 1.5, color: INK.secondary, marginTop: 4 }}>
+      <figcaption style={{ fontSize: 'var(--fs-label)', lineHeight: 1.5, color: INK.secondary, marginTop: 4 }}>
         {describeSurface(grid, faces)}
       </figcaption>
     </figure>
@@ -513,7 +513,7 @@ export function surfaceInkHex(t: number): string {
  * cell, because an empty cell reads as a formatting accident.
  */
 export const SurfaceTable: React.FC<{ grid: SurfaceGrid }> = ({ grid }) => (
-  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-label)'}}>
     <caption style={{ captionSide: 'top', textAlign: 'left', color: INK.secondary, paddingBottom: 4 }}>
       {grid.zLabel ?? 'value'} by {grid.xLabel ?? 'x'} and {grid.yLabel ?? 'y'}
     </caption>

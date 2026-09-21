@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import shutil
 import subprocess  # nosec B404 — invoking npm with a fixed argv, no shell
 import tempfile
@@ -52,6 +53,26 @@ _FRONTEND = _ROOT / "frontend"
 
 def _npm() -> str | None:
     return shutil.which("npm")
+
+
+_NPM_CI_RE = re.compile(r"^RUN\s+npm\s+ci\b(?P<flags>.*)$", re.MULTILINE)
+
+
+def _dockerfile_npm_ci_flags() -> list[str]:
+    """The flags `Dockerfile` itself passes to `npm ci`.
+
+    Read rather than repeated. This test's whole claim is that it runs what the
+    image runs, and a hard-coded argv here quietly stops being true the first
+    time the Dockerfile gains a flag — which it has: `--legacy-peer-deps`, to
+    work around an arborist crash while loading optional peer sets. A test that
+    kept running the bare command would have gone on failing for a defect the
+    build no longer has, and the obvious way to "fix" that is to delete the
+    test.
+    """
+    text = (_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    match = _NPM_CI_RE.search(text)
+    assert match, "Dockerfile no longer contains a `RUN npm ci` line — this test is testing nothing"
+    return match.group("flags").split()
 
 
 # ── Cheap checks — these run in the fast suite ───────────────────────────────
@@ -125,7 +146,7 @@ def test_npm_ci_succeeds_from_a_clean_directory():
         shutil.copy2(_FRONTEND / "package-lock.json", work / "package-lock.json")
 
         result = subprocess.run(  # nosec B603 — fixed argv, shell=False
-            [npm, "ci", "--no-audit", "--no-fund"],
+            [npm, "ci", "--no-audit", "--no-fund", *_dockerfile_npm_ci_flags()],
             cwd=work,
             capture_output=True,
             text=True,
@@ -136,4 +157,19 @@ def test_npm_ci_succeeds_from_a_clean_directory():
     assert result.returncode == 0, (
         "npm ci failed from a clean directory — the Docker build (Dockerfile:10) will fail "
         f"the same way:\n\n{result.stderr[-4000:]}"
+    )
+
+
+@pytest.mark.unit
+def test_the_install_command_is_read_from_the_dockerfile():
+    """The anti-divergence check for the test above, which is skipped without npm.
+
+    It asserts the parse SUCCEEDS and returns whatever the Dockerfile says —
+    never a fixed list, because pinning the expected flags here would recreate
+    the duplication it exists to remove.
+    """
+    flags = _dockerfile_npm_ci_flags()
+    assert all(f.startswith("-") for f in flags), (
+        f"parsed {flags!r} from the Dockerfile's `npm ci` line — those are not flags, "
+        "so the regex has drifted from the file"
     )

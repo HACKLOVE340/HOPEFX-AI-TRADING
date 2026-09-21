@@ -8,6 +8,7 @@ import React, { memo, useEffect, useRef } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor, severityLabel } from '../types/nuclear';
 import type { NuclearState } from '../types/nuclear';
+import { Radiation } from 'lucide-react';
 
 // ─── Gauge bar ────────────────────────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ const NuclearGeopoliticalBanner = memo(({ onClickExplain }: Props) => {
         </div>
         <div style={s.labelStack}>
           <span style={{ ...s.gaugeLabel, color }}>
-            {isAlert && '☢️ '}{gaugeLabel}
+            {isAlert && <Radiation size={12} aria-hidden style={{ verticalAlign: '-1px', marginRight: 4 }} />}{gaugeLabel}
           </span>
           <span style={s.actionLabel}>
             {action.replace(/_/g, ' ').toUpperCase()}
@@ -199,7 +200,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'color 0.4s ease',
   },
   actionLabel: {
-    fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1.5, fontWeight: 600,
+    fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', letterSpacing: 1.5, fontWeight: 600,
   },
   centerSection: {
     flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0,
@@ -208,10 +209,10 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
   },
   gaugeCaption: {
-    fontSize: 10, color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700,
+    fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', letterSpacing: 2, fontWeight: 700,
   },
   gaugeScore: {
-    fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
+    fontSize: 'var(--fs-body)', fontWeight: 700, fontFamily: 'monospace',
     transition: 'color 0.4s ease',
   },
   gaugeTrack: {
@@ -232,7 +233,7 @@ const s: Record<string, React.CSSProperties> = {
   termPill: {
     display: 'flex', alignItems: 'center', gap: 4,
     padding: '2px 8px', borderRadius: 10,
-    border: '1px solid', fontSize: 10, color: 'var(--text-dim)',
+    border: '1px solid', fontSize: 'var(--fs-micro)', color: 'var(--text-dim)',
     background: 'rgba(255,255,255,0.03)',
     fontFamily: 'monospace',
   },
@@ -255,12 +256,12 @@ const s: Record<string, React.CSSProperties> = {
     transition: 'color 0.4s ease, border-color 0.4s ease',
   },
   rlConf: {
-    fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace',
+    fontSize: 'var(--fs-micro)', color: 'var(--text-muted)', fontFamily: 'monospace',
   },
   explainBtn: {
     background: 'transparent', border: '1px solid',
     borderRadius: 4, padding: '4px 10px',
-    fontSize: 11, fontWeight: 700, letterSpacing: 1,
+    fontSize: 'var(--fs-label)', fontWeight: 700, letterSpacing: 1,
     cursor: 'pointer', fontFamily: 'monospace',
     transition: 'background 0.2s ease',
   },

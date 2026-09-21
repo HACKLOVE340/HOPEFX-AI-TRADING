@@ -493,7 +493,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           <button
             type="button"
             onClick={onExit}
-            style={{ ...control, minHeight: 34, padding: '0 11px', fontSize: 11 }}
+            style={{ ...control, minHeight: 34, padding: '0 11px', fontSize: 'var(--fs-label)'}}
           >
             <Minimize2 size={12} aria-hidden /> Exit <kbd style={{ ...label, marginLeft: 2 }}>esc</kbd>
           </button>
@@ -566,7 +566,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
               style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4, maxWidth: '46ch' }}
             >
               {lastFew.map((line, i) => (
-                <li key={`${line.at}-${i}`} style={{ fontSize: 12, color: C.dim, textAlign: 'center' }}>
+                <li key={`${line.at}-${i}`} style={{ fontSize: 'var(--fs-body)', color: C.dim, textAlign: 'center' }}>
                   <span style={{ color: line.who === 'ai' ? C.core : C.quiet, fontWeight: 700 }}>
                     {line.who === 'ai' ? '' : 'You: '}
                   </span>
@@ -694,7 +694,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           }}
         />
         <button type="submit" style={control} disabled={!typed.trim()}>
-          <Send size={13} aria-hidden /> Send
+          <Send size="1em" aria-hidden /> Send
         </button>
         <button
           type="button"
@@ -702,13 +702,13 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           disabled={!sttSupported}
           style={{ ...control, borderColor: listening ? C.bad : C.edge2, opacity: sttSupported ? 1 : 0.5 }}
         >
-          <Mic size={13} aria-hidden /> {listening ? 'Stop listening' : 'Talk'}
+          <Mic size="1em" aria-hidden /> {listening ? 'Stop listening' : 'Talk'}
         </button>
         <button type="button" onClick={onStop} style={control}>
           <Square size={12} aria-hidden /> Stop
         </button>
         <button type="button" onClick={onToggleMute} aria-pressed={muted} style={control}>
-          {muted ? <VolumeX size={13} aria-hidden /> : <Volume2 size={13} aria-hidden />}
+          {muted ? <VolumeX size="1em" aria-hidden /> : <Volume2 size="1em" aria-hidden />}
           {muted ? 'Muted' : 'Aloud'}
         </button>
         <button
@@ -721,7 +721,7 @@ export const PresenceStage: React.FC<PresenceStageProps> = ({
           title={handsOn ? hands.status.reason || 'Reading hand position from the camera.' : 'Use the camera for hand gestures'}
           style={{ ...control, borderColor: handsOn ? C.core : C.edge2 }}
         >
-          <Hand size={13} aria-hidden /> {handsOn ? 'Hands on' : 'Hands'}
+          <Hand size="1em" aria-hidden /> {handsOn ? 'Hands on' : 'Hands'}
         </button>
       </form>
     </div>

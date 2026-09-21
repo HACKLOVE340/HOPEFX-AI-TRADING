@@ -1,10 +1,12 @@
 # Choosing the AI provider (Claude vs OpenAI)
 
 HOPEFX's AI features — the chat assistant, the strategy-generation "brain", and
-the security-analysis agent — run through **one** LLM layer (`brain/llm_agent.py`,
-`brain/llm_wrapper`). You pick the provider with **environment variables only** —
-there is **no code change** and no new integration to build. Both providers are
-already implemented.
+the security-analysis agent — run through two entry points: `brain/llm_agent.py`,
+which selects the backend itself, and `security/llm_wrapper.py`, which is now a
+thin adapter onto `ai/gateway` and takes its backend from platform config rather
+than from the environment. For the brain and the chat assistant you pick the provider
+with **environment variables only** — there is **no code change** and no new
+integration to build. Both providers are already implemented.
 
 ## The three variables
 

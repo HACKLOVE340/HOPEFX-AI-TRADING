@@ -44,6 +44,7 @@ import { isChunkLoadError, tryChunkReload } from './lib/chunkReload';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
 import { PageSurface } from './components/system/PageSurface';
+import { AlertTriangle } from 'lucide-react';
 
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
 const Login                   = React.lazy(() => import('./pages/Login'));
@@ -254,9 +255,9 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
           width: 48, height: 48, borderRadius: '50%',
           background: '#ff3b5c22', border: '1px solid #ff3b5c44',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 22, marginBottom: 16,
+          marginBottom: 16,
         }}>
-          ⚠
+          <AlertTriangle size={22} aria-hidden />
         </div>
 
         <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
@@ -270,7 +271,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
         {_IS_DEV && this.state.stack && (
           <pre style={{
             background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
-            color: 'var(--text-dim)', fontSize: 11, lineHeight: 1.5, maxWidth: 640,
+            color: 'var(--text-dim)', fontSize: 'var(--fs-label)', lineHeight: 1.5, maxWidth: 640,
             maxHeight: 200, overflow: 'auto', padding: '12px 16px',
             textAlign: 'left', marginBottom: 24, whiteSpace: 'pre-wrap',
           }}>
@@ -353,7 +354,7 @@ const NoLiveFeedBanner: React.FC = () => {
       aria-live="polite"
       style={{
         background: bg, borderBottom: `1px solid ${border}`,
-        color, fontSize: 12, fontWeight: 600,
+        color, fontSize: 'var(--fs-body)', fontWeight: 600,
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         padding: '6px 16px', flexShrink: 0,
       }}

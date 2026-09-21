@@ -130,7 +130,7 @@ const AccessibilitySection: React.FC = () => {
           ].map(({ label, color }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 16, height: 16, borderRadius: 4, background: color }} />
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{label}</span>
             </div>
           ))}
         </div>

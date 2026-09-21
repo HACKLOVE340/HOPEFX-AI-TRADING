@@ -269,7 +269,7 @@ const titleStyle: React.CSSProperties = {
 
 const countStyle: React.CSSProperties = {
   color: '#ef4444',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   fontWeight: 600,
 };
 
@@ -297,7 +297,7 @@ const legendItemStyle: React.CSSProperties = {
   alignItems: 'center',
   gap: 5,
   color: 'var(--text-muted, var(--text-dim))',
-  fontSize: 11,
+  fontSize: 'var(--fs-label)',
   textTransform: 'capitalize',
 };
 

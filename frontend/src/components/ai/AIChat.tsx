@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { summonPresence, dismissPresence } from '../../hub/presenceSummons';
 import { aiAssistantApi } from '../../hooks/useApi';
 import { useVoice } from '../../hooks/useVoice';
+import { Bot, Mic, Square, User, Volume2, VolumeX } from 'lucide-react';
 
 interface ChatTurn {
   id: string;
@@ -134,7 +135,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
       setTurns(prev => [...prev, {
         id: `a-${Date.now()}`,
         role: 'assistant',
-        content: '⚠️ I couldn\'t reach the assistant just now. Please check your connection and try again.',
+        content: "I couldn't reach the assistant just now. Please check your connection and try again.",
         ts: Date.now(),
       }]);
     } finally {
@@ -193,7 +194,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
           return (
             <div key={t.id} style={{ display: 'flex', flexDirection: own ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-end' }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: own ? '#1e3a5f' : '#16233a' }}>
-                {own ? '🧑' : '🤖'}
+                {own ? <User size="1em" aria-hidden /> : <Bot size="1em" aria-hidden />}
               </div>
               <div style={{
                 maxWidth: '78%',
@@ -209,7 +210,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
         })}
         {sending && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', fontSize: fs }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: '#16233a' }}>🤖</div>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: '#16233a' }}><Bot size="1em" aria-hidden /></div>
             <span>Thinking…</span>
           </div>
         )}
@@ -246,7 +247,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
                 fontSize: fs + 2, padding: compact ? '8px 11px' : '10px 13px',
               }}
             >
-              {voice.listening ? '⏹' : '🎤'}
+              {voice.listening ? <Square size="1em" aria-hidden /> : <Mic size="1em" aria-hidden />}
             </button>
           )}
           {voice.ttsSupported && (
@@ -263,7 +264,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
                 fontSize: fs + 2, padding: compact ? '8px 11px' : '10px 13px',
               }}
             >
-              {speakReplies ? '🔊' : '🔈'}
+              {speakReplies ? <Volume2 size="1em" aria-hidden /> : <VolumeX size="1em" aria-hidden />}
             </button>
           )}
           <button
@@ -279,7 +280,7 @@ const AIChat: React.FC<AIChatProps> = ({ sessionId, intro, placeholder, suggesti
           </button>
         </div>
         {!empty && (
-          <button onClick={() => void clear()} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: 11, cursor: 'pointer', padding: 0 }}>
+          <button onClick={() => void clear()} style={{ marginTop: 6, background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: 'var(--fs-label)', cursor: 'pointer', padding: 0 }}>
             Clear conversation
           </button>
         )}

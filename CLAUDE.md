@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **How does this branch reach `main`?** | `docs/audit/LANDING_PLAN.md` — 665 commits and 1,561 files ahead, cut into nine reviewable slices with a proven recipe. Read it before opening a pull request. |
+| **Did the audit branch land?** | **Yes — PR #315 merged 2026-09-18**, merge commit `9cdc37a`: 666 commits and 1,561 files, in ONE merge, not nine slices. `docs/audit/LANDING_PLAN.md` is now a RECORD, not a plan — read its top box first, because everything below it is written in the present tense about a state that no longer holds. The branch is 41 commits and 295 files ahead of `main`, and that is follow-up work. Verified by local execution on Python 3.11 AND 3.12 (F95: Actions has assigned no runner for twelve days, so no CI run has ever executed against any of it). |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | **I am picking up the frontend / AI-presence work — what is done and what is next?** | **`docs/audit/FRONTEND_HANDOVER.md`** — what was built and why it is shaped that way, what is left in the order to do it, what is deliberately NOT worth doing, and the six traps this thread actually fell into. Start there before the plan. |
 | What was the frontend plan, and which parts are done? | `docs/audit/plans/2026-09-15-frontend-ultra.md` — Tasks 1–2 landed, 3–11 open. The handover above supersedes it where they differ, because it was measured later. |
@@ -40,7 +40,7 @@ is always today's. Everything below is the shape; that command is the state.
 | What can the spatial/3D system claim, and what must it refuse to? | `docs/ai/specs/SPATIAL_INTELLIGENCE.md` · `ai/spatial/assurance.py` · `invariants/spatial.py` |
 | Which spatial capabilities actually exist, measured? | `python scripts/spatial_capabilities.py` · `docs/ai/specs/SPATIAL_CAPABILITIES.toml` |
 | Why does the light/dark toggle change nothing *yet*? | `frontend/src/index.css` now defines both themes and the document ground follows them; the 189 files that still paint their own literals do not (201 at the audit; 1,777 literals reached the token layer on 2026-09-14). `python scripts/frontend_colour_ratchet.py --check` · `docs/FRONTEND_COLOUR_DEBT.json` |
-| Why are there still emoji where icons belong? | `python scripts/frontend_emoji_ratchet.py --check` · `docs/FRONTEND_EMOJI_DEBT.json` |
+| Why are there still emoji where icons belong? | `python scripts/frontend_emoji_ratchet.py --check` · `docs/FRONTEND_EMOJI_DEBT.json` — **327 across 64 files**, down from 1,407 at the audit and from 750 on 2026-09-18. Retire them with `python scripts/frontend_emoji_codemod.py --check` · `--apply`, which converts ONLY a glyph outside every string literal in a `.tsx` file — a bare glyph there can only be JSX children, and converting one inside a string yields `'<Zap /> Plan'` rendered to the user. It emits `size="1em"`, never a pixel count, so the icon follows `data-density` exactly as the glyph did and a 32px empty-state glyph needs no per-site decision. **The 327 left are the ones it refuses:** mostly inside a string — a ternary producing a label, or a lookup table of glyphs. The `label: '<glyph> Text'` arrays are largely retired: an entry gains an `icon:` field and the render site draws it, which is a per-array change no codemod can make. Pick a name that shadows nothing — `MapIcon` not `Map` (`new Map()` is 1,100 lines below the import in PlatformConfiguration), `Link2` not `Link` (react-router exports one); regional-indicator flags (Lucide has none; on Windows the pair already renders as letters, so a country code is the honest replacement), faces used as a sentiment scale, and 4 in comments, which want rewording. The gate is a RANGE SWEEP, not a presentation test — it counts `✓ ✕ ✗`, which are text-presentation dingbats in the icon role — and it cannot express a glyph in a string the browser renders itself, so `useNuclearWS.ts` stays at 1 on purpose. **Converting one can DELETE an accessible name:** six controls had theirs only because the glyph was their text content. `npx vitest run src/test/controls_use_icons_not_glyphs.test.tsx` fails if an icon-only button has no name |
 | How are the four specification groups organised? | `docs/ai/BACKLOG_GROUPS.md` |
 | What binds every group? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — T0, twelve Articles, INV-01…21 |
 | How do I recover the database? | `docs/runbooks/database-restore.md` |
@@ -51,6 +51,7 @@ is always today's. Everything below is the shape; that command is the state.
 | Does every ORM table have a migration, or only `create_all()`? | `python scripts/schema_migration_check.py --check` |
 | Which controls have no accessible name? | `cd frontend && npm run lint` · `frontend/a11y-debt.json` |
 | What is the standard page, and which pages are not on it yet? | `frontend/src/components/system/PageShell.tsx` — four widths replace twelve, a consistent header (or the page's own, via the `hero` slot), and a footer that is derived rather than forgotten. 61 of 62 migrated — only `/terminal` is off, by the owner's decision. `python scripts/frontend_page_shell_ratchet.py --check` · `docs/FRONTEND_PAGE_SHELL_DEBT.json`. The gate reads code, not prose: it was `"PageShell" in text` until 2026-09-15, when a `// TODO: migrate this page to PageShell` comment was shown to clear it |
+| Why did a green suite still ship a broken deployment? | `npx`-free reproduction: move `static/` aside and issue the requests a browser issues. Measured 2026-09-19 on a live server: `/` answered **302 to `/godmode/`** and served the legacy bundle committed 2026-09-05 ("HOPEFX GodMode v9.5"); `/login` and `/register` answered **200 with a meta-refresh to `/docs`**, the Swagger UI — reported by the owner as "it takes me to documents". `test_every_spa_route_serves_the_app.py` covered these exact routes and passed throughout, because it asserts `text/html` — which the stale bundle, the meta-refresh and a Jinja page all are — and because it **skips when `static/index.html` is absent**, the one state in which any of it happens. A guard that stands down in the failure condition is not a guard. `tests/unit/test_the_server_serves_the_app_it_claims.py` asserts **identity** instead (the bytes are the built shell) and exercises the unbuilt case rather than skipping it. It also pins the three live collisions the identity check found with the frontend built: `/docs` (Swagger shadows `DocsPage`), `/pricing` and `/status` (Jinja templates shadow the built React pages) — all three need an owner decision, and `test_a_pinned_collision_is_still_a_collision` fails if one is resolved and left pinned |
 | Which pages actually show live data, and which are static? | `python scripts/frontend_data_reachability.py` — measures the IMPORT GRAPH, not the page file. 70 of 73 routed pages reach live data (67 in their own file, 3 through a child or the store); the three that do not are `DocsPage`, `PrivacyPolicy` and `TermsAndRiskDisclosure`, and all three are documents. It does not block: a static page is a legitimate page. It replaced a hand-grepped list in FRONTEND_HANDOVER.md that named five already-wired pages as needing a fetch |
 | Why does every page have a "Where to next" footer now? | `PageSurface` renders one for any page that does not claim the slot, so a page cannot be a dead end. Links come from `frontend/src/lib/related.ts`, derived from navConfig. `npx vitest run src/test/no_page_is_a_dead_end.test.tsx` |
 | What is the AI presence's face doing, and what decided it? | `frontend/src/hub/headModes.ts` — eleven modes (panicking · refusing · worried · concerned · speaking · listening · mimicking · detection · reaction · awareness · dormant), each chosen by `chooseHeadMode` from the same measurements the presence machine reads. There is no `setMode`: a settable mood is a decorative live value with a face. `npx vitest run src/test/the_head_has_modes.test.ts` |
@@ -60,11 +61,12 @@ is always today's. Everything below is the shape; that command is the state.
 | Why does the sidebar only show 14 things now? | `frontend/src/components/sidebar/navConfig.ts` — items carry a `hub`, and `frontend/src/pages/Hub.tsx` renders what is behind each one. 61 destinations, nothing removed; `npx vitest run src/test/nav_hub_reachability.test.ts` fails if any becomes unreachable |
 | How is a page's density and palette chosen? | `frontend/src/components/system/PageSurface.tsx` — one table, stamped on every route as `data-density` and `data-surface`, plus the person's own setting from `frontend/src/lib/densityPref.ts` (Settings → Appearance → Density). Tiers are `comfortable` / `promax` / `ultra`, `ultra` by default; AI routes get the instrument palette. The preference overrides the table in both directions with one floor it cannot cross: a data surface never loosens below `ultra`, because how many rows of open risk fit on screen is not a taste question |
 | Why do the terminals show flat candles, and nothing at 1h? | Two separate things, both diagnosed 2026-09-15 and neither in the chart code. **Flat candles:** the bars really are flat — measured on the daily series the platform serves offline, 62 of 500 have no body or no wicks. `frontend/src/lib/barQuality.ts` says so on all four live charts instead of drawing them silently. Timestamp conversion is `frontend/src/lib/chartTime.ts` — one copy, after five diverging ones of which two placed a pre-2001 millisecond bar in the year 32,633. **Nothing at 1h:** XAUUSD has no intraday source without a live feed — its yfinance ticker is deliberately empty (Yahoo delisted it, verified 2026-07-26; a previous hand-maintained copy served delisted `GC=F` futures as spot) and the bundled CSV is daily/weekly only. The endpoint correctly 503s with the feed to configure rather than fabricating. Do not put a yfinance ticker back. **And note the asymmetry:** `/ai-chart-dashboard` renders six panels at 1h, and five of those six symbols (EURUSD, GBPUSD, USDJPY, BTCUSD, ETHUSD) have a working yfinance ticker — XAUUSD, the instrument this platform trades, is the one that does not. The 503 now names the timeframes bundled history CAN serve, so an operator can tell a broken timeframe from a broken instrument. |
-| Why does changing the density barely change anything? | It reaches less than it should. `data-density` is real and proven live in a browser (gap 16→10→7px, body 15→13→12px, card padding 20→14→10px), but literal pixels are not in the cascade. 763 inline font sizes were converted on 2026-09-15 and **2,108** remain, with 1,089 numeric spacing utilities. Same defect as the colour literals, in the size dimension. `python scripts/correction_register.py --id DENSITY-CANNOT-REACH` |
-| What stops the unreachable-size count growing while that is decided? | `python scripts/frontend_size_ratchet.py --check` · `docs/FRONTEND_SIZE_DEBT.json` — 3,198 sizes the density control cannot reach (2,107 inline `fontSize`, 1,091 numeric spacing utilities) across 194 files, held at a baseline that may only fall. Same rule as the colour ratchet, including that a file reaching zero must have its line DELETED. `scripts/correction_register.py`'s DENSITY-CANNOT-REACH probe imports its counter, so the gate and the register cannot print different numbers for the same thing |
-| How do I retire an inline font size? | `python scripts/frontend_size_codemod.py --check` · `--apply`. Only substitutes a number byte-identical to a type-scale token at the DEFAULT density, so nothing moves at `promax` and the other two tiers gain 763 call sites. Never inside a canvas or chart-option call, and never in an expression — `fontSize: 13 + offset` is arithmetic. `--check` ranks the sizes that sit BETWEEN tokens (12px ×638, 11px ×532) and need a decision per site rather than a substitution |
+| Why does changing the density barely change anything? | It reaches less than it should. `data-density` is real and proven live in a browser (gap 16→10→7px, body 15→13→12px, card padding 20→14→10px), but literal pixels are not in the cascade. 763 inline font sizes were converted on 2026-09-15 against the `:root` (promax) scale, and **1,367 more on 2026-09-18** against the **ultra** scale — the tier `densityPref` actually defaults a person to, and the one `:root` does not declare, which is why the three commonest literals in the tree (`fontSize: 12` ×638, `11` ×532, `10` ×257) were invisible to the codemod for three days. **716** inline sizes remain, with 1,090 numeric spacing utilities. Same defect as the colour literals, in the size dimension. `python scripts/correction_register.py --id DENSITY-CANNOT-REACH` |
+| What stops the unreachable-size count growing while that is decided? | `python scripts/frontend_size_ratchet.py --check` · `docs/FRONTEND_SIZE_DEBT.json` — **1,806** sizes the density control cannot reach (716 inline `fontSize`, 1,090 numeric spacing utilities) across 166 files, held at a baseline that may only fall. It reads code, not prose: a comment line was holding a file in the baseline for a *sentence* about a size it had already removed — the F255/F257 shape in the size dimension. Same rule as the colour ratchet, including that a file reaching zero must have its line DELETED. `scripts/correction_register.py`'s DENSITY-CANNOT-REACH probe imports its counter, so the gate and the register cannot print different numbers for the same thing |
+| Should the type scale gain a `--fs-display` tier? | It has one — `--fs-display-sm` / `--fs-display` / `--fs-display-lg`, added 2026-09-18 above `--fs-hero`, declared in `:root` and all three tiers. It exists for the **11** sites that were sizing TYPE above the old top of the scale; the ultra values (32 / 36 / 48px) are byte-identical to the literals they replaced, so nothing moved at the default tier. It is **not** for the other **29**, which size an emoji or an icon — `fontSize` is the only lever a glyph has, and each vanishes when `frontend_emoji_ratchet.py` turns it into an SVG. Those three sizes are deliberately absent from the codemod's tables, because a bulk rewrite sees `fontSize: 32` and cannot tell a price from an emoji; `tests/unit/test_size_codemod_only_touches_css.py` fails if one is added. Assign one by ROLE, by hand. `python scripts/frontend_size_ratchet.py --check` prints the split, which has THREE parts, not two — it now reads **2 glyph, 27 icon, 0 type**. The `icon` bucket arrived when the emoji codemod converted a pictograph inside `style={{ fontSize: 32 }}` to a Lucide element at `size="1em"`: the declaration still does the sizing, so it is load-bearing and is NOT a candidate for a type token, but a two-way classifier reads it as `type` and 27 sites started arguing for a display token in one commit |
+| How do I retire an inline font size? | `python scripts/frontend_size_codemod.py --check` · `--apply`, and **`--anchor ultra`**. Only substitutes a number byte-identical to a type-scale token at the chosen tier, so nothing moves at that tier and the other two gain the call sites. `--anchor root` (the default) is the promax scale `:root` declares; `--anchor ultra` is the tier `densityPref` defaults a person to and `PageSurface` stamps on every data surface. **The two tables may never share a number** — `15` is `--fs-value` at `:root` and `--fs-title` at ultra, so it is in neither, and `--selftest` fails if an overlap is ever added. Never inside a canvas or chart-option call, and never in an expression — `fontSize: 13 + offset` is arithmetic. `--check` ranks the sizes that sit BETWEEN tokens (12px ×638, 11px ×532) and need a decision per site rather than a substitution |
 | How do I retire a colour literal? | `python scripts/frontend_token_codemod.py --check` · `--apply`. Only substitutes literals that are byte-identical to a token, and never inside a canvas or chart-option call — `var()` is resolved by the cascade, and a canvas is not the cascade |
-| What colour, size, spacing or duration should I use in the frontend? | `frontend/src/index.css` — the token layer: both themes, a seven-step type scale, a pro-max density scale, and the `data-surface="ai"` instrument palette. Reach them through the Tailwind roles in `tailwind.config.ts` (`bg-surface`, `text-dim`, `text-title`, `p-card`), never a literal. `frontend/src/test/design_tokens.test.ts` holds the set complete |
+| What colour, size, spacing or duration should I use in the frontend? | `frontend/src/index.css` — the token layer: both themes, a ten-step type scale, a pro-max density scale, and the `data-surface="ai"` instrument palette. Reach them through the Tailwind roles in `tailwind.config.ts` (`bg-surface`, `text-dim`, `text-title`, `p-card`), never a literal. `frontend/src/test/design_tokens.test.ts` holds the set complete |
 | Which committed price history is safe to train on? | `ml.cached_series.CLEAN_SINCE` — 2020+ for XAUUSD; `scripts/clamp_ohlc.py` for the rest |
 | Which documents are authoritative, and who owns them? | `docs/REGISTRY.toml` |
 | A document states a figure — is it still true? | `python scripts/doc_metrics.py --check` · `--sync` (what `pre-commit` runs) maintains the two per-commit figures and checks the rest |
@@ -428,6 +430,21 @@ they are the ones most often skipped under time pressure:
   `ml/inference_engine.py` among them. `python
   scripts/model_provenance_report.py --check` holds those at their baseline so
   they cannot grow.
+- **The Dockerfile's `npm ci` carries `--legacy-peer-deps`, and that is a
+  workaround, not a preference.** npm's arborist loads the *optional* peer sets
+  of packages named in the lockfile even for `ci`, which resolves nothing and
+  should not need the registry. On 2026-09-18 that walk reached
+  `@vitest/browser-playwright@5.0.1` — an optional peer of the locked
+  `vitest@4.1.11` — which peers on `vitest@*`, resolving to the newly published
+  vitest 5, and crashed: `Cannot read properties of null (reading 'edgesOut')`.
+  Reproduced on npm 10.9.7 **and** npm 10.8.2, the version `node:20-alpine`
+  ships, so **no image could be built** — with nothing in this repository
+  changed and the full suite green hours earlier. The lockfile is sound: with
+  the flag, `npm ci` installs 738 packages at 0 version mismatches and 0
+  packages absent from the lock. Remove the flag once npm ships the fix;
+  `tests/unit/test_frontend_lockfile_installs_cleanly.py` now READS the
+  Dockerfile's flags rather than repeating them, so it proves whether removing
+  it is safe. `python scripts/correction_register.py --id DOCKER-NPM-PEER-CRASH`.
 - `WORDMAP.json` is gitignored; copy from `WORDMAP.json.example` locally.
   `prop_firm_mode.json` is **not** — `.gitignore` commits it deliberately with
   placeholder credentials so CI has a config to load. This file previously said
@@ -477,6 +494,76 @@ they are the ones most often skipped under time pressure:
   are keyed on (authenticated `sub`, client session label); `ChatRequest`
   carries no user field, because an identity in the body is an identity the
   caller chooses. `--id CHAT-SHARED-HISTORY`.
+- **The fiat wallet is now the ledger, and the debit side is OFF by default.**
+  ADR 0021. A confirmed Stripe payment (`payment_intent.succeeded`) credits the
+  wallet through `api/billing.py::_credit_confirmed_deposit`; a withdrawal
+  debits it through `api/payments.py::_debit_wallet_for_withdrawal`, gated on
+  `WITHDRAWAL_DEBITS_LEDGER`, **default false**.
+
+  That default is load-bearing, not cautious. `api/billing.py::get_balance`
+  promises "the authenticated user's wallet balance" and reads the **broker
+  account**, falling back to the subscription manager — never the ledger. The
+  ledger also carries no history before deposits started crediting it. With the
+  flag on today, a user the UI says has funds is refused `402`: an outage that
+  looks like a money bug, and the pressure to fix it falls on the balance check,
+  which is a real gate. Turn it on after reconciliation —
+  `python scripts/correction_register.py --id BALANCE-SOURCE-SPLIT`.
+
+  `/billing/balance` now **reports that split** instead of hiding it:
+  `balance_known`, `source`, `ledger_balance` and `sources_agree` are in the
+  response, so the two numbers can be compared. It still SHOWS the broker's
+  figure — deciding which is authoritative is the owner's call, so that finding
+  reads PARTIAL, not FIXED. Two defects were fixed on the way there: a balance
+  of exactly **zero** crashed the broker read, because
+  `getattr(a, "balance", 0) or a.get("balance", 0)` conflates "missing" with
+  "zero" when 0.0 is falsy; and every failure was logged at DEBUG, which is off
+  in production, so a user whose lookup failed was shown `0.00` in a response
+  byte-identical to a genuinely empty account. `--id BALANCE-ZERO-RAISES`.
+
+  Two things not to "tidy": the AML gate is consulted **twice** on the
+  withdrawal path (`_screen_withdrawal_for_aml`, then again inside
+  `debit_wallet`) — defence in depth, because the second cannot be bypassed by a
+  caller that forgets the first. And the ledger's eight refusals map to eight
+  different status codes on purpose: collapsing them hides a
+  balance-did-not-reconcile **corruption** event behind a `402`.
+
+  Idempotency on the credit side is enforced by the database
+  (`uq_wallet_txn_user_reference`), not by the Python check beside it — measured
+  by disabling the check and confirming a replayed webhook still writes one row.
+  Stripe delivers at least once; a double credit creates capital.
+- **A leakage guard asserted a mechanism the code no longer has.**
+  `tests/unit/test_mtf_ensemble_leakage.py` exists because
+  `CalibratedClassifierCV(cv=3)` re-trained the stacking ensemble's base
+  learners on sub-splits of the test fold and produced ~99% walk-forward
+  accuracy that was not there. The guard patched that class and checked its
+  `cv=` argument — but `cv='prefit'` was **removed in scikit-learn 1.4** and the
+  code moved to `_calibrate_prefit`, which fits an `IsotonicRegression` on the
+  base model's output. Nothing constructed a `CalibratedClassifierCV` after
+  that, so the tracking list was always empty and `for cv_arg in …` ran zero
+  times. Proven by deleting `_calibrate_prefit` from `train_xgboost` entirely
+  and watching the file stay green. It now asserts the PROPERTY — the returned
+  wrapper carries the same estimator that was fitted, fitted exactly once, and
+  the isotonic layer is handed probabilities rather than the feature matrix —
+  and every assertion is preceded by one that it observed anything at all,
+  because an empty list satisfies a `for` loop. Found because the test took
+  131s against a 120s `pytest-timeout`: flaky whenever the machine is busy,
+  which is when CI runs. `--id LEAKAGE-GUARD-CHECKED-NOTHING`.
+- **`.env.example` documented three risk limits that nothing read.** 26 of its
+  969 keys appeared in no source file, and they were near-misses of live names
+  rather than random rot — `SELF_HEAL_ENABLED` for `SELF_HEALER_ENABLED`,
+  `SPREAD_SPIKE_THRESHOLD` for `SPREAD_SPIKE_MULTIPLIER`, `TWAP_DURATION_S` for
+  `TWAP_DEFAULT_SECS`. Three sat under `# Risk limits`:
+  `RISK_DAILY_LOSS_LIMIT=500` (live: `RISK_MAX_DAILY_LOSS_PCT`, a fraction not
+  dollars), `RISK_MAX_LEVERAGE=10` (live: `MAX_LEVERAGE_RATIO`) and
+  `RISK_PER_TRADE_PCT=0.01` (live: `MAX_RISK_PCT_PER_TRADE`) — and 0.01 is also
+  the live default, so halving it to 0.005 showed a file agreeing with the risk
+  in force while changing nothing. Every dead line is now a comment naming the
+  live key. `tests/unit/test_env_example_documents_real_variables.py` blocks a
+  key that appears in no source file; its rule is a literal match rather than an
+  `os.getenv` scan, because this codebase reads env through helpers
+  (`_env_float(...)`) and tables (`_FeatureDef(...)`) and the stricter version
+  would have called eleven live strategy knobs dead.
+  `--id ENV-EXAMPLE-DEAD-KNOBS`.
 - `test-results.xml` is a CI-generated artifact — never commit it.
 </content>
 </invoke>

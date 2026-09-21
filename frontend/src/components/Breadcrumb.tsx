@@ -25,7 +25,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
       display: 'flex',
       alignItems: 'center',
       gap: 4,
-      fontSize: 12,
+      fontSize: 'var(--fs-body)',
       color: 'var(--text-muted)',
       marginBottom: 10,
       flexWrap: 'wrap',
@@ -78,7 +78,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
               onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#64748b'; }}
             >
-              {item.icon && <span style={{ lineHeight: 1, fontSize: 11 }}>{item.icon}</span>}
+              {item.icon && <span style={{ lineHeight: 1, fontSize: 'var(--fs-label)'}}>{item.icon}</span>}
               {item.label}
             </Link>
           ) : (
@@ -91,7 +91,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
                 gap: 4,
               }}
             >
-              {item.icon && <span style={{ lineHeight: 1, fontSize: 11 }}>{item.icon}</span>}
+              {item.icon && <span style={{ lineHeight: 1, fontSize: 'var(--fs-label)'}}>{item.icon}</span>}
               {item.label}
             </span>
           )}

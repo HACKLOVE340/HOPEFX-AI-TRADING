@@ -12,7 +12,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { BookOpen, Briefcase, Calculator, Shield, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Briefcase, Calculator, CheckCircle2, ClipboardList, NotebookPen, Save, Shield, X, Zap } from 'lucide-react';
 import { EmptyState } from '../components';
 import { useStore, selectAccount, selectFeedLive } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
@@ -273,7 +273,11 @@ const RiskCalculator: React.FC = () => {
   const { markFailed } = freshness;
   const [history, setHistory]       = useState<SavedCalc[]>([]);
   const [saving, setSaving]         = useState(false);
-  const [saveMsg, setSaveMsg]       = useState('');
+  // {text, ok} rather than a string: the colour below used to be decided by
+  // saveMsg.startsWith('✓'), so the tick was not decoration — it was the
+  // success flag. Removing the glyph without this would have rendered every
+  // successful save in the failure colour.
+  const [saveMsg, setSaveMsg]       = useState<{ text: string; ok: boolean } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [calcLabel, setCalcLabel]   = useState('');
   const priceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -357,7 +361,7 @@ const RiskCalculator: React.FC = () => {
   const handleSave = async () => {
     if (!result) return;
     setSaving(true);
-    setSaveMsg('');
+    setSaveMsg(null);
     try {
       await riskCalcApi.saveCalc({
         symbol:       state.symbol,
@@ -370,11 +374,11 @@ const RiskCalculator: React.FC = () => {
         reward_amount: result.rewardAmount,
         label:        calcLabel || undefined,
       });
-      setSaveMsg('✓ Saved');
+      setSaveMsg({ text: 'Saved', ok: true });
       setCalcLabel('');
       await loadHistory();
-    } catch { setSaveMsg('⚠ Save failed'); }
-    finally { setSaving(false); setTimeout(() => setSaveMsg(''), 3000); }
+    } catch { setSaveMsg({ text: 'Save failed', ok: false }); }
+    finally { setSaving(false); setTimeout(() => setSaveMsg(null), 3000); }
   };
 
   const handleDeleteHistory = async (id: string) => {
@@ -417,22 +421,22 @@ const RiskCalculator: React.FC = () => {
                 fetch is failing — the price feeding position sizing would then
                 look current when it is not (F1-01). */}
             {livePrice && !freshness.failed && (
-              <div style={{ fontSize: 11, color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
+              <div style={{ fontSize: 'var(--fs-label)', color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
                 ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: 'var(--text-faint)' }}>{livePriceAge}s</span>
               </div>
             )}
             <button onClick={() => setShowHistory(h => !h)}
-              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              📋 History {history.length > 0 ? `(${history.length})` : ''}
+              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <ClipboardList size="1em" aria-hidden /> History {history.length > 0 ? `(${history.length})` : ''}
             </button>
-            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
-              ⚡ Trade
+            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
+              <Zap size="1em" aria-hidden /> Trade
             </Link>
-            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
-              📓 Journal
+            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
+              <NotebookPen size="1em" aria-hidden /> Journal
             </Link>
-            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
-              🛡 Prop Firm
+            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: 'var(--warn)', fontSize: 'var(--fs-body)', fontWeight: 600, textDecoration: 'none' }}>
+              <Shield size="1em" aria-hidden /> Prop Firm
             </Link>
           </div>
         }
@@ -447,10 +451,10 @@ const RiskCalculator: React.FC = () => {
             display: 'flex', alignItems: 'flex-start', gap: 8,
             padding: '8px 12px', borderRadius: 6, marginBottom: 12,
             background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.3)',
-            fontSize: 12, color: '#ffb800',
+            fontSize: 'var(--fs-body)', color: '#ffb800',
           }}
         >
-          <span aria-hidden="true">⚠</span>
+          <span aria-hidden="true"><AlertTriangle size="1em" aria-hidden /></span>
           <span>
             Couldn&apos;t reach the instrument catalogue — sizing from the
             built-in specification. It is checked against the server on every
@@ -468,7 +472,6 @@ const RiskCalculator: React.FC = () => {
           <Label text="Symbol" htmlFor="risk-symbol" />
           <select
             id="risk-symbol"
-            aria-labelledby="risk-symbol-label"
             style={s.select}
             value={state.symbol}
             onChange={(e) => setState((p) => ({ ...p, symbol: e.target.value }))}
@@ -574,7 +577,7 @@ const RiskCalculator: React.FC = () => {
                   textAlign: 'center', marginBottom: 10, boxSizing: 'border-box',
                 }}
               >
-                ⚡ Apply to Trade — {state.symbol}
+                <Zap size="1em" aria-hidden /> Apply to Trade — {state.symbol}
               </Link>
               {/* Save calculation */}
               <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
@@ -582,13 +585,15 @@ const RiskCalculator: React.FC = () => {
                   value={calcLabel}
                   onChange={e => setCalcLabel(e.target.value)}
                   placeholder="Label (optional)"
-                  style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 12, padding: '6px 10px', outline: 'none' }}
+                  style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '6px 10px', outline: 'none' }}
                 />
                 <button onClick={() => void handleSave()} disabled={saving}
-                  style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
-                  {saving ? '…' : '💾 Save'}
+                  style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                  {saving ? '…' : <><Save size="1em" aria-hidden /> Save</>}
                 </button>
-                {saveMsg && <span style={{ fontSize: 11, color: saveMsg.startsWith('✓') ? '#22c55e' : 'var(--loss)', alignSelf: 'center' }}>{saveMsg}</span>}
+                {saveMsg && <span style={{ fontSize: 'var(--fs-label)', color: saveMsg.ok ? '#22c55e' : 'var(--loss)', alignSelf: 'center' }}>
+                  {saveMsg.ok ? <CheckCircle2 size="1em" aria-hidden /> : <AlertTriangle size="1em" aria-hidden />} {saveMsg.text}
+                </span>}
               </div>
             </>
           )}
@@ -596,10 +601,10 @@ const RiskCalculator: React.FC = () => {
           <div style={s.divider} />
           <div style={s.cardTitle}>Quick Tips</div>
           <div style={s.tipList}>
-            <div style={s.tip}>✅ Minimum R:R of 1:2 recommended</div>
-            <div style={s.tip}>✅ Risk no more than 1–2% per trade</div>
-            <div style={s.tip}>✅ At 1:2 R:R you only need 34% win rate to be profitable</div>
-            <div style={s.tip}>⚠️ Higher leverage = higher margin efficiency but more risk</div>
+            <div style={s.tip}><CheckCircle2 size="1em" aria-hidden /> Minimum R:R of 1:2 recommended</div>
+            <div style={s.tip}><CheckCircle2 size="1em" aria-hidden /> Risk no more than 1–2% per trade</div>
+            <div style={s.tip}><CheckCircle2 size="1em" aria-hidden /> At 1:2 R:R you only need 34% win rate to be profitable</div>
+            <div style={s.tip}><AlertTriangle size="1em" aria-hidden /> Higher leverage = higher margin efficiency but more risk</div>
           </div>
         </div>
       </div>
@@ -609,7 +614,7 @@ const RiskCalculator: React.FC = () => {
         <div style={{ marginTop: 24, background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div style={s.cardTitle}>Saved Calculations</div>
-            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
+            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}><X size="1em" aria-hidden /></button>
           </div>
           {history.length === 0 ? (
             <EmptyState
@@ -626,21 +631,21 @@ const RiskCalculator: React.FC = () => {
                     <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
                       {h.label || h.symbol} · 1:{Number.isFinite(h.rr_ratio) ? h.rr_ratio.toFixed(2) : '—'} R:R
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
                       Entry {h.entry_price} · SL {h.stop_loss} · TP {h.take_profit} · {h.lot_size.toFixed(4)} lots
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>
+                    <div style={{ fontSize: 'var(--fs-micro)', color: 'var(--text-faint)', marginTop: 2 }}>
                       {new Date(h.saved_at).toLocaleString()}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={() => loadFromHistory(h)}
-                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 11, cursor: 'pointer' }}>
+                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: 'var(--link)', fontSize: 'var(--fs-label)', cursor: 'pointer' }}>
                       Load
                     </button>
                     <button onClick={() => void handleDeleteHistory(h.id)}
-                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: 'var(--loss)', fontSize: 11, cursor: 'pointer' }}>
-                      ✕
+                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: 'var(--loss)', fontSize: 'var(--fs-label)', cursor: 'pointer' }}>
+                      <X size="1em" aria-hidden />
                     </button>
                   </div>
                 </div>
@@ -701,11 +706,11 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
 
       {/* Cross-links */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Prop Firm</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
-        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
-        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
+        <Link to="/prop-firm" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Shield size="1em" aria-hidden /> Prop Firm</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><NotebookPen size="1em" aria-hidden /> Trade Journal</Link>
+        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Zap size="1em" aria-hidden /> Trade</Link>
+        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Briefcase size="1em" aria-hidden /> Portfolio</Link>
+        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><BarChart3 size="1em" aria-hidden /> Performance</Link>
       </div>
       <RelatedPages
         links={[
@@ -793,7 +798,7 @@ const s: Record<string, React.CSSProperties> = {
   divider: { height: 1, background: 'var(--surface-hover)', margin: '20px 0' },
   rrDisplay: { textAlign: 'center', padding: '16px 0' },
   rrLabel: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 8 },
-  rrValue: { fontSize: 48, fontWeight: 800, lineHeight: 1 },
+  rrValue: { fontSize: 'var(--fs-display-lg)', fontWeight: 800, lineHeight: 1 },
   rrSub: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginTop: 8 },
   resultRow: {
     display: 'flex',
@@ -826,8 +831,8 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'flex-end',
     padding: '0 12px 4px',
   },
-  vizLineLabel: { fontSize: 11, fontWeight: 600 },
-  vizLinePrice: { fontSize: 11 },
+  vizLineLabel: { fontSize: 'var(--fs-label)', fontWeight: 600 },
+  vizLinePrice: { fontSize: 'var(--fs-label)'},
   tipList: { display: 'flex', flexDirection: 'column', gap: 8 },
   tip: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', lineHeight: 1.5 },
 };

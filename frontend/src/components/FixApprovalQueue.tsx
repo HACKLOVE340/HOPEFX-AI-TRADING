@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { securityFixesApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { Check, X } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -175,7 +176,7 @@ const FixRow: React.FC<FixRowProps> = ({
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); }
         }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-          <span style={{ color: statusColour, fontSize: 10 }}>⬤</span>
+          <span style={{ color: statusColour, fontSize: 'var(--fs-micro)'}}>⬤</span>
           <span style={endpointStyle}>{fix.endpoint}</span>
           <span style={timeStyle}>{time}</span>
         </div>
@@ -183,7 +184,7 @@ const FixRow: React.FC<FixRowProps> = ({
           <span style={{ ...statusPillStyle, background: statusColour + '22', color: statusColour }}>
             {fix.status}
           </span>
-          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{expanded ? '▲' : '▼'}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
@@ -206,14 +207,14 @@ const FixRow: React.FC<FixRowProps> = ({
                 onClick={onApprove}
                 disabled={acting}
               >
-                {acting ? '…' : '✓ Approve'}
+                {acting ? '…' : <><Check size="1em" aria-hidden /> Approve</>}
               </button>
               <button
                 style={btnStyle('var(--loss)')}
                 onClick={onDecline}
                 disabled={acting}
               >
-                {acting ? '…' : '✗ Decline'}
+                {acting ? '…' : <><X size="1em" aria-hidden /> Decline</>}
               </button>
             </div>
           )}
@@ -263,7 +264,7 @@ const errorStyle: React.CSSProperties = {
   border: '1px solid #ef4444',
   borderRadius: 6,
   color: 'var(--loss)',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   margin: '8px 16px',
   padding: '8px 12px',
 };
@@ -300,7 +301,7 @@ const rowHeaderStyle: React.CSSProperties = {
 const endpointStyle: React.CSSProperties = {
   color: 'var(--text, var(--text-strong))',
   fontFamily: 'monospace',
-  fontSize: 12,
+  fontSize: 'var(--fs-body)',
   fontWeight: 600,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
@@ -309,13 +310,13 @@ const endpointStyle: React.CSSProperties = {
 
 const timeStyle: React.CSSProperties = {
   color: 'var(--text-muted)',
-  fontSize: 11,
+  fontSize: 'var(--fs-label)',
   flexShrink: 0,
 };
 
 const statusPillStyle: React.CSSProperties = {
   borderRadius: 10,
-  fontSize: 10,
+  fontSize: 'var(--fs-micro)',
   fontWeight: 700,
   padding: '2px 7px',
   textTransform: 'capitalize',
@@ -337,7 +338,7 @@ const diffSectionStyle: React.CSSProperties = {
 
 const diffLabelStyle: React.CSSProperties = {
   color: 'var(--text-dim)',
-  fontSize: 10,
+  fontSize: 'var(--fs-micro)',
   fontWeight: 700,
   letterSpacing: 0.5,
   textTransform: 'uppercase',
@@ -348,7 +349,7 @@ const codeStyle: React.CSSProperties = {
   borderRadius: 6,
   color: 'var(--text)',
   fontFamily: 'monospace',
-  fontSize: 11,
+  fontSize: 'var(--fs-label)',
   lineHeight: 1.6,
   margin: 0,
   overflowX: 'auto',

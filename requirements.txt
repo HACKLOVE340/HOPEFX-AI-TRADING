@@ -48,7 +48,30 @@ pyotp>=2.9.0,<3.0.0
 # python-ecdsa removed: package abandoned at 0.18.0, no 0.19.x release exists.
 # CVE-2024-49298 (Minerva timing attack) is mitigated by the `cryptography`
 # package already listed above, which uses OpenSSL's constant-time ECDSA.
-hdwallet>=3.6.1,<4.0.0
+#
+# NOT INSTALLED ON WINDOWS. hdwallet pulls in ed25519-blake2b (Monero curve
+# support), which publishes no Windows wheel and always compiles from source
+# there — and Windows carries no C++ toolchain by default, unlike Linux
+# (gcc) or macOS (Xcode CLT). A bare `pip install -r requirements.txt` died
+# on that build on 2026-09-21. This is the same shape quickfix was fixed for
+# below: a native-extension dep that cannot build on a platform, pinned
+# unconditionally, blocking the base platform install for a feature that
+# platform was never going to reach anyway.
+#
+# Not load-bearing to run HOPEFX: payments/crypto/address_generator.py and
+# payments/crypto/bitcoin.py both guard the import and raise a clear
+# RuntimeError naming the missing package rather than crash or fabricate an
+# address (test_crypto_deposit_addresses_are_real.py, F222) — a Windows
+# deployment loses crypto deposit address generation, loudly, nothing else.
+# requirements-ci.txt pins hdwallet independently on the Linux runner where
+# it already builds cleanly, so this does not reduce CI's coverage of real
+# BIP-vector-correct address derivation.
+#
+# Want it on Windows anyway? Install "Desktop development with C++" from the
+# Visual Studio Build Tools installer, then: pip install hdwallet>=3.6.1,<4.0.0
+#
+# Pinned by tests/unit/test_hdwallet_marker_skips_windows.py.
+hdwallet>=3.6.1,<4.0.0; sys_platform != "win32"
 pydantic[email]>=2.5.0,<3.0.0
 email-validator>=2.1.0,<3.0.0
 # Web framework — pin minor to avoid breaking middleware changes
@@ -180,9 +203,31 @@ circuitbreaker>=2.0.0
 # execution/fix_adapter.py tries quickfix first, then pyfixmsg.
 #
 # quickfix requires a C compiler and the quickfix C++ library headers.
-# On Ubuntu/Debian: sudo apt-get install libquickfix-dev
-# On macOS:         brew install quickfix
-quickfix==1.15.1; sys_platform != "win32"
+# On Ubuntu/Debian (x86_64): sudo apt-get install libquickfix-dev
+#
+# NOT INSTALLED ON ARM, and no package manager fixes that. quickfix publishes
+# ZERO wheels on PyPI — measured 2026-09-19 at 1.15.1 and at 1.16.0 — so it is
+# always compiled from source, and its C++/AtomicCount.h carries hand-written
+# x86 inline assembly with no ARM64 path:
+#
+#     C++/AtomicCount.h:163: error: unrecognized instruction mnemonic
+#         "lock\n\t"   ->   xadd x9, [x8]
+#
+# `lock` and `xadd` are x86 mnemonics being handed to an ARM register file, so
+# this is an architecture mismatch rather than a missing header. This line used
+# to point macOS readers at a Homebrew install of the C++ library, which cannot
+# help — it sent an Apple Silicon reader to fix the wrong thing. (Reworded
+# rather than quoted: the guard test greps for that instruction, and reproducing
+# it verbatim to explain it made the file fail its own check — prose read as the
+# thing it describes, the F255/F257 shape.)
+#
+# Nothing breaks. execution/fix_adapter.py guards the import and falls back
+# quickfix -> pyfixmsg -> simplefix -> stub, and requirements-ci.txt already
+# excludes quickfix outright, which is why CI installs clean. quickfix remains
+# the preferred PRODUCTION backend, and production is x86, so the marker keeps
+# requesting it there.
+# Pinned by tests/unit/test_quickfix_marker_skips_apple_silicon.py.
+quickfix==1.15.1; sys_platform != "win32" and platform_machine not in "arm64 aarch64"
 # pyfixmsg/simplefix removed — not available on PyPI for Python 3.12; FIX adapter uses quickfix or stub
 simplefix>=1.0.1
 

@@ -37,6 +37,7 @@ import RiskHeatmap from './RiskHeatmap';
 import SignalFeed from './SignalFeed';
 import type { ChartClickContext } from '../types';
 import { IChartApi, ISeriesApi, SeriesType } from 'lightweight-charts';
+import { X } from 'lucide-react';
 
 // ─── Global CSS injection ─────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ class PanelErrorBoundary extends Component<{ children: ReactNode; label: string 
     if (this.state.hasError) {
       return (
         <div style={eb.wrapper}>
-          <span style={eb.icon}>✕</span>
+          <X size={20} aria-hidden style={eb.icon} />
           <span style={eb.label}>{this.props.label}</span>
           <span style={eb.msg}>{this.state.error}</span>
           <button style={eb.btn} onClick={() => this.setState({ hasError: false, error: '' })}>
@@ -112,7 +113,7 @@ class PanelErrorBoundary extends Component<{ children: ReactNode; label: string 
 
 const eb: Record<string, React.CSSProperties> = {
   wrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8, background: COLORS.bg.surface, border: `1px solid ${COLORS.bg.border}`, borderRadius: 8, minHeight: 120 },
-  icon:    { fontSize: 20, color: COLORS.loss.base },
+  icon:    { color: COLORS.loss.base },
   label:   { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: COLORS.text.muted, letterSpacing: '0.1em' },
   msg:     { fontFamily: '"Inter", sans-serif', fontSize: 11, color: COLORS.text.secondary, textAlign: 'center' },
   btn:     { background: COLORS.bg.elevated, border: `1px solid ${COLORS.bg.divider}`, borderRadius: 4, color: COLORS.text.secondary, cursor: 'pointer', fontFamily: '"JetBrains Mono", monospace', fontSize: 9, padding: '4px 10px', letterSpacing: '0.06em' },

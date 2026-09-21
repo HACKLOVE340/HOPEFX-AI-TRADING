@@ -217,11 +217,11 @@ const s: Record<string, React.CSSProperties> = {
   badge: {
     display: 'inline-flex', alignItems: 'center', gap: 6,
     background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
-    color: 'var(--link)', fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+    color: 'var(--link)', fontSize: 'var(--fs-label)', fontWeight: 700, letterSpacing: 0.5,
     padding: '4px 12px', borderRadius: 20, marginBottom: 16,
     textTransform: 'uppercase',
   },
-  title:      { fontSize: 36, fontWeight: 800, color: 'var(--text-strong)', margin: '0 0 8px', letterSpacing: -0.5 },
+  title:      { fontSize: 'var(--fs-display)', fontWeight: 800, color: 'var(--text-strong)', margin: '0 0 8px', letterSpacing: -0.5 },
   subtitle:   { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 16px' },
   intro:      { fontSize: 'var(--fs-value)', color: 'var(--text-dim)', lineHeight: 1.7, margin: 0 },
   sections:   { display: 'flex', flexDirection: 'column', gap: 32 },

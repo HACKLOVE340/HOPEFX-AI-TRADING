@@ -261,3 +261,27 @@ def test_the_command_palette_left_the_record():
         pytest.skip("baseline not adopted yet")
     files = json.loads(baseline.read_text())["files"]
     assert "frontend/src/components/CommandPalette.tsx" not in files
+
+
+def test_text_presentation_dingbats_are_counted(project: Path):
+    """The rule the code implements, which the docstring used to contradict.
+
+    U+2713 ✓, U+2715 ✕ and U+2717 ✗ are Dingbats with TEXT presentation by
+    default — no variation selector, no colour, and they set in the page's font.
+    The module docstring promised "only ranges whose characters have emoji
+    presentation" and that "typographic glyphs in the same neighbourhood are not
+    counted", and then swept all of U+2600–U+27BF, taking in 70 of them.
+
+    They stay counted, and the docstring was corrected to say so, because the
+    role is what the rule is about: `✕` is a close button, `✓` is a status mark,
+    and both should be an SVG for exactly the reasons a pictograph should. A
+    contributor who read the old promise and reached for `✓` was blocked by a
+    gate whose documentation said it would not block — which is the worse of the
+    two failures to leave in place.
+    """
+    (project / "frontend" / "src" / "pages" / "Dingbats.tsx").write_text(
+        "<button aria-label='close'>✕</button><span>✓ ok</span><span>✗ no</span>\n",
+        encoding="utf-8",
+    )
+    counts = json.loads(run("--report", "--root", str(project), cwd=project).stdout)
+    assert counts["frontend/src/pages/Dingbats.tsx"] == 3

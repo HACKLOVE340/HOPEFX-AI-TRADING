@@ -13,6 +13,7 @@
 
 import React from 'react';
 import { useStore, selectRiskSnapshot, selectAccount, selectKillSwitch } from '../../store';
+import { Shield } from 'lucide-react';
 
 const fmtPct = (v: number | null | undefined, dp = 1): string =>
   v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(dp)}%`;
@@ -29,7 +30,7 @@ const Cell: React.FC<{
       flex: 1, minWidth: 120, padding: '10px 12px',
       background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-micro)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
       <div style={{ fontSize: 'var(--fs-title)', fontWeight: 800, color: fg, marginTop: 2 }}>{value}</div>
     </div>
   );
@@ -61,9 +62,9 @@ export const RiskTransparencyStrip: React.FC = () => {
       borderRadius: 12, padding: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>🛡️ Risk State</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}><Shield size="1em" aria-hidden /> Risk State</span>
         <span style={{
-          fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
+          fontSize: 'var(--fs-micro)', fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',
           color: killSwitch ? 'var(--loss)' : '#22c55e',
           background: killSwitch ? 'rgba(248,113,113,0.12)' : 'rgba(34,197,94,0.12)',

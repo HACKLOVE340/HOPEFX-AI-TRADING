@@ -136,7 +136,7 @@ export default function Support(): React.ReactElement {
             border: `1px solid ${C.accent}`, background: C.accent, color: C.onAccent, cursor: 'pointer',
           }}
         >
-          <Plus size={13} aria-hidden="true" style={{ verticalAlign: -2, marginRight: 5 }} />
+          <Plus size="1em" aria-hidden="true" style={{ verticalAlign: -2, marginRight: 5 }} />
           New ticket
         </button>
       </header>
@@ -145,7 +145,7 @@ export default function Support(): React.ReactElement {
         {/* ── my tickets ─────────────────────────────────────────────────── */}
         <section style={{ ...panel, overflow: 'hidden' }} aria-label="My tickets">
           <h2 style={{
-            margin: 0, padding: '10px 12px', fontSize: 11, letterSpacing: '.08em',
+            margin: 0, padding: '10px 12px', fontSize: 'var(--fs-label)', letterSpacing: '.08em',
             textTransform: 'uppercase', color: C.muted, borderBottom: `1px solid ${C.border}`,
           }}>
             My tickets
@@ -212,7 +212,7 @@ export default function Support(): React.ReactElement {
                 }}>{error}</p>
               ) : null}
 
-              <label id="ticket-subject-label" htmlFor="ticket-subject" style={{ display: 'block', fontSize: 12, color: C.muted, marginBottom: 4 }}>
+              <label id="ticket-subject-label" htmlFor="ticket-subject" style={{ display: 'block', fontSize: 'var(--fs-body)', color: C.muted, marginBottom: 4 }}>
                 Subject
               </label>
               <input aria-labelledby="ticket-subject-label"
@@ -224,7 +224,7 @@ export default function Support(): React.ReactElement {
                 }}
               />
 
-              <label id="ticket-body-label" htmlFor="ticket-body" style={{ display: 'block', fontSize: 12, color: C.muted, marginBottom: 4 }}>
+              <label id="ticket-body-label" htmlFor="ticket-body" style={{ display: 'block', fontSize: 'var(--fs-body)', color: C.muted, marginBottom: 4 }}>
                 What happened
               </label>
               <textarea aria-labelledby="ticket-body-label"
@@ -310,7 +310,7 @@ export default function Support(): React.ReactElement {
                         borderLeft: `2px solid ${who.colour}`,
                       }}
                     >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: who.colour, marginBottom: 4 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-label)', color: who.colour, marginBottom: 4 }}>
                         <who.Icon size={11} aria-hidden="true" />
                         {who.label}
                         {m.created_at ? <span style={{ color: C.muted }}>· {when(m.created_at)}</span> : null}

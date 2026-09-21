@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { Activity, AlertCircle, CheckCircle2, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { authApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -170,7 +170,7 @@ const ResetPassword: React.FC = () => {
                         }} />
                       ))}
                     </div>
-                    {strength.label && <span style={{ fontSize: 11, color: strength.color, fontWeight: 600 }}>{strength.label}</span>}
+                    {strength.label && <span style={{ fontSize: 'var(--fs-label)', color: strength.color, fontWeight: 600 }}>{strength.label}</span>}
                   </div>
                 )}
               </div>
@@ -206,7 +206,7 @@ const ResetPassword: React.FC = () => {
                   </button>
                 </div>
                 {confirm && confirm === password && (
-                  <span style={{ fontSize: 11, color: '#22c55e', marginTop: 4 }}>✓ Passwords match</span>
+                  <span style={{ fontSize: 'var(--fs-label)', color: '#22c55e', marginTop: 4 }}><Check size={12} aria-hidden style={{ verticalAlign: '-1px' }} /> Passwords match</span>
                 )}
               </div>
 
@@ -261,7 +261,7 @@ const s: Record<string, React.CSSProperties> = {
   subtext: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' },
   form:    { display: 'flex', flexDirection: 'column', gap: 16 },
   field:   { display: 'flex', flexDirection: 'column' },
-  label:   { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  label:   { fontSize: 'var(--fs-label)', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   input: {
     background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     padding: '12px 14px', fontSize: 16, /* prevents iOS zoom */

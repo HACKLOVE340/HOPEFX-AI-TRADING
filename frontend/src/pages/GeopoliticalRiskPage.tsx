@@ -13,7 +13,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { Calendar, CalendarDays, Globe2, LineChart, Link2, Microscope, Newspaper, Radiation, Radio, Zap } from 'lucide-react';
+import { Ban, BarChart3, Calendar, CalendarDays, Circle, CloudLightning, Flag, Flame, Fuel, Globe, Globe2, Hand, Landmark, LineChart, Link2, MapIcon, Medal, Microscope, Mountain, Newspaper, Plug, Radiation, Radio, Server, Shield, Ship, Swords, Waves, Zap } from 'lucide-react';
 import { CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
@@ -22,41 +22,45 @@ import {
   queryKeys,
   type WorldMonitorViews,
 } from '../features/chart-bot/services/chart-api';
+import type { LucideIcon } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CRISIS_ICONS: Record<string, string> = {
-  ukraine_russia:   '⚔',
-  israel_gaza:      '🔥',
-  red_sea_houthi:   '🚢',
-  taiwan_strait:    '🌏',
-  sudan_africa:     '🌍',
-  korea_peninsula:  '☢',
+const CRISIS_ICONS: Record<string, LucideIcon> = {
+  ukraine_russia:   Swords,
+  israel_gaza:      Flame,
+  red_sea_houthi:   Ship,
+  taiwan_strait:    Globe,
+  sudan_africa:     Globe,
+  korea_peninsula:  Radiation,
 };
 
-const REGION_ICONS: Record<string, string> = {
-  global:                    '🌐',
-  americas:                  '🌎',
-  europe:                    '🏛',
-  middle_east_north_africa:  '🛢',
-  asia_pacific:              '🌏',
-  africa:                    '🌍',
-  oceania:                   '🪸',
+const REGION_ICONS: Record<string, LucideIcon> = {
+  global:                    Globe,
+  americas:                  Globe,
+  europe:                    Landmark,
+  middle_east_north_africa:  Fuel,
+  asia_pacific:              Globe,
+  africa:                    Globe,
+  oceania:                   Waves,
 };
 
-const LAYER_ICONS: Record<string, string> = {
-  conflicts:    '⚔',
-  hotspots:     '🔴',
-  sanctions:    '🚫',
-  weather:      '🌩',
-  outages:      '⚡',
-  natural:      '🌋',
-  military:     '🪖',
-  protests:     '✊',
-  nuclear:      '☢',
-  pipelines:    '🛢',
-  cables:       '🔌',
-  datacenters:  '🖥',
+// Components, not characters. A glyph here could not take the layer's colour,
+// rendered differently on every OS, and was announced literally by a screen
+// reader beside a label that already said the same word.
+const LAYER_ICONS: Record<string, LucideIcon> = {
+  conflicts:    Swords,
+  hotspots:     Flame,
+  sanctions:    Ban,
+  weather:      CloudLightning,
+  outages:      Zap,
+  natural:      Mountain,
+  military:     Shield,
+  protests:     Hand,
+  nuclear:      Radiation,
+  pipelines:    Fuel,
+  cables:       Plug,
+  datacenters:  Server,
 };
 
 const LAYER_COLORS: Record<string, string> = {
@@ -101,7 +105,7 @@ const LayerSelector = memo(({ allLayers, active, onChange }: LayerSelectorProps)
           onClick={() => onChange(layer)}
           title={`Toggle ${layer} layer`}
         >
-          <span>{LAYER_ICONS[layer] ?? '●'}</span>
+          <span>{(() => { const Icon = LAYER_ICONS[layer] ?? Circle; return <Icon size="1em" aria-hidden />; })()}</span>
           {layer}
         </button>
       );
@@ -183,7 +187,7 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
             style={{ ...s.groupBtn, ...(tabGroup === g ? s.groupBtnActive : {}) }}
             onClick={() => setTabGroup(g)}
           >
-            {g === 'crisis' ? '🔥 Crisis Zones' : g === 'regions' ? '🌐 All Regions' : '🥇 Gold Intel'}
+            {g === 'crisis' ? <><Flame size="1em" aria-hidden /> Crisis Zones</> : g === 'regions' ? <><Globe size="1em" aria-hidden /> All Regions</> : <><Medal size="1em" aria-hidden /> Gold Intel</>}
           </button>
         ))}
       </div>
@@ -196,7 +200,7 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
             style={{ ...s.tab, ...(activeCrisis === key ? s.tabActive : {}) }}
             onClick={() => setActiveCrisis(key)}
           >
-            {CRISIS_ICONS[key] ?? '⚑'} {data.crisis_labels[key] ?? key.replace(/_/g, ' ')}
+            {(() => { const I = CRISIS_ICONS[key] ?? Flag; return <I size="1em" aria-hidden />; })()} {data.crisis_labels[key] ?? key.replace(/_/g, ' ')}
           </button>
         ))}
         {tabGroup === 'regions' && regionKeys.map((key) => (
@@ -205,7 +209,7 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
             style={{ ...s.tab, ...(activeRegion === key ? s.tabActive : {}) }}
             onClick={() => setActiveRegion(key)}
           >
-            {REGION_ICONS[key] ?? '🗺'} {data.region_labels[key] ?? key.replace(/_/g, ' ')}
+            {(() => { const I = REGION_ICONS[key] ?? MapIcon; return <I size="1em" aria-hidden />; })()} {data.region_labels[key] ?? key.replace(/_/g, ' ')}
           </button>
         ))}
         {tabGroup === 'gold' && goldKeys.map((key) => (
@@ -214,7 +218,7 @@ const WorldMonitorSection = memo(({ data }: WorldMonitorSectionProps) => {
             style={{ ...s.tab, ...(activeGold === key ? s.tabActive : {}) }}
             onClick={() => setActiveGold(key)}
           >
-            {REGION_ICONS[key] ?? '🗺'} {GOLD_LABELS[key] ?? key.replace(/_/g, ' ')}
+            {(() => { const I = REGION_ICONS[key] ?? MapIcon; return <I size="1em" aria-hidden />; })()} {GOLD_LABELS[key] ?? key.replace(/_/g, ' ')}
           </button>
         ))}
       </div>
@@ -315,24 +319,24 @@ const GeopoliticalRiskPage: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <Link to="/research"
-              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: 'var(--ai-model)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
-              🔬 Research
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: 'var(--ai-model)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              <Microscope size="1em" aria-hidden /> Research
             </Link>
             <Link to="/correlation"
-              style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 8, color: 'var(--link)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
-              📊 Correlation
+              style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              <BarChart3 size="1em" aria-hidden /> Correlation
             </Link>
             <Link to="/nuclear"
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: 'var(--loss)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
-              ☢ Nuclear AI
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}>
+              <Radiation size="1em" aria-hidden /> Nuclear AI
             </Link>
             <Link
               to="/trade"
               state={{ signal: { symbol: 'XAU/USD', direction: 'BUY' } }}
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 12, fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}
+              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: 'var(--gain)', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '7px 14px', textDecoration: 'none' }}
               title="Gold tends to rally during geopolitical risk — buy XAU/USD"
             >
-              ⚡ Trade XAU/USD
+              <Zap size="1em" aria-hidden /> Trade XAU/USD
             </Link>
           </div>
         }
@@ -394,7 +398,7 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--text)',
     letterSpacing: 0.5,
   },
-  pageSubtitle: { margin: '6px 0 0', fontSize: 12, color: 'var(--text-faint)' },
+  pageSubtitle: { margin: '6px 0 0', fontSize: 'var(--fs-body)', color: 'var(--text-faint)' },
 
   grid: {
     display: 'grid',
@@ -420,14 +424,14 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 200,
     textAlign: 'center' as const,
   },
-  fallbackText: { margin: 0, fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.6 },
+  fallbackText: { margin: 0, fontSize: 'var(--fs-body)', color: 'var(--text-faint)', lineHeight: 1.6 },
 
   wmHeader: { display: 'flex', flexDirection: 'column', gap: 4 },
   wmTitleRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  wmTitle: { fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)' },
+  wmTitle: { fontSize: 'var(--fs-label)', fontWeight: 800, letterSpacing: 2, color: 'var(--text-muted)' },
   liveDot: { color: '#00ff88', fontSize: 9, letterSpacing: 1, animation: 'pulse 2s infinite' },
-  wmSubtitle: { margin: 0, fontSize: 11, color: 'var(--text-faint)' },
-  wmExtLink: { fontSize: 11, color: '#3b82f6', textDecoration: 'none' },
+  wmSubtitle: { margin: 0, fontSize: 'var(--fs-label)', color: 'var(--text-faint)' },
+  wmExtLink: { fontSize: 'var(--fs-label)', color: '#3b82f6', textDecoration: 'none' },
 
   groupRow: { display: 'flex', gap: 6 },
   groupBtn: {
@@ -436,7 +440,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #1e3a5f',
     borderRadius: 6,
     color: 'var(--text-muted)',
-    fontSize: 11,
+    fontSize: 'var(--fs-label)',
     fontFamily: 'monospace',
     cursor: 'pointer',
   },
@@ -456,7 +460,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #1e3a5f',
     borderRadius: 5,
     color: 'var(--text-muted)',
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     fontFamily: 'monospace',
     cursor: 'pointer',
     whiteSpace: 'nowrap' as const,
@@ -522,7 +526,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: '3px 9px',
     border: '1px solid',
     borderRadius: 4,
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     fontFamily: 'monospace',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
@@ -541,7 +545,7 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid #1e3a5f',
     borderRadius: 4,
     color: '#3b82f6',
-    fontSize: 10,
+    fontSize: 'var(--fs-micro)',
     fontFamily: 'monospace',
     textDecoration: 'none',
     cursor: 'pointer',

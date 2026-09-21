@@ -4804,8 +4804,9 @@ decrypt() honours it  ->       'MY-BROKER-PASSWORD'
 ```
 
 There is no signal to the caller that a credential is unencrypted. Base64 is an
-encoding, not a cipher; a `version=0` row in `config/credentials.enc` is a
-plaintext broker password with extra steps.
+encoding, not a cipher; a `version=0` row in the encrypted credential store —
+`credentials.enc` under `config/`, written at runtime by `security/encryption.py`
+— is a plaintext broker password with extra steps.
 
 **Also**: `decrypt()` returns `""` on failure rather than raising. A caller
 doing `api_key = vault.get_credential(...)` cannot distinguish "no such
@@ -4877,8 +4878,10 @@ of the platform's completeness.**
 ## F185 — one third of the backend has no user interface · HIGH (product, not a bug)
 
 **891 non-infrastructure endpoints. 309 (34%) are not called from anywhere in
-the SPA.** (`api/health.py`, `api/pages.py`, `api/metrics.py` excluded — those
-are infra probes and server-rendered pages, correctly not SPA-called.)
+the SPA.** (`api/health.py` and `api/pages.py` excluded — those are infra probes
+and server-rendered pages, correctly not SPA-called. This line also named a
+`metrics.py` under `api/`; no such module has ever existed here — the Prometheus
+scrape endpoint is declared inline in `api/server.py`.)
 
 This is not dead code and it is not a defect. It is **built, working capability
 that a subscriber cannot reach.** For the question "how far do I need to go
@@ -4972,7 +4975,7 @@ user-visible value per unit of work:
    claims.
 4. **`api/status.py`** — a real public status page with incidents and history,
    which a subscriber checks before they trust the platform with money.
-5. **`api/custom-indicators` `test` + `deploy` + `builtin`** — rewire the
+5. **`api/custom_indicators.py` (`/api/custom-indicators`) `test` + `deploy` + `builtin`** — rewire the
    existing page to the stronger API.
 6. **`api/portfolio_allocator.py` + `api/portfolio.py` factor endpoints** —
    allocation and factor exposure, the institutional layer.
@@ -6557,9 +6560,15 @@ headings (F173), no tables (F174/F190), inert metrics (F187), dead ends
 
 Rewriting 60+ pages individually would mean re-solving each of those 60+ times
 and produce 60 slightly different answers. So the first deliverable is a
-**primitive layer** — `frontend/src/components/ds/` — where each primitive
-exists to close one measured finding, and applying it to a page closes all of
-them at once for that page.
+**primitive layer**, where each primitive exists to close one measured finding,
+and applying it to a page closes all of them at once for that page.
+
+It was first built as a parallel `ds/` directory under
+`frontend/src/components/`, which was the same defect as F180 — a second set of
+components beside the ones 26 and 20 pages already imported. That directory was
+deleted and the shared components upgraded in place instead (commit `124ad50`),
+so the primitives are `PageHeader`, `Section`, `DataTable`, `EmptyState` and
+`CrossLinkBar` directly under `frontend/src/components/`.
 
 **Design system source.** `ui-ux-pro-max --design-system` recommended Dark Mode
 (OLED), IBM Plex Sans, and a gold+purple palette for a fintech product. The
