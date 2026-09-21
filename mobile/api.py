@@ -306,7 +306,19 @@ class MobileAPIServer:
         @self.app.post("/api/v2/auth/register", response_model=AuthToken, tags=["Auth"])
         async def register(user: MobileUserRegistration):
             try:
-                if self.db and self.db.user_exists(user.email):
+                # Fail closed with no store to write to. Previously the db
+                # checks were all `if self.db`, so with none configured the
+                # duplicate check and save_user() were both skipped and the
+                # handler still issued tokens for a user that was never
+                # created. login() in this class already returns 503 in that
+                # state; register must not be more permissive than login.
+                # (Same defect as mobile/api_v2.py; this module is not
+                # currently mounted by core/router_registry.py, but it is the
+                # same code one wiring change away from being live.)
+                if not self.db:
+                    raise HTTPException(status_code=503, detail="Database unavailable")
+
+                if self.db.user_exists(user.email):
                     raise HTTPException(status_code=409, detail="User already exists")
 
                 salt = bcrypt.gensalt()
@@ -336,7 +348,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Registration failed: %s")
+                logger.exception("Registration failed")
                 raise HTTPException(status_code=500, detail="Registration failed") from None
 
         @self.app.post("/api/v2/auth/login", response_model=AuthToken, tags=["Auth"])
@@ -358,7 +370,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Login failed: %s")
+                logger.exception("Login failed")
                 raise HTTPException(status_code=500, detail="Login failed") from None
 
         @self.app.post("/api/v2/auth/refresh", response_model=AuthToken, tags=["Auth"])
@@ -403,7 +415,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Failed to fetch account for %s: %s", user_id)
+                logger.exception("Failed to fetch account for %s", user_id)
                 raise HTTPException(status_code=500, detail="Failed to fetch account") from None
 
     # ── Trading ──────────────────────────────────────────────────────────────
@@ -427,7 +439,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Failed to fetch quote for %s: %s", symbol)
+                logger.exception("Failed to fetch quote for %s", symbol)
                 raise HTTPException(status_code=500, detail="Failed to fetch quote") from None
 
         @self.app.post("/api/v2/orders", response_model=dict[str, Any], tags=["Trading"])
@@ -496,7 +508,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Order placement failed for %s: %s", user_id)
+                logger.exception("Order placement failed for %s", user_id)
                 raise HTTPException(status_code=500, detail="Order placement failed") from None
 
         @self.app.get("/api/v2/trades", response_model=list[TradeData], tags=["Trading"])
@@ -526,7 +538,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Failed to fetch trades for %s: %s", user_id)
+                logger.exception("Failed to fetch trades for %s", user_id)
                 raise HTTPException(status_code=500, detail="Failed to fetch trades") from None
 
         @self.app.post("/api/v2/trades/{trade_id}/close", tags=["Trading"])
@@ -556,7 +568,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Failed to close trade %s: %s", trade_id)
+                logger.exception("Failed to close trade %s", trade_id)
                 raise HTTPException(status_code=500, detail="Failed to close trade") from None
 
     # ── Performance ──────────────────────────────────────────────────────────
@@ -598,7 +610,7 @@ class MobileAPIServer:
             try:
                 return []
             except Exception:
-                logger.exception("Failed to fetch news: %s")
+                logger.exception("Failed to fetch news")
                 raise HTTPException(status_code=500, detail="Failed to fetch news") from None
 
     # ── Notifications ────────────────────────────────────────────────────────
@@ -616,7 +628,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Failed to fetch prefs for %s: %s", user_id)
+                logger.exception("Failed to fetch prefs for %s", user_id)
                 raise HTTPException(status_code=500, detail="Failed to fetch preferences") from None
 
         @self.app.post("/api/v2/notifications/preferences", tags=["Notifications"])
@@ -631,7 +643,7 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Failed to update prefs for %s: %s", user_id)
+                logger.exception("Failed to update prefs for %s", user_id)
                 raise HTTPException(status_code=500, detail="Failed to update preferences") from None
 
     # ── WebSocket ────────────────────────────────────────────────────────────
@@ -682,7 +694,7 @@ class MobileAPIServer:
             except WebSocketDisconnect:
                 logger.debug("WebSocket quotes disconnected")
             except Exception:
-                logger.exception("WebSocket quotes error: %s")
+                logger.exception("WebSocket quotes error")
                 await websocket.close()
             finally:
                 await limiter.release(client_ip)
@@ -721,7 +733,7 @@ class MobileAPIServer:
             except WebSocketDisconnect:
                 logger.debug("WebSocket trades disconnected for %s", user_id)
             except Exception:
-                logger.exception("WebSocket trades error for %s: %s", user_id)
+                logger.exception("WebSocket trades error for %s", user_id)
             finally:
                 conns = self.active_connections.get(user_id, [])
                 if websocket in conns:

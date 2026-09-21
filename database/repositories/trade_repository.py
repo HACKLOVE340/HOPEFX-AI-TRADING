@@ -109,6 +109,51 @@ class TradeRepository(AsyncRepository[Trade]):
         result = await session.execute(stmt)
         return result.scalars().all()
 
+    @staticmethod
+    def _coerce_status(status: TradeStatus | str | None) -> TradeStatus | None:
+        """Accept a TradeStatus or its string value (e.g. "closed")."""
+        if status is None or isinstance(status, TradeStatus):
+            return status
+        try:
+            return TradeStatus(str(status).lower())
+        except ValueError:
+            return None
+
+    async def get_recent(
+        self,
+        session: AsyncSession,
+        status: TradeStatus | str | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> Sequence[Trade]:
+        """Return recent trades across all users, optionally filtered by status.
+
+        Unlike :meth:`get_by_user`, this is platform-wide (no user filter) — used
+        by the performance/equity endpoints which aggregate every account.
+        """
+        stmt = select(Trade).options(selectinload(Trade.account))
+        st = self._coerce_status(status)
+        if st is not None:
+            stmt = stmt.where(Trade.status == st)
+        stmt = stmt.order_by(desc(Trade.entry_time)).limit(limit).offset(offset)
+        result = await session.execute(stmt)
+        return result.scalars().all()
+
+    async def count_by_status(
+        self,
+        session: AsyncSession,
+        status: TradeStatus | str | None = None,
+    ) -> int:
+        """Count trades across all users, optionally filtered by status."""
+        from sqlalchemy import func as sa_func
+
+        stmt = select(sa_func.count(Trade.id))
+        st = self._coerce_status(status)
+        if st is not None:
+            stmt = stmt.where(Trade.status == st)
+        result = await session.execute(stmt)
+        return int(result.scalar_one() or 0)
+
     async def get_by_date_range(
         self,
         session: AsyncSession,

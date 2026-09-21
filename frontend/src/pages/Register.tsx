@@ -19,13 +19,23 @@ import AppBackground from '../components/AppBackground';
 
 // ── Plan badge ────────────────────────────────────────────────────────────────
 
+/**
+ * The badge names the plan the visitor arrived from; it does not quote a price
+ * (audit #59).
+ *
+ * It used to read "Starter — $1,800/mo" from a hardcoded table — a third copy
+ * of prices whose canonical source is api/billing.py::_PLANS, with nothing
+ * keeping it in step. Registration is free and the real price is shown at
+ * checkout, sourced from the catalogue and charged server-side, so quoting a
+ * figure here could only ever be redundant or wrong.
+ */
 const PLAN_LABELS: Record<string, { label: string; color: string }> = {
-  starter:      { label: 'Starter — $1,800/mo',      color: '#22c55e' },
-  professional: { label: 'Professional — $4,500/mo', color: '#3b82f6' },
+  starter:      { label: 'Starter plan',      color: '#22c55e' },
+  professional: { label: 'Professional plan', color: '#3b82f6' },
   // legacy alias kept for URL backward-compat (?plan=pro)
-  pro:          { label: 'Professional — $4,500/mo', color: '#3b82f6' },
-  enterprise:   { label: 'Enterprise — $7,500/mo',   color: '#06b6d4' },
-  elite:        { label: 'Elite — $10,000/mo',        color: '#a855f7' },
+  pro:          { label: 'Professional plan', color: '#3b82f6' },
+  enterprise:   { label: 'Enterprise plan',   color: '#06b6d4' },
+  elite:        { label: 'Elite plan',        color: '#a855f7' },
 };
 
 // ── Password strength ─────────────────────────────────────────────────────────
@@ -35,6 +45,9 @@ interface StrengthResult {
   label: string;
   color: string;
 }
+
+/** The zero-score entry, named so the fallback is not itself an index access. */
+const NO_STRENGTH: StrengthResult = { score: 0, label: '', color: '#334155' };
 
 function measureStrength(pw: string): StrengthResult {
   if (!pw) return { score: 0, label: '', color: '#334155' };
@@ -46,13 +59,15 @@ function measureStrength(pw: string): StrengthResult {
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   score = Math.min(score, 4);
   const map: StrengthResult[] = [
-    { score: 0, label: '',          color: '#334155' },
+    NO_STRENGTH,
     { score: 1, label: 'Weak',      color: '#ef4444' },
     { score: 2, label: 'Fair',      color: '#f59e0b' },
     { score: 3, label: 'Good',      color: '#3b82f6' },
     { score: 4, label: 'Strong',    color: '#22c55e' },
   ];
-  return map[score];
+  // Clamp rather than index blind: an out-of-range score reports the
+  // weakest rating, never `undefined` (audit #38).
+  return map[Math.min(Math.max(score, 0), map.length - 1)] ?? NO_STRENGTH;
 }
 
 function PasswordStrengthBar({ password }: { password: string }) {
@@ -66,7 +81,7 @@ function PasswordStrengthBar({ password }: { password: string }) {
             key={i}
             style={{
               flex: 1, height: 3, borderRadius: 2,
-              background: i <= strength.score ? strength.color : '#1e293b',
+              background: i <= strength.score ? strength.color : 'var(--raised)',
               transition: 'background 0.2s',
             }}
           />
@@ -86,7 +101,7 @@ function PasswordStrengthBar({ password }: { password: string }) {
 function shimBar(w: number | string, h: number, mb = 0): React.CSSProperties {
   return {
     width: w, height: h, marginBottom: mb, borderRadius: 6,
-    background: 'linear-gradient(90deg,#1e293b 25%,#334155 50%,#1e293b 75%)',
+    background: 'linear-gradient(90deg,var(--raised) 25%,var(--surface-hover) 50%,var(--raised) 75%)',
     backgroundSize: '200% 100%',
     animation: 'shimmer 1.4s infinite',
   };
@@ -119,13 +134,25 @@ function humaniseError(raw: string | undefined): string {
   return raw.length > 120 ? 'Registration failed. Please check your details and try again.' : raw;
 }
 
+/** Affiliate code stashed by LandingPage when the visitor arrived via `/?ref=`. */
+function readStoredRef(): string {
+  try { return sessionStorage.getItem('hopefx_ref') ?? ''; } catch { return ''; }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const Register: React.FC = () => {
   const navigate       = useNavigate();
   const [params]       = useSearchParams();
-  const plan           = params.get('plan') ?? 'starter';
-  const refCode        = params.get('ref') ?? '';
+  // No default. Arriving at /register with no ?plan= used to fall back to
+  // 'starter', so the page read "Create your free account" with a green
+  // "Starter — $1,800/mo" badge directly beneath it. Registration is free; the
+  // badge is only meaningful when the visitor actually came from a plan link.
+  const plan           = params.get('plan');
+  // Accept the code from the URL, or from the landing page's sessionStorage
+  // capture — links already shared in the wild point at `/?ref=CODE`, which lands
+  // on LandingPage rather than here.
+  const refCode        = params.get('ref') ?? readStoredRef();
   const setAuth        = useStore((s) => s.setAuth);
 
   const [email,     setEmail]     = useState('');
@@ -138,17 +165,14 @@ const Register: React.FC = () => {
   const [success,   setSuccess]   = useState('');
   const [loading,   setLoading]   = useState(false);
   const [focusField, setFocusField] = useState<string | null>(null);
+  const [trialWarning, setTrialWarning] = useState('');
 
-  const planInfo = PLAN_LABELS[plan] ?? PLAN_LABELS.starter;
+  const planInfo = plan ? PLAN_LABELS[plan] : undefined;
 
   useEffect(() => {
-    const id = 'hopefx-shimmer';
-    if (!document.getElementById(id)) {
-      const st = document.createElement('style');
-      st.id = id;
-      st.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
-      document.head.appendChild(st);
-    }
+    // The `shimmer` keyframes used to be injected into <head> here at runtime.
+    // index.css already defines them globally (audit #68) — as it does `spin` —
+    // so this was a third copy of a rule that was always present.
     document.title = 'Create Account — HOPEFX';
     return () => { document.title = 'HOPEFX'; };
   }, []);
@@ -191,9 +215,8 @@ const Register: React.FC = () => {
         password,
       });
 
-      // Auto-login immediately after registration so we have the real user.id
-      // (UUID) needed for activateFreeTier. The register endpoint only returns
-      // {message} — it does not expose the user ID.
+      // Auto-login immediately after registration so the session is established
+      // before activateFreeTier, which now takes the account from the token.
       try {
         const loginRes = await authApi.login({ email: email.trim().toLowerCase(), password });
         const { access_token, user } = loginRes.data;
@@ -202,11 +225,19 @@ const Register: React.FC = () => {
         // Store access token in Zustand memory — axios interceptor reads it from there.
         setAuth(access_token, user);
 
-        // Activate free tier using the real UUID from the login response.
+        // Activate the trial. setAuth() above put the token in the store, so the
+        // server resolves the account itself.
         try {
-          await authApi.activateFreeTier(user.id, refCode || undefined);
+          await authApi.activateFreeTier(refCode || undefined);
         } catch (tierErr: unknown) {
-          console.warn('[Register] Free tier activation failed (non-fatal):', tierErr);
+          // Non-fatal for navigation, but not invisible: without the trial the
+          // user lands on a dashboard where every gated feature shows an upgrade
+          // wall, and nothing explains why — they were never told a trial existed.
+          console.warn('[Register] Free tier activation failed:', tierErr);
+          setTrialWarning(
+            "Your account was created, but we couldn't start your free trial. " +
+            'Contact support and we will activate it.'
+          );
         }
 
         // Warm CSRF cache before navigating so the first POST after registration
@@ -244,10 +275,12 @@ const Register: React.FC = () => {
         </Link>
         <p style={s.tagline}>Create your free account</p>
 
-        {/* Plan badge */}
-        <div style={{ ...s.planBadge, border: `1px solid ${planInfo.color}`, color: planInfo.color }}>
-          {planInfo.label}
-        </div>
+        {/* Plan badge — only when the visitor arrived from a plan link. */}
+        {planInfo && (
+          <div style={{ ...s.planBadge, border: `1px solid ${planInfo.color}`, color: planInfo.color }}>
+            {planInfo.label}
+          </div>
+        )}
 
         {success ? (
           <div style={s.successBox}>
@@ -266,9 +299,9 @@ const Register: React.FC = () => {
           <form onSubmit={handleSubmit} style={s.form} noValidate>
             {/* Email */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="email">Email</label>
+              <label style={s.label} htmlFor="email" id="email-label">Email</label>
               <input
-                id="email" type="email" value={email}
+                id="email" aria-labelledby="email-label" type="email" value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 onFocus={() => setFocusField('email')}
                 onBlur={() => setFocusField(null)}
@@ -280,9 +313,9 @@ const Register: React.FC = () => {
 
             {/* Username */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="username">Username</label>
+              <label style={s.label} htmlFor="username" id="username-label">Username</label>
               <input
-                id="username" type="text" value={username}
+                id="username" aria-labelledby="username-label" type="text" value={username}
                 onChange={(e) => { setUsername(e.target.value); setError(''); }}
                 onFocus={() => setFocusField('username')}
                 onBlur={() => setFocusField(null)}
@@ -297,10 +330,10 @@ const Register: React.FC = () => {
 
             {/* Password */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="password">Password</label>
+              <label style={s.label} htmlFor="password" id="password-label">Password</label>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="password"
+                  id="password" aria-labelledby="password-label"
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(''); }}
@@ -323,10 +356,10 @@ const Register: React.FC = () => {
 
             {/* Confirm password */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="confirm">Confirm Password</label>
+              <label style={s.label} htmlFor="confirm" id="confirm-label">Confirm Password</label>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="confirm"
+                  id="confirm" aria-labelledby="confirm-label"
                   type={showConf ? 'text' : 'password'}
                   value={confirm}
                   onChange={(e) => { setConfirm(e.target.value); setError(''); }}
@@ -376,6 +409,22 @@ const Register: React.FC = () => {
               </div>
             )}
 
+            {/* The account exists but the trial did not start — say so rather
+                than dropping the user on a dashboard of upgrade walls. */}
+            {trialWarning && (
+              <div
+                role="status"
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                  background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
+                  padding: '10px 14px', color: 'var(--warn)', fontSize: 'var(--fs-body)', marginBottom: 16,
+                }}
+              >
+                <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{trialWarning}</span>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleButtonClick}
@@ -399,7 +448,7 @@ const Register: React.FC = () => {
 
         <div style={s.footer}>
           Already have an account?{' '}
-          <Link to="/login" style={{ ...s.link, color: '#60a5fa' }}>Sign in →</Link>
+          <Link to="/login" style={{ ...s.link, color: 'var(--link)' }}>Sign in →</Link>
         </div>
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -431,8 +480,8 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 16px' },
+  logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
+  tagline: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 16px' },
   planBadge: {
     fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
     borderRadius: 20, padding: '4px 14px',
@@ -441,13 +490,13 @@ const s: Record<string, React.CSSProperties> = {
   } as React.CSSProperties,
   form:      { display: 'flex', flexDirection: 'column', gap: 14 },
   field:     { display: 'flex', flexDirection: 'column' },
-  label:     { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
-  fieldHint: { fontSize: 11, color: '#64748b', marginTop: 4 },
+  label:     { fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  fieldHint: { fontSize: 11, color: 'var(--text-muted)', marginTop: 4 },
   input: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 8,
     padding: '12px 14px',
     fontSize: 16, /* prevents iOS zoom on focus */
-    color: '#f8fafc', outline: 'none',
+    color: 'var(--text-strong)', outline: 'none',
     transition: 'border-color 0.15s,box-shadow 0.15s', width: '100%', boxSizing: 'border-box',
     WebkitAppearance: 'none',
   },
@@ -461,7 +510,7 @@ const s: Record<string, React.CSSProperties> = {
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
-    borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', lineHeight: 1.5,
+    borderRadius: 8, padding: '10px 14px', fontSize: 'var(--fs-body)', color: 'var(--loss)', lineHeight: 1.5,
   },
   successBox: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -476,15 +525,15 @@ const s: Record<string, React.CSSProperties> = {
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
     color: '#fff', border: 'none', borderRadius: 8, padding: '14px',
-    fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4,
+    fontSize: 'var(--fs-value)', fontWeight: 700, cursor: 'pointer', marginTop: 4,
     minHeight: 48, width: '100%',
     transition: 'opacity 0.15s',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     touchAction: 'manipulation',
   },
-  terms:  { fontSize: 11, color: '#475569', textAlign: 'center', lineHeight: 1.6, margin: 0 },
-  footer: { textAlign: 'center', marginTop: 20, fontSize: 13, color: '#64748b' },
-  link:   { color: '#64748b', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
+  terms:  { fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', lineHeight: 1.6, margin: 0 },
+  footer: { textAlign: 'center', marginTop: 20, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
+  link:   { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };
 
 export default Register;

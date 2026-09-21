@@ -90,6 +90,17 @@ export interface SignalFeature {
 // ─── AI Analysis ──────────────────────────────────────────────────────────────
 
 export interface ChartClickContext {
+  /**
+   * The instrument the user is actually looking at.
+   *
+   * This field did not exist. The backend read `context.get("symbol", "XAUUSD")`
+   * and the click handler never sent one — so clicking a EURUSD chart returned
+   * an XAUUSD analysis, rendered inside the EURUSD panel with no indication
+   * that the two were different instruments. Same for `timeframe`, which
+   * defaulted to "1h" no matter which timeframe was selected.
+   */
+  symbol: string;
+  timeframe: string;
   price: number;
   time: number;
   bar: OHLCVBar | null;
@@ -112,6 +123,24 @@ export interface AIAnalysis {
   priceTargets: { bull: number; bear: number; base: number };
   timeHorizon: string;
   warnings: string[];
+
+  /**
+   * Provenance. The backend has always returned `data_source` and
+   * `bars_analyzed`; nothing in the UI read either, so a fallback answer with
+   * zero bars rendered the same confident badge as a real one — "RANGING 50%,
+   * Recommended: HOLD at 0.0000" with no warnings attached.
+   *
+   * Optional because a cached analysis from an older build will not carry them.
+   */
+  modelVersion?: string;
+  modelAvailable?: boolean;
+  barsAnalyzed?: number;
+  dataSource?: string;
+  degraded?: boolean;
+  rsi?: number | null;
+  atr?: number | null;
+  /** Feature importances from the model that produced this verdict. */
+  features?: SignalFeature[];
 }
 
 // ─── Technical Levels ─────────────────────────────────────────────────────────

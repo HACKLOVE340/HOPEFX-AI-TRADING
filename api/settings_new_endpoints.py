@@ -49,6 +49,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user, require_role
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -361,13 +362,27 @@ class CreateApiKeyPayload(BaseModel):
     scopes: list[str] = ["read"]
 
 
+# Scopes a key may carry, by the role of whoever creates it. The chip list in the
+# UI is a convenience; this is the boundary.
+_USER_SCOPES = frozenset({"read", "trade"})
+_ADMIN_SCOPES = frozenset({"read", "trade", "admin"})
+
+
 @router.get("/api/settings/api-keys")
 async def list_api_keys(user: TokenPayload = Depends(get_current_user)):
     uid = user.sub
     keys = _load_from_db(f"api_keys:{uid}", {"api_keys": []}).get("api_keys", [])
-    # Never return full key — only prefix
+    # Never return full key — only prefix.
+    #
+    # Revoked keys are excluded. Revocation is a soft delete, and returning them
+    # meant a revoked key reappeared under "Active keys" on the next reload,
+    # complete with a Revoke button — so someone who had just cut off a
+    # compromised key saw it listed as live. api/platform.py:229 already filters
+    # correctly.
     safe = []
     for k in keys:
+        if k.get("revoked"):
+            continue
         safe.append(
             {
                 "key_id": k["key_id"],
@@ -387,6 +402,21 @@ async def create_api_key(payload: CreateApiKeyPayload, user: TokenPayload = Depe
     uid = user.sub
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="Key name is required")
+
+    # Validate scopes server-side. Nothing authenticates with these keys yet —
+    # there is no APIKeyHeader dependency anywhere — so requesting "admin" grants
+    # nothing today. That is exactly why this has to land now: whoever builds the
+    # verifier would otherwise inherit a table of self-granted admin claims.
+    allowed = _ADMIN_SCOPES if user.role in ("admin", "superadmin") else _USER_SCOPES
+    requested = set(payload.scopes or [])
+    if not requested:
+        raise HTTPException(status_code=400, detail="At least one scope is required")
+    if requested - allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Scopes not permitted: {sorted(requested - allowed)}",
+        )
+
     raw_key = f"hfx_{secrets.token_urlsafe(32)}"
     key_id = secrets.token_hex(8)
     entry = {
@@ -652,7 +682,7 @@ def get_performance_metrics(user: TokenPayload = Depends(require_role("admin")))
             "ops_per_sec": _info.get("instantaneous_ops_per_sec", 0),
         }
     except Exception as exc:
-        result["redis"] = {"connected": False, "error": str(exc)}
+        result["redis"] = {"connected": False, "error": safe_error(exc)}
 
     # ── DB pool health ────────────────────────────────────────────────────────
     try:
@@ -677,7 +707,7 @@ def get_performance_metrics(user: TokenPayload = Depends(require_role("admin")))
 
     # ── Component latencies from last health check ────────────────────────────
     try:
-        from health_check_service import _last_health_result  # type: ignore[attr-defined]
+        from health_check_service import _last_health_result
 
         if _last_health_result:
             result["components"] = [

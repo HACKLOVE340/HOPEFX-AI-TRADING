@@ -10,7 +10,8 @@ import type { SuperAdminUser, BulkUserResult } from './types';
 import { ROLE_BADGE_STYLES, ROLE_LABELS, PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { UserRole } from '../../store';
 import type { Plan } from '../../lib/subscription';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
+import { Ban, CheckCircle2, Download, KeyRound, RefreshCw, Trash2, User, Users } from 'lucide-react';
 
 const timeAgo = (iso: string | null) => {
   if (!iso) return 'Never';
@@ -139,7 +140,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         />
       )}
       <div style={{ position: 'fixed', inset: 0, zIndex: 800, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)' }} onClick={onClose} />
-      <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 801, width: 460, background: '#0a1628', borderLeft: '1px solid #1e293b', overflowY: 'auto', padding: 24, animation: 'sa-fadein 0.2s ease' }}>
+      <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 801, width: 460, background: '#0a1628', borderLeft: '1px solid var(--border)', overflowY: 'auto', padding: 24, animation: 'sa-fadein 0.2s ease' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -148,17 +149,17 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
               {user.username?.[0]?.toUpperCase() ?? '?'}
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{user.username}</div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>{user.email}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>{user.username}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{user.email}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20 }}>×</button>
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 18 }}>
           {(['overview', 'edit', 'activity'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? '#1e293b' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? '#f8fafc' : '#64748b', padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 7, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
               {{ overview: 'Overview', edit: 'Edit', activity: 'Activity' }[t]}
             </button>
           ))}
@@ -171,23 +172,23 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
               {[
                 { label: 'Status',     value: <StatusBadge status={user.status} size="sm" /> },
                 { label: 'Role',       value: <span style={{ fontSize: 11, fontWeight: 700, color: roleStyle.color }}>{ROLE_LABELS[user.role as UserRole] ?? user.role}</span> },
-                { label: 'Plan',       value: <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[user.plan as Plan] ?? '#94a3b8' }}>{PLAN_LABELS[user.plan as Plan] ?? user.plan}</span> },
-                { label: '2FA',        value: <span style={{ color: user.two_fa_enabled ? '#4ade80' : '#f87171', fontSize: 11 }}>{user.two_fa_enabled ? 'Enabled' : 'Disabled'}</span> },
+                { label: 'Plan',       value: <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[user.plan as Plan] ?? 'var(--text-dim)' }}>{PLAN_LABELS[user.plan as Plan] ?? user.plan}</span> },
+                { label: '2FA',        value: <span style={{ color: user.two_fa_enabled ? 'var(--gain)' : 'var(--loss)', fontSize: 11 }}>{user.two_fa_enabled ? 'Enabled' : 'Disabled'}</span> },
                 { label: 'Joined',     value: fmtDate(user.created_at) },
                 { label: 'Last Login', value: timeAgo(user.last_login) },
                 { label: 'Trades',     value: user.total_trades.toLocaleString() },
                 { label: 'Revenue',    value: `$${user.revenue_generated.toFixed(2)}` },
               ].map(r => (
-                <div key={r.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, padding: '8px 10px' }}>
-                  <div style={{ fontSize: 10, color: '#475569', marginBottom: 3 }}>{r.label}</div>
-                  <div style={{ fontSize: 12, color: '#e2e8f0' }}>{r.value}</div>
+                <div key={r.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 3 }}>{r.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text)' }}>{r.value}</div>
                 </div>
               ))}
             </div>
 
             {/* Role + Plan pickers */}
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>Change Role</div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Change Role</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Select value={role} onChange={e => setRole(e.target.value)} options={[
                   { value: 'user', label: 'User' }, { value: 'trader', label: 'Trader' },
@@ -197,8 +198,8 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
               </div>
             </div>
 
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>Change Plan</div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Change Plan</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Select value={plan} onChange={e => setPlan(e.target.value)} options={[
                   { value: 'free',         label: 'Free' },
@@ -212,14 +213,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <ActionBtn label="Reset Password"   onClick={() => setConfirm({ action: 'reset-pw',    label: 'Reset Password'   })} variant="warning" icon="🔑" />
-              <ActionBtn label="Impersonate User" onClick={() => setConfirm({ action: 'impersonate', label: 'Impersonate User' })} variant="primary" icon="👤" />
+              <ActionBtn label="Reset Password"   onClick={() => setConfirm({ action: 'reset-pw',    label: 'Reset Password'   })} variant="warning" icon={<KeyRound size={18} aria-hidden />} />
+              <ActionBtn label="Impersonate User" onClick={() => setConfirm({ action: 'impersonate', label: 'Impersonate User' })} variant="primary" icon={<User size={18} aria-hidden />} />
               {user.status === 'banned'
-                ? <ActionBtn label="Unban User" onClick={() => setConfirm({ action: 'unban', label: 'Unban User' })} variant="success" icon="✅" />
-                : <ActionBtn label="Ban User"   onClick={() => setConfirm({ action: 'ban',   label: 'Ban User'   })} variant="danger"  icon="🚫" />
+                ? <ActionBtn label="Unban User" onClick={() => setConfirm({ action: 'unban', label: 'Unban User' })} variant="success" icon={<CheckCircle2 size={18} aria-hidden />} />
+                : <ActionBtn label="Ban User"   onClick={() => setConfirm({ action: 'ban',   label: 'Ban User'   })} variant="danger"  icon={<Ban size={18} aria-hidden />} />
               }
-              <div style={{ borderTop: '1px solid #1e293b', paddingTop: 8 }}>
-                <ActionBtn label="Delete Account" onClick={() => setDeleteConfirm(true)} loading={deleting} icon="🗑️" variant="danger" />
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                <ActionBtn label="Delete Account" onClick={() => setDeleteConfirm(true)} loading={deleting} icon={<Trash2 size={18} aria-hidden />} variant="danger" />
               </div>
             </div>
           </>
@@ -228,8 +229,8 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         {/* ── TAB: Edit ── */}
         {tab === 'edit' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 12 }}>Edit Profile</div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 12 }}>Edit Profile</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <Input label="Username" value={editFields.username} onChange={e => setEditFields(f => ({ ...f, username: e.target.value }))} />
                 <Input label="Email"    value={editFields.email}    onChange={e => setEditFields(f => ({ ...f, email:    e.target.value }))} />
@@ -243,19 +244,19 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         {tab === 'activity' && (
           <div>
             {activityLoading ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>Loading activity…</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>Loading activity…</div>
             ) : activity.length === 0 ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No activity recorded.</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>No activity recorded.</div>
             ) : (
               activity.map((a, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid #0f172a', alignItems: 'flex-start' }}>
+                <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--hairline)', alignItems: 'flex-start' }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#3b82f6', marginTop: 5, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{a.action}</div>
-                    {a.details && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{a.details}</div>}
-                    <div style={{ fontSize: 10, color: '#334155', marginTop: 2 }}>IP: {a.ip}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-strong)' }}>{a.action}</div>
+                    {a.details && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{a.details}</div>}
+                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>IP: {a.ip}</div>
                   </div>
-                  <div style={{ fontSize: 11, color: '#475569', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {new Date(a.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
@@ -265,7 +266,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
         )}
 
         {msg && (
-          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: msg === 'Done' ? '#052e16' : '#450a0a', color: msg === 'Done' ? '#4ade80' : '#f87171', fontSize: 12, fontWeight: 600 }}>
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: msg === 'Done' ? '#052e16' : '#450a0a', color: msg === 'Done' ? 'var(--gain)' : 'var(--loss)', fontSize: 12, fontWeight: 600 }}>
             {msg === 'Done' ? '✅ Action completed successfully' : `❌ ${msg}`}
           </div>
         )}
@@ -279,20 +280,20 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
 const BulkResultToast: React.FC<{ result: BulkUserResult; onClose: () => void }> = ({ result, onClose }) => (
   <div style={{
     position: 'fixed', bottom: 24, right: 24, zIndex: 900,
-    background: '#0a1628', border: '1px solid #1e293b', borderRadius: 12,
+    background: '#0a1628', border: '1px solid var(--border)', borderRadius: 12,
     padding: '16px 20px', minWidth: 280, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
     animation: 'sa-fadein 0.2s ease',
   }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>Bulk Operation Complete</span>
-      <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16 }}>x</button>
+      <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>Bulk Operation Complete</span>
+      <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>x</button>
     </div>
-    <div style={{ fontSize: 12, color: '#4ade80' }}>✅ {result.succeeded.length} succeeded</div>
+    <div style={{ fontSize: 12, color: 'var(--gain)' }}>✅ {result.succeeded.length} succeeded</div>
     {result.failed.length > 0 && (
-      <div style={{ fontSize: 12, color: '#f87171', marginTop: 4 }}>
+      <div style={{ fontSize: 12, color: 'var(--loss)', marginTop: 4 }}>
         ❌ {result.failed.length} failed
         {result.failed.slice(0, 3).map(f => (
-          <div key={f.user_id} style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+          <div key={f.user_id} style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
             {f.user_id}: {f.reason}
           </div>
         ))}
@@ -335,7 +336,7 @@ const UsersSection: React.FC = () => {
       params.page_size = String(PAGE_SIZE);
       const res = await superadminApi.users(params);
       if (!mountedRef.current) return;
-      setUsers(res.data.users ?? res.data);
+      setUsers(asArray(res.data, 'users'));
       setCheckedIds(new Set());
     } catch (e: unknown) {
       if (!mountedRef.current) return;
@@ -361,7 +362,12 @@ const UsersSection: React.FC = () => {
   };
 
   const toggleOne = (id: string) =>
-    setCheckedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setCheckedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   const doBulkAction = async (action: string) => {
     const ids = Array.from(checkedIds);
@@ -411,10 +417,10 @@ const UsersSection: React.FC = () => {
 
       <SectionCard
         title="User Management"
-        icon="👥"
+        icon={<Users size={18} aria-hidden />}
         accent="#3b82f6"
         subtitle={`${users.length} users loaded`}
-        actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}
       >
         {/* Filters */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -458,9 +464,9 @@ const UsersSection: React.FC = () => {
               {checkedIds.size} selected
             </span>
             <div style={{ flex: 1 }} />
-            <ActionBtn label="Ban Selected"   onClick={() => setBulkConfirm({ action: 'ban',   label: 'Ban Users'   })} variant="danger"  size="sm" icon="🚫" loading={bulkBusy === 'ban'} />
-            <ActionBtn label="Unban Selected" onClick={() => setBulkConfirm({ action: 'unban', label: 'Unban Users' })} variant="success" size="sm" icon="✅" loading={bulkBusy === 'unban'} />
-            <ActionBtn label="Export CSV"     onClick={() => doBulkAction('export')}                                    variant="ghost"   size="sm" icon="⬇️" loading={bulkBusy === 'export'} />
+            <ActionBtn label="Ban Selected"   onClick={() => setBulkConfirm({ action: 'ban',   label: 'Ban Users'   })} variant="danger"  size="sm" icon={<Ban size={18} aria-hidden />} loading={bulkBusy === 'ban'} />
+            <ActionBtn label="Unban Selected" onClick={() => setBulkConfirm({ action: 'unban', label: 'Unban Users' })} variant="success" size="sm" icon={<CheckCircle2 size={18} aria-hidden />} loading={bulkBusy === 'unban'} />
+            <ActionBtn label="Export CSV"     onClick={() => doBulkAction('export')}                                    variant="ghost"   size="sm" icon={<Download size={18} aria-hidden />} loading={bulkBusy === 'export'} />
             <ActionBtn label="Clear"          onClick={() => setCheckedIds(new Set())}                                  variant="ghost"   size="sm" />
           </div>
         )}
@@ -468,12 +474,13 @@ const UsersSection: React.FC = () => {
         {/* Table */}
         {loading ? <LoadingRows rows={8} /> : error ? <ErrorState message={error} onRetry={load} /> : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '8px 12px', width: 36 }}>
                     <input
                       type="checkbox"
+                      aria-label="Select all users on this page"
                       checked={allChecked}
                       ref={el => { if (el) el.indeterminate = someChecked; }}
                       onChange={toggleAll}
@@ -481,7 +488,7 @@ const UsersSection: React.FC = () => {
                     />
                   </th>
                   {['User', 'Role', 'Plan', 'Status', 'Trades', 'Last Login', 'Joined', ''].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                       {h}
                     </th>
                   ))}
@@ -492,20 +499,36 @@ const UsersSection: React.FC = () => {
                   const rs = roleStyle(u.role);
                   const isChecked = checkedIds.has(u.user_id);
                   return (
-                    <tr key={u.user_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a', transition: 'background 0.1s', background: isChecked ? '#0f1f35' : undefined }}>
+                    <tr key={u.user_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)', transition: 'background 0.1s', background: isChecked ? '#0f1f35' : undefined }}>
                       <td style={{ padding: '10px 12px' }} onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(u.user_id)} style={{ cursor: 'pointer', accentColor: '#3b82f6' }} />
+                        {/* Named by its row. Twenty checkboxes all announced
+                            "checkbox" is a list nobody can act on. */}
+                        <input type="checkbox" aria-label={`Select ${u.username ?? u.email}`}
+                          checked={isChecked} onChange={() => toggleOne(u.user_id)} style={{ cursor: 'pointer', accentColor: '#3b82f6' }} />
                       </td>
-                      <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: rs.bg, border: `1px solid ${rs.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: rs.color, flexShrink: 0 }}>
-                            {u.username[0].toUpperCase()}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, color: '#f1f5f9' }}>{u.username}</div>
-                            <div style={{ fontSize: 11, color: '#475569' }}>{u.email}</div>
-                          </div>
-                        </div>
+                      {/* The row's ONE keyboard path. Eight cells carry the same
+                          onClick for mouse convenience, but a <td> is not
+                          focusable and cannot be reached by keyboard at all — so
+                          this table was operable only with a pointer. Making all
+                          eight focusable would put eight tab stops on every row;
+                          one, named by the user it opens, is the whole row. */}
+                      <td style={{ padding: '10px 12px', cursor: 'pointer' }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelected(u)}
+                          aria-label={`Open ${u.username ?? u.email}`}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                   background: 'none', border: 0, padding: 0, textAlign: 'left',
+                                   font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+                        >
+                          <span style={{ width: 28, height: 28, borderRadius: '50%', background: rs.bg, border: `1px solid ${rs.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: rs.color, flexShrink: 0 }}>
+                            {u.username?.[0]?.toUpperCase() ?? '?'}
+                          </span>
+                          <span>
+                            <span style={{ display: 'block', fontWeight: 600, color: 'var(--text-strong)' }}>{u.username}</span>
+                            <span style={{ display: 'block', fontSize: 11, color: 'var(--text-faint)' }}>{u.email}</span>
+                          </span>
+                        </button>
                       </td>
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: rs.color, background: rs.bg, border: `1px solid ${rs.border}`, borderRadius: 4, padding: '2px 7px' }}>
@@ -513,14 +536,14 @@ const UsersSection: React.FC = () => {
                         </span>
                       </td>
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[u.plan as Plan] ?? '#94a3b8' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[u.plan as Plan] ?? 'var(--text-dim)' }}>
                           {PLAN_LABELS[u.plan as Plan] ?? u.plan}
                         </span>
                       </td>
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}><StatusBadge status={u.status} size="sm" /></td>
-                      <td style={{ padding: '10px 12px', color: '#94a3b8', cursor: 'pointer' }} onClick={() => setSelected(u)}>{u.total_trades.toLocaleString()}</td>
-                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelected(u)}>{timeAgo(u.last_login)}</td>
-                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelected(u)}>{fmtDate(u.created_at)}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-dim)', cursor: 'pointer' }} onClick={() => setSelected(u)}>{u.total_trades.toLocaleString()}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelected(u)}>{timeAgo(u.last_login)}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }} onClick={() => setSelected(u)}>{fmtDate(u.created_at)}</td>
                       <td style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setSelected(u)}><span style={{ fontSize: 11, color: '#3b82f6' }}>View →</span></td>
                     </tr>
                   );
@@ -528,7 +551,7 @@ const UsersSection: React.FC = () => {
               </tbody>
             </table>
             {users.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '32px', color: '#475569', fontSize: 13 }}>
+              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>
                 No users match the current filters.
               </div>
             )}
@@ -539,7 +562,7 @@ const UsersSection: React.FC = () => {
         {!loading && users.length > 0 && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
             <ActionBtn label="← Prev" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} size="sm" />
-            <span style={{ fontSize: 12, color: '#64748b', alignSelf: 'center' }}>Page {page}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>Page {page}</span>
             <ActionBtn label="Next →" onClick={() => setPage(p => p + 1)} disabled={users.length < PAGE_SIZE} size="sm" />
           </div>
         )}

@@ -6,7 +6,7 @@
 """
 research/pipeline/paper_trading_gate.py
 =========================================
-OANDA paper trading run clock and phase gate enforcement.
+Broker-agnostic paper trading run clock and phase gate enforcement.
 
 This module provides the authoritative gate checks for Phases 2 and 3.
 It reads from environment variables and optionally from a persistent
@@ -15,12 +15,12 @@ state file so the gate survives process restarts.
 Gate summary
 ------------
 Phase 2 (Anomaly weighting):
-  - 30 calendar days elapsed since OANDA_PAPER_RUN_START_UTC
+  - 30 calendar days elapsed since PAPER_RUN_START_UTC (any broker)
   - Paper Sharpe drop < 0.2 after enabling (checked via check_sharpe_gate())
 
 Phase 3 (Online learning):
-  - 90 calendar days elapsed since OANDA_PAPER_RUN_START_UTC
-  - >= 500 confirmed fills (OANDA_PAPER_FILL_COUNT)
+  - 90 calendar days elapsed since PAPER_RUN_START_UTC (any broker)
+  - >= 500 confirmed fills (PAPER_FILL_COUNT)
 
 Phase 4 (Deep ensemble):
   - OOS accuracy >= 70% (from model meta JSON)
@@ -71,7 +71,7 @@ PHASE2_MAX_SHARPE_DROP = 0.2
 
 class PaperTradingGate:
     """
-    Tracks the OANDA paper trading run and enforces phase gates.
+    Tracks the paper trading run (any broker) and enforces phase gates.
 
     State is persisted to a JSON file so it survives process restarts.
     All timestamps are stored and compared in UTC.
@@ -91,8 +91,10 @@ class PaperTradingGate:
     def _load_state(self) -> dict:
         """Load state from disk, falling back to env vars if file missing."""
         default: dict = {
-            "run_start_utc": os.getenv("OANDA_PAPER_RUN_START_UTC", ""),
-            "fill_count": int(os.getenv("OANDA_PAPER_FILL_COUNT", "0")),
+            # Broker-agnostic: a paper run on ANY supported broker counts.
+            # Prefer the neutral vars; fall back to the legacy OANDA_* names.
+            "run_start_utc": os.getenv("PAPER_RUN_START_UTC") or os.getenv("OANDA_PAPER_RUN_START_UTC", ""),
+            "fill_count": int(os.getenv("PAPER_FILL_COUNT") or os.getenv("OANDA_PAPER_FILL_COUNT", "0")),
             "fills": [],  # list of {ts, pnl} dicts
             "sharpe_before": None,
             "sharpe_after": None,
@@ -221,7 +223,7 @@ class PaperTradingGate:
         """
         # Time gate
         if self.run_start is None:
-            return False, ("Run start not set. Call set_run_start() or set OANDA_PAPER_RUN_START_UTC.")
+            return False, ("Run start not set. Call set_run_start() or set PAPER_RUN_START_UTC (any broker).")
         if self.elapsed_days < PHASE2_MIN_DAYS:
             remaining = PHASE2_MIN_DAYS - self.elapsed_days
             return False, (
@@ -252,7 +254,7 @@ class PaperTradingGate:
 
         # Time gate
         if self.run_start is None:
-            return False, ("Run start not set. Call set_run_start() or set OANDA_PAPER_RUN_START_UTC.")
+            return False, ("Run start not set. Call set_run_start() or set PAPER_RUN_START_UTC (any broker).")
         if self.elapsed_days < PHASE3_MIN_DAYS:
             remaining = PHASE3_MIN_DAYS - self.elapsed_days
             return False, (

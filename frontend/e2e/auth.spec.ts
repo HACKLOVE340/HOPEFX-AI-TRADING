@@ -12,7 +12,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAs, logout, captureConsoleErrors } from './helpers';
+import {  logout, captureConsoleErrors } from './helpers';
 
 test.describe('Landing page', () => {
   test('renders without JS errors', async ({ page }) => {
@@ -66,10 +66,20 @@ test.describe('Login page', () => {
 
     // Wait for error message (API returns 401)
     const errorMsg = page.locator('[role="alert"], .error, [data-testid="error"]');
-    // In demo mode the login may succeed with any credentials — just check no crash
     await page.waitForTimeout(2000);
-    // Page should still be on /login or have navigated — either is acceptable
-    // The key assertion is no unhandled JS exception
+
+    // Two outcomes are legitimate: the API refuses and the page says so, or a
+    // demo build accepts any credentials and navigates away. A THIRD outcome
+    // is a defect — still on /login, no error shown — and that is the one this
+    // assertion catches. The locator was built and never used, so the test
+    // could only fail on an unhandled exception, which is not what it is for.
+    const stillOnLogin = new URL(page.url()).pathname.startsWith('/login');
+    if (stillOnLogin) {
+      await expect(
+        errorMsg.first(),
+        'rejected sign-in left the user on /login with no message explaining why',
+      ).toBeVisible();
+    }
   });
 
   test('has link to register page', async ({ page }) => {

@@ -19,9 +19,13 @@ on:
 
 # Use SHA so Dependabot bumps get their own group and don't cancel
 # runs triggered by real code changes.
+# Superseded runs are cancelled on feature branches and PRs; main is left alone
+# because its runs are the release record. This block previously keyed the group
+# on github.sha, giving every commit its own group — so it collided with nothing
+# and superseded nothing, and every push queued another complete pipeline.
 concurrency:
-  group: ci-${{ github.ref }}-${{ github.sha }}
-  cancel-in-progress: false
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   pre-commit:
@@ -30,14 +34,14 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
       - name: Cache pre-commit envs
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -51,43 +55,48 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
       - name: Install pip-audit
         run: pip install --retries 5 --timeout 60 pip-audit
       - name: Dependency vulnerability scan
-        # Blocks on CRITICAL severity; HIGH and below are reported only.
+        # Blocks on any CVE that has a real, available fix version — pip-audit's
+        # own JSON schema has no severity field at all (a vuln's "aliases" are
+        # just a plain list of CVE/GHSA ID strings, e.g. ["CVE-2024-23342",
+        # "GHSA-wj6h-64fc-37mp"]), so a prior version of this script that tried
+        # to read `.get("severity")` off each alias entry crashed with
+        # AttributeError on every run that found anything ('str' object has no
+        # attribute 'get') — meaning this step has been failing unconditionally
+        # regardless of actual severity. There is no way to recover a CRITICAL-
+        # only distinction from pip-audit's own data without an extra API call
+        # per CVE, so this now blocks on the achievable, honest signal instead:
+        # a known vulnerability where upstream has actually shipped a fix.
         # To suppress a false-positive: pip-audit --ignore-vuln GHSA-xxxx-xxxx-xxxx
         run: |
           pip-audit --requirement=requirements.txt --desc \
             --vulnerability-service pypi \
             --format json --output pip-audit-report.json || true
-          # Exit non-zero if any CRITICAL CVEs are present
           python - <<'EOF'
           import json, sys
           try:
               data = json.load(open("pip-audit-report.json"))
           except Exception:
               sys.exit(0)  # no report = no vulns
-          criticals = [
+          fixable = [
               v for dep in data.get("dependencies", [])
               for v in dep.get("vulns", [])
-              if v.get("fix_versions") is not None  # exploitable, has fix
-              and any(
-                  "CRITICAL" in (a.get("severity", "") or "").upper()
-                  for a in v.get("aliases", [{"severity": ""}])
-              )
+              if v.get("fix_versions")  # non-empty list = a real fix exists
           ]
-          if criticals:
-              print(f"BLOCKED: {len(criticals)} CRITICAL CVE(s) found:")
-              for c in criticals:
-                  print(f"  {c['id']}: {c.get('description', '')[:120]}")
+          if fixable:
+              print(f"BLOCKED: {len(fixable)} CVE(s) with an available fix:")
+              for v in fixable:
+                  print(f"  {v['id']}: {v.get('description', '')[:120]}")
               sys.exit(1)
-          print("pip-audit: no CRITICAL CVEs found")
+          print("pip-audit: no fixable CVEs found")
           EOF
       - name: Upload pip-audit report
         if: always()
@@ -108,7 +117,55 @@ jobs:
           tar -xzf trivy.tgz trivy
           sudo install -m 0755 trivy /usr/local/bin/trivy
           trivy version
-          trivy fs . --severity CRITICAL,HIGH --exit-code 1 --format table
+          # --ignorefile is required: Trivy does NOT auto-load
+          # .trivyignore.yaml (only the plain .trivyignore), so without this
+          # flag every acceptance in that file is silently ignored and the
+          # scan fails on findings that have a written, expiring exemption.
+          #
+          # Deliberately NOT --ignore-unfixed. That flag drops every CVE with
+          # no upstream fix, permanently and with no record. security-scan.yml
+          # used to pass it, which is how all six of the chromadb/ecdsa/nltk
+          # findings disappeared from that job while this one reported two
+          # criticals on the same commit; it has been removed there too, and
+          # both jobs now read the same .trivyignore.yaml. An unfixed CVE has to
+          # be argued for in that file and re-argued when the entry expires.
+          trivy fs . \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            --ignorefile .trivyignore.yaml \
+            --format table
+      - name: Scan the PINNED dependency set with Trivy
+        # `trivy fs .` above reads requirements.txt, which holds RANGES
+        # (chromadb>=0.4.0). Trivy cannot resolve a range, so it reported
+        # "requirements.txt  pip  0" for as long as this job has run — and that
+        # zero means "no version I could resolve", not "no vulnerabilities"
+        # (audit F271).
+        #
+        # requirements.lock holds the real pins, but "requirements.lock" is not
+        # a filename Trivy recognises as a pip manifest, so it was never read.
+        # Copying it under a recognised name is the whole fix.
+        #
+        # Measured on 2026-09-06: the pinned set reports 11 findings against the
+        # 6 that uv.lock shows, and 5 of the extra ones HAD upstream fixes —
+        # cryptography (Bleichenbacher oracle) and four nltk CVEs including a
+        # critical JVM argument injection. Those are now floored in
+        # requirements.txt and pinned in requirements.lock. A scan that reads
+        # ranges cannot see a fixable CVE at all.
+        run: |
+          set -euo pipefail
+          mkdir -p .trivy-pinned
+          # Strip comments and pip-compile's "# via" provenance lines; keep the
+          # `name==version` pins, which is what Trivy needs.
+          grep -vE '^\s*#|^\s*$' requirements.lock \
+            | sed 's/\s*#.*//' \
+            | grep -E '^[A-Za-z0-9]' > .trivy-pinned/requirements.txt
+          echo "Scanning $(wc -l < .trivy-pinned/requirements.txt) pinned packages"
+          trivy fs .trivy-pinned \
+            --scanners vuln \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            --ignorefile .trivyignore.yaml \
+            --format table
 
   typecheck:
     runs-on: ubuntu-latest
@@ -116,17 +173,17 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
 
       - name: Cache pip packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-ci-3.11-${{ hashFiles('requirements-ci.txt') }}
@@ -205,17 +262,17 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Cache pip packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-ci-${{ matrix.python-version }}-${{ hashFiles('requirements-ci.txt') }}
@@ -266,7 +323,7 @@ jobs:
           if dead:
               print(f"\nERROR: {len(dead)} dead/unresolved Python file(s) in project root.")
               print("Resolution: wire into production, delete, or add to EXEMPTIONS")
-              print("in tests/test_dead_file_detection.py with a justification.\n")
+              print("in tests/unit/test_dead_file_detection.py with a justification.\n")
               for name, hits in dead:
                   print(f"  {name}")
                   for lineno, text in hits:
@@ -287,7 +344,7 @@ jobs:
 
       - name: Run ruff (lint + format check)
         run: |
-          pip install --retries 5 --timeout 60 "ruff>=0.9.0,<0.10.0"
+          pip install --retries 5 --timeout 60 "ruff>=0.9.0"
           ruff check \
             api/ auth/ brokers/ cache/ celery_app.py config/ core/ \
             data_feed/ execution/ kill_switch.py ml/ risk/ strategies/ utils/
@@ -344,6 +401,7 @@ jobs:
       # here and reused by the per-package gates below — no re-runs needed.
       - name: Run tests with coverage (full suite, 70% baseline)
         env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # pragma: allowlist secret
@@ -369,11 +427,44 @@ jobs:
             --timeout=120 \
             -q
 
-      # Invariant coverage report — pure introspection (no app boot). Fails the
-      # build if a critical component lacks invariant or alert coverage. Cheap
-      # meta-gate that catches "we added a component but forgot to protect it".
+      # Coverage SCOPE report — printed immediately after the coverage figure,
+      # because that figure is a fraction of what `.coveragerc` points at, not
+      # of the application. `[run] source` names a subset of packages and `omit`
+      # removes modules from inside them, so "70% baseline" and the per-package
+      # gates describe a minority of the codebase, not all of it (F221/F105).
+      #
+      # As of the F221 commit that added this step, `source` covers 38.6% of
+      # application statements. Still outside it: api/, data_layer/, security/,
+      # data/, utils/, scripts/, analysis/, research/. Still omitted from inside
+      # packages that ARE in scope: risk/manager.py, execution/engine.py and the
+      # decision engine. Do not restate those two lists anywhere else — read the
+      # step's own output, which is generated from `.coveragerc` and cannot go
+      # stale the way this comment can.
+      #
+      # This does not gate the percentage: widening `source` to the whole
+      # application would drop it below the floor overnight and teach nobody
+      # anything. It gates the honesty — the scope is printed beside the number.
+      - name: Coverage scope report
+        if: always()
+        run: python scripts/coverage_scope_report.py --fail-under-share 25
+
+      # Invariant coverage report — pure introspection (no app boot). The
+      # registry inventory is measured; the critical-component matrix is a
+      # DECLARATION in invariants/registry.py, not a probe (F176). This step
+      # fails the build when a component declared critical does not declare
+      # invariant or alert coverage — "we added a component but forgot to
+      # declare its protection". It does not verify that the protection exists;
+      # the runtime invariant check below is what exercises real behaviour.
       - name: Invariant coverage report
         run: python scripts/invariant_coverage.py
+
+      # Custom-skill claim verification — the four hopefx-* skills in
+      # .claude/skills cite constants, defaults, counts and file paths. A skill
+      # that cites a stale constant is worse than no skill, because it is
+      # believed: an agent acts on it without re-deriving it. This step fails
+      # the build when a cited claim stops being true of the codebase.
+      - name: Custom-skill claim verification
+        run: python scripts/verify_skill_claims.py
 
       # Runtime invariant check — boots the app, probes endpoints, asserts output
       # invariants and scans the event log so "looks right, behaves wrong" fails
@@ -381,6 +472,7 @@ jobs:
       # in this environment) is surfaced as a warning, not a hard failure.
       - name: Runtime invariant check (output invariants)
         env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx  # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # pragma: allowlist secret
@@ -441,7 +533,7 @@ jobs:
         # continue-on-error: QLTY_COVERAGE_TOKEN is optional; upload is best-effort.
         # Tests must not fail because a coverage reporting secret is absent.
         continue-on-error: true
-        uses: qltysh/qlty-action/coverage@a19242102d17e497f437d7466aa01b528537e899  # v2
+        uses: qltysh/qlty-action/coverage@08a0a862c159eae9b9003081da6663d96efef637  # v2
         with:
           token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
           files: coverage.xml
@@ -452,7 +544,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
@@ -464,7 +556,7 @@ jobs:
             libzmq3-dev libzmq5
 
       - name: Cache CMake build directory
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: execution/cpp_shim/build
           key: cpp-shim-${{ runner.os }}-${{ hashFiles('execution/cpp_shim/CMakeLists.txt', 'execution/cpp_shim/hopefx_shim.cpp') }}
@@ -498,12 +590,12 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           # Pinned to Node 20 LTS — "lts/*" is non-deterministic and can
           # resolve to a new major that breaks cached installs mid-sprint.
@@ -536,12 +628,12 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: "20"
           cache: "npm"

@@ -19,6 +19,8 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 
+from news.keyword_match import contains_keyword
+
 logger = logging.getLogger(__name__)
 
 
@@ -252,7 +254,7 @@ class ImpactPredictor:
         # Count keyword matches for each category
         scores = {}
         for category, keywords in self.CATEGORY_KEYWORDS.items():
-            score = sum(1 for keyword in keywords if keyword in text)
+            score = sum(1 for keyword in keywords if contains_keyword(text, keyword))
             scores[category] = score
 
         # Return category with highest score
@@ -266,7 +268,7 @@ class ImpactPredictor:
     def _calculate_impact_level(self, text: str, category: EventCategory) -> ImpactLevel:
         """Calculate impact level based on keywords and category"""
         # Count high-impact keywords
-        high_impact_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text)
+        high_impact_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if contains_keyword(text, keyword))
 
         # Category-based base impact
         category_impact = {
@@ -307,7 +309,7 @@ class ImpactPredictor:
             confidence += 0.1
 
         # Increase confidence if high-impact keywords present
-        keyword_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text)
+        keyword_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if contains_keyword(text, keyword))
         confidence += min(keyword_count * 0.1, 0.2)
 
         return min(confidence, 1.0)

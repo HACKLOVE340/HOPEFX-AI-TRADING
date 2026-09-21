@@ -24,8 +24,9 @@ from invariants.constitution import (
 )
 
 
-def verify_retrieval(doc_ids: Iterable[Any], known_ids: set[Any], trusted_sources: set[str],
-                     sources: Iterable[str]) -> list[Violation]:
+def verify_retrieval(
+    doc_ids: Iterable[Any], known_ids: set[Any], trusted_sources: set[str], sources: Iterable[str]
+) -> list[Violation]:
     """RAG: every retrieved doc must exist and come from a trusted source."""
     out: list[Violation] = []
     missing = [d for d in doc_ids if d not in known_ids]

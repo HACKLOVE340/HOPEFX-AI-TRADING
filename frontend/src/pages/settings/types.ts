@@ -17,6 +17,21 @@ export type SettingsTab =
   | 'accessibility'
   | 'admin'
   | 'danger'
+  // Professional control plane
+  | 'control-overview'
+  | 'control-brain'
+  | 'control-models'
+  | 'control-agents'
+  | 'control-connectors'
+  | 'control-sandbox'
+  | 'control-startup'
+  | 'control-audit'
+  | 'safe-supervisor'
+  | 'safe-agents'
+  | 'safe-models'
+  | 'safe-integrations'
+  | 'safe-repairs'
+  | 'safe-chat'
   // SA — Overview
   | 'sa-overview'
   // SA — Users & Access

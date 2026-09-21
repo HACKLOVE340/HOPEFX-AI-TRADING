@@ -948,7 +948,8 @@ async def ws_social_feed(websocket: WebSocket) -> None:
     """
     WebSocket endpoint — streams live signal feed to SocialFeed.tsx.
 
-    Auth: token query-param (JWT).  Closes 4001 on invalid/missing token.
+    Auth: hopefx.auth.bearer subprotocol (preferred) or the deprecated ?token=
+    query-param (JWT).  Closes 4001 on invalid/missing token.
     Messages sent:
       {"type": "new_signal",  "signal": FeedItem}
       {"type": "heartbeat"}           — every 30 s
@@ -957,21 +958,28 @@ async def ws_social_feed(websocket: WebSocket) -> None:
     """
     import asyncio as _asyncio
 
-    token = websocket.query_params.get("token", "")
+    # Prefer the hopefx.auth.bearer subprotocol (a header); the query
+    # parameter stays as a deprecated fallback. Reading only the query string
+    # rejected every browser client once the SPA moved to the subprotocol.
+    from api.ws_live import ws_accept_subprotocol, ws_auth_token
+
+    token = ws_auth_token(websocket) or ""
     _sf_user_id: str | None = None
 
     if token:
         try:
-            from api.auth import decode_token
+            from api.auth import _decode_token
 
-            _payload = decode_token(token)
-            _sf_user_id = str(_payload.get("sub", _payload.get("user_id", ""))) if _payload else None
+            # _decode_token returns a TokenPayload (Pydantic model), not a dict.
+            _payload = _decode_token(token)
+            _sf_user_id = str(getattr(_payload, "sub", "") or "") or None
         except Exception:
             _sf_user_id = None
 
     # FIX: accept() MUST be called before close() — FastAPI raises RuntimeError
     # if close() is called on an unaccepted WebSocket.  Reject after accept.
-    await websocket.accept()
+    # The negotiated subprotocol must be echoed or the browser closes the socket.
+    await websocket.accept(subprotocol=ws_accept_subprotocol(websocket))
 
     if _sf_user_id is None:
         await websocket.send_text(

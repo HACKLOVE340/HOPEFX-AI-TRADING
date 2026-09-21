@@ -38,6 +38,7 @@ Provides endpoints for:
 
 import asyncio
 import concurrent.futures as concurrent_futures
+import contextlib
 import logging
 import os
 import platform
@@ -134,7 +135,6 @@ try:
 except Exception as _obs_err:
     logging.getLogger(__name__).warning("Observability install skipped: %s", _obs_err)
 
-import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRouter as _APIRouter
@@ -178,7 +178,8 @@ from api.admin import (
 from api.platform import init_sentry, setup_rate_limiting
 from api.signals import create_signals_router as _create_signals_router
 from config.feature_flags import flags as feature_flags
-from kill_switch import KillSwitch, create_kill_switch_router
+from kill_switch import create_kill_switch_router
+from kill_switch import kill_switch as kill_switch
 
 _signals_router = _create_signals_router()
 
@@ -280,17 +281,28 @@ for _route in app.routes:
 #   2. _redis_breach_listener() subscribes to CH_BREACH — this pod receives
 #      activations triggered on other pods
 # Without this wiring, the kill switch only works within a single process.
+#
+# There is exactly ONE KillSwitch: the module singleton in kill_switch.py.
+# This file used to construct a second one and start *that* (poll loop, flag
+# file, Redis latch) while the money path — risk/pre_trade_gate.py — read the
+# singleton. The two never synchronised, so `POST /api/kill-switch/activate`
+# reported success while orders kept flowing, the documented kill_switch.flag
+# runbook never blocked a trade, and health routes showed the opposite state to
+# whichever instance was actually active. See docs/HARDENING_BACKLOG.md S2-01
+# and tests/unit/test_kill_switch_single_instance.py.
+#
+# The event bus is attached to the singleton rather than passed to a new
+# constructor, so cross-pod propagation reaches the instance that gates trades.
 try:
     from core.event_bus import bus as _event_bus
 
-    kill_switch = KillSwitch(event_bus=_event_bus)
+    kill_switch.set_event_bus(_event_bus)
     logger.info("KillSwitch wired to Redis EventBus for cross-pod propagation")
 except Exception as _ks_bus_err:
     logger.warning(
         "KillSwitch: could not wire Redis EventBus (%s) — kill switch will only work within this pod",
         _ks_bus_err,
     )
-    kill_switch = KillSwitch()
 
 _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
@@ -494,6 +506,7 @@ from core.startup_helpers import (
     start_l2_feed as _start_l2_feed,
     start_nuclear_price_bridge as _start_nuclear_price_bridge,
 )
+from api.professional_control_plane import mark_startup_component as _mark_control_plane_component
 
 
 @asynccontextmanager
@@ -502,6 +515,8 @@ async def lifespan(_app: FastAPI):
     # Re-validate environment on every startup/restart (catches config drift on
     # hot-reload or container restart without a full process exit).
     validate_environment(strict=True)
+    _mark_control_plane_component("configuration", "ready")
+    _mark_control_plane_component("startup", "starting")
 
     # Build the React frontend in the background if static/index.html is absent.
     # Runs as a fire-and-forget thread so the API starts immediately without
@@ -537,6 +552,18 @@ async def lifespan(_app: FastAPI):
     )
     asyncio.get_running_loop().set_default_executor(_io_executor)
 
+    # Log which safety gates this process is actually running with. Several
+    # Round 3 audit findings were invisible in production because a gate wired
+    # to state nothing writes, or a blocking mode left at its warn-only
+    # default, logs identically to a gate that is passing legitimately.
+    # See docs/HARDENING_BACKLOG.md S11-03.
+    try:
+        from core.safety_config_report import log_safety_config
+
+        log_safety_config()
+    except Exception as _safety_exc:  # never block startup on a report
+        logger.warning("Could not log safety config: %s", _safety_exc)
+
     await kill_switch.start()
 
     # Expose app_state on app.state BEFORE the startup task runs so that
@@ -551,11 +578,55 @@ async def lifespan(_app: FastAPI):
     # (FRED, CFTC, IMF, Yahoo, gold) to connect.  The server returns 503 on
     # data-dependent endpoints until app_state.initialized is True.
     _startup_task = asyncio.create_task(startup_event(), name="startup_event")
-    _startup_task.add_done_callback(
-        lambda t: (
-            logger.error("startup_event failed: %s", t.exception()) if not t.cancelled() and t.exception() else None
+
+    def _on_startup_task_done(task: "asyncio.Task[None]") -> None:
+        """Log a failed startup_event — and hard-exit if it demanded exit.
+
+        A BaseException that is not an Exception (SystemExit from a startup gate
+        such as core.env_validator.validate_and_report, or KeyboardInterrupt)
+        escapes this task, cancels the ASGI lifespan, and closes uvicorn's
+        listening socket. The process then does NOT exit: the 64-worker
+        ThreadPoolExecutor installed above and OpenTelemetry's
+        BatchSpanProcessor are non-daemon threads, so the interpreter blocks in
+        shutdown indefinitely.
+
+        The result is the worst possible failure mode — `docker ps` reports the
+        container as running, the process is alive, and nothing is listening on
+        the port. No shutdown message is logged either, because the JSON logging
+        setup replaces uvicorn's handlers. Production spent hours in exactly
+        that state before this was tracked down.
+
+        Honour the gate's intent (never serve a misconfigured trading system),
+        but make the failure terminal and visible: exit non-zero so the restart
+        policy applies and the container is reported as failed.
+        """
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is None:
+            return
+        logger.error("startup_event failed: %s", exc)
+        if isinstance(exc, Exception):
+            # An ordinary error — startup is degraded but the API stays up and
+            # StartupGateMiddleware keeps returning 503 on data endpoints.
+            return
+        code = exc.code if isinstance(exc, SystemExit) and isinstance(exc.code, int) else 1
+        logger.critical(
+            "STARTUP GATE DEMANDED EXIT (%r) — terminating the process. Without this the "
+            "container would stay 'running' with no listening socket. Fix the reported "
+            "configuration errors above and restart.",
+            exc,
         )
-    )
+        for _handler in logging.getLogger().handlers:
+            # Never let a flush error mask the exit — the log above is the only
+            # record of why the process died.
+            with contextlib.suppress(Exception):
+                _handler.flush()
+        # os._exit, not sys.exit: sys.exit only raises in this callback's frame
+        # and would leave the non-daemon threads blocking interpreter shutdown.
+        os._exit(code or 1)
+
+    _startup_task.add_done_callback(_on_startup_task_done)
     # Start Sharpe circuit breaker as a top-level lifespan task so it always
     # runs even if startup_event() raises before reaching the call inside it.
     # Mirrors the pattern used for Prometheus, WS broadcasters, and nuclear engine.
@@ -672,6 +743,43 @@ from core.startup_factories import (
 )
 
 
+def _enable_stack_dump_signal() -> None:
+    """Let SIGUSR1 dump every thread's stack to stderr.
+
+    Written after a production hang that could not be diagnosed at all. The
+    container's health probe timed out with **zero bytes received** — curl
+    connected and the server never wrote a response — repeatedly, every 30
+    seconds. ``/api/health/live`` returns a literal dict and cannot block, so
+    something upstream was not letting it run; but with no way to see what the
+    process was doing, every explanation was a guess.
+
+    There was no way in: ``faulthandler`` was never registered, ``py-spy`` is
+    not in the image, and ``docker exec … python -c 'faulthandler.dump_traceback()'``
+    only dumps the *new* process, which says nothing about PID 1.
+
+    Now one signal answers it, with nothing to install:
+
+        docker kill -s USR1 hopefx-ai-trading-app-1
+        docker logs --tail 100 hopefx-ai-trading-app-1
+
+    The traceback of every thread, including whatever is holding the event
+    loop, goes to stderr. SIGUSR1 is used because nothing else in this stack
+    claims it and the default disposition would otherwise kill the process.
+    """
+    import faulthandler
+    import signal
+
+    try:
+        # keep the file open for the process lifetime — faulthandler writes to
+        # the fd directly, so a closed handle would silently produce nothing.
+        faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True, chain=False)
+        logger.info("Stack-dump signal armed: `docker kill -s USR1 <container>` dumps all thread stacks to stderr")
+    except (AttributeError, ValueError, OSError) as exc:
+        # SIGUSR1 does not exist on Windows, and faulthandler refuses if stderr
+        # has been replaced with an object that has no fileno().
+        logger.debug("Stack-dump signal not armed: %s", exc)
+
+
 async def startup_event():
     """Initialize application on startup via ComponentRegistry.
 
@@ -681,6 +789,8 @@ async def startup_event():
     logger.info("=" * 70)
     logger.info("HOPEFX AI TRADING API - STARTING")
     logger.info("=" * 70)
+
+    _enable_stack_dump_signal()
 
     _registry = _build_component_registry(app, feature_flags)
     _tasks_done: list[str] = []
@@ -703,7 +813,26 @@ async def startup_event():
             app_state.async_db_pool = _async_pool
             logger.info("Async DB pool initialised and registered as default pool")
         except Exception as _pool_err:
-            logger.warning("Async DB pool init failed (non-fatal): %s", _pool_err)
+            # The old message was "Async DB pool init failed (non-fatal): %s"
+            # with nothing but the exception's own text. On the deployed box
+            # that read as a shrug, and left the reader with no way to tell
+            # whether the DSN, the driver or the database was at fault — the
+            # three causes need three different fixes. It also asserted
+            # "non-fatal" without saying what stops working, which is the same
+            # habit as reporting an empty backtest as a 0% return.
+            from database.async_connection import _resolve_async_db_url as _dsn
+            from utils.redaction import redact_url as _redact
+
+            logger.warning(
+                "Async DB pool init failed — %s: %s (resolved DSN: %s). "
+                "/api/health/ready will report db_pool degraded and anything "
+                "depending on get_async_db() will raise until this is fixed. "
+                "A sync driver in the DSN is the usual cause; set "
+                "ASYNC_DATABASE_URL to a postgresql+asyncpg:// URL to override.",
+                type(_pool_err).__name__,
+                _pool_err,
+                _redact(_dsn()),
+            )
 
         # Populate _tasks_done / _tasks_failed from the registry results so
         # mark_startup_complete() and the health endpoint report accurate state.
@@ -790,7 +919,7 @@ async def startup_event():
             logger.warning("Could not mark startup complete: %s", _hc_err)
 
     except Exception:
-        logger.exception("Startup failed: %s")
+        logger.exception("Startup failed")
         raise
 
 
@@ -847,6 +976,17 @@ async def shutdown_event():
             logger.info("[OK] Trading engine stopped")
         except Exception as _te_err:
             logger.warning("Trading engine stop error: %s", _te_err)
+
+    # Per-user trading accounts (core.account_registry). Each is a live broker
+    # instance with its own Redis-backed state; leaving them connected on
+    # shutdown leaks connections and can hold the interpreter open.
+    try:
+        from core.account_registry import get_account_registry
+
+        await get_account_registry().close_all()
+        logger.info("[OK] Per-user trading accounts closed")
+    except Exception as _acct_err:
+        logger.warning("Account registry shutdown error: %s", _acct_err)
     _engine_task = getattr(app_state, "engine_task", None)
     if _engine_task is not None and not _engine_task.done():
         _engine_task.cancel()
@@ -931,7 +1071,7 @@ app.include_router(_compat_router)
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler."""
-    logger.exception("Unhandled exception: %s")
+    logger.exception("Unhandled exception")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"error": "Internal server error"},
@@ -952,6 +1092,8 @@ register_page_routes(app)  # mounts React dashboard LAST
 
 def run_server():
     """Run the API server."""
+    import uvicorn  # Deferred: only needed when actually starting the server process.
+
     # Default to 0.0.0.0 so the server is reachable inside containers/Gitpod.
     # Override with API_HOST env var for production deployments.
     host = os.getenv("API_HOST", "0.0.0.0")

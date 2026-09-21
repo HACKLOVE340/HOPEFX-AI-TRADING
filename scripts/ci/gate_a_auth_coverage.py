@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -41,6 +42,18 @@ AUTH_DEPENDS_MARKERS: frozenset[str] = frozenset(
         # Subscription-gated auth (monetization/subscription.py)
         "require_plan",
         "_require_plan",
+        # Quota-gated auth (core/ai_quota.py). `ai_quota(...)` returns a
+        # dependency whose own signature is
+        # `_check(user: TokenPayload = Depends(get_current_user))`, so a route
+        # using it is authenticated — this gate reads source, not the resolved
+        # dependency graph, so it cannot see through the indirection itself.
+        # That claim is asserted, not assumed:
+        # tests/unit/test_gate_a_markers_really_authenticate.py fails if
+        # ai_quota ever stops resolving get_current_user, so this entry cannot
+        # quietly become a hole. Adding it here fixed seven false positives on
+        # api/brain.py, api/chat.py and api/voice.py, which have been
+        # authenticated since the commit that introduced the quota.
+        "ai_quota",
         # Module-level aliases (api/superadmin/_shared.py, api/platform.py, etc.)
         "_require_superadmin",
         "_require_admin",
@@ -118,30 +131,101 @@ SKIP_FILES: frozenset[str] = frozenset(
 )
 
 
-def _file_has_router_level_auth(tree: ast.Module) -> bool:
+def _guarded_router_names(tree: ast.Module) -> set[str]:
     """
-    Return True if ANY APIRouter in this file is constructed with
-    a `dependencies=[...]` argument that references an auth marker.
+    Return the names of routers constructed with a `dependencies=[...]`
+    argument that references an auth marker.
+
+    Scoped per router, not per file. This used to answer "does ANY router in
+    this file carry auth?" and, on a yes, exempt every endpoint in the file
+    without looking at one of them. A second, auth-free router in the same file
+    then inherited that exemption — which is precisely the shape of
+    `api/advanced_trading.py`:
+
+        router        = APIRouter(dependencies=[Depends(get_current_user)])
+        public_router = APIRouter()      # mounted, no auth
+
+    A mutating route added to `public_router` was waved through by the guard on
+    `router`. Returning the guarded names instead lets `check_file` exempt only
+    the routes whose own router is guarded.
     """
+    guarded: set[str] = set()
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
+        if not isinstance(node, ast.Assign):
             continue
-        func = node.func
+        call = node.value
+        if not isinstance(call, ast.Call):
+            continue
+        func = call.func
         if not (
             (isinstance(func, ast.Name) and func.id == "APIRouter")
             or (isinstance(func, ast.Attribute) and func.attr == "APIRouter")
         ):
             continue
-        for kw in node.keywords:
-            if kw.arg != "dependencies":
-                continue
-            src = ast.unparse(kw.value)
-            if any(marker in src for marker in AUTH_DEPENDS_MARKERS):
-                return True
-    return False
+        has_auth = any(
+            kw.arg == "dependencies" and any(marker in ast.unparse(kw.value) for marker in AUTH_DEPENDS_MARKERS)
+            for kw in call.keywords
+        )
+        if not has_auth:
+            continue
+        for target in node.targets:
+            guarded.add(ast.unparse(target))
+    return guarded
 
 
-def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+def _route_owner(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    """
+    Return the name of the router a route decorator hangs off — the `x` in
+    `@x.post(...)` — or None when this is not a decorated route.
+    """
+    for dec in node.decorator_list:
+        func = dec.func if isinstance(dec, ast.Call) else dec
+        if isinstance(func, ast.Attribute) and func.attr in MUTATING_HTTP_METHODS:
+            return ast.unparse(func.value)
+    return None
+
+
+def _verified_auth_aliases(tree: ast.Module) -> set[str]:
+    """
+    Return module-local names that are *verified* auth dependencies.
+
+    A router may share one alias across its endpoints:
+
+        def _admin(user: TokenPayload = Depends(require_role("admin"))) -> TokenPayload:
+            return user
+
+        @router.post("/x")
+        async def x(user: TokenPayload = Depends(_admin)): ...
+
+    FastAPI resolves that nested dependency and the route *is* protected, but a
+    marker list keyed on names alone cannot see it — which is why 22 genuinely
+    authenticated endpoints in api/safe_agent_platform.py and
+    api/professional_control_plane.py were reported as missing auth.
+
+    The fix resolves the alias instead of trusting its name: a name is returned
+    only when its own definition carries a recognised auth marker. `def _admin():
+    return None` is therefore still a violation, and adding a name to
+    AUTH_DEPENDS_MARKERS remains the weaker option — that trusts a spelling this
+    function actually checks.
+    """
+    aliases: set[str] = set()
+    for node in tree.body:
+        # def _admin(user = Depends(require_role("admin"))) -> ...
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            defaults = list(node.args.defaults) + [d for d in node.args.kw_defaults if d is not None]
+            if any(marker in ast.unparse(d) for d in defaults for marker in AUTH_DEPENDS_MARKERS):
+                aliases.add(node.name)
+        # _require_superadmin = require_role("superadmin")
+        elif isinstance(node, ast.Assign):
+            value_src = ast.unparse(node.value)
+            if any(marker in value_src for marker in AUTH_DEPENDS_MARKERS):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        aliases.add(target.id)
+    return aliases
+
+
+def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef, auth_aliases: frozenset[str] = frozenset()) -> bool:
     """
     Return True if the function is protected by auth, either via:
       (a) a parameter default containing Depends(<auth_func>), or
@@ -153,6 +237,11 @@ def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     for default in all_defaults:
         src = ast.unparse(default)
         if any(marker in src for marker in AUTH_DEPENDS_MARKERS):
+            return True
+        # A verified module-local alias: Depends(_admin) where _admin itself
+        # depends on require_role(...). Resolved, not trusted — see
+        # _verified_auth_aliases.
+        if any(re.search(rf"Depends\(\s*{re.escape(alias)}\s*[),]", src) for alias in auth_aliases):
             return True
 
     # (b) body-level imperative auth call
@@ -187,11 +276,11 @@ def check_file(path: Path) -> list[str]:
     except (SyntaxError, UnicodeDecodeError):
         return []
 
-    # If every APIRouter in this file is constructed with a top-level
-    # dependencies=[Depends(<auth>)] argument, all endpoints it owns are
-    # protected — no per-function check needed.
-    if _file_has_router_level_auth(tree):
-        return []
+    # Routers constructed with a top-level dependencies=[Depends(<auth>)]
+    # protect every endpoint registered on *that* router — those need no
+    # per-function check. Routers without it get checked function by function.
+    guarded_routers = _guarded_router_names(tree)
+    auth_aliases = frozenset(_verified_auth_aliases(tree))
 
     violations: list[str] = []
     for node in ast.walk(tree):
@@ -201,7 +290,9 @@ def check_file(path: Path) -> list[str]:
             continue
         if not _is_mutating_endpoint(node):
             continue
-        if not _has_auth_depends(node):
+        if _route_owner(node) in guarded_routers:
+            continue
+        if not _has_auth_depends(node, auth_aliases):
             rel = path.relative_to(REPO_ROOT)
             violations.append(f"  {rel}:{node.lineno}  {node.name}()")
     return violations

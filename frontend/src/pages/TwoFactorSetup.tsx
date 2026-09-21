@@ -15,18 +15,20 @@
  *   GET  /api/2fa/backup-codes — generate one-time backup codes
  *   GET  /api/2fa/status       — check enabled state + codes remaining
  *
- * QR code is rendered inline via the otpauth_uri returned by the backend,
- * using the api.qrserver.com public service (same as backend). No external
- * library dependency required.
+ * The QR code is generated locally in the browser from the otpauth_uri. That
+ * URI carries the TOTP shared secret, so it must not leave the client.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import { PageShell } from '../components/system/PageShell';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, prefetchCsrfToken, resetCsrfCache } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import QRCode from '../components/QRCode';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { extractApiError } from '../lib/utils';
+import { ShieldCheck } from 'lucide-react';
 
 // ── CSRF retry helper ─────────────────────────────────────────────────────────
 
@@ -51,7 +53,9 @@ type Step = 'idle' | 'setup' | 'active' | 'backup';
 interface SetupData {
   secret: string;
   otpauth_uri: string;
-  qr_url: string;
+  // No `qr_url`: the API no longer returns a third-party image URL with the
+  // otpauth URI (i.e. the TOTP shared secret) in its query string. The QR is
+  // encoded locally from `otpauth_uri` — see components/QRCode.tsx.
 }
 
 interface StatusData {
@@ -62,15 +66,6 @@ interface StatusData {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-
-/** Build QR image URL from the otpauth URI returned by the backend. */
-function buildQRUrl(otpauthUri: string): string {
-  return (
-    'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
-    encodeURIComponent(otpauthUri) +
-    '&bgcolor=1e293b&color=f1f5f9&margin=10'
-  );
-}
 
 /** Download backup codes as a plain-text file. */
 function downloadBackupCodes(codes: string[], userId: string): void {
@@ -114,11 +109,18 @@ interface CodeInputProps {
   onChange: (v: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** id of the caller's visible <label>. The name is a reference to it. */
+  labelId?: string;
 }
 
-function CodeInput({ value, onChange, disabled, placeholder = '000000' }: CodeInputProps) {
+function CodeInput({ value, onChange, disabled, placeholder = '000000', labelId }: CodeInputProps) {
   return (
     <input
+      // The name comes from the caller's own visible label. This component is
+      // used twice with DIFFERENT wording ("Enter the 6-digit code from your
+      // app" / "Current TOTP code"), so a name baked in here would contradict
+      // what one of the two users can see (WCAG 2.5.3).
+      aria-labelledby={labelId}
       type="text"
       inputMode="numeric"
       maxLength={6}
@@ -127,8 +129,8 @@ function CodeInput({ value, onChange, disabled, placeholder = '000000' }: CodeIn
       placeholder={placeholder}
       disabled={disabled}
       style={{
-        width: '100%', background: '#0f172a', border: '1px solid #334155',
-        borderRadius: 8, color: '#f1f5f9', padding: '12px', fontSize: 28,
+        width: '100%', background: 'var(--surface)', border: '1px solid var(--border-strong)',
+        borderRadius: 8, color: 'var(--text-strong)', padding: '12px', fontSize: 'var(--fs-hero)',
         textAlign: 'center', letterSpacing: 10, marginBottom: 16,
         boxSizing: 'border-box', fontFamily: 'monospace',
         opacity: disabled ? 0.5 : 1,
@@ -151,9 +153,7 @@ const TwoFactorSetup: React.FC = () => {
   const [error, setError]             = useState('');
   const [loading, setLoading]         = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
-  const [qrError, setQrError]         = useState(false);
   const [featureDisabled, setFeatureDisabled] = useState(false);
-  const qrRef = useRef<HTMLImageElement>(null);
 
   // Fetch 2FA status on mount
   useEffect(() => {
@@ -169,7 +169,6 @@ const TwoFactorSetup: React.FC = () => {
   const handleSetup = async () => {
     setLoading(true);
     setError('');
-    setQrError(false);
     try {
       const res = await withCsrfRetry(() => api.post<SetupData>('/2fa/setup'));
       setSetupData(res.data);
@@ -264,16 +263,16 @@ const TwoFactorSetup: React.FC = () => {
         />
         <div style={{ ...s.card, textAlign: 'center', padding: '48px 32px' }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>🔧</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#e2e8f0', marginBottom: 8 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
             2FA is not available
           </div>
-          <div style={{ fontSize: 14, color: '#64748b', marginBottom: 24 }}>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>
             Two-factor authentication is not enabled on this instance.
             Contact your administrator to enable it.
           </div>
           <Link to="/settings" style={{
-            display: 'inline-block', padding: '10px 24px', background: '#334155',
-            color: '#e2e8f0', borderRadius: 8, textDecoration: 'none', fontSize: 14, fontWeight: 600,
+            display: 'inline-block', padding: '10px 24px', background: 'var(--surface-hover)',
+            color: 'var(--text)', borderRadius: 8, textDecoration: 'none', fontSize: 14, fontWeight: 600,
           }}>
             Back to Settings
           </Link>
@@ -283,46 +282,50 @@ const TwoFactorSetup: React.FC = () => {
   }
 
   return (
-    <div className="page-content">
-      <PageHeader
-        title="Two-Factor Authentication"
-        icon="🔐"
-        subtitle="Add an extra layer of security using an authenticator app."
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Settings', href: '/settings' },
-          { label: '2FA Setup' },
-        ]}
-        actions={
-          <Link to="/settings" style={{
-            fontSize: 13, color: '#64748b', textDecoration: 'none',
-            padding: '6px 14px', border: '1px solid #334155', borderRadius: 6,
-          }}>
-            ← Settings
-          </Link>
-        }
-      />
+    <PageShell
+      title="Two-Factor Authentication"
+      icon={ShieldCheck}
+      subtitle="Add an extra layer of security using an authenticator app."
+      breadcrumbs={[
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Settings', href: '/settings' },
+        { label: '2FA Setup' },
+      ]}
+      width="standard"
+      // Mid-enrolment, a "Where to next" row invites the reader to leave with a
+      // half-configured authenticator and no backup codes. PageShell's own note
+      // names this case: suppress it where leaving would lose the user's work.
+      related={false}
+      actions={
+        <Link to="/settings" style={{
+          fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none',
+          padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 6,
+        }}>
+          ← Settings
+        </Link>
+      }
+    >
 
       {/* Status banner */}
       <div style={{
         ...s.statusBanner,
-        background: status.enabled ? '#14532d' : '#1e293b',
+        background: status.enabled ? '#14532d' : 'var(--raised)',
         border: '1px solid ' + (status.enabled ? '#166534' : '#334155'),
       }}>
         <span style={{ fontSize: 22 }}>{status.enabled ? '🔒' : '🔓'}</span>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, color: status.enabled ? '#4ade80' : '#94a3b8' }}>
+          <div style={{ fontWeight: 600, color: status.enabled ? 'var(--gain)' : 'var(--text-dim)' }}>
             2FA is {status.enabled ? 'ENABLED' : 'DISABLED'}
           </div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             {status.enabled
               ? 'Your account is protected with TOTP authentication.'
               : 'Enable 2FA to protect your account from unauthorized access.'}
           </div>
         </div>
         {status.enabled && status.backup_codes_remaining > 0 && (
-          <div style={{ fontSize: 12, color: '#64748b', textAlign: 'right' }}>
-            <div style={{ color: '#94a3b8', fontWeight: 600 }}>{status.backup_codes_remaining}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' }}>
+            <div style={{ color: 'var(--text-dim)', fontWeight: 600 }}>{status.backup_codes_remaining}</div>
             <div>backup codes</div>
           </div>
         )}
@@ -338,8 +341,8 @@ const TwoFactorSetup: React.FC = () => {
           <h2 style={s.cardTitle}>Enable Two-Factor Authentication</h2>
           <p style={s.cardText}>
             You'll need an authenticator app like{' '}
-            <strong style={{ color: '#e2e8f0' }}>Google Authenticator</strong> or{' '}
-            <strong style={{ color: '#e2e8f0' }}>Authy</strong>. After setup, you'll enter a
+            <strong style={{ color: 'var(--text)' }}>Google Authenticator</strong> or{' '}
+            <strong style={{ color: 'var(--text)' }}>Authy</strong>. After setup, you'll enter a
             6-digit code each time you log in.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -370,29 +373,28 @@ const TwoFactorSetup: React.FC = () => {
             Open your authenticator app and scan this QR code, or enter the secret manually.
           </p>
 
-          {/* QR code */}
+          {/* QR code — generated locally. The otpauth URI contains the TOTP
+              shared secret, so it must never be sent to a third-party image
+              service: anyone able to read those requests can generate the
+              user's codes, which defeats the second factor entirely. */}
           <div style={s.qrContainer}>
-            {!qrError ? (
-              <img
-                ref={qrRef}
-                src={buildQRUrl(setupData.otpauth_uri)}
-                alt="TOTP QR Code — scan with your authenticator app"
-                style={{ width: 200, height: 200, borderRadius: 8, display: 'block' }}
-                onError={() => setQrError(true)}
-              />
-            ) : (
-              /* Fallback: show the otpauth URI as text when image fails */
-              <div style={{
-                width: 200, height: 200, background: '#0f172a', border: '1px solid #334155',
-                borderRadius: 8, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', padding: 12, gap: 8,
-              }}>
-                <span style={{ fontSize: 32 }}>📷</span>
-                <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center' }}>
-                  QR image unavailable — use manual entry below
+            <QRCode
+              value={setupData.otpauth_uri}
+              size={200}
+              alt="TOTP QR Code — scan with your authenticator app"
+              fallback={
+                <div style={{
+                  width: 200, height: 200, background: 'var(--surface)', border: '1px solid var(--border-strong)',
+                  borderRadius: 8, display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', padding: 12, gap: 8,
+                }}>
+                  <span style={{ fontSize: 32 }}>📷</span>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+                    QR image unavailable — use manual entry below
+                  </div>
                 </div>
-              </div>
-            )}
+              }
+            />
           </div>
 
           {/* Manual secret */}
@@ -407,13 +409,13 @@ const TwoFactorSetup: React.FC = () => {
           </div>
 
           {/* Issuer info */}
-          <div style={{ fontSize: 12, color: '#475569', marginBottom: 20 }}>
-            Issuer: <strong style={{ color: '#64748b' }}>HOPEFX</strong> ·
+          <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 20 }}>
+            Issuer: <strong style={{ color: 'var(--text-muted)' }}>HOPEFX</strong> ·
             Algorithm: SHA1 · Digits: 6 · Period: 30s
           </div>
 
-          <label style={s.label}>Enter the 6-digit code from your app</label>
-          <CodeInput value={code} onChange={setCode} disabled={loading} />
+          <label id="totp-enroll-code-label" style={s.label}>Enter the 6-digit code from your app</label>
+          <CodeInput value={code} onChange={setCode} disabled={loading} labelId="totp-enroll-code-label" />
           <button
             onClick={handleVerify}
             disabled={loading || code.length !== 6}
@@ -432,10 +434,10 @@ const TwoFactorSetup: React.FC = () => {
       {step === 'active' && (
         <div style={s.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-            <span style={{ fontSize: 28 }}>✅</span>
+            <span style={{ fontSize: 'var(--fs-hero)'}}>✅</span>
             <div>
-              <div style={{ fontWeight: 700, color: '#4ade80', fontSize: 16 }}>2FA Activated!</div>
-              <div style={{ fontSize: 13, color: '#94a3b8' }}>Your account is now protected.</div>
+              <div style={{ fontWeight: 700, color: 'var(--gain)', fontSize: 16 }}>2FA Activated!</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>Your account is now protected.</div>
             </div>
           </div>
           <p style={s.cardText}>
@@ -457,7 +459,7 @@ const TwoFactorSetup: React.FC = () => {
         <div style={s.card}>
           <h2 style={s.cardTitle}>Backup Codes</h2>
           <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
-            padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#fbbf24' }}>
+            padding: '10px 14px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--warn)' }}>
             ⚠️ Save these codes now. They will not be shown again.
             Each code can only be used once.
           </div>
@@ -491,13 +493,13 @@ const TwoFactorSetup: React.FC = () => {
       {/* ── DISABLE 2FA ── */}
       {status.enabled && step !== 'active' && step !== 'backup' && (
         <div style={{ ...s.card, border: '1px solid #7f1d1d', marginTop: 8 }}>
-          <h2 style={{ ...s.cardTitle, color: '#f87171' }}>Disable 2FA</h2>
+          <h2 style={{ ...s.cardTitle, color: 'var(--loss)' }}>Disable 2FA</h2>
           <p style={s.cardText}>
             Enter your current authenticator code to disable 2FA. This will remove all
             backup codes and your TOTP secret.
           </p>
-          <label style={s.label}>Current TOTP code</label>
-          <CodeInput value={disableCode} onChange={setDisableCode} disabled={loading} />
+          <label id="totp-disable-code-label" style={s.label}>Current TOTP code</label>
+          <CodeInput value={disableCode} onChange={setDisableCode} disabled={loading} labelId="totp-disable-code-label" />
           <button
             onClick={handleDisable}
             disabled={loading || disableCode.length !== 6}
@@ -517,10 +519,10 @@ const TwoFactorSetup: React.FC = () => {
       <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
         { label: '⚙️ Settings',  href: '/settings',  color: '#60a5fa' },
         { label: '👤 Profile',   href: '/profile',   color: '#a78bfa' },
-        { label: '🔑 API Keys',  href: '/settings',  color: '#fbbf24' },
+        { label: '🔑 API Keys',  href: '/settings?tab=api-keys', color: '#fbbf24' },
         { label: '📊 Dashboard', href: '/dashboard', color: '#34d399' },
       ]}/>
-    </div>
+    </PageShell>
   );
 };
 
@@ -530,35 +532,35 @@ const s: Record<string, React.CSSProperties> = {
   page:         { padding: 24, maxWidth: 640, margin: '0 auto' },
   statusBanner: { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
     borderRadius: 10, marginBottom: 20 },
-  card:         { background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+  card:         { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 12,
     padding: 24, marginBottom: 16 },
-  cardTitle:    { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 10px' },
-  cardText:     { fontSize: 14, color: '#94a3b8', margin: '0 0 20px', lineHeight: 1.6 },
+  cardTitle:    { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 10px' },
+  cardText:     { fontSize: 14, color: 'var(--text-dim)', margin: '0 0 20px', lineHeight: 1.6 },
   btn:          { display: 'block', width: '100%', background: '#3b82f6', border: 'none',
-    borderRadius: 8, color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+    borderRadius: 8, color: '#fff', fontSize: 'var(--fs-value)', fontWeight: 600, cursor: 'pointer',
     padding: '12px 0', transition: 'opacity 0.15s' },
-  btnSecondary: { display: 'block', width: '100%', background: '#334155', border: 'none',
-    borderRadius: 8, color: '#94a3b8', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+  btnSecondary: { display: 'block', width: '100%', background: 'var(--surface-hover)', border: 'none',
+    borderRadius: 8, color: 'var(--text-dim)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
     padding: '10px 0' },
-  label:        { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6, fontWeight: 500 },
+  label:        { display: 'block', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 },
   qrContainer:  { display: 'flex', justifyContent: 'center', margin: '16px 0' },
-  secretBox:    { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8,
+  secretBox:    { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 8,
     padding: '10px 14px', marginBottom: 16 },
-  secretLabel:  { fontSize: 12, color: '#475569' },
-  secretCode:   { fontSize: 13, color: '#60a5fa', letterSpacing: 2, wordBreak: 'break-all',
+  secretLabel:  { fontSize: 12, color: 'var(--text-faint)' },
+  secretCode:   { fontSize: 'var(--fs-body)', color: 'var(--link)', letterSpacing: 2, wordBreak: 'break-all',
     display: 'block', marginTop: 4 },
-  copyBtn:      { background: 'none', border: '1px solid #334155', borderRadius: 6,
-    color: '#94a3b8', fontSize: 12, padding: '3px 10px', cursor: 'pointer' },
+  copyBtn:      { background: 'none', border: '1px solid var(--border-strong)', borderRadius: 6,
+    color: 'var(--text-dim)', fontSize: 12, padding: '3px 10px', cursor: 'pointer' },
   codesGrid:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '16px 0' },
-  backupCode:   { background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 6,
-    padding: '10px 12px', fontSize: 15, color: '#94a3b8', textAlign: 'center',
+  backupCode:   { background: 'var(--surface)', border: '1px solid #1e3a5f', borderRadius: 6,
+    padding: '10px 12px', fontSize: 'var(--fs-value)', color: 'var(--text-dim)', textAlign: 'center',
     letterSpacing: 3, fontFamily: 'monospace' },
   errorBox:     { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
-    padding: '10px 14px', color: '#f87171', fontSize: 14, marginBottom: 16 },
-  appLink:      { fontSize: 12, color: '#60a5fa', textDecoration: 'none',
+    padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
+  appLink:      { fontSize: 12, color: 'var(--link)', textDecoration: 'none',
     padding: '4px 10px', border: '1px solid #1e3a5f', borderRadius: 6,
-    background: '#0f172a' },
-  crossLink:    { fontSize: 13, color: '#64748b', textDecoration: 'none' },
+    background: 'var(--surface)' },
+  crossLink:    { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none' },
 };
 
 export default TwoFactorSetup;

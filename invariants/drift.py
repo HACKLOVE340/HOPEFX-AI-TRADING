@@ -24,8 +24,9 @@ from invariants.constitution import (
 )
 
 
-def verify_no_value_drift(current: float, approved: float, tol: float, name: str,
-                          rule: str = "No Unexplained System Behavior") -> list[Violation]:
+def verify_no_value_drift(
+    current: float, approved: float, tol: float, name: str, rule: str = "No Unexplained System Behavior"
+) -> list[Violation]:
     """A numeric policy parameter must stay at its approved value (± tolerance)."""
     if not (_is_finite_number(current) and _is_finite_number(approved)):
         return [_v(rule, CRITICAL, f"{name} drift inputs non-finite")]
@@ -42,8 +43,9 @@ def verify_risk_appetite_stable(current_profile: Any, approved_profile: Any) -> 
 
 def verify_allocation_policy_stable(current_policy: Any, approved_policy: Any) -> list[Violation]:
     if current_policy != approved_policy:
-        return [_v("No Unauthorized Capital Movement", CONSTITUTIONAL,
-                   "capital-allocation policy drifted from approved")]
+        return [
+            _v("No Unauthorized Capital Movement", CONSTITUTIONAL, "capital-allocation policy drifted from approved")
+        ]
     return []
 
 
@@ -55,16 +57,26 @@ def verify_governance_consistent(current_rules: Any, approved_rules: Any) -> lis
 
 def verify_compliance_current(rules_version: Any, required_version: Any) -> list[Violation]:
     if rules_version != required_version:
-        return [_v("No Compliance Breach", CONSTITUTIONAL,
-                   f"compliance rules out of date: {rules_version!r} != required {required_version!r}")]
+        return [
+            _v(
+                "No Compliance Breach",
+                CONSTITUTIONAL,
+                f"compliance rules out of date: {rules_version!r} != required {required_version!r}",
+            )
+        ]
     return []
 
 
 def verify_constitution_version(current_version: Any, approved_version: Any) -> list[Violation]:
     """The constitution itself must be the approved, signed version."""
     if current_version != approved_version:
-        return [_v("No Loss Of Human Control", CONSTITUTIONAL,
-                   f"constitution version {current_version!r} != approved {approved_version!r}")]
+        return [
+            _v(
+                "No Loss Of Human Control",
+                CONSTITUTIONAL,
+                f"constitution version {current_version!r} != approved {approved_version!r}",
+            )
+        ]
     return []
 
 

@@ -40,6 +40,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 UTC = timezone.utc
@@ -54,10 +55,54 @@ _TRANSFER_LOCKS: dict[str, asyncio.Lock] = {}
 MAX_ACCOUNT_BALANCE = float(os.getenv("MAX_ACCOUNT_BALANCE", "1_000_000_000"))  # 1B
 MAX_TRANSFER_AMOUNT = float(os.getenv("MAX_TRANSFER_AMOUNT", "1_000_000_000"))  # 1B
 
+CENT = Decimal("0.01")
+
+
+def _money(value: Any) -> Decimal:
+    """Read a stored balance as an exact decimal.
+
+    Always via ``str``: ``Decimal(0.1)`` inherits the binary error verbatim
+    (0.1000000000000000055511151231257827…), while ``Decimal(str(0.1))`` is
+    exactly ``0.1``. ``hopefx-money-precision`` lists the first form as the
+    mistake this codebase makes most.
+
+    Deliberately does NOT quantise. A stored balance may carry sub-cent dust —
+    ``initial_balance`` is a plain float with no cent constraint — and rounding
+    it here would silently restate someone's balance on a read.
+    """
+    try:
+        return Decimal(str(value if value is not None else 0))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal(0)
+
+
+def _to_cents(amount: float) -> Decimal:
+    """Quantise a requested amount to cents, half away from zero.
+
+    Python's ``round`` is ROUND_HALF_EVEN (banker's rounding), which is correct
+    for statistics and wrong for money: it rounds 0.125 down and 0.135 up, so
+    the direction depends on a digit the payer never sees.
+    """
+    return Decimal(str(amount)).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload
+
+# ── F4-01b: the plan gate must exist on the side that counts ─────────────────
+#
+# `SubscriptionGate` in React and `PLAN_FEATURES` in TypeScript are UI
+# affordances, not authorization: anyone with devtools can set the store's plan,
+# and nothing stops a direct call carrying a valid free-tier token. The routes
+# below depended on `get_current_user` alone, which checks *authentication* and
+# never *plan*, so the advertised gate existed on neither side.
+#
+# Same defect, and the same sentence, as the one already fixed in api/nocode.py.
+# Admin and superadmin bypass require_plan by design.
+# Advertised in frontend/src/lib/subscription.ts as: sub-accounts (elite) / teams (enterprise) -> per-endpoint
+from monetization.subscription import require_plan
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/accounts", tags=["Accounts"])
@@ -349,7 +394,7 @@ class TransferRequest(BaseModel):
 
 @router.get("/sub-accounts")
 async def list_sub_accounts(
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """List all sub-accounts owned by the current user."""
     # Prefer DB-backed sub_accounts table
@@ -369,7 +414,7 @@ async def list_sub_accounts(
 @router.post("/sub-accounts", status_code=status.HTTP_201_CREATED)
 async def create_sub_account(
     req: CreateSubAccountRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """Create a new sub-account."""
     ids = _get_index(user.sub)
@@ -432,7 +477,7 @@ async def create_sub_account(
 @router.get("/sub-accounts/{account_id}", summary="Get a specific sub-account")
 async def get_sub_account(
     account_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """Return details of a single sub-account owned by the current user."""
     acc = _get_account_any(user.sub, account_id)
@@ -445,7 +490,7 @@ async def get_sub_account(
 async def update_sub_account(
     account_id: str,
     req: UpdateSubAccountRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """Update sub-account fields."""
     acc = _get_account_any(user.sub, account_id)
@@ -477,7 +522,7 @@ async def update_sub_account(
 @router.delete("/sub-accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sub_account(
     account_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> None:
     """Delete a sub-account. Cannot delete the last active account."""
     acc = _get_account_any(user.sub, account_id)
@@ -507,7 +552,7 @@ async def delete_sub_account(
 async def transfer_between_sub_accounts(
     account_id: str,
     req: TransferRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ) -> dict[str, Any]:
     """Transfer funds between two sub-accounts owned by the same user."""
     if account_id == req.to_account_id:
@@ -529,17 +574,65 @@ async def transfer_between_sub_accounts(
         if dst is None:
             raise HTTPException(status_code=404, detail="Destination sub-account not found")
 
-        src_bal = float(src.get("balance") or src.get("current_balance") or 0)
-        dst_bal = float(dst.get("balance") or dst.get("current_balance") or 0)
+        # Exact decimals from here to the write. This used to be:
+        #
+        #     new_src_bal = round(src_bal - req.amount, 2)
+        #     new_dst_bal = round(dst_bal + req.amount, 2)
+        #
+        # Two independent roundings of two independent floats, so the two
+        # results were under no obligation to sum to what went in — and did
+        # not: src=10.125 dst=20.125 amt=5.00 took a total of 30.250 to 30.240,
+        # destroying a cent, while 33.335/66.665/1.00 created one. `round` is
+        # also ROUND_HALF_EVEN, which is the wrong tie-break for money.
+        #
+        # A transfer is one movement, so it is now one quantised amount applied
+        # to both sides. Decimal addition and subtraction of the same value are
+        # exactly conservative, so nothing is rounded after the split and there
+        # is no second place for a cent to go missing.
+        src_bal = _money(src.get("balance") if src.get("balance") is not None else src.get("current_balance"))
+        dst_bal = _money(dst.get("balance") if dst.get("balance") is not None else dst.get("current_balance"))
+        amount = _to_cents(req.amount)
 
-        if src_bal < req.amount:
+        if amount <= 0:
+            # Only reachable when a sub-cent request quantises to zero; the
+            # Pydantic gt=0 stops a literal zero. Moving nothing while
+            # reporting a transfer is its own kind of wrong answer.
+            raise HTTPException(
+                status_code=400,
+                detail=f"Amount {req.amount} is below the smallest transferable unit (0.01)",
+            )
+
+        if src_bal < amount:
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient balance: {src_bal:.2f}",
             )
 
-        new_src_bal = round(src_bal - req.amount, 2)
-        new_dst_bal = round(dst_bal + req.amount, 2)
+        new_src = src_bal - amount
+        new_dst = dst_bal + amount
+
+        # No Hidden Capital (invariants/constitution.py). The arithmetic above
+        # cannot lose a cent, so this is here to catch a future edit that can —
+        # a re-introduced round(), a float creeping back in, a quantise added
+        # "for tidiness". It refuses rather than warns: a transfer that does not
+        # reconcile must not be written, and the caller gets a 500 instead of a
+        # silently wrong balance.
+        if (new_src + new_dst) != (src_bal + dst_bal):
+            logger.error(
+                "Transfer refused — capital would not reconcile: %s + %s -> %s + %s (user %s)",
+                src_bal,
+                dst_bal,
+                new_src,
+                new_dst,
+                user.sub,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Transfer refused: balances would not reconcile",
+            )
+
+        new_src_bal = float(new_src)
+        new_dst_bal = float(new_dst)
 
         src["balance"] = new_src_bal
         src["current_balance"] = new_src_bal
@@ -555,10 +648,14 @@ async def transfer_between_sub_accounts(
         # defined even if an exception is raised before this point.
         _result_src_bal = new_src_bal
         _result_dst_bal = new_dst_bal
+        # Report what moved, not what was asked for. A request of 10.005 moves
+        # 10.01; echoing the request back would put a number in the response
+        # that no balance agrees with.
+        _result_amount = float(amount)
 
     logger.info(
         "Transfer %.2f from %s to %s by user %s",
-        req.amount,
+        _result_amount,
         account_id,
         req.to_account_id,
         user.sub,
@@ -567,7 +664,7 @@ async def transfer_between_sub_accounts(
         "ok": True,
         "from_account_id": account_id,
         "to_account_id": req.to_account_id,
-        "amount": req.amount,
+        "amount": _result_amount,
         "from_balance": _result_src_bal,
         "to_balance": _result_dst_bal,
         "note": req.note,
@@ -594,7 +691,7 @@ def _save_team_members(team_id: str, members: list[dict]) -> None:
 
 
 @router.get("/teams")
-async def list_teams(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
+async def list_teams(user: TokenPayload = Depends(require_plan("enterprise"))) -> dict[str, Any]:
     """List teams the current user belongs to."""
     teams = []
     ids = _get_index(user.sub)
@@ -610,7 +707,7 @@ async def list_teams(user: TokenPayload = Depends(get_current_user)) -> dict[str
 @router.post("/teams", status_code=status.HTTP_201_CREATED)
 async def create_team(
     req: CreateTeamRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("enterprise")),
 ) -> dict[str, Any]:
     """Create a new team. Creator is added as owner member."""
     ids = _get_index(user.sub)
@@ -648,7 +745,7 @@ async def create_team(
 async def invite_member(
     team_id: str,
     req: InviteMemberRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("enterprise")),
 ) -> dict[str, Any]:
     """Invite a member to a team. Requires owner role."""
     members = _get_team_members(team_id)
@@ -668,7 +765,7 @@ async def invite_member(
 async def remove_member(
     team_id: str,
     member_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("enterprise")),
 ) -> None:
     """Remove a member from a team. Requires owner role."""
     members = _get_team_members(team_id)
@@ -686,7 +783,7 @@ async def update_member_role(
     team_id: str,
     member_id: str,
     req: UpdateMemberRoleRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("enterprise")),
 ) -> dict[str, Any]:
     """Change a team member's role. Requires owner role."""
     members = _get_team_members(team_id)

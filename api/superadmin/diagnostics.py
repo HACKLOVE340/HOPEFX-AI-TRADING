@@ -44,6 +44,7 @@ from pydantic import BaseModel
 
 from api.auth import TokenPayload
 from ._shared import _log_superadmin_action, _require_superadmin, _utcnow
+from api.error_details import safe_error
 
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
@@ -62,7 +63,9 @@ _REDIS_REMEDIATION_KEY = "heal:diagnostics:remediation_log"
 _CHECK_DESCRIPTIONS: dict[str, str] = {
     "env_vars_required": "Verify all required environment variables are set",
     "env_vars_optional": "Warn about missing optional environment variables",
-    "import_chain": "Subprocess-import every core package to detect broken imports",
+    "import_chain": "Verify every core package imports cleanly, in-process",
+    "route_families": "Verify every endpoint family the frontend depends on is registered",
+    "model_registry": "Detect registry entries over one artifact claiming different metrics",
     "database": "Probe database connectivity with a SELECT 1 query",
     "redis": "Probe Redis connectivity and verify key namespaces exist",
     "frontend_build": "Check that static/index.html exists and is not stale",
@@ -295,7 +298,7 @@ async def trigger_remediation(
             "actions_taken": 0,
             "actions": [],
             "triggered_at": _utcnow().isoformat(),
-            "error": str(exc),
+            "error": safe_error(exc),
         }
 
 
@@ -388,7 +391,7 @@ async def run_single_check(
         logger.warning("diagnostics: single check %s failed: %s", check_name, exc)
         return {
             "check_name": check_name,
-            "error": str(exc),
+            "error": safe_error(exc),
             "ran_at": _utcnow().isoformat(),
         }
 

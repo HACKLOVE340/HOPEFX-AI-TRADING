@@ -101,10 +101,16 @@ def verify_no_event_loss(emitted: int, ingested: int, tolerance: int = 0) -> lis
     return []
 
 
-def verify_circuit_open_on_failure(failure_rate: float, threshold: float, circuit_open: bool,
-                                   name: str = "dependency") -> list[Violation]:
+def verify_circuit_open_on_failure(
+    failure_rate: float, threshold: float, circuit_open: bool, name: str = "dependency"
+) -> list[Violation]:
     """A failing dependency must trip its circuit breaker (blast-radius containment)."""
     if _is_finite_number(failure_rate) and failure_rate > threshold and not circuit_open:
-        return [_v("No Unbounded Failure", CRITICAL,
-                   f"{name} failure rate {failure_rate} > {threshold} but circuit not open")]
+        return [
+            _v(
+                "No Unbounded Failure",
+                CRITICAL,
+                f"{name} failure rate {failure_rate} > {threshold} but circuit not open",
+            )
+        ]
     return []

@@ -19,9 +19,11 @@ Usage
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,59 @@ logger = logging.getLogger(__name__)
 # Tracks (method, path) pairs already registered so that compat/alias routers
 # do not create duplicate routes that cause FastAPI to match the wrong handler.
 _registered_routes: set[tuple[str, str]] = set()
+
+
+def iter_api_routes(routes: Iterable[Any], _prefix: str = "") -> Iterator[APIRoute]:
+    """
+    Recursively yield every APIRoute reachable from *routes*, with `.path`
+    corrected to the true, fully-dispatchable path.
+
+    Starlette (as of the version this pins to) no longer flattens an included
+    router's routes onto app.routes at include_router() time — each inclusion
+    is instead recorded as an opaque ``_IncludedRouter`` wrapper holding the
+    original router on ``.original_router``, only expanded internally at
+    request-dispatch time. Any code that walks ``app.routes`` looking for
+    ``APIRoute`` instances (dedup bookkeeping, auth-coverage checks, route-count
+    tests, WHITELIST verification, …) must descend into that wrapper explicitly
+    or it will silently see almost nothing.
+
+    Worse, when a router is included into ANOTHER router that is itself later
+    included into the app (two or more inclusion levels — e.g. api/superadmin's
+    aggregate router including api/superadmin/nuclear_controls's router), each
+    ``APIRoute.path`` only reflects the prefix baked in by its OWN immediate
+    router — prefixes contributed by ancestor inclusions are tracked
+    separately, on each ``_IncludedRouter.include_context.prefix``, and are
+    NEVER applied to the leaf route's `.path` itself. Reading `.path` naively
+    on a multi-level-nested route therefore returns a path that is missing its
+    ancestors' prefixes entirely (e.g. "/nuclear/halt" instead of the real
+    "/api/superadmin/nuclear/halt") — confirmed by testing the real endpoint:
+    the short path 404s/405s while the fully-prefixed one correctly dispatches.
+    This function accumulates the prefix through the recursion and returns a
+    shallow copy of each route with `.path` corrected, so callers see the same
+    path FastAPI actually dispatches on. The original route objects (used for
+    real request routing) are never mutated.
+    """
+    import copy
+
+    for r in routes:
+        if isinstance(r, APIRoute):
+            full_path = _prefix.rstrip("/") + "/" + r.path.lstrip("/") if _prefix else r.path
+            if full_path == r.path:
+                yield r
+            else:
+                r2 = copy.copy(r)
+                r2.path = full_path
+                yield r2
+        else:
+            original = getattr(r, "original_router", None)
+            if original is not None and hasattr(original, "routes"):
+                ctx = getattr(r, "include_context", None)
+                sub_prefix = (getattr(ctx, "prefix", "") or "") if ctx is not None else ""
+                if _prefix and sub_prefix:
+                    combined = _prefix.rstrip("/") + "/" + sub_prefix.lstrip("/")
+                else:
+                    combined = _prefix or sub_prefix
+                yield from iter_api_routes(original.routes, combined)
 
 
 def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
@@ -42,27 +97,51 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     with the router's own prefix, to correctly handle routers that carry no
     built-in prefix (e.g. the nuclear router mounted at /api/nuclear).
     """
-    from fastapi.routing import APIRoute as _APIRoute
-
-    # The full effective prefix is the kwarg mount-prefix PLUS the router's
-    # own prefix.  Either may be empty — we combine both to get the real path
-    # that FastAPI will expose for each route.
     mount_prefix = kwargs.get("prefix", "") or ""
     router_prefix = getattr(router, "prefix", "") or ""
-    if mount_prefix and router_prefix:
-        effective_prefix = mount_prefix.rstrip("/") + "/" + router_prefix.lstrip("/")
-    else:
-        effective_prefix = mount_prefix or router_prefix
+
+    def _relative_path(route_path: str) -> str:
+        """Strip the router's own baked-in prefix from route_path, if present.
+
+        Newer FastAPI/Starlette bakes an APIRouter's own `prefix` into each
+        route's `.path` at route-definition time, rather than deferring that
+        to include_router() as older versions did. Detect and strip it so the
+        rest of this function can keep treating route paths as relative,
+        regardless of which behaviour the installed FastAPI version has.
+
+        A route declared as ``@router.get("")`` sits exactly at the prefix, so
+        its relative path is the empty string — **not** ``"/"``. Returning
+        ``"/"`` there is what published `/api/indicators/` alongside
+        `/api/indicators` when the two indicator routers collided (S-32): the
+        remount below re-added the route one character off its real path, and
+        two different subsystems then answered the same URL with and without a
+        trailing slash.
+
+        The prefix is only stripped on a segment boundary, so a router at
+        ``/api/ml`` does not mangle a route at ``/api/mlops``.
+        """
+        if router_prefix and route_path.startswith(router_prefix):
+            remainder = route_path[len(router_prefix) :]
+            if remainder == "" or remainder.startswith("/"):
+                return remainder
+        return route_path
 
     def _full_path(route_path: str) -> str:
-        """Combine effective prefix with route path, normalising slashes."""
-        if not effective_prefix:
-            return route_path
-        return effective_prefix.rstrip("/") + "/" + route_path.lstrip("/")
+        """Combine mount prefix + router prefix + relative route path."""
+        rel = _relative_path(route_path)
+        if mount_prefix and router_prefix:
+            prefix = mount_prefix.rstrip("/") + "/" + router_prefix.lstrip("/")
+        else:
+            prefix = mount_prefix or router_prefix
+        if not prefix:
+            return rel or "/"
+        if not rel:
+            return prefix.rstrip("/")
+        return prefix.rstrip("/") + "/" + rel.lstrip("/")
 
     skipped = 0
     for route in router.routes:
-        if not isinstance(route, _APIRoute):
+        if not isinstance(route, APIRoute):
             continue
         full = _full_path(route.path)
         for method in route.methods or {"GET"}:
@@ -86,7 +165,7 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
             default_response_class=router.default_response_class,
         )
         for route in router.routes:
-            if not isinstance(route, _APIRoute):
+            if not isinstance(route, APIRoute):
                 # Non-API routes (WebSocket, Mount, etc.) — always include
                 filtered.routes.append(route)
                 continue
@@ -95,7 +174,7 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
             if any((m.upper(), full) in _registered_routes for m in methods):
                 continue
             filtered.add_api_route(
-                route.path,
+                _relative_path(route.path),
                 route.endpoint,
                 methods=list(methods),
                 response_model=route.response_model,
@@ -111,11 +190,11 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     else:
         app.include_router(router, **kwargs)
 
-    # Record all routes now on the app (full paths as FastAPI stores them)
-    for route in app.routes:
-        if isinstance(route, _APIRoute):
-            for method in route.methods or {"GET"}:
-                _registered_routes.add((method.upper(), route.path))
+    # Record all routes now on the app (full paths as FastAPI stores them).
+    # Must descend into _IncludedRouter wrappers — see iter_api_routes().
+    for route in iter_api_routes(app.routes):
+        for method in route.methods or {"GET"}:
+            _registered_routes.add((method.upper(), route.path))
 
 
 def register_routers(
@@ -135,18 +214,31 @@ def register_routers(
     from api.analysis import router as analysis_router
     from api.backtesting import _compat_router as backtesting_compat_router
     from api.backtesting import router as backtesting_router
+    from api.ai_core import router as ai_core_router
+    from api.ai_memory import router as ai_memory_router
+    from api.ai_notifications import router as ai_notifications_router
     from api.brain import router as brain_router
+    from api.support import router as support_router
     from api.broker import router as broker_router
     from api.calendar import router as calendar_router
     from api.chat import router as chat_router
+    from api.professional_control_plane import router as control_plane_router
+    from api.safe_agent_platform import router as safe_agent_platform_router
+
+    # Registered here, not only in api/server.py::create_api_app: production runs
+    # `python app.py`, which registers routers through this module. create_api_app
+    # is called only from within api/server.py itself, so a router registered
+    # there alone has no reachable endpoints on the running app -- which is what
+    # security/code_analyzer.py's broken_router rule caught here.
+    from api.superadmin.ai_operations import router as superadmin_ai_operations_router
     from api.explain import router as explain_router
     from api.health import router as health_router
 
-    # api.landing (static templates/landing.html served at / and /landing) is
-    # intentionally NOT registered: it shadowed the live React SPA landing
-    # (frontend LandingPage.tsx, which has the real-time price ticker). With it
-    # gone, '/' and '/landing' fall through to the SPA catch-all in
-    # core/page_routes.py and render the live landing page.
+    # The old static landing (api/landing.py + templates/landing.html) has been
+    # REMOVED. It shadowed the live React SPA landing (frontend LandingPage.tsx,
+    # which has the real-time WebSocket price ticker). With it gone, '/' and
+    # '/landing' fall through to the SPA catch-all in core/page_routes.py and
+    # render the live landing page.
     from api.pages import router as pages_router
     from api.macro import router as macro_router
     from api.ml import router as ml_router
@@ -242,6 +334,13 @@ def register_routers(
         status_router,
         brain_router,
         calendar_router,
+        control_plane_router,
+        safe_agent_platform_router,
+        superadmin_ai_operations_router,
+        ai_core_router,
+        ai_notifications_router,
+        ai_memory_router,
+        support_router,
         profiles_router,
         social_feed_router,
         social_leaderboard_router,
@@ -313,13 +412,34 @@ def register_routers(
     else:
         logger.debug("TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable")
 
-    if feature_flags.BILLING_SUBSCRIPTION:
-        from api.billing import router as billing_router
+    # Billing is registered unconditionally. It used to sit behind
+    # FEATURE_BILLING_SUBSCRIPTION, which hid all 31 of its endpoints — including
+    # /balance and /transactions, which the Wallet page calls on every load and
+    # which need no payment provider at all (/balance reads the broker account;
+    # /transactions documents that it returns an empty list when nothing is
+    # configured). With billing off, that page showed the user two red 404s.
+    #
+    # The flag's own description says it governs "GET /api/billing/subscription",
+    # a single endpoint — so its blast radius was 31x its stated scope, and the
+    # platform's diagnostics reported the consequence as
+    # "route_families CRITICAL — every page under a missing prefix will 404".
+    #
+    # Money-moving endpoints now carry require_payments_configured and answer 503
+    # ("exists, not configured yet") instead of 404 ("does not exist"). The Stripe
+    # webhook keeps its own fail-closed check: verify_webhook raises in production
+    # when STRIPE_WEBHOOK_SECRET is absent, so registering it never accepts an
+    # unsigned event.
+    from api.billing import router as billing_router
 
-        _include_router_deduped(app, billing_router)
+    _include_router_deduped(app, billing_router)
+    if feature_flags.BILLING_SUBSCRIPTION:
         logger.info("Billing router registered (/api/billing)")
     else:
-        logger.debug("BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable")
+        logger.info(
+            "Billing router registered (/api/billing) — FEATURE_BILLING_SUBSCRIPTION is off, "
+            "so payment endpoints answer 503 until a provider is configured. Account balance "
+            "and transaction history are unaffected."
+        )
 
     # ── Public pricing catalogue (/api/pricing) — no auth required ────────────
     try:
@@ -389,6 +509,26 @@ def register_routers(
     elif graphql_available and not feature_flags.GRAPHQL_API:
         logger.debug("GRAPHQL_API disabled — set FEATURE_GRAPHQL_API=true to enable")
 
+    # ── Security fixes (LLM auto-heal queue + GitHub PR pipeline) ─────────────
+    #
+    # Registered BEFORE security.global_fortress deliberately. Both declare
+    # /api/security/fixes, /fixes/approve and /fixes/decline, so whichever is
+    # included first wins and the other's copies are deduped away. This one is
+    # the dedicated implementation and is the better winner on every count
+    # (S-32): it takes a `limit`, tolerates a malformed queue record instead of
+    # 500ing the whole listing, validates bodies through typed models (the
+    # decline reason among them), and — the one that matters — approves a fix
+    # without requiring the security brain to be running, where the
+    # global_fortress copy answers 503 "Security brain not started". Both carry
+    # the same require_role("admin") gate, so this is not an auth question.
+    try:
+        from api.security.fixes import router as fixes_router
+
+        _include_router_deduped(app, fixes_router)
+        logger.info("Security fixes router registered (/api/security/fixes)")
+    except Exception as _fixes_err:
+        logger.warning("Security fixes router not registered: %s", _fixes_err)
+
     # ── Security: HOPEFXBrain (/api/security/*) ───────────────────────────────
     # Eager module-level router — delegates to get_brain() at request time so
     # the live instance created by start_brain() is used once startup completes.
@@ -418,12 +558,17 @@ def register_routers(
     except Exception as _av_err:
         logger.warning("Antivirus router not registered: %s", _av_err)
 
-    # ── Custom Indicators (/api/indicators) ──────────────────────────────────
+    # ── Custom Indicators (/api/custom-indicators) ───────────────────────────
+    #
+    # Deliberately *not* /api/indicators: that prefix belongs to
+    # api/advanced_trading.py, which serves formula-based chart overlays from
+    # a different store. Both used to be mounted on it — see S-32 and the
+    # module docstring in api/custom_indicators.py.
     try:
         from api.custom_indicators import router as custom_indicators_router
 
         _include_router_deduped(app, custom_indicators_router)
-        logger.info("Custom indicators router registered (/api/indicators)")
+        logger.info("Custom indicators router registered (/api/custom-indicators)")
     except Exception as _ci_err:
         logger.warning("Custom indicators router not registered: %s", _ci_err)
 
@@ -511,14 +656,8 @@ def register_routers(
     except Exception as _dl_err:
         logger.warning("Data layer router not registered: %s", _dl_err)
 
-    # ── Security fixes (LLM auto-heal queue + GitHub PR pipeline) ─────────────
-    try:
-        from api.security.fixes import router as fixes_router
-
-        _include_router_deduped(app, fixes_router)
-        logger.info("Security fixes router registered (/api/security/fixes)")
-    except Exception as _fixes_err:
-        logger.warning("Security fixes router not registered: %s", _fixes_err)
+    # (api/security/fixes.py is registered further up, ahead of
+    # security.global_fortress — see the note there.)
 
     # ── Security dashboard (attacks, lockdown, heal, AV) ──────────────────────
     try:
@@ -658,19 +797,40 @@ def register_routers(
     else:
         logger.debug("REPLAY_ENGINE disabled — set FEATURE_REPLAY=true to enable")
 
-    # ── Notifications / Alert Engine (/api/alerts) ────────────────────────────
-    if feature_flags.PUSH_NOTIFICATIONS:
-        try:
-            from notifications.alert_engine import router as notifications_router
-
-            _include_router_deduped(app, notifications_router)
-            logger.info("Notifications/alert engine router registered (/api/alerts)")
-        except Exception as _notif_err:
-            logger.warning("Notifications router not registered: %s", _notif_err)
-    else:
+    # ── Push notifications ────────────────────────────────────────────────────
+    # PUSH_NOTIFICATIONS used to mount `notifications.alert_engine.router`, a
+    # SECOND router claiming the /api/alerts prefix that PRICE_ALERTS already
+    # gives to api/alerts.py. Two problems, both verified by building the app
+    # under each flag combination:
+    #
+    #   1. The two implementations blended. `_include_router_deduped` skipped
+    #      the eight paths api/alerts.py had already claimed, so with default
+    #      flags GET /api/alerts/stats — the one path api/alerts.py lacks — was
+    #      served by the other module while its eight siblings were not.
+    #   2. `FEATURE_PRICE_ALERTS=false` did not disable price alerts. It handed
+    #      all nine paths to `notifications.alert_engine` instead, and that
+    #      router has **no ownership checks**: GET/DELETE/pause/resume take any
+    #      alert id and act on it, `GET /` lists every user's alerts with no
+    #      user filter, and `POST /` stores alerts with no user_id at all. It
+    #      also skips the require_plan("starter") gate. api/alerts.py does all
+    #      of that correctly via `_get_owned_alert`, which returns 404 rather
+    #      than 403 so it does not leak which ids exist.
+    #
+    # So the documented way to switch the feature off actually replaced a
+    # scoped implementation with an unscoped one. /api/alerts now has exactly
+    # one owner: api/alerts.py, under FEATURE_PRICE_ALERTS.
+    #
+    # Nothing is lost here. `api/notifications.py` (/api/notifications) is
+    # mounted unconditionally with the core routers above — the name collision
+    # between the two `notifications_router` imports is probably how this
+    # happened. No client calls /api/alerts/stats: both SPAs use only the six
+    # paths api/alerts.py serves. Push delivery itself is a service concern,
+    # not a router, so this flag currently gates nothing; that is recorded in
+    # docs/HARDENING_BACKLOG.md rather than papered over with a fake mount.
+    if not feature_flags.PUSH_NOTIFICATIONS:
         logger.debug("PUSH_NOTIFICATIONS disabled — set FEATURE_PUSH_NOTIFICATIONS=true to enable")
 
-    # ── Transparency Reports (/api/transparency) ──────────────────────────────
+    # ── Transparency Reports (/api/transparency) ───────────────────────────��──
     if feature_flags.TRANSPARENCY_REPORTS:
         try:
             from transparency.router import router as transparency_router
@@ -822,7 +982,7 @@ def register_routers(
     except Exception as _nocode_err:
         logger.warning("No-Code Builder router not registered: %s", _nocode_err)
 
-    # ── API v1 versioned prefix ────────────────────────────────────────────────
+    # ── API v1 versioned prefix ��───────────────────────────────────────────────
     # Mount a thin /api/v1/* prefix that re-exports the existing /api/* routes.
     # New clients should use /api/v1/; existing /api/* routes remain unchanged
     # for backward compatibility with current frontend and external integrations.
@@ -831,20 +991,20 @@ def register_routers(
     # and re-dispatches to the main app, so every /api/v1/<path> automatically
     # resolves to the equivalent /api/<path> handler without duplicating routes.
     try:
-        from fastapi import APIRouter
-        from fastapi.routing import APIRoute
-
-        _v1_router = APIRouter(prefix="/api/v1")
-
         # Collect all existing /api/* routes and re-register them under /v1.
         # We create lightweight forwarding entries rather than copying handlers,
         # keeping the route list in sync automatically via this loop.
-        for route in app.routes:
-            if isinstance(route, APIRoute) and route.path.startswith("/api/"):
+        #
+        # Must use iter_api_routes() rather than a flat `for route in app.routes`
+        # walk: with this FastAPI version, app.routes holds opaque
+        # _IncludedRouter wrappers for every included router, not flat
+        # APIRoute instances, so a naive isinstance() filter here found ~0
+        # matches and this alias mechanism was silently creating zero
+        # /api/v1/* routes despite logging a success message.
+        _v1_count = 0
+        for route in list(iter_api_routes(app.routes)):
+            if route.path.startswith("/api/") and "/v1/" not in route.path:
                 _v1_path = "/api/v1" + route.path[len("/api") :]
-                # Skip if already a v1 path (prevent infinite loop)
-                if "/v1/" in route.path:
-                    continue
                 app.add_api_route(
                     _v1_path,
                     route.endpoint,
@@ -856,10 +1016,11 @@ def register_routers(
                     dependencies=list(route.dependencies) if route.dependencies else [],
                     include_in_schema=False,  # hide from OpenAPI to avoid duplicate docs
                 )
+                _v1_count += 1
 
         logger.info(
             "API v1 versioned routes registered (/api/v1/* aliases for /api/* — %d routes)",
-            sum(1 for r in app.routes if isinstance(r, APIRoute) and "/api/v1/" in r.path),
+            _v1_count,
         )
     except Exception as _v1_err:
         logger.warning("API v1 versioned routes not registered: %s", _v1_err)

@@ -101,8 +101,41 @@ except ImportError:
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
-RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+
+def _redis_url_with_db(db: int) -> str:
+    """Default a Celery URL from REDIS_URL, swapping in *db*.
+
+    The literal defaults were ``redis://localhost:6379/1`` and ``/2``.
+    docker-compose sets CELERY_BROKER_URL on the ``celery-worker`` and
+    ``celery-beat`` services but **not** on ``app`` — so inside the app
+    container the variable is unset, "localhost" means the app container
+    itself, and nothing listens there. The deployed Reliability page showed:
+
+        Celery Task Queue   WARNING
+        Celery inspect failed: Error 111 connecting to localhost:6379.
+        Connection refused.
+
+    while every other component reached ``redis:6379`` perfectly well. The app
+    always has REDIS_URL, so derive from it: one correctly-configured variable
+    is enough, and adding a service to compose cannot silently miss this again.
+    """
+    raw = os.getenv("REDIS_URL", "").strip()
+    if not raw:
+        return f"redis://localhost:6379/{db}"
+    base, _, _ = raw.partition("?")
+    scheme_sep = base.find("://")
+    if scheme_sep == -1:
+        return f"redis://localhost:6379/{db}"
+    host_part = base[scheme_sep + 3 :]
+    # Strip any existing /<db> suffix, taking care not to cut into credentials.
+    slash = host_part.rfind("/")
+    if slash != -1 and host_part[slash + 1 :].isdigit():
+        host_part = host_part[:slash]
+    return f"{base[:scheme_sep]}://{host_part}/{db}"
+
+
+BROKER_URL = os.getenv("CELERY_BROKER_URL") or _redis_url_with_db(1)
+RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND") or _redis_url_with_db(2)
 ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in ("true", "1")
 
 # ── App factory ───────────────────────────────────────────────────────────────
@@ -158,6 +191,33 @@ if _CELERY_AVAILABLE:
             "interval_start": 0,
             "interval_step": 0.2,
             "interval_max": 2.0,
+            # ── Idle-connection survival ──────────────────────────────────────
+            # The Redis service runs with `--timeout 300`: it closes any
+            # connection that has been idle for five minutes. A Celery control
+            # connection from the app container is idle far longer than that —
+            # nothing uses it until an operator opens a health page — so by the
+            # time inspect() runs, the server has already hung up. The client
+            # only discovers it on write, which fails instantly.
+            #
+            # That is the "Celery: DOWN, RuntimeError" at 8ms on System Health
+            # and "Celery inspect failed: Connection closed by server" on
+            # Reliability. Both were correct. The 8ms is the tell: a 2-second
+            # inspect timeout that fails in 8ms never waited for anything, it
+            # wrote to a socket the server had closed.
+            #
+            # health_check_interval makes redis-py PING a connection that has
+            # been idle this long before handing it out, which both refreshes
+            # the server's idle timer and detects a dead socket early enough to
+            # reconnect transparently. It must stay comfortably below the
+            # server's timeout.
+            "socket_keepalive": True,
+            "retry_on_timeout": True,
+            "health_check_interval": int(os.getenv("CELERY_HEALTH_CHECK_INTERVAL", "60")),
+        },
+        result_backend_transport_options={
+            "socket_keepalive": True,
+            "retry_on_timeout": True,
+            "health_check_interval": int(os.getenv("CELERY_HEALTH_CHECK_INTERVAL", "60")),
         },
         # ── Result backend ────────────────────────────────────────────────────
         result_expires=timedelta(hours=24),
@@ -563,21 +623,54 @@ def database_backup(self=None):
     """
     Trigger a database backup snapshot.
 
-    Calls the DatabaseBackupManager to create a compressed snapshot and
-    upload it to the configured object store (S3 / GCS / local).
-    """
-    import asyncio
+    Calls database.backup.run_backup() to write a snapshot, then
+    database.restore.verify_backup() to check the snapshot is restorable, and
+    returns both the path and the verification.
 
+    The verification is not optional politeness. Until it existed this task
+    returned "ok" whenever run_backup did not raise, and the SQLite path was
+    writing artefacts that restored to an empty database — committed rows were
+    left in the WAL sidecar, and every layer above reported success. An
+    unverified backup is absent, not assumed good (Rule 2), so a snapshot that
+    cannot be verified is reported as `unverified` rather than `ok`.
+
+    A failed verification does not raise: the artefact is still on disk and may
+    be salvageable, and raising would retry the dump against a database that is
+    probably fine. It returns a status an operator and an alert can both read.
+    """
     try:
         # Lock TTL must exceed time_limit (2100 s) so the lock does not expire
         # while the task is still running.  Use time_limit + 60 s buffer.
         with _redis_lock("database_backup", timeout=2160):
-            from database.backup import DatabaseBackupManager
+            from database.backup import run_backup
+            from database.restore import RestoreRefused, verify_backup
 
-            mgr = DatabaseBackupManager()
-            result = asyncio.run(mgr.create_backup())
-            logger.info("database_backup: %s", result)
-            return {"status": "ok", "backup": result}
+            result = run_backup()
+            try:
+                report = verify_backup(result)
+            except RestoreRefused as exc:
+                logger.error("database_backup wrote an unverifiable snapshot %s: %s", result, exc)
+                return {
+                    "status": "unverified",
+                    "verified": False,
+                    "backup": str(result),
+                    "reason": str(exc),
+                }
+            logger.info(
+                "database_backup: %s (%s, %d tables, %s bytes)",
+                result,
+                report.format.value,
+                report.tables,
+                f"{report.bytes_uncompressed:,}",
+            )
+            return {
+                "status": "ok",
+                "verified": True,
+                "backup": str(result),
+                "format": report.format.value,
+                "tables": report.tables,
+                "bytes_uncompressed": report.bytes_uncompressed,
+            }
     except RuntimeError as exc:
         if "already held" in str(exc):
             logger.info("database_backup skipped — lock already held by another task")

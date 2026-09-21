@@ -198,64 +198,87 @@ class TradingPrefsBody(BaseModel):
     default_leverage: int = 50
 
 
+def _kill_switch_active() -> bool:
+    """Report whether the app-level kill switch is currently engaged.
+
+    Read-only. Returns False when no kill switch is wired up, which matches the
+    behaviour of every other read path.
+    """
+    try:
+        import sys as _sys
+
+        _ks = getattr(_sys.modules.get("app"), "kill_switch", None)
+        if _ks is not None and callable(getattr(_ks, "is_active", None)):
+            return bool(_ks.is_active())
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.debug("kill switch status unavailable: %s", exc)
+    return False
+
+
 @router.get("/api/settings/trading", summary="Get trading preferences")
 async def get_trading_prefs(user: TokenPayload = Depends(get_current_user)):
-    """Return trading preferences for the authenticated user."""
+    """Return trading preferences for the authenticated user.
+
+    `kill_switch_enabled` reflects the LIVE kill switch, not a stored preference.
+    It used to be read back from whatever was last saved, so the settings page
+    could report trading as halted when it was running, or running when it was
+    halted.
+    """
     uid = user.sub
-    return _load(uid, "trading", TradingPrefsBody().model_dump())
+    prefs = _load(uid, "trading", TradingPrefsBody().model_dump())
+    prefs["kill_switch_enabled"] = _kill_switch_active()
+    return prefs
 
 
 @router.post("/api/settings/trading", summary="Save trading preferences")
 async def save_trading_prefs(body: TradingPrefsBody, user: TokenPayload = Depends(get_current_user)):
-    """Persist trading preferences and sync kill switch with the risk engine."""
+    """Persist trading preferences.
+
+    This endpoint does NOT touch the kill switch, in either direction.
+
+    It used to. `kill_switch_enabled` defaults to False on this model, so any
+    save that omitted the field — a user changing their lot size — took the
+    "user explicitly disabled the kill switch" branch and called
+    `risk_manager.resume_trading()`, whose own docstring reads "requires explicit
+    operator action". A halt raised by a drawdown circuit breaker could be
+    cleared by any authenticated user, at any plan tier, saving an unrelated
+    preference.
+
+    It also attempted `kill_switch.deactivate()` with no token, bypassing both
+    the admin role check on `POST /api/admin/resume` and the
+    HOPEFX_KILL_SWITCH_TOKEN requirement that exists so trading cannot resume
+    unattended. That call raised and was swallowed by a debug-level except, so
+    the bypass left no trace.
+
+    Halting and resuming live trading belong to the operator endpoints:
+    `POST /api/trading/emergency-stop`, `POST /api/admin/pause`,
+    `POST /api/admin/resume` and `/api/nuclear/kill_switch/*` — all admin-gated.
+    """
     uid = user.sub
-    _save(uid, "trading", body.model_dump())
 
-    if body.kill_switch_enabled:
-        try:
-            # Activate the app-level kill switch singleton directly so the halt
-            # reaches the running risk manager and all subsystems.  Creating a
-            # new RiskManager() instance would apply the halt to a throwaway
-            # object that has no effect on the live trading engine.
-            import sys as _sys
+    # Never persist the kill switch as a user preference: it is global engine
+    # state, and storing it invites the next reader to sync from it.
+    prefs = body.model_dump()
+    requested_halt = prefs.pop("kill_switch_enabled", False)
+    _save(uid, "trading", prefs)
 
-            _app = _sys.modules.get("app")
-            _ks = getattr(_app, "kill_switch", None)
-            if _ks is not None and callable(getattr(_ks, "activate", None)):
-                if not _ks.is_active():
-                    _ks.activate(reason="user settings")
-                    logger.warning("Kill switch activated via user settings for user %s", uid)
-            else:
-                # Fallback: reach the live risk manager via app_state
-                from core.app_state import app_state as _state
+    if requested_halt and not _kill_switch_active():
+        # Someone reached the halt through a door that no longer opens it. Say so
+        # loudly rather than returning a bare success the caller reads as "halted".
+        logger.warning(
+            "settings/trading: user=%s sent kill_switch_enabled=true — ignored. "
+            "Use POST /api/trading/emergency-stop (admin) to halt trading.",
+            uid,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Trading preferences cannot engage the kill switch. "
+                "Use the emergency stop control — it requires an administrator."
+            ),
+        )
 
-                _rm = getattr(_state, "risk_manager", None)
-                if _rm is not None and callable(getattr(_rm, "_halt_trading", None)):
-                    _rm._halt_trading("user settings")
-                    logger.warning("RiskManager halted via user settings for user %s", uid)
-        except Exception as exc:
-            logger.debug("Kill switch propagation failed: %s", exc)
-
-    elif not body.kill_switch_enabled:
-        # User explicitly disabled the kill switch — resume trading if halted.
-        try:
-            import sys as _sys
-
-            _app = _sys.modules.get("app")
-            _ks = getattr(_app, "kill_switch", None)
-            if _ks is not None and _ks.is_active():
-                _ks.deactivate()
-                logger.info("Kill switch deactivated via user settings for user %s", uid)
-            # Also resume the live risk manager if it was halted.
-            from core.app_state import app_state as _state
-
-            _rm = getattr(_state, "risk_manager", None)
-            if _rm is not None and callable(getattr(_rm, "resume_trading", None)):
-                _rm.resume_trading()
-        except Exception as exc:
-            logger.debug("Kill switch deactivation failed: %s", exc)
-
-    return {"status": "saved"}
+    return {"status": "saved", "kill_switch_enabled": _kill_switch_active()}
 
 
 # ── Broker settings ───────────────────────────────────────────────────────────
@@ -307,14 +330,57 @@ async def save_broker_settings(body: BrokerSettingsBody, user: TokenPayload = De
 # ── Password change ───────────────────────────────────────────────────────────
 
 
+def _safe_client_ip(request: Request) -> str:
+    """The client address, for a log line written while something is already
+    broken. Never raises: the caller is an exception handler, and a handler
+    that raises replaces a loud warning with a 500.
+    """
+    try:
+        return request.client.host if request.client else "unknown"
+    except Exception:  # pragma: no cover - defensive; the attribute is plain
+        return "unknown"
+
+
 class ChangePasswordBody(BaseModel):
     current_password: str
     new_password: str
 
 
 @router.post("/api/auth/change-password", summary="Change authenticated user password")
-async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends(get_current_user)):
-    """Change the password for the currently authenticated user."""
+async def change_password(
+    body: ChangePasswordBody,
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Change the password for the currently authenticated user.
+
+    This route was non-functional in three independent ways, each of which alone
+    would have broken it (pre-launch finding Q-01):
+
+    1. It read and wrote ``user.password_hash``. The column on
+       ``database.user_models.User`` is ``hashed_password``; no ``password_hash``
+       attribute exists, so line one of the check raised AttributeError, the
+       broad ``except Exception`` below caught it, and every single request
+       returned 500 "Password change failed. Please try again." Nobody could
+       change their password, ever.
+
+    2. It hashed with bare ``bcrypt.hashpw(password)``. Registration and login go
+       through ``auth.jwt.hash_password`` / ``verify_password``, which BLAKE2b
+       pre-hash the input before bcrypt to dodge bcrypt's 72-byte truncation. So
+       even with the column name fixed, the ``checkpw`` would have rejected every
+       correct current password, and any hash it did write would not verify at
+       login — locking the user out of their own account. auth/service.py already
+       carries a comment about this exact failure happening once before, when
+       that module used pbkdf2_sha256 while auth.jwt used bcrypt.
+
+    3. It did not revoke sessions. Changing a password is what a user does when
+       they believe someone else has access; leaving existing sessions valid
+       means the attacker keeps it. ``logout_all`` now runs after the change.
+
+    Also fixed: ``mgr.session()`` was entered with ``ctx.__enter__()`` and never
+    exited, leaking a DB session per call, and the route had no rate limit while
+    accepting a password guess.
+    """
     uid = user.sub
 
     if len(body.new_password) < 8:
@@ -323,9 +389,40 @@ async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends
             detail="New password must be at least 8 characters",
         )
 
+    # The current_password field makes this a credential-guessing surface, so it
+    # is throttled like the login route rather than left open. A stolen access
+    # token is a session; the password is the account, so this is the step
+    # between the two.
     try:
-        import bcrypt
+        from auth.router import _check_ip_rate_limit, _get_client_ip
 
+        client_ip = _get_client_ip(request)
+        _check_ip_rate_limit(client_ip)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # Deliberately fail OPEN: a limiter fault must not lock a user out of
+        # changing their own password, which is what they do when they believe
+        # someone else has access.
+        #
+        # But it is logged at ERROR, and it names the CONSEQUENCE rather than
+        # the fault. This handler is the only thing that knows the endpoint just
+        # served an unthrottled credential guess; at DEBUG — which is off in
+        # production — the one moment this route is unprotected is the one
+        # moment nobody is told (F248). "rate limit unavailable" described the
+        # tool and left an operator to infer the rest.
+        logger.error(
+            "change-password served UNTHROTTLED for user %s from %s: brute-force protection did not run (%s)",
+            uid,
+            _safe_client_ip(request),
+            exc,
+        )
+
+    try:
+        # The one hashing scheme the rest of auth uses. Importing it rather than
+        # reimplementing bcrypt here is the point: a second scheme in a second
+        # file is how defect 2 above happened.
+        from auth.jwt import hash_password, verify_password
         from database.connection import get_db_manager
         from database.models import User
 
@@ -333,22 +430,20 @@ async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends
         if not mgr:
             raise HTTPException(status_code=503, detail="Database unavailable")
 
-        ctx = mgr.session()
-        session = ctx.__enter__()
-        user = session.query(User).filter_by(id=uid).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        with mgr.session() as session:
+            row = session.query(User).filter_by(id=uid).first()
+            if not row:
+                raise HTTPException(status_code=404, detail="User not found")
 
-        if not bcrypt.checkpw(body.current_password.encode(), user.password_hash.encode()):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Current password is incorrect",
-            )
+            if not verify_password(body.current_password, row.hashed_password):
+                logger.warning("change-password: wrong current password for user %s", uid)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password is incorrect",
+                )
 
-        user.password_hash = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
-        session.commit()
-        logger.info("Password changed for user %s", uid)
-        return {"status": "updated"}
+            row.hashed_password = hash_password(body.new_password)
+            session.commit()
 
     except HTTPException:
         raise
@@ -358,6 +453,33 @@ async def change_password(body: ChangePasswordBody, user: TokenPayload = Depends
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Password change failed. Please try again.",
         ) from exc
+
+    # Outside the DB block: the password is already committed, so a failure to
+    # revoke must not turn a successful change into a 500 that tells the user it
+    # did not happen. It is logged loudly instead, because a change that leaves
+    # old sessions alive is the security-relevant half of this endpoint.
+    revoked = False
+    try:
+        import asyncio
+
+        from auth.router import _svc
+
+        # _svc() is the initialised singleton — AuthService requires a
+        # session_factory, so constructing one here would raise. logout_all is
+        # blocking SQLAlchemy, which auth/service.py's threading model requires
+        # callers in async contexts to wrap.
+        await asyncio.to_thread(_svc().logout_all, uid)
+        revoked = True
+    except Exception as exc:
+        logger.error(
+            "Password changed for user %s but session revocation FAILED (%s) — "
+            "pre-existing sessions may still be valid",
+            uid,
+            exc,
+        )
+
+    logger.info("Password changed for user %s (sessions_revoked=%s)", uid, revoked)
+    return {"status": "updated", "sessions_revoked": revoked}
 
 
 # ── Account deletion ──────────────────────────────────────────────────────────

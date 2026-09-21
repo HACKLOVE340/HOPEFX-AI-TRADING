@@ -249,8 +249,13 @@ class TestSocialFeedAuthOrder:
 
         ws = MagicMock()
         ws.query_params = {"token": ""}
+        # No subprotocol offered — exercises the query-string path.
+        ws.headers = {}
 
-        async def _accept():
+        async def _accept(subprotocol=None, headers=None):
+            # Mirrors starlette.websockets.WebSocket.accept. Taking no arguments
+            # made the double diverge from the object it stands in for, which is
+            # what let a real signature change through unnoticed.
             call_order.append("accept")
 
         async def _send_text(text):

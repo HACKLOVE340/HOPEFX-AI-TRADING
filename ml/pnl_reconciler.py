@@ -193,9 +193,8 @@ class PnLReconciler:
         PositionManager is not initialised (e.g. during offline gate checks).
         """
         try:
-            from core.app_state import get_position_manager
+            from execution.position_manager import position_manager as pm
 
-            pm = get_position_manager()
             if pm is None:
                 return 0.0, 0
             history = list(pm._history)

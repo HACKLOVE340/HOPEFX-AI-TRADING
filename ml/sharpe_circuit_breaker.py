@@ -163,7 +163,18 @@ class SharpeCircuitBreaker:
         self._redis = redis_client
         restore_setting = os.environ.get("SHARPE_CB_RESTORE")
         if restore_setting is None:
-            env = os.environ.get("ENVIRONMENT", "").strip().lower()
+            # APP_ENV first, then ENVIRONMENT. This used to read ENVIRONMENT
+            # alone, and nothing in the test suite sets it — tests/conftest.py
+            # declares APP_ENV=test, which is also what the other ~100 env
+            # checks in this codebase read. So the "opt-out for tests" below
+            # never opted out: a fresh breaker restored whatever a previous
+            # test run had left in Redis, and assertions like
+            # `state.total_trades == 60` saw accumulated totals instead.
+            # tests/unit/test_sharpe_circuit_breaker.py works around it with an
+            # autouse Redis flush; test_critical_paths.py and
+            # test_smoke_critical.py construct the same class without one, so
+            # they passed only while no Redis was reachable.
+            env = (os.environ.get("APP_ENV") or os.environ.get("ENVIRONMENT") or "").strip().lower()
             restore_enabled = env not in {"test", "testing"}
         else:
             restore_enabled = restore_setting.strip().lower() in {"1", "true", "yes", "on"}
@@ -461,14 +472,27 @@ class SharpeCircuitBreaker:
             from core.app_state import app_state
 
             ae = getattr(app_state, "alert_engine", None)
-            if ae and hasattr(ae, "send_alert"):
-                ae.send_alert(
-                    title="Sharpe Circuit Breaker Tripped",
-                    message=(f"Model '{state.model_version}' gated out of production.\nReason: {state.trip_reason}"),
-                    severity="critical",
-                )
+
+            # As in ml/performance_monitor.py: title=/severity= are not parameters
+            # of send_alert, and the coroutine was never awaited, so a tripped
+            # circuit breaker raised a TypeError into the except below and
+            # notified nobody (F248).
+            from notifications import send_alert_nowait
+
+            send_alert_nowait(
+                "critical",
+                f"Sharpe Circuit Breaker Tripped: model '{state.model_version}' gated out of production.",
+                {
+                    "event": "sharpe_circuit_breaker_trip",
+                    "model_version": state.model_version,
+                    "reason": state.trip_reason,
+                },
+                engine=ae,
+            )
         except Exception as exc:
-            logger.debug("SharpeCircuitBreaker alert failed: %s", exc)
+            # A tripped circuit breaker that could not be announced is an
+            # operator-visible event, not a debug detail.
+            logger.error("SharpeCircuitBreaker alert failed: %s", exc)
 
     async def _retire_model(self, model_version: str, reason: str) -> None:
         """Retire the model in the registry so it cannot be re-promoted without review."""

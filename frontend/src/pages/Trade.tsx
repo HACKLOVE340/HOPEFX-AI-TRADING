@@ -19,23 +19,23 @@
  *   DELETE /api/trading/positions
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, Link } from 'react-router-dom';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
-import { PageHeader } from '../components';
 import { CrossLinkBar } from '../components/CrossLinkBar';
-import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
+import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot, selectFeedLive } from '../store';
 
 const TRADE_CROSS_LINKS = [
-  { label: 'Trading Terminal', href: '/terminal',       icon: '🖥️', color: '#3b82f6' },
-  { label: 'Dashboard',        href: '/dashboard',      icon: '📊', color: '#60a5fa' },
-  { label: 'Watchlist',        href: '/watchlist',      icon: '👁',  color: '#34d399' },
-  { label: 'Risk Calculator',  href: '/risk-calculator',icon: '🛡',  color: '#f59e0b' },
-  { label: 'Trade Journal',    href: '/journal',        icon: '📓', color: '#a78bfa' },
-  { label: 'Copy Trading',     href: '/copy-trading',   icon: '🔁', color: '#f97316' },
+  { label: 'Trading Terminal', href: '/terminal',       icon: Monitor, color: '#3b82f6' },
+  { label: 'Dashboard',        href: '/dashboard',      icon: BarChart3, color: '#60a5fa' },
+  { label: 'Watchlist',        href: '/watchlist',      icon: Eye,  color: '#34d399' },
+  { label: 'Risk Calculator',  href: '/risk-calculator',icon: Shield,  color: '#f59e0b' },
+  { label: 'Trade Journal',    href: '/journal',        icon: NotebookPen, color: '#a78bfa' },
+  { label: 'Copy Trading',     href: '/copy-trading',   icon: Repeat, color: '#f97316' },
 ];
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
 import { tradingApi } from '../hooks/useApi';
@@ -43,8 +43,9 @@ import { OrderEntryForm } from '../components/panels/OrderEntryForm';
 import { PositionsTable } from '../components/panels/PositionsTable';
 import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol, describeCloseAll, positionSide } from '../lib/utils';
 import type { PriceTick } from '../types';
+import { BarChart3, CandlestickChart, Eye, Monitor, NotebookPen, Repeat, Shield } from 'lucide-react';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
         'min-w-[148px] flex-shrink-0',
         selected
           ? 'bg-[#1e3a5f] border-[#3b82f6] shadow-[0_0_0_1px_#3b82f6]'
-          : 'bg-[#0d1421] border-[#1e2d3d] hover:border-[#334155]',
+          : 'bg-[var(--surface)] border-[var(--border)] hover:border-[#334155]',
       )}
     >
       {/* Symbol + change badge */}
@@ -108,7 +109,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
           <span
             className={cn(
               'text-[10px] font-semibold px-1.5 py-0.5 rounded',
-              isUp ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]',
+              isUp ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]',
             )}
           >
             {isUp ? '+' : ''}{change.toFixed(2)}%
@@ -134,7 +135,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-[8px] text-slate-600 uppercase">Ask</span>
-            <span className="text-[#00e676] font-semibold">{fmtPrice(tick.ask)}</span>
+            <span className="text-[var(--bull)] font-semibold">{fmtPrice(tick.ask)}</span>
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-[8px] text-slate-600 uppercase">Sprd</span>
@@ -156,11 +157,13 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
 
 const BrokerStatusBanner: React.FC = () => {
   const account  = useStore((s) => s.account);
-  const wsStatus = useStore(selectWsStatus);
+  // F10-01: `selectFeedLive`, not `wsStatus`. A stalled socket stays
+  // 'connected', so this banner was suppressed during the outage it describes.
+  const feedLive = useStore(selectFeedLive);
 
-  // Only show when we have no account data AND WS is not connected
+  // Only show when we have no account data AND the feed is not delivering
   // (avoids flash during normal load)
-  if (account || wsStatus === 'connected') return null;
+  if (account || feedLive) return null;
 
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#ffb800]/10 border border-[#ffb800]/30 text-[11px]">
@@ -178,6 +181,10 @@ const BrokerStatusBanner: React.FC = () => {
 const AccountBar: React.FC = () => {
   const { data: account } = useAccount();
   const wsStatus = useStore(selectWsStatus);
+  // F10-01: "live" must describe the feed, not the socket — the same defect
+  // fixed in Dashboard's WsBadge, surviving here because this page is a
+  // near-duplicate of it and nobody knew the badge existed three times.
+  const feedLive = useStore(selectFeedLive);
 
   if (!account) return null;
 
@@ -188,7 +195,7 @@ const AccountBar: React.FC = () => {
   const pnl        = account.total_pnl   ?? 0;
 
   return (
-    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[11px]">
       {[
         { label: 'Balance',      value: `$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    color: 'text-slate-200' },
         { label: 'Equity',       value: `$${equity.toLocaleString('en-US',  { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    color: 'text-slate-200' },
@@ -196,14 +203,14 @@ const AccountBar: React.FC = () => {
         {
           label: 'Unrealized P&L',
           value: `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`,
-          color: pnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]',
+          color: pnl >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]',
         },
         {
           label: 'Margin Level',
-          value: account.margin_level != null ? `${account.margin_level.toFixed(0)}%` : '—',
+          value: fmtMarginLevel(account.margin_level, account.margin_used),
           color:
-            (account.margin_level ?? 300) > 200 ? 'text-[#00e676]' :
-            (account.margin_level ?? 300) > 100 ? 'text-[#ffb800]' : 'text-[#ff1744]',
+            marginLevelIsSafe(account.margin_level) ? 'text-[var(--bull)]' :
+            (account.margin_level ?? 300) > 100 ? 'text-[#ffb800]' : 'text-[var(--bear)]',
         },
       ].map(({ label, value, color }) => (
         <div key={label} className="flex flex-col gap-0.5">
@@ -216,11 +223,13 @@ const AccountBar: React.FC = () => {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
+            feedLive ? 'bg-[var(--bull)] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
         <span className="text-[10px] text-slate-500 capitalize">
-          {wsStatus === 'connected' ? 'live' : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
+          {feedLive ? 'live'
+            : wsStatus === 'connected' ? 'stalled'
+            : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
         </span>
       </div>
     </div>
@@ -246,7 +255,7 @@ function TradeHistoryTab() {
   });
 
   if (isLoading) return <div className="p-4"><PanelSkeleton rows={5} /></div>;
-  if (isError)   return <div className="p-4 text-[11px] text-[#ff1744]">Failed to load trade history</div>;
+  if (isError)   return <div className="p-4 text-[11px] text-[var(--bear)]">Failed to load trade history</div>;
   if (!data?.length) return (
     <div className="flex items-center justify-center h-20 text-slate-600 text-[12px]">
       No closed trades yet
@@ -257,7 +266,7 @@ function TradeHistoryTab() {
     <div className="overflow-x-auto">
       <table className="w-full text-[11px]">
         <thead>
-          <tr className="border-b border-[#1e2d3d]">
+          <tr className="border-b border-[var(--border)]">
             {['Symbol','Side','Size','Entry','Exit','P&L','Opened','Closed','Duration'].map((h) => (
               <th
                 key={h}
@@ -270,15 +279,15 @@ function TradeHistoryTab() {
         </thead>
         <tbody>
           {data.map((t) => {
-            const isLong = t.side === 'long' || t.side === 'buy';
+            const isLong = positionSide(t) === 'long';  // F5-02
             const pnlPos = t.realized_pnl >= 0;
             return (
-              <tr key={t.id} className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/30 transition-colors">
+              <tr key={t.id} className="border-b border-[var(--surface)] hover:bg-[var(--border)]/30 transition-colors">
                 <td className="px-3 py-2 font-semibold text-slate-200 whitespace-nowrap">{t.symbol}</td>
                 <td className="px-3 py-2">
                   <span className={cn(
                     'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase',
-                    isLong ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]',
+                    isLong ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]',
                   )}>
                     {isLong ? '▲ Long' : '▼ Short'}
                   </span>
@@ -287,7 +296,7 @@ function TradeHistoryTab() {
                 <td className="px-3 py-2 tabular-nums text-slate-300">{fmtPrice(t.entry_price)}</td>
                 <td className="px-3 py-2 tabular-nums text-slate-300">{fmtPrice(t.exit_price)}</td>
                 <td className="px-3 py-2">
-                  <span className={cn('font-semibold tabular-nums', pnlPos ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+                  <span className={cn('font-semibold tabular-nums', pnlPos ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>
                     {fmtPnl(t.realized_pnl)}
                   </span>
                 </td>
@@ -310,7 +319,7 @@ function TradeHistoryTab() {
 const AISignalPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
   const signals = useStore(selectSignals);
   const symSignals = signals
-    .filter((s) => s.symbol === symbol && s.status === 'active')
+    .filter((s) => sameSymbol(s.symbol, symbol) && s.status === 'active')
     .slice(0, 3);
 
   if (symSignals.length === 0) {
@@ -327,10 +336,10 @@ const AISignalPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
         const isLong = sig.direction === 'long';
         const conf   = (sig.confidence ?? 0) * 100;
         return (
-          <div key={sig.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0a0f1a] border border-[#1e2d3d]">
+          <div key={sig.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0a0f1a] border border-[var(--border)]">
             <span className={cn(
               'text-[10px] font-bold px-2 py-0.5 rounded uppercase',
-              isLong ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]',
+              isLong ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]',
             )}>
               {isLong ? '▲ Long' : '▼ Short'}
             </span>
@@ -338,15 +347,15 @@ const AISignalPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
               <div className="flex gap-3 text-[10px] tabular-nums">
                 <span className="text-slate-500">Entry <span className="text-slate-300">{fmtPrice(sig.entry_price)}</span></span>
                 <span className="text-[#ff3b5c]">SL {fmtPrice(sig.stop_loss)}</span>
-                <span className="text-[#00e676]">TP {fmtPrice(sig.take_profit)}</span>
+                <span className="text-[var(--bull)]">TP {fmtPrice(sig.take_profit)}</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex-1 h-1 rounded bg-[#1e2d3d]">
+                <div className="flex-1 h-1 rounded bg-[var(--border)]">
                   <div
                     className="h-1 rounded transition-all"
                     style={{
                       width: `${conf}%`,
-                      background: conf >= 75 ? '#00e676' : conf >= 55 ? '#ffb800' : '#ff1744',
+                      background: conf >= 75 ? 'var(--bull)' : conf >= 55 ? '#ffb800' : 'var(--bear)',
                     }}
                   />
                 </div>
@@ -375,11 +384,11 @@ const RiskBar: React.FC = () => {
   ];
 
   return (
-    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[11px]">
       {items.map(({ label, value, warn }) => (
         <div key={label} className="flex flex-col gap-0.5">
           <span className="text-[9px] uppercase tracking-wider text-slate-500">{label}</span>
-          <span className={cn('font-semibold tabular-nums', warn ? 'text-[#ff1744]' : 'text-slate-300')}>{value}</span>
+          <span className={cn('font-semibold tabular-nums', warn ? 'text-[var(--bear)]' : 'text-slate-300')}>{value}</span>
         </div>
       ))}
     </div>
@@ -399,8 +408,8 @@ function BottomSection() {
   ];
 
   return (
-    <div className="bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden">
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-[#1e2d3d]">
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden">
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--border)]">
         {tabs.map(({ id, label }) => (
           <button
             key={id}
@@ -408,8 +417,8 @@ function BottomSection() {
             className={cn(
               'px-3 py-1 rounded text-[11px] font-semibold border transition-colors',
               tab === id
-                ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+                : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
             )}
           >
             {label}
@@ -427,16 +436,21 @@ function BottomSection() {
 // ── Keyboard shortcut hint bar ────────────────────────────────────────────────
 
 const KeyboardHints: React.FC = () => (
-  <div className="flex flex-wrap gap-3 px-3 py-1.5 rounded bg-[#0a0f1a] border border-[#1e2d3d] text-[10px] text-slate-600">
+  <div className="flex flex-wrap gap-3 px-3 py-1.5 rounded bg-[#0a0f1a] border border-[var(--border)] text-[10px] text-slate-600">
     {[
-      ['1–6', 'Select symbol'],
-      ['B', 'Buy market'],
-      ['S', 'Sell market'],
+      // Digits select from SYMBOLS, of which only the first nine are reachable
+      // by a single keypress — the hint said 1–6 while twelve are listed.
+      ['1–9', 'Select symbol'],
+      // B and S pre-select a side in the order ticket. They do NOT place an
+      // order; labelling them "Buy market" on a live trading terminal claimed a
+      // keystroke would execute.
+      ['B', 'Pre-fill buy'],
+      ['S', 'Pre-fill sell'],
       ['Esc', 'Cancel / deselect'],
       ['Cmd+K', 'Command palette'],
     ].map(([key, desc]) => (
       <span key={key} className="flex items-center gap-1">
-        <kbd className="px-1.5 py-0.5 rounded bg-[#1e2d3d] text-slate-400 font-mono text-[9px]">{key}</kbd>
+        <kbd className="px-1.5 py-0.5 rounded bg-[var(--border)] text-slate-400 font-mono text-[9px]">{key}</kbd>
         <span>{desc}</span>
       </span>
     ))}
@@ -449,13 +463,14 @@ const Trade: React.FC = () => {
   const location    = useLocation();
   const signalState = (location.state as { signal?: {
     symbol?: string; direction?: string;
-    entry_price?: number; stop_loss?: number; take_profit?: number;
+    entry_price?: number; stop_loss?: number; take_profit?: number; quantity?: number;
   } } | null)?.signal;
 
   const [selectedSymbol, setSelectedSymbol] = useState(signalState?.symbol ?? 'XAU/USD');
   const [closingAll, setClosingAll]         = useState(false);
   const [pendingSide, setPendingSide]       = useState<'buy' | 'sell' | null>(null);
   const prices      = useStore((s) => s.prices);
+  const positions   = useStore((s) => s.positions);
   const allHistory  = useStore((s) => s.priceHistory);
   const qc          = useQueryClient();
   const confirm     = useConfirm();
@@ -464,9 +479,13 @@ const Trade: React.FC = () => {
   usePositions();
 
   const handleCloseAll = useCallback(async () => {
+    // State the magnitude, not the category. "Every open position" is
+    // something a trader cannot check before agreeing to it — they are not told
+    // how many, which symbols, or what P&L they are about to realise. Shared
+    // with PositionsTable so the two confirmations cannot drift (S10-03).
     const ok = await confirm({
       title:        'Close all positions?',
-      description:  'This will market-close every open position immediately. This cannot be undone.',
+      description:  describeCloseAll(positions),
       confirmLabel: 'Close All',
       variant:      'danger',
     });
@@ -481,7 +500,7 @@ const Trade: React.FC = () => {
     } finally {
       setClosingAll(false);
     }
-  }, [confirm, qc, toast]);
+  }, [confirm, positions, qc, toast]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -490,53 +509,55 @@ const Trade: React.FC = () => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-      // 1–6: select symbol by index
-      const idx = parseInt(e.key, 10) - 1;
-      if (idx >= 0 && idx < SYMBOLS.length) {
-        setSelectedSymbol(SYMBOLS[idx]);
+      // Digits 1–9 select a symbol by index. `parseInt` is deliberately bounded
+      // to a single character: without it, any key parsing as a number could
+      // index the list.
+      if (!/^[1-9]$/.test(e.key)) {
+        switch (e.key.toLowerCase()) {
+          case 'b': setPendingSide('buy');  break;
+          case 's': setPendingSide('sell'); break;
+          case 'escape': setPendingSide(null); break;
+        }
         return;
       }
-
-      switch (e.key.toLowerCase()) {
-        case 'b': setPendingSide('buy');  break;
-        case 's': setPendingSide('sell'); break;
-        case 'escape': setPendingSide(null); break;
-      }
+      const idx = parseInt(e.key, 10) - 1;
+      const sym = SYMBOLS[idx];
+      // Bind then guard: the bounds check does not narrow SYMBOLS[idx] for the
+      // compiler (audit #38).
+      if (sym) setSelectedSymbol(sym);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
   return (
-    <div className="page-content gap-3 sm:gap-4 fade-in">
-
-      <PageHeader
-        title="Trade"
-        icon="💹"
-        subtitle="Real-time execution — market, limit and stop orders"
-        breadcrumbs={[
+    <PageShell
+      title="Trade"
+      icon={CandlestickChart}
+      subtitle="Real-time execution — market, limit and stop orders"
+      breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Trade' },
         ]}
-        actions={
+      actions={
           <div className="flex flex-wrap items-center gap-1.5">
             <Link
               to="/watchlist"
-              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[#38bdf8] hover:bg-[#1e3a5f]/40 transition-colors min-h-[36px]"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[var(--focus)] hover:bg-[#1e3a5f]/40 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
               👁 <span className="hidden xs:inline ml-1">Watchlist</span>
             </Link>
             <Link
               to="/portfolio"
-              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[var(--ai-model)] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
               💼 <span className="hidden xs:inline ml-1">Portfolio</span>
             </Link>
             <Link
               to="/risk-calculator"
-              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/40 transition-colors min-h-[36px]"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[var(--text-dim)] hover:bg-[#334155]/40 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
               🛡 <span className="hidden xs:inline ml-1">Risk Calc</span>
@@ -544,13 +565,16 @@ const Trade: React.FC = () => {
             <button
               onClick={handleCloseAll}
               disabled={closingAll}
-              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50 min-h-[36px]"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-bold bg-[var(--bear)]/10 border border-[var(--bear)]/30 text-[var(--bear)] hover:bg-[var(--bear)]/20 transition-colors disabled:opacity-50 min-h-[36px]"
             >
               {closingAll ? 'Closing…' : '✕ Close All'}
             </button>
           </div>
         }
-      />
+      width="standard"
+    >
+
+
 
       {/* Broker readiness banner — shown only when broker is still starting */}
       <BrokerStatusBanner />
@@ -565,8 +589,8 @@ const Trade: React.FC = () => {
       <KeyboardHints />
 
       {/* Symbol selector strip — numbers 1-6 select via keyboard */}
-      <div className="stagger flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[#1e2d3d]">
-        {SYMBOLS.map((sym, i) => (
+      <div className="stagger flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[var(--border)]">
+        {SYMBOLS.map((sym, _i) => (
           <SymbolCard
             key={sym}
             symbol={sym}
@@ -589,6 +613,7 @@ const Trade: React.FC = () => {
           defaultLimitPx={signalState?.entry_price ? String(signalState.entry_price) : undefined}
           defaultSl={signalState?.stop_loss ? String(signalState.stop_loss) : undefined}
           defaultTp={signalState?.take_profit ? String(signalState.take_profit) : undefined}
+          defaultQty={signalState?.quantity ? signalState.quantity.toFixed(2) : undefined}
           onOrderPlaced={() => {
             setPendingSide(null);
             void qc.invalidateQueries({ queryKey: ['positions'] });
@@ -596,7 +621,7 @@ const Trade: React.FC = () => {
         />
         <div className="flex flex-col gap-4">
           <PositionsTable symbol={selectedSymbol} />
-          <div className="bg-[#0d1421] border border-[#1e2d3d] rounded-lg p-3">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
               AI Signals — {selectedSymbol}
             </div>
@@ -609,7 +634,7 @@ const Trade: React.FC = () => {
       <BottomSection />
 
       <CrossLinkBar links={TRADE_CROSS_LINKS} title="Related" style={{ marginTop: 24 }} />
-    </div>
+    </PageShell>
   );
 };
 

@@ -65,7 +65,14 @@ multi_source_feed:
 
     # ── Precious metals ───────────────────────────────────────────────────────
     XAUUSD:
-      yfinance_ticker:      "GC=F"          # Gold futures (continuous)
+      # yfinance: Yahoo no longer serves this contract (verified 2026-07-26:
+      # 'possibly delisted, no price data found' at 1m/5m/1d). Left blank so the
+      # feed skips straight to the next source instead of failing ~100x per symbol.
+      # Spot metals/oil must come from twelve_data or alpha_vantage — the ETFs
+      # (GLD/SLV/USO) do work on Yahoo but track a DIFFERENT price: GLD is ~$390
+      # against spot gold ~$4,070, so quoting one as the other would be far worse
+      # than no quote at all.
+      yfinance_ticker:      ""
       alpha_vantage_symbol: "XAU"
       alpha_vantage_market: "USD"
       twelve_data_symbol:   "XAU/USD"
@@ -73,7 +80,14 @@ multi_source_feed:
       price_max: 10000.0
 
     XAGUSD:
-      yfinance_ticker:      "SI=F"          # Silver futures (continuous)
+      # yfinance: Yahoo no longer serves this contract (verified 2026-07-26:
+      # 'possibly delisted, no price data found' at 1m/5m/1d). Left blank so the
+      # feed skips straight to the next source instead of failing ~100x per symbol.
+      # Spot metals/oil must come from twelve_data or alpha_vantage — the ETFs
+      # (GLD/SLV/USO) do work on Yahoo but track a DIFFERENT price: GLD is ~$390
+      # against spot gold ~$4,070, so quoting one as the other would be far worse
+      # than no quote at all.
+      yfinance_ticker:      ""
       alpha_vantage_symbol: "XAG"
       alpha_vantage_market: "USD"
       twelve_data_symbol:   "XAG/USD"
@@ -81,7 +95,14 @@ multi_source_feed:
       price_max: 500.0
 
     XPTUSD:
-      yfinance_ticker:      "PL=F"          # Platinum futures (continuous)
+      # yfinance: Yahoo no longer serves this contract (verified 2026-07-26:
+      # 'possibly delisted, no price data found' at 1m/5m/1d). Left blank so the
+      # feed skips straight to the next source instead of failing ~100x per symbol.
+      # Spot metals/oil must come from twelve_data or alpha_vantage — the ETFs
+      # (GLD/SLV/USO) do work on Yahoo but track a DIFFERENT price: GLD is ~$390
+      # against spot gold ~$4,070, so quoting one as the other would be far worse
+      # than no quote at all.
+      yfinance_ticker:      ""
       alpha_vantage_symbol: "XPT"
       alpha_vantage_market: "USD"
       twelve_data_symbol:   "XPT/USD"
@@ -148,7 +169,14 @@ multi_source_feed:
     # ── Commodities ───────────────────────────────────────────────────────────
     USOIL:
       # WTI Crude Oil futures (continuous)
-      yfinance_ticker:      "CL=F"
+      # yfinance: Yahoo no longer serves this contract (verified 2026-07-26:
+      # 'possibly delisted, no price data found' at 1m/5m/1d). Left blank so the
+      # feed skips straight to the next source instead of failing ~100x per symbol.
+      # Spot metals/oil must come from twelve_data or alpha_vantage — the ETFs
+      # (GLD/SLV/USO) do work on Yahoo but track a DIFFERENT price: GLD is ~$390
+      # against spot gold ~$4,070, so quoting one as the other would be far worse
+      # than no quote at all.
+      yfinance_ticker:      ""
       # Alpha Vantage has no direct WTI endpoint; empty string skips it.
       alpha_vantage_symbol: ""
       alpha_vantage_market: "USD"
@@ -176,7 +204,9 @@ multi_source_feed:
     # ── Equity indices ────────────────────────────────────────────────────────
     NAS100:
       # NASDAQ-100 futures (continuous)
-      yfinance_ticker:      "NQ=F"
+      # NQ=F (futures) is delisted on Yahoo; ^NDX is the index itself and returns
+      # data (verified 2026-07-26, 78 rows @5m).
+      yfinance_ticker:      "^NDX"
       # Alpha Vantage does not expose index futures; empty string skips it.
       alpha_vantage_symbol: ""
       alpha_vantage_market: "USD"
@@ -186,7 +216,9 @@ multi_source_feed:
 
     US30:
       # Dow Jones Industrial Average futures (continuous)
-      yfinance_ticker:      "YM=F"
+      # YM=F (futures) is delisted on Yahoo; ^DJI is the index itself and returns
+      # data (verified 2026-07-26, 78 rows @5m).
+      yfinance_ticker:      "^DJI"
       alpha_vantage_symbol: ""
       alpha_vantage_market: "USD"
       twelve_data_symbol:   "DJI"

@@ -33,18 +33,30 @@ def verify_reconciliation_chain(balances: Mapping[str, float], tol: float = 0.01
     if not vals:
         return []
     if max(vals) - min(vals) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   f"reconciliation chain disagrees: {dict(balances)}", spread=round(max(vals) - min(vals), 6))]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                f"reconciliation chain disagrees: {dict(balances)}",
+                spread=round(max(vals) - min(vals), 6),
+            )
+        ]
     return []
 
 
-def verify_custody_reconciled(custodian_holdings: float, internal_holdings: float,
-                              tol: float = 0.01) -> list[Violation]:
+def verify_custody_reconciled(
+    custodian_holdings: float, internal_holdings: float, tol: float = 0.01
+) -> list[Violation]:
     if not (_is_finite_number(custodian_holdings) and _is_finite_number(internal_holdings)):
         return [_v("No Hidden Capital", CONSTITUTIONAL, "custody holdings non-finite")]
     if abs(custodian_holdings - internal_holdings) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   f"custody mismatch: custodian {custodian_holdings} != internal {internal_holdings}")]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                f"custody mismatch: custodian {custodian_holdings} != internal {internal_holdings}",
+            )
+        ]
     return []
 
 
@@ -53,8 +65,13 @@ def verify_double_entry(total_debits: float, total_credits: float, tol: float = 
     if not (_is_finite_number(total_debits) and _is_finite_number(total_credits)):
         return [_v("No Hidden Capital", CONSTITUTIONAL, "ledger totals non-finite")]
     if abs(total_debits - total_credits) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   f"ledger unbalanced: debits {total_debits} != credits {total_credits}")]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                f"ledger unbalanced: debits {total_debits} != credits {total_credits}",
+            )
+        ]
     return []
 
 
@@ -64,16 +81,22 @@ def verify_ledger_immutable(entry_hash: str, stored_hash: str) -> list[Violation
     return []
 
 
-def verify_treasury_flow(opening: float, deposits: float, withdrawals: float, funding: float,
-                         closing: float, tol: float = 0.01) -> list[Violation]:
+def verify_treasury_flow(
+    opening: float, deposits: float, withdrawals: float, funding: float, closing: float, tol: float = 0.01
+) -> list[Violation]:
     """opening + deposits − withdrawals + funding == closing (treasury balance)."""
     vals = [opening, deposits, withdrawals, funding, closing]
     if not all(_is_finite_number(x) for x in vals):
         return [_v("No Hidden Capital", CONSTITUTIONAL, "treasury flow component non-finite")]
     expected = opening + deposits - withdrawals + funding
     if abs(expected - closing) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   f"treasury does not reconcile: expected {round(expected, 4)} != closing {closing}")]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                f"treasury does not reconcile: expected {round(expected, 4)} != closing {closing}",
+            )
+        ]
     return []
 
 
@@ -83,9 +106,14 @@ def verify_alpha_attribution(total_pnl: float, attributed: Mapping[str, float], 
     if not all(_is_finite_number(x) for x in [*vals, total_pnl]):
         return [_v("No Hidden Loss", CONSTITUTIONAL, "PnL attribution component non-finite")]
     if abs(sum(vals) - total_pnl) > tol:
-        return [_v("No Hidden Loss", CRITICAL,
-                   f"unattributed PnL: sum(sources) {round(sum(vals), 4)} != total {total_pnl}",
-                   unexplained=round(total_pnl - sum(vals), 6))]
+        return [
+            _v(
+                "No Hidden Loss",
+                CRITICAL,
+                f"unattributed PnL: sum(sources) {round(sum(vals), 4)} != total {total_pnl}",
+                unexplained=round(total_pnl - sum(vals), 6),
+            )
+        ]
     return []
 
 
@@ -102,7 +130,12 @@ def verify_revenue_leakage(expected_revenue: float, recognized_revenue: float, t
     if not (_is_finite_number(expected_revenue) and _is_finite_number(recognized_revenue)):
         return [_v("No Hidden Loss", CRITICAL, "revenue values non-finite")]
     if expected_revenue - recognized_revenue > tol:
-        return [_v("No Hidden Loss", CRITICAL,
-                   f"revenue leakage: expected {expected_revenue} but recognized {recognized_revenue}",
-                   leak=round(expected_revenue - recognized_revenue, 6))]
+        return [
+            _v(
+                "No Hidden Loss",
+                CRITICAL,
+                f"revenue leakage: expected {expected_revenue} but recognized {recognized_revenue}",
+                leak=round(expected_revenue - recognized_revenue, 6),
+            )
+        ]
     return []

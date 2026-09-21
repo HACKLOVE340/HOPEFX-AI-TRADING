@@ -15,6 +15,13 @@ Design rules (this is a money-moving system):
   ``enforce``}. Default ``monitor`` — checks run and log but **never block**, so
   turning the wiring on changes no trading behaviour. Flipping to ``enforce`` is
   the deliberate, explicit activation of blocking/halting.
+* **Staged rollout (per-check).** Rather than one global flip that makes every
+  check blocking at once, keep the global mode at ``monitor`` and promote
+  individual checks via ``HOPEFX_INVARIANT_ENFORCE_KINDS`` (comma-separated
+  kinds, or ``all``). ``HOPEFX_INVARIANT_MONITOR_KINDS`` is the inverse — hold a
+  named check in monitor while the global mode is ``enforce``. See
+  :func:`effective_mode`. This is the safe way to enable enforcement on a live
+  desk: one check at a time, watching telemetry between steps.
 * **Fail-safe on findings.** In ``enforce`` mode a CONSTITUTIONAL or CRITICAL
   violation blocks the trade / signals a halt. WARNINGs only log.
 * **Cannot take the desk down by accident.** A bug *inside this layer* must not
@@ -33,6 +40,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import deque
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -49,8 +57,27 @@ from invariants.constitution import (
     verify_tick,
     verify_within_limit,
 )
-from invariants.ai import verify_trust_floor, verify_trust_score, verify_trust_weighted_allocation
-from invariants.governance import verify_action_audited, verify_pod_isolation
+from invariants.ai import (
+    verify_agent_action_approved,
+    verify_agent_action_authorized,
+    verify_agent_authority,
+    verify_agent_no_self_escalation,
+    verify_tool_allowed,
+    verify_trust_floor,
+    verify_trust_score,
+    verify_trust_weighted_allocation,
+)
+from invariants.ai_governance import (
+    verify_autonomous_capital_limit,
+    verify_autonomous_strategy_control,
+    verify_no_self_replication,
+)
+from invariants.governance import verify_action_audited, verify_human_approval, verify_pod_isolation
+from invariants.payments import (
+    verify_amount_valid,
+    verify_balance_after,
+    verify_withdrawal_within_balance,
+)
 from invariants.resilience import verify_recovery_path_exists
 from invariants.risk import (
     verify_daily_loss,
@@ -72,10 +99,71 @@ _DEFAULT_MODE = MODE_MONITOR
 
 
 def current_mode() -> str:
-    """Read the enforcement mode from the environment (re-read each call so ops
-    can change it without a restart). Unknown values fall back to ``monitor``."""
+    """Read the *global* enforcement mode from the environment (re-read each call
+    so ops can change it without a restart). Unknown values fall back to
+    ``monitor``."""
     mode = os.environ.get("HOPEFX_INVARIANT_MODE", _DEFAULT_MODE).strip().lower()
     return mode if mode in _VALID_MODES else _DEFAULT_MODE
+
+
+# Every check ``kind`` the façade emits — the vocabulary for staged rollout and
+# the resolved view in :func:`status`. Keep in sync with the ``_safe(...)`` calls.
+KNOWN_KINDS: tuple[str, ...] = (
+    "pre_trade",
+    "order_authorization",
+    "human_approval",
+    "reconciliation",
+    "ledger",
+    "exposure",
+    "var",
+    "trust_allocation",
+    "risk_appetite",
+    "policy_governance",
+    "spof",
+    "blast_radius",
+    "action_audit",
+    "agent_action",
+    "pod_isolation",
+    "recovery_readiness",
+    "audit_chain",
+)
+
+
+def _kinds_from_env(var: str) -> frozenset[str]:
+    """Parse a comma-separated set of check kinds from ``var`` (lower-cased)."""
+    return frozenset(k.strip().lower() for k in os.environ.get(var, "").split(",") if k.strip())
+
+
+def effective_mode(kind: str) -> str:
+    """Resolve the enforcement mode for a specific check *kind*.
+
+    This is what makes a **staged** enforce rollout safe on a live money path:
+    rather than one global flip that makes every check blocking at once, ops can
+    keep the global mode at ``monitor`` and promote individual kinds to
+    ``enforce`` one at a time via ``HOPEFX_INVARIANT_ENFORCE_KINDS`` (a
+    comma-separated list, or ``all``). The inverse lever
+    ``HOPEFX_INVARIANT_MONITOR_KINDS`` demotes named kinds back to ``monitor``
+    while the global mode is ``enforce`` — useful to carve out one noisy check
+    without losing enforcement everywhere else.
+
+    Precedence: ``off`` (global) wins over everything. Otherwise a per-kind
+    promotion/demotion overrides the global mode for that kind only. With no
+    per-kind vars set, this is exactly ``current_mode()`` for every kind, so
+    behaviour is unchanged by default.
+    """
+    mode = current_mode()
+    if mode == MODE_OFF:
+        return MODE_OFF
+    k = kind.strip().lower()
+    if mode == MODE_MONITOR:
+        enforce_kinds = _kinds_from_env("HOPEFX_INVARIANT_ENFORCE_KINDS")
+        if "all" in enforce_kinds or k in enforce_kinds:
+            return MODE_ENFORCE
+        return MODE_MONITOR
+    # mode == enforce: allow selectively holding a kind back in monitor.
+    if k in _kinds_from_env("HOPEFX_INVARIANT_MONITOR_KINDS"):
+        return MODE_MONITOR
+    return MODE_ENFORCE
 
 
 def _fail_closed() -> bool:
@@ -162,7 +250,7 @@ def _decide(kind: str, violations: list[Violation], *, checker_error: bool = Fal
       * monitor  → log findings, never block.
       * enforce  → block/halt on a blocking violation (or fail-closed error).
     """
-    mode = current_mode()
+    mode = effective_mode(kind)
     blocking = _is_blocking(violations) or (checker_error and _fail_closed())
     reason = _reason(violations) if violations else ("checker_error" if checker_error else "ok")
 
@@ -192,7 +280,7 @@ def _decide(kind: str, violations: list[Violation], *, checker_error: bool = Fal
 
 def _safe(kind: str, fn: Any) -> EnforcementResult:
     """Run a checker thunk; never let an internal error reach the caller."""
-    if current_mode() == MODE_OFF:
+    if effective_mode(kind) == MODE_OFF:
         return EnforcementResult(True, False, [], MODE_OFF, "off")
     try:
         violations = fn() or []
@@ -203,6 +291,30 @@ def _safe(kind: str, fn: Any) -> EnforcementResult:
         )
         return _decide(kind, [], checker_error=True)
     return _decide(kind, violations)
+
+
+def _resolve_epoch(signal, names: tuple[str, ...]) -> float | None:
+    """Return the first usable timestamp from *names* as a POSIX float.
+
+    Accepts ``int``/``float`` epochs **and** ``datetime`` objects. Accepting
+    only numerics meant the freshness check silently found nothing to measure:
+    ``_MinimalSignal`` carries no timestamp at all, and the brain's ``Signal``
+    carries a ``datetime`` — so the "never trade on a stale tick" invariant
+    could not fire on either signal type used in production.
+    See docs/HARDENING_BACKLOG.md S5-01.
+
+    Naive datetimes are assumed UTC, matching the rest of the data layer.
+    """
+    for name in names:
+        raw = getattr(signal, name, None)
+        if isinstance(raw, bool) or raw is None:
+            continue
+        if isinstance(raw, (int, float)):
+            return float(raw)
+        if isinstance(raw, datetime):
+            ts = raw if raw.tzinfo is not None else raw.replace(tzinfo=timezone.utc)
+            return ts.timestamp()
+    return None
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -266,15 +378,7 @@ def enforce_pre_trade(
         # timestamp is present on the signal and a budget was supplied; the first
         # attribute among (tick_ts, tick_timestamp, ts, timestamp) wins.
         if now is not None and max_staleness_s is not None:
-            tick_ts = next(
-                (
-                    getattr(signal, attr)
-                    for attr in ("tick_ts", "tick_timestamp", "ts", "timestamp")
-                    if isinstance(getattr(signal, attr, None), (int, float))
-                    and not isinstance(getattr(signal, attr, None), bool)
-                ),
-                None,
-            )
+            tick_ts = _resolve_epoch(signal, ("tick_ts", "tick_timestamp", "ts", "timestamp"))
             if tick_ts is not None:
                 out += verify_within_limit(
                     now - tick_ts,
@@ -395,7 +499,9 @@ def enforce_risk_appetite(state: dict[str, Any], policy: dict[str, Any]) -> Enfo
 
         sym = state.get("traded_symbol")
         if sym is not None and sym in set(prohibited.get("symbols", []) or []):
-            out.append(_v("No Unauthorized Trade", CONSTITUTIONAL, f"trade on prohibited symbol {sym!r} (risk-appetite)"))
+            out.append(
+                _v("No Unauthorized Trade", CONSTITUTIONAL, f"trade on prohibited symbol {sym!r} (risk-appetite)")
+            )
 
         jur = state.get("jurisdiction")
         if jur is not None:
@@ -440,6 +546,38 @@ def enforce_ledger_reconciliation(
     )
 
 
+def enforce_wallet_movement(
+    *,
+    before: float,
+    delta: float,
+    after: float,
+    available: float | None = None,
+    tol: float = 0.01,
+) -> EnforcementResult:
+    """Assert a single wallet credit/debit is sound before it is recorded.
+
+    ``before + delta`` must equal ``after`` (No Unauthorized Capital Movement),
+    the amount must be finite and positive, and a debit must not exceed
+    ``available``. Wired from payments/wallet.py; runs under the ``ledger`` kind
+    alongside enforce_ledger_reconciliation, which checks the same property over
+    a whole account period rather than one movement.
+
+    The write path additionally refuses on its own exact-Decimal check, because
+    a balance that does not reconcile must never be recorded regardless of
+    HOPEFX_INVARIANT_MODE. This wrapper is what makes the violation *observable*
+    — counted, logged and surfaced by enforcement.status.
+    """
+
+    def _check() -> list[Violation]:
+        violations = verify_amount_valid(abs(delta))
+        violations += verify_balance_after(before, delta, after, tol)
+        if available is not None and delta < 0:
+            violations += verify_withdrawal_within_balance(abs(delta), available)
+        return violations
+
+    return _safe("ledger", _check)
+
+
 def enforce_no_spof(dependencies: dict[str, dict[str, Any]]) -> EnforcementResult:
     """Assert no critical dependency is a single point of failure (No Critical
     Single Point Of Failure). ``dependencies`` maps name -> {critical, redundancy,
@@ -459,6 +597,96 @@ def enforce_action_audited(action_id: Any, audited_ids: Any) -> EnforcementResul
     """Assert an executed AI action/decision left a structured audit record
     (No Hidden AI Action)."""
     return _safe("action_audit", lambda: verify_action_audited(action_id, audited_ids))
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# AGENT ACTIONS — an agent's scope is enforced here, not in its prompt
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_agent_action(request: Any) -> EnforcementResult:
+    """Assert an agent action is inside its granted scope and carries the
+    approval the platform requires for it.
+
+    ``invariants/ai.py`` and ``invariants/ai_governance.py`` hold sixteen
+    CONSTITUTIONAL predicates covering exactly what the AI Core spec promises —
+    scoped actions, scoped tools, no self-escalation, hard capital limits, no
+    uncontrolled agent spawning, no strategy reaching production without a
+    human. **None of them was reachable from any enforcement path**:
+    ``ai_governance`` was imported by nothing outside its own tests and there
+    was no ``agent_action`` kind. The spec's own load-bearing sentence is "per
+    agent permission scoping enforced at the tool layer, not just prompted";
+    this function is where that stops being a sentence.
+
+    ``request`` is read defensively so it works with a dict, a dataclass, or an
+    object carrying a ``metadata`` mapping — the same shape
+    ``enforce_order_authorization`` accepts. Recognised fields:
+
+    ==========================  ====================================================
+    ``action``                  what the agent wants to do
+    ``allowed_actions``         the actions its role grants
+    ``tool``                    the tool it reaches for (optional)
+    ``allowed_tools``           the tools its role grants
+    ``approval_required``       actions that need a superadmin approval record
+    ``approved_by``             the human who approved it
+    ``modified_own_permissions``whether it changed its own grant
+    ``action_risk``             risk of this action, against ``authority_level``
+    ``capital_allocated``       capital it is moving, against ``capital_limit``
+    ``spawned_agents``          sub-agents created, gated by ``spawn_approved``
+    ``strategy_auto_deployed``  gated by ``human_approved``
+    ==========================  ====================================================
+
+    Absent fields are not checked: a request that says nothing about capital is
+    not making a capital claim. What is present is checked, and every check is
+    CONSTITUTIONAL — in ``enforce`` mode a violation refuses the action.
+    """
+
+    def _get(name: str, default: Any = None) -> Any:
+        val = getattr(request, name, None)
+        if val is None and isinstance(getattr(request, "metadata", None), dict):
+            val = request.metadata.get(name)
+        if val is None and isinstance(request, dict):
+            val = request.get(name)
+        return default if val is None else val
+
+    def _num(name: str) -> float | None:
+        v = _get(name)
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    def _check() -> list[Violation]:
+        violations: list[Violation] = []
+
+        action = _get("action")
+        if action is not None:
+            violations += verify_agent_action_authorized(str(action), set(_get("allowed_actions", set()) or ()))
+            violations += verify_agent_action_approved(
+                str(action),
+                set(_get("approval_required", set()) or ()),
+                _get("approved_by"),
+            )
+
+        tool = _get("tool")
+        if tool is not None:
+            violations += verify_tool_allowed(str(tool), set(_get("allowed_tools", set()) or ()))
+
+        violations += verify_agent_no_self_escalation(bool(_get("modified_own_permissions", False)))
+
+        risk, authority = _num("action_risk"), _num("authority_level")
+        if risk is not None and authority is not None:
+            violations += verify_agent_authority(risk, authority)
+
+        allocated, limit = _num("capital_allocated"), _num("capital_limit")
+        if allocated is not None and limit is not None:
+            violations += verify_autonomous_capital_limit(allocated, limit)
+
+        spawned = _num("spawned_agents")
+        if spawned is not None:
+            violations += verify_no_self_replication(int(spawned), bool(_get("spawn_approved", False)))
+
+        if _get("strategy_auto_deployed", False):
+            violations += verify_autonomous_strategy_control(True, bool(_get("human_approved", False)))
+
+        return violations
+
+    return _safe("agent_action", _check)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -493,6 +721,51 @@ def enforce_order_authorization(order: Any) -> EnforcementResult:
         return out
 
     return _safe("order_authorization", _check)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# 3b. HUMAN APPROVAL — large notionals need a named human (four-eyes / dual control)
+# ════════════════════════════════════════════════════════════════════════════════
+def enforce_human_approval(order: Any, threshold: float | None = None) -> EnforcementResult:
+    """Require a named human approver on orders at/above a notional threshold.
+
+    The threshold comes from ``threshold`` or the ``RISK_HUMAN_APPROVAL_NOTIONAL_USD``
+    env var (default ``0`` = gate disabled). Notional is read defensively as
+    ``notional_usd``/``notional``, else ``abs(quantity) * (price|tick_mid)``. The
+    approver is read from ``approved_by``/``approver`` (attr, ``metadata``, or dict
+    key). In enforce mode a large order with no approver is refused (No Loss Of
+    Human Control) — the human-in-the-loop gate the readiness map calls for.
+    """
+    if threshold is None:
+        try:
+            threshold = float(os.environ.get("RISK_HUMAN_APPROVAL_NOTIONAL_USD", "0") or 0)
+        except (TypeError, ValueError):
+            threshold = 0.0
+
+    def _get(name: str) -> Any:
+        val = getattr(order, name, None)
+        if not val and isinstance(getattr(order, "metadata", None), dict):
+            val = order.metadata.get(name)
+        if not val and isinstance(order, dict):
+            val = order.get(name)
+        return val
+
+    def _num(name: str) -> float | None:
+        v = _get(name)
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    def _check() -> list[Violation]:
+        notional = _num("notional_usd")
+        if notional is None:
+            notional = _num("notional")
+        if notional is None:
+            qty = _num("quantity") or _num("size")
+            px = _num("price") or _num("tick_mid") or _num("fill_price")
+            notional = abs(qty) * px if (qty is not None and px is not None) else float("nan")
+        approver = _get("approved_by") or _get("approver")
+        return verify_human_approval(notional, float(threshold or 0.0), approver)
+
+    return _safe("human_approval", _check)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -554,11 +827,16 @@ def status() -> dict[str, Any]:
         engine_ok = False
 
     mode = current_mode()
+    resolved = {k: effective_mode(k) for k in KNOWN_KINDS}
     return {
         "mode": mode,
         "active": mode != MODE_OFF,
-        "blocking_enabled": mode == MODE_ENFORCE,
+        # True if *any* check blocks — global enforce OR a staged per-kind promotion.
+        "blocking_enabled": any(m == MODE_ENFORCE for m in resolved.values()),
         "fail_closed": _fail_closed(),
+        "enforce_kinds": sorted(_kinds_from_env("HOPEFX_INVARIANT_ENFORCE_KINDS")),
+        "monitor_kinds": sorted(_kinds_from_env("HOPEFX_INVARIANT_MONITOR_KINDS")),
+        "resolved": resolved,
         "engine_healthy": engine_ok,
         "counters": dict(_counters),
         "recent": list(_recent),

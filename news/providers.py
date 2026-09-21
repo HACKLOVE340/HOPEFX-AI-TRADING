@@ -97,6 +97,31 @@ def _xml_text(el: _stdlib_ET.Element | None) -> str:
     return (el.text or "").strip() if el is not None else ""
 
 
+def _first(
+    parent: _stdlib_ET.Element,
+    primary: str,
+    fallback: str,
+    ns: dict[str, str] | None = None,
+) -> "_stdlib_ET.Element | None":
+    """Return the first of two child paths that is actually present.
+
+    This must not be written as ``parent.find(a) or parent.find(b)``. An
+    ``Element`` is falsy whenever it has no *child* elements, which is true of
+    every leaf a feed cares about -- ``<pubDate>``, ``<title>``, ``<link>``.
+    So the ``or`` discarded the element it had just found and fell through to
+    the fallback, which is usually ``None``.
+
+    That silently emptied three things: RSS ``pubDate`` (so every article was
+    stamped with ``now()`` and the ``hours_back`` cutoff dropped nothing --
+    stale news served as current), RSS ``dc:creator``, and, in Atom feeds,
+    the title, summary, link, timestamp and author of every single entry.
+    """
+    found = parent.find(primary, ns) if ns else parent.find(primary)
+    if found is not None:
+        return found
+    return parent.find(fallback, ns) if ns else parent.find(fallback)
+
+
 def _parse_rss_feed(xml_bytes: bytes, source_name: str) -> list[dict]:
     """Parse RSS 2.0 or Atom feed XML bytes into a list of entry dicts."""
     try:
@@ -110,11 +135,11 @@ def _parse_rss_feed(xml_bytes: bytes, source_name: str) -> list[dict]:
     if root.tag == f"{{{_ATOM_NS}}}feed" or root.tag.endswith("}feed"):
         ns = {"a": _ATOM_NS}
         for entry in root.findall("a:entry", ns) or root.findall("entry"):
-            title_el = entry.find("a:title", ns) or entry.find("title")
-            summary_el = entry.find("a:summary", ns) or entry.find("summary")
-            link_el = entry.find("a:link", ns) or entry.find("link")
-            updated_el = entry.find("a:updated", ns) or entry.find("updated")
-            author_el = entry.find("a:author/a:name", ns) or entry.find("author/name")
+            title_el = _first(entry, "a:title", "title", ns)
+            summary_el = _first(entry, "a:summary", "summary", ns)
+            link_el = _first(entry, "a:link", "link", ns)
+            updated_el = _first(entry, "a:updated", "updated", ns)
+            author_el = _first(entry, "a:author/a:name", "author/name", ns)
             link_href = ""
             if link_el is not None:
                 link_href = link_el.get("href", "") or _xml_text(link_el)
@@ -131,9 +156,11 @@ def _parse_rss_feed(xml_bytes: bytes, source_name: str) -> list[dict]:
         return entries
 
     # RSS 2.0
-    channel = root.find("channel") or root
+    channel = root.find("channel")
+    if channel is None:
+        channel = root
     for item in channel.findall("item"):
-        pub_el = item.find("pubDate") or item.find(f"{{{_DC_NS}}}date")
+        pub_el = _first(item, "pubDate", f"{{{_DC_NS}}}date")
         desc_el = item.find("description")
         entries.append(
             {
@@ -141,7 +168,7 @@ def _parse_rss_feed(xml_bytes: bytes, source_name: str) -> list[dict]:
                 "summary": _xml_text(desc_el),
                 "link": _xml_text(item.find("link")),
                 "published": _xml_text(pub_el),
-                "author": _xml_text(item.find(f"{{{_DC_NS}}}creator") or item.find("author")),
+                "author": _xml_text(_first(item, f"{{{_DC_NS}}}creator", "author")),
                 "source": source_name,
             }
         )

@@ -748,6 +748,12 @@ def create_teams_router(manager: "TeamManager"):
             )
         return {"teams": teams, "total": len(teams)}
 
+    # Both forms, matching list_teams above. The SPA's teams client posts to
+    # the bare "/teams" against an axios baseURL of "/api", so a slash-only
+    # route answered 405 and team creation from the UI failed. Starlette does
+    # not redirect a 405 — its slash redirect only fires when the request would
+    # otherwise 404 — so the bare path has to be registered explicitly.
+    @router.post("")
     @router.post("/")
     async def create_team(req: CreateTeamRequest, user: TokenPayload = Depends(_get_current_user)):
         """Create a new team."""

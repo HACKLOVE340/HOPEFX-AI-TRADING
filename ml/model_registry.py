@@ -468,6 +468,135 @@ class ModelRegistry:
             return False, "No active production model in registry"
         return self.verify(active)
 
+    def audit_manifest(self) -> dict[str, Any]:
+        """Cross-entry consistency check over the whole manifest.
+
+        ``verify()`` answers "do these bytes still hash to what we recorded?"
+        one entry at a time, which cannot see a contradiction *between* entries.
+        The shipped manifest has one:
+
+            advanced_oos_v1   sha dc7454d8  advanced_oos.pkl  oos_accuracy 0.565
+            advanced_oos_v2   sha dc7454d8  advanced_oos.pkl  oos_accuracy 0.565
+            xgb_horizon5_v1   sha dc7454d8  advanced_oos.pkl  oos_accuracy 0.565
+            xgb_horizon5_v3   sha dc7454d8  advanced_oos.pkl  oos_accuracy 0.5734   ← active
+
+        Four names, one file, one digest — and two different out-of-sample
+        accuracies. Identical bytes cannot have scored two different numbers on
+        a held-out set, so at least one figure was measured against a model that
+        is not this file and then attached to it. The one that disagrees is the
+        version currently serving inference, and it is the number the dashboard
+        prints as "ML MODEL ACCURACY 57.3%".
+
+        Every per-entry check passes on this manifest: each digest matches its
+        file, because it is the same file. Nothing in the system was positioned
+        to notice, which is why this is reported rather than repaired — the
+        correct accuracy is a measurement, not something a migration can infer.
+
+        Returns a findings dict; ``ok`` is False when anything needs attention.
+        """
+        manifest = self._load()
+        versions: dict[str, dict[str, Any]] = manifest.get("versions", {})
+
+        by_digest: dict[str, list[str]] = {}
+        missing: list[str] = []
+        for name, entry in versions.items():
+            digest = entry.get("sha256", "")
+            if digest:
+                by_digest.setdefault(digest, []).append(name)
+            file_path = entry.get("file", "")
+            if file_path and not Path(file_path).exists():
+                missing.append(name)
+
+        duplicates = {d: sorted(names) for d, names in by_digest.items() if len(names) > 1}
+
+        conflicts: list[dict[str, Any]] = []
+        for digest, names in duplicates.items():
+            metrics: dict[str, set] = {}
+            for field in ("oos_accuracy", "oos_sharpe", "train_rows"):
+                values = {
+                    round(float(versions[n][field]), 6)
+                    for n in names
+                    if versions[n].get(field) is not None and isinstance(versions[n][field], int | float)
+                }
+                if len(values) > 1:
+                    metrics[field] = values
+            if metrics:
+                conflicts.append(
+                    {
+                        "sha256": digest,
+                        "versions": names,
+                        "file": versions[names[0]].get("file", ""),
+                        "conflicting": {k: sorted(v) for k, v in metrics.items()},
+                        "active_among_them": manifest.get("active_version") in names,
+                    }
+                )
+
+        stale = self._entries_disagreeing_with_their_artifact(versions)
+
+        return {
+            "ok": not conflicts and not missing and not stale,
+            "total_versions": len(versions),
+            "active_version": manifest.get("active_version"),
+            "duplicate_artifacts": duplicates,
+            "metric_conflicts": conflicts,
+            "missing_artifacts": missing,
+            "stale_metrics": stale,
+        }
+
+    @staticmethod
+    def _entries_disagreeing_with_their_artifact(versions: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        """Entries whose recorded metrics contradict the artifact's own metadata.
+
+        The trainer writes ``<stem>_meta.json`` beside the ``.pkl`` in the same
+        run that produces it, so that file is the measurement and a registry
+        entry is a copy of it. When a model is retrained **in place** — the same
+        filename overwritten — every older entry still points at that path while
+        describing the model that used to be there.
+
+        That is what happened here. ``advanced_oos_meta.json`` records
+        ``oos_accuracy 0.5734``, trained 2026-06-26, horizon 5. Three registry
+        entries over that same file still claim 0.565, from before the retrain.
+        Only ``xgb_horizon5_v3`` carries the artifact's real figure, which is why
+        it was the odd one out in the conflict above — it is the only entry that
+        was updated.
+
+        Reported, not corrected: rewriting the stale entries to 0.5734 would
+        assert that they describe the current model, and they do not. They
+        describe a model that no longer exists on disk. Deleting them or
+        re-registering is an operator decision.
+        """
+        findings: list[dict[str, Any]] = []
+        for name, entry in versions.items():
+            artifact = Path(entry.get("file", ""))
+            if not artifact.name or not artifact.exists():
+                continue
+            sidecar = artifact.with_name(f"{artifact.stem}_meta.json")
+            if not sidecar.exists():
+                continue
+            try:
+                meta = json.loads(sidecar.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            measured = meta.get("oos_accuracy")
+            recorded = entry.get("oos_accuracy")
+            if measured is None or recorded is None:
+                continue
+            try:
+                if abs(float(measured) - float(recorded)) > 1e-6:
+                    findings.append(
+                        {
+                            "version": name,
+                            "file": str(artifact),
+                            "recorded_oos_accuracy": float(recorded),
+                            "artifact_oos_accuracy": float(measured),
+                            "artifact_trained_at": meta.get("trained_at"),
+                            "sidecar": str(sidecar),
+                        }
+                    )
+            except (TypeError, ValueError):
+                continue
+        return findings
+
     # ── Queries ───────────────────────────────────────────────────────────────
 
     def active_version(self) -> dict[str, Any] | None:

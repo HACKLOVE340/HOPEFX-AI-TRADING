@@ -192,6 +192,33 @@ RECOMMENDED_VARS: list[EnvVar] = [
 ]
 
 
+# ── Recommended vars that are still fatal in production ──────────────────────
+#
+# `strict=True` (production) used to promote EVERY unset RECOMMENDED var to a
+# fatal error. That is self-contradictory — RECOMMENDED_VARS carries documented
+# defaults, and FIX_CONFIG_FILE (default 'fix.cfg') aborted startup despite
+# having a perfectly good fallback. In practice it meant a paper-trading deploy
+# refused to boot because SMTP, Telegram, OANDA and FIX credentials were absent,
+# which is exactly the configuration a paper deployment is supposed to have.
+#
+# Worse, the abort is a sys.exit(1) raised inside the startup_event task, so the
+# symptom was not a clear error but uvicorn's listening socket closing while the
+# container kept reporting itself as running (see app.py's startup done-callback).
+#
+# So: a missing recommended var is now a warning — loud, listed at startup, but
+# not fatal — except for the entries below, where absence is a genuine
+# production safety problem rather than a disabled optional integration.
+#
+# HOPEFX_KILL_SWITCH_TOKEN: without it there is no authenticated way to clear a
+# trading halt through the API. That is a risk-control capability, not an
+# integration, so it stays fatal in production.
+PRODUCTION_CRITICAL: frozenset[str] = frozenset(
+    {
+        "HOPEFX_KILL_SWITCH_TOKEN",
+    }
+)
+
+
 # ── Known dev-only placeholder values — always rejected in production ─────────
 _DEV_PLACEHOLDERS: dict[str, str] = {
     "SECURITY_JWT_SECRET": "dev-jwt-secret-minimum-32-characters-long!!",  # pragma: allowlist secret
@@ -260,7 +287,7 @@ def validate_environment(strict: bool = False) -> ValidationResult:
             msg = f"Env var not set: {var.name} — {var.description}"
             if var.default:
                 msg += f" (using default: {var.default})"
-            if strict:
+            if strict and var.name in PRODUCTION_CRITICAL:
                 result.errors.append(msg)
             else:
                 result.warnings.append(msg)

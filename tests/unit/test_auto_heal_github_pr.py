@@ -43,7 +43,20 @@ class TestGitHubPRPublisher:
 
     @pytest.mark.asyncio
     async def test_returns_error_when_no_token(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "")
+        # Patch the MODULE CONSTANT, not the environment variable.
+        #
+        # `GITHUB_TOKEN` is read once at import time, so setenv only worked
+        # while this happened to be the first test to import the module. Any
+        # earlier importer left the ambient token in place, `publish()` made a
+        # REAL request to the GitHub API, and the assertion failed on a 403
+        # from the network rather than on the missing-token path it is about.
+        # Reproduced on the pre-fix tree by importing the module first.
+        #
+        # Worse than the flake: with a token present this test opened a real
+        # outbound call to GitHub from the unit suite.
+        import security.github_pr_publisher as pr_mod
+
+        monkeypatch.setattr(pr_mod, "GITHUB_TOKEN", "")
         pub = self._publisher()
         result = await pub.publish("/api/auth/login", "old", "new")
         assert result["status"] == "error"
@@ -411,7 +424,9 @@ class TestFixesRouter:
         )
 
     def _mock_auth(self, role="admin"):
-        return {"sub": "admin@test.com", "role": role}
+        # The subject differs by role because the quorum counts DISTINCT
+        # approvers: the same person approving twice is one approver.
+        return {"sub": f"{role}@test.com", "role": role}
 
     @pytest.mark.asyncio
     async def test_get_pending_fixes_empty(self):
@@ -465,8 +480,25 @@ class TestFixesRouter:
             "file_path": "api/auth.py",
         }
 
+        # A fix now needs TWO distinct approvers, at least one a superadmin --
+        # ai/policy/roles.py:quorum, the rule api/safe_agent_platform.py already
+        # enforced on its own queue while this endpoint took a single admin.
+        # The first approval is recorded and the record goes back on the queue.
         with (
             patch("api.security.fixes._require_admin", return_value=self._mock_auth()),
+            patch("api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)),
+        ):
+            body = ApproveFixRequest(endpoint="/api/auth/login", approved_by="admin")
+            first = await approve_fix(body, mock_request)
+
+        assert first["status"] == "awaiting_approval"
+        requeued = mock_redis.rpush.call_args[0][1]
+        mock_redis.lrange.return_value = [requeued]
+        mock_redis.lrem.reset_mock()
+        mock_redis.rpush.reset_mock()
+
+        with (
+            patch("api.security.fixes._require_admin", return_value=self._mock_auth(role="superadmin")),
             patch("api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)),
             patch(
                 "security.github_pr_publisher.GitHubPRPublisher.publish",
@@ -474,7 +506,7 @@ class TestFixesRouter:
                 return_value=pr_result,
             ),
         ):
-            body = ApproveFixRequest(endpoint="/api/auth/login", approved_by="admin")
+            body = ApproveFixRequest(endpoint="/api/auth/login", approved_by="root")
             result = await approve_fix(body, mock_request)
 
         assert result["status"] == "approved"
@@ -487,6 +519,7 @@ class TestFixesRouter:
         archived = json.loads(mock_redis.rpush.call_args[0][1])
         assert archived["status"] == "approved"
         assert archived["pr_url"] == "https://github.com/owner/repo/pull/99"
+        assert sorted(a["approver_role"] for a in archived["approvals"]) == ["admin", "superadmin"]
 
     @pytest.mark.asyncio
     async def test_approve_fix_404_when_not_found(self):
@@ -521,6 +554,13 @@ class TestFixesRouter:
 
         with (
             patch("api.security.fixes._require_admin", return_value=self._mock_auth()),
+            patch("api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)),
+        ):
+            await approve_fix(ApproveFixRequest(endpoint="/api/auth/login"), mock_request)
+        mock_redis.lrange.return_value = [mock_redis.rpush.call_args[0][1]]
+
+        with (
+            patch("api.security.fixes._require_admin", return_value=self._mock_auth(role="superadmin")),
             patch("api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)),
             patch(
                 "security.github_pr_publisher.GitHubPRPublisher.publish",

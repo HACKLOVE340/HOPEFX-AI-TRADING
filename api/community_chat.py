@@ -331,7 +331,10 @@ async def send_message(
         "id": str(uuid.uuid4()),
         "room_id": room_id,
         "user_id": user.sub,
-        "username": getattr(user, "email", user.sub).split("@")[0],
+        # `TokenPayload.email` is declared `str | None`, so the attribute always
+        # exists and the getattr default never fired: a token without an email
+        # claim gave None and `.split` raised, 500-ing every message send.
+        "username": (user.email or user.sub).split("@")[0],
         "content": body.message_text,
         "attachments": body.attachments or [],
         "created_at": datetime.now(UTC).isoformat(),
@@ -358,9 +361,19 @@ async def delete_message(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
     msgs = _get_messages(room_id, 1000)
-    new_msgs = [m for m in msgs if m.get("id") != msg_id]
-    if len(new_msgs) == len(msgs):
+
+    # Only the author may delete their message; admins may moderate. This
+    # endpoint bound `user` for authentication and then never looked at it, so
+    # any authenticated account could delete anybody's message in any room.
+    target = next((m for m in msgs if m.get("id") == msg_id), None)
+    if target is None:
         raise HTTPException(status_code=404, detail="Message not found")
+    if target.get("user_id") != user.sub and getattr(user, "role", "") not in ("admin", "superadmin"):
+        # 404, not 403: a caller should not learn that a message they cannot
+        # touch exists.
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    new_msgs = [m for m in msgs if m.get("id") != msg_id]
     r = _redis()
     key = f"{_MSG_PREFIX}{room_id}"
     if r:
@@ -486,21 +499,27 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
     """
     import asyncio
 
-    # Auth — token passed as query param (same pattern as /ws/live).
+    # Auth — same channel as /ws/live: the hopefx.auth.bearer subprotocol
+    # (a header) is preferred, with the deprecated ?token= query parameter as
+    # a fallback. Reading only the query string here would reject every browser
+    # client, because the SPA moved to the subprotocol.
     # FIX: invalid or missing tokens must reject the connection, not silently
     # allow unauthenticated access.  Chat rooms contain user-generated content
     # that should only be visible to authenticated members.
-    token_param = websocket.query_params.get("token", "")
+    from api.ws_live import ws_accept_subprotocol, ws_auth_token
+
+    token_param = ws_auth_token(websocket) or ""
     _ws_chat_auth_required: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
 
     if _ws_chat_auth_required:
         _chat_user_id: str | None = None
         if token_param:
             try:
-                from api.auth import decode_access_token
+                from api.auth import _decode_token
 
-                _payload = decode_access_token(token_param)
-                _chat_user_id = str(_payload.get("sub", _payload.get("user_id", ""))) if _payload else None
+                # _decode_token returns a TokenPayload (Pydantic model), not a dict.
+                _payload = _decode_token(token_param)
+                _chat_user_id = str(getattr(_payload, "sub", "") or "") or None
             except Exception:
                 _chat_user_id = None
 
@@ -509,7 +528,7 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
             # Guard every send/close: the client may already be gone, which
             # otherwise surfaces as an unhandled ASGI ConnectionClosed error.
             try:
-                await websocket.accept()
+                await websocket.accept(subprotocol=ws_accept_subprotocol(websocket))
                 await websocket.send_text(
                     json.dumps({"type": "error", "code": "AUTH_REQUIRED", "message": "Valid JWT required"})
                 )
@@ -521,7 +540,9 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
         _chat_user_id = "anonymous"
 
     try:
-        await websocket.accept()
+        # The negotiated subprotocol must be echoed or the browser closes the
+        # socket the moment the handshake completes.
+        await websocket.accept(subprotocol=ws_accept_subprotocol(websocket))
     except Exception:  # nosec B110 — client disconnected during handshake
         return
 

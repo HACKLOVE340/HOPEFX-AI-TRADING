@@ -9,14 +9,16 @@ import {
 } from './ui';
 import type { RateLimitRule } from './types';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
+import { Ban, BarChart3, Lock, Plus, TrendingDown } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const SCOPE_COLORS: Record<string, string> = {
-  global:   '#a78bfa',
-  per_user: '#60a5fa',
-  per_ip:   '#fbbf24',
+  global:   'var(--ai-model)',
+  per_user: 'var(--link)',
+  per_ip:   'var(--warn)',
 };
 
 interface Violation {
@@ -35,6 +37,7 @@ const RateLimitingSection: React.FC = () => {
   const [error, setError]           = useState('');
   const [busy, setBusy]             = useState<string | null>(null);
   const [msg, setMsg]               = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [tab, setTab]               = useState<'rules' | 'violations'>('rules');
   const [showCreate, setShowCreate] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -85,6 +88,7 @@ const RateLimitingSection: React.FC = () => {
       await superadminApi.updateRateLimitRule(rule.rule_id, { enabled: !rule.enabled });
       setRules(prev => prev.map(r => r.rule_id === rule.rule_id ? { ...r, enabled: !r.enabled } : r));
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Toggle failed'));
     } finally { setBusy(null); }
   };
@@ -102,8 +106,10 @@ const RateLimitingSection: React.FC = () => {
         ? { ...r, limit: parseInt(edit.limit), window_seconds: parseInt(edit.window_seconds) }
         : r));
       setEditing(prev => { const n = { ...prev }; delete n[ruleId]; return n; });
+      setMsgOk(true);
       setMsg('Rule updated');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Update failed'));
     } finally { setBusy(null); }
   };
@@ -118,11 +124,15 @@ const RateLimitingSection: React.FC = () => {
         scope:          newRule.scope,
         enabled:        true,
       });
-      setRules(prev => [...prev, res.data]);
+      // Backend returns { ok, rule }, not the bare rule — push the rule so the
+      // new row has scope/current_hits/rule_id and doesn't crash the table.
+      setRules(prev => [...prev, res.data?.rule ?? res.data]);
       setNewRule({ endpoint: '', limit: '100', window_seconds: '60', scope: 'per_user' });
       setShowCreate(false);
+      setMsgOk(true);
       setMsg('Rule created');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Create failed'));
     } finally { setBusy(null); }
   };
@@ -132,8 +142,10 @@ const RateLimitingSection: React.FC = () => {
     try {
       await superadminApi.deleteRateLimitRule(ruleId);
       setRules(prev => prev.filter(r => r.rule_id !== ruleId));
+      setMsgOk(true);
       setMsg('Rule deleted');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Delete failed'));
     } finally { setBusy(null); setDeleteConfirm(null); }
   };
@@ -159,33 +171,22 @@ const RateLimitingSection: React.FC = () => {
         />
       )}
 
-      {msg && (
-        <div style={{
-          background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)',
-          border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`,
-          borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13,
-          color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80',
-          display: 'flex', justifyContent: 'space-between',
-        }}>
-          {msg}
-          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon="🔒" accent="#60a5fa" />
-        <KpiTile label="Total Requests" value={stats.total_requests.toLocaleString()} icon="📊" accent="#22c55e" />
-        <KpiTile label="Blocked Requests" value={stats.blocked_requests.toLocaleString()} icon="🚫" accent="#f87171" />
-        <KpiTile label="Block Rate" value={`${blockRate}%`} icon="📉" accent={parseFloat(blockRate) > 5 ? '#f87171' : '#22c55e'} />
+        <KpiTile label="Active Rules" value={rules.filter(r => r.enabled).length} icon={<Lock size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Total Requests" value={stats.total_requests.toLocaleString()} icon={<BarChart3 size={18} aria-hidden />} accent="#22c55e" />
+        <KpiTile label="Blocked Requests" value={stats.blocked_requests.toLocaleString()} icon={<Ban size={18} aria-hidden />} accent="#f87171" />
+        <KpiTile label="Block Rate" value={`${blockRate}%`} icon={<TrendingDown size={18} aria-hidden />} accent={parseFloat(blockRate) > 5 ? '#f87171' : '#22c55e'} />
       </div>
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['rules', 'violations'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            background: tab === t ? '#1e293b' : 'transparent',
+            background: tab === t ? 'var(--raised)' : 'transparent',
             border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`,
-            borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b',
-            padding: '7px 16px', fontSize: 13, cursor: 'pointer',
+            borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)',
+            padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer',
           }}>
             {t === 'rules' ? `Rules (${rules.length})` : `Violations (${violations.length})`}
           </button>
@@ -198,7 +199,7 @@ const RateLimitingSection: React.FC = () => {
       {tab === 'rules' && (
         <>
           {showCreate && (
-            <SectionCard title="Create Rate Limit Rule" icon="➕" accent="#3b82f6">
+            <SectionCard title="Create Rate Limit Rule" icon={<Plus size={18} aria-hidden />} accent="#3b82f6">
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 2, minWidth: 200 }}>
                   <Input label="Endpoint pattern" placeholder="/api/trading/orders or *" value={newRule.endpoint} onChange={e => setNewRule(p => ({ ...p, endpoint: e.target.value }))} />
@@ -218,41 +219,47 @@ const RateLimitingSection: React.FC = () => {
             </SectionCard>
           )}
 
-          <SectionCard title="Rate Limit Rules" icon="🔒" accent="#60a5fa" noPad>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <SectionCard title="Rate Limit Rules" icon={<Lock size={18} aria-hidden />} accent="#60a5fa" noPad>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Endpoint', 'Limit / Window', 'Scope', 'Hits', 'Enabled', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rules.map(rule => {
-                  const isEditing = !!editing[rule.rule_id];
+                  // Bind the draft row instead of re-indexing: `isEditing`
+                  // being true does not narrow `editing[id]` for the compiler
+                  // (audit #38), and the updater below spread a possibly-absent
+                  // row, which would have written a partial record.
+                  const draft = editing[rule.rule_id];
                   return (
-                    <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: '#60a5fa' }}>{rule.endpoint}</td>
+                    <tr key={rule.rule_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: 'var(--link)' }}>{rule.endpoint}</td>
                       <td style={{ padding: '10px 16px' }}>
-                        {isEditing ? (
+                        {draft ? (
                           <div style={{ display: 'flex', gap: 6 }}>
                             <input
                               type="number"
-                              value={editing[rule.rule_id].limit}
-                              onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...p[rule.rule_id], limit: e.target.value } }))}
-                              style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#f8fafc', padding: '3px 6px', fontSize: 12 }}
+                              aria-label={`Request limit for ${rule.endpoint}`}
+                              value={draft.limit}
+                              onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, limit: e.target.value } }))}
+                              style={{ width: 70, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 12 }}
                             />
-                            <span style={{ color: '#475569', alignSelf: 'center' }}>/</span>
+                            <span style={{ color: 'var(--text-faint)', alignSelf: 'center' }}>/</span>
                             <input
                               type="number"
-                              value={editing[rule.rule_id].window_seconds}
-                              onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...p[rule.rule_id], window_seconds: e.target.value } }))}
-                              style={{ width: 70, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#f8fafc', padding: '3px 6px', fontSize: 12 }}
+                              aria-label={`Window in seconds for ${rule.endpoint}`}
+                              value={draft.window_seconds}
+                              onChange={e => setEditing(p => ({ ...p, [rule.rule_id]: { ...draft, window_seconds: e.target.value } }))}
+                              style={{ width: 70, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-strong)', padding: '3px 6px', fontSize: 12 }}
                             />
-                            <span style={{ color: '#475569', alignSelf: 'center', fontSize: 11 }}>s</span>
+                            <span style={{ color: 'var(--text-faint)', alignSelf: 'center', fontSize: 11 }}>s</span>
                           </div>
                         ) : (
-                          <span style={{ color: '#f8fafc' }}>
+                          <span style={{ color: 'var(--text-strong)' }}>
                             {rule.limit} / {rule.window_seconds}s
                           </span>
                         )}
@@ -260,14 +267,14 @@ const RateLimitingSection: React.FC = () => {
                       <td style={{ padding: '10px 16px' }}>
                         <span style={{
                           fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
-                          background: `${SCOPE_COLORS[rule.scope] ?? '#94a3b8'}22`,
-                          color: SCOPE_COLORS[rule.scope] ?? '#94a3b8',
-                          border: `1px solid ${SCOPE_COLORS[rule.scope] ?? '#94a3b8'}44`,
+                          background: `${SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)'}22`,
+                          color: SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)',
+                          border: `1px solid ${SCOPE_COLORS[rule.scope] ?? 'var(--text-dim)'}44`,
                         }}>
                           {rule.scope.replace('_', ' ').toUpperCase()}
                         </span>
                       </td>
-                      <td style={{ padding: '10px 16px', color: rule.current_hits > rule.limit * 0.8 ? '#f87171' : '#94a3b8', fontSize: 12 }}>
+                      <td style={{ padding: '10px 16px', color: rule.current_hits > rule.limit * 0.8 ? 'var(--loss)' : 'var(--text-dim)', fontSize: 12 }}>
                         {rule.current_hits.toLocaleString()}
                       </td>
                       <td style={{ padding: '10px 16px' }}>
@@ -275,7 +282,7 @@ const RateLimitingSection: React.FC = () => {
                       </td>
                       <td style={{ padding: '10px 16px' }}>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          {isEditing ? (
+                          {draft ? (
                             <>
                               <ActionBtn label="Save" onClick={() => saveEdit(rule.rule_id)} loading={busy === rule.rule_id} accent="#22c55e" size="sm" />
                               <ActionBtn label="Cancel" onClick={() => setEditing(p => { const n = { ...p }; delete n[rule.rule_id]; return n; })} accent="#64748b" size="sm" />
@@ -298,25 +305,25 @@ const RateLimitingSection: React.FC = () => {
       )}
 
       {tab === 'violations' && (
-        <SectionCard title="Rate Limit Violations" icon="🚫" accent="#f87171" noPad>
+        <SectionCard title="Rate Limit Violations" icon={<Ban size={18} aria-hidden />} accent="#f87171" noPad>
           {violations.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No violations recorded</div>
+            <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No violations recorded</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['Endpoint', 'IP / User', 'Count', 'Time'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {violations.slice(0, 100).map((v, i) => (
-                  <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: '#f87171' }}>{v.endpoint}</td>
-                    <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{v.ip ?? v.user_id ?? '—'}</td>
-                    <td style={{ padding: '10px 16px', color: '#fbbf24', fontWeight: 700 }}>{v.count}</td>
-                    <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(v.timestamp)}</td>
+                  <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: 'var(--loss)' }}>{v.endpoint}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-dim)', fontSize: 12 }}>{v.ip ?? v.user_id ?? '—'}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--warn)', fontWeight: 700 }}>{v.count}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(v.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>

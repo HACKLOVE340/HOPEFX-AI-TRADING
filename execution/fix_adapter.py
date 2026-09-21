@@ -196,6 +196,35 @@ class CircuitBreaker:
 _QuickfixBase: type = fix.Application if fix is not None else object
 
 
+def _fix_absent_errors() -> tuple[type[BaseException], ...]:
+    """The loaded backend's own "that field was not on the message" exception.
+
+    quickfix raises ``quickfix.FieldNotFound``, and that class derives from
+    ``quickfix.FIXException(Exception)`` — not from ``AttributeError``,
+    ``TypeError``, ``ValueError`` or ``KeyError``.  Every handler below names
+    those four, so until this helper existed the one exception each of them was
+    written to catch went straight past it.  Verified against the quickfix
+    1.15.1 sdist that ``requirements.txt`` pins: ``C++/FieldMap.h`` declares
+    ``getField`` ``throw( FieldNotFound )``, and ``quickfix.py`` defines
+    ``class FieldNotFound(FIXException)`` over ``class FIXException(Exception)``.
+
+    Two of those handlers are on the money path.  ``_handle_exec_report`` and
+    ``_handle_order_cancel_reject`` both exist to resolve the caller's pending
+    future when a report cannot be read; if the handler dies before reaching
+    ``_reject_pending``, ``send_order`` waits out its full 30-second timeout
+    instead of failing at once.
+
+    Resolved per call rather than at import so it follows whichever backend is
+    loaded, and returns an empty tuple when there is no library — the
+    simulation and simplefix paths raise ordinary built-ins and need nothing
+    added.
+    """
+    absent = getattr(fix, "FieldNotFound", None) if fix is not None else None
+    if isinstance(absent, type) and issubclass(absent, BaseException):
+        return (absent,)
+    return ()
+
+
 def _get_fix_field(message: Any, field_obj: Any, context: str = "") -> str:
     """
     Extract a string value from a FIX message field.
@@ -213,7 +242,7 @@ def _get_fix_field(message: Any, field_obj: Any, context: str = "") -> str:
     try:
         message.getField(field_obj)
         return str(field_obj.getString())
-    except (AttributeError, TypeError, ValueError) as exc:
+    except (AttributeError, TypeError, ValueError, *_fix_absent_errors()) as exc:
         if context:
             logger.debug("%s field absent: %s", context, exc)
         return ""
@@ -269,7 +298,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                     message.setField(fix.Username(self._username))
                 if self._password:
                     message.setField(fix.Password(self._password))
-        except (AttributeError, TypeError, ValueError) as exc:
+        except (AttributeError, TypeError, ValueError, *_fix_absent_errors()) as exc:
             logger.warning("fix.toAdmin: could not inject credentials: %s", exc)
 
     def _log_logout(self, message: Any, session_id: Any) -> None:
@@ -307,7 +336,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                 self._log_logout(message, session_id)
             elif mt == fix.MsgType_Reject:
                 self._log_session_reject(message)
-        except (AttributeError, ValueError, TypeError) as exc:
+        except (AttributeError, ValueError, TypeError, *_fix_absent_errors()) as exc:
             logger.warning("fix.fromAdmin: error processing admin message: %s", exc)
 
     def toApp(self, message: Any, session_id: Any) -> None:
@@ -316,7 +345,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         try:
             cl_ord_id = message.getField(fix.ClOrdID()).getString()
             self._send_times[cl_ord_id] = time.monotonic()
-        except (AttributeError, TypeError) as _e:
+        except (AttributeError, TypeError, *_fix_absent_errors()) as _e:
             logger.debug("fix.toApp: ClOrdID not present in outbound message: %s", _e)
 
     def fromApp(self, message: Any, session_id: Any) -> None:
@@ -367,7 +396,13 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         }
 
     def _handle_exec_report(self, message: Any) -> None:
-        cl_ord_id = "<unknown>"
+        # Read ClOrdID on its own, before anything else can fail.  It is the key
+        # the caller's pending future is filed under, so a rejection can only
+        # reach that caller if this value is already in hand: extracting it as
+        # part of the bulk read meant any *later* missing field — AvgPx, say —
+        # rejected "<unknown>", which the dispatcher drops as unsolicited while
+        # the caller waits out the full 30-second timeout.
+        cl_ord_id = _get_fix_field(message, fix.ClOrdID(), "fix_adapter._handle_exec_report: ClOrdID") or "<unknown>"
         try:
             fields = self._extract_exec_report_fields(message)
             cl_ord_id = fields["cl_ord_id"]
@@ -392,7 +427,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             )
             self._on_exec_report(report)
 
-        except (AttributeError, ValueError, TypeError, KeyError) as exc:
+        except (AttributeError, ValueError, TypeError, KeyError, *_fix_absent_errors()) as exc:
             logger.exception(
                 "fix_adapter._handle_exec_report error cl_ord_id=%s: %s",
                 cl_ord_id,
@@ -423,7 +458,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                     f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} reason={reason_code} text={text!r}"
                 ),
             )
-        except (AttributeError, ValueError, TypeError, KeyError) as exc:
+        except (AttributeError, ValueError, TypeError, KeyError, *_fix_absent_errors()) as exc:
             logger.exception(
                 "fix_adapter._handle_order_cancel_reject error cl_ord_id=%s: %s",
                 cl_ord_id,
@@ -928,11 +963,18 @@ class FIXAdapter:
             return await asyncio.wait_for(future, timeout=30.0)
 
         except TimeoutError:
-            with self._pending_lock:
-                self._pending.pop(order.cl_ord_id, None)
             raise TimeoutError(
                 f"FIX ExecutionReport not received within 30 s for {order.cl_ord_id}",
             ) from None
+
+        finally:
+            # Free the slot however this call ended.  _dispatch_exec_report
+            # pops it on the paths it handles, but the simulation backend
+            # resolves the future directly and never goes near the dispatcher —
+            # so without this the map grew by one entry per simulated order and
+            # nothing ever removed it.  Cancellation left the same residue.
+            with self._pending_lock:
+                self._pending.pop(order.cl_ord_id, None)
 
     def _send_quickfix(self, order: FIXOrder) -> None:
         """Build and send a FIX 4.4 NewOrderSingle via quickfix."""

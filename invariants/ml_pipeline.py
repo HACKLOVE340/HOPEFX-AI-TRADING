@@ -43,8 +43,13 @@ def verify_online_offline_parity(online_val: float, offline_val: float, tol: flo
     if not (_is_finite_number(online_val) and _is_finite_number(offline_val)):
         return [_v("No Unverified AI Decision", CRITICAL, "feature parity values non-finite")]
     if abs(online_val - offline_val) > tol:
-        return [_v("No Unverified AI Decision", CRITICAL,
-                   f"online/offline feature skew {abs(online_val - offline_val)} > {tol}")]
+        return [
+            _v(
+                "No Unverified AI Decision",
+                CRITICAL,
+                f"online/offline feature skew {abs(online_val - offline_val)} > {tol}",
+            )
+        ]
     return []
 
 
@@ -65,8 +70,9 @@ def verify_training_reproducible(seed_recorded: bool, metrics_recorded: bool) ->
     return []
 
 
-def verify_model_lineage(meta: Mapping[str, Any],
-                         required: tuple[str, ...] = ("owner", "training_record", "validation_record", "approved")) -> list[Violation]:
+def verify_model_lineage(
+    meta: Mapping[str, Any], required: tuple[str, ...] = ("owner", "training_record", "validation_record", "approved")
+) -> list[Violation]:
     """Every registered model must carry full governance metadata."""
     missing = [f for f in required if not meta.get(f)]
     if missing:

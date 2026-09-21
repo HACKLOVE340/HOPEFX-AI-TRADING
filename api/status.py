@@ -17,6 +17,8 @@ GET /api/status/history — last 90 days of daily uptime records
 
 from __future__ import annotations
 
+import asyncio
+
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -733,7 +735,7 @@ async def paper_trading_status():
     _starter_path = _Path("data/paper_trading_status.json")
     if _starter_path.exists():
         try:
-            starter_status = _json.loads(_starter_path.read_text(encoding="utf-8"))
+            starter_status = _json.loads(await asyncio.to_thread(_starter_path.read_text, encoding="utf-8"))
         except Exception as _e:
             logger.warning("paper_trading_status: could not read starter status: %s", _e)
 

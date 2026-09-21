@@ -26,7 +26,12 @@ def _make_broker_filled(fill_price=2350.0):
     broker = MagicMock()
     order_result = MagicMock()
     order_result.status.value = "filled"
-    order_result.id = "ord_filled"
+    # `order_id`, matching brokers/base.py MarketOrderResult — the shape the
+    # executor actually receives. This said `.id`, which never took effect: a
+    # bare MagicMock auto-creates a truthy `.order_id`, and the executor reads
+    # `getattr(order, "order_id", None) or getattr(order, "id", None)`, so the
+    # assertion compared against an auto-generated mock rather than the fixture.
+    order_result.order_id = "ord_filled"
     order_result.filled_quantity = 0.01
     order_result.average_fill_price = fill_price
     order_result.commission = 0.5
@@ -85,6 +90,12 @@ class TestExecuteOpenSuccessPath:
                     "stop_loss": 2340.0,
                     "take_profit": 2370.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is True
@@ -109,6 +120,7 @@ class TestExecuteOpenSuccessPath:
                     "stop_loss": 2360.0,
                     "take_profit": 2330.0,
                     "confidence": 0.75,
+                    "risk_approval_token": "rat-test-fixture",  # see S1-05 note above
                 }
             )
         assert result.success is True
@@ -121,7 +133,7 @@ class TestExecuteOpenSuccessPath:
         broker = MagicMock()
         order_result = MagicMock()
         order_result.status.value = "partial"
-        order_result.id = "ord_partial"
+        order_result.order_id = "ord_partial"
         order_result.filled_quantity = 0.005
         order_result.average_fill_price = 2350.0
         order_result.commission = 0.25
@@ -137,6 +149,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is True  # partial counts as success
@@ -149,7 +167,7 @@ class TestExecuteOpenSuccessPath:
         broker = MagicMock()
         order_result = MagicMock()
         order_result.status.value = "rejected"
-        order_result.id = "ord_rej"
+        order_result.order_id = "ord_rej"
         order_result.filled_quantity = 0.0
         order_result.average_fill_price = 0.0
         order_result.commission = 0.0
@@ -165,6 +183,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is False
@@ -188,6 +212,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is False
@@ -212,6 +242,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert result.success is False
@@ -259,6 +295,12 @@ class TestExecuteOpenSuccessPath:
                     "size": 0.01,
                     "entry_price": 2350.0,
                     "confidence": 0.8,
+                    # TradeExecutor no longer mints a token when one is absent
+                    # (audit finding S1-05): an order with no proof it passed
+                    # RiskManager.size_order is rejected as unauthorized. Tests
+                    # exercising the *execution* path must supply one, as the
+                    # decision engine now does.
+                    "risk_approval_token": "rat-test-fixture",
                 }
             )
         assert len(fired) == 1

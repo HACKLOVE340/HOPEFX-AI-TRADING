@@ -71,6 +71,39 @@ class LeaderboardManager:
             e.rank = i
         return entries
 
+    def clear(self, category: str | None = None) -> None:
+        """Clear one category, or every category when *category* is None.
+
+        Clears **both** backends. Constructing a new ``LeaderboardManager`` only
+        resets the in-process fallback dict; the Redis sorted set behind
+        ``leaderboard:{category}`` outlives the instance, the process and the
+        test run. That is what made the smoke tests for this class pass on a
+        machine with no Redis and fail on one with it — backwards, since Redis is
+        the path production takes.
+
+        Scoped to this class's own key prefix, never ``FLUSHDB``: this instance
+        may share Redis with the rate limiter, the kill-switch latch and the
+        idempotency store.
+
+        Useful beyond tests — resetting a leaderboard season is a real operation.
+        """
+        if category is None:
+            self._data.clear()
+        else:
+            self._data.pop(category, None)
+
+        r = _get_sync_redis()
+        if not r:
+            return
+        try:
+            if category is None:
+                for key in r.scan_iter(match=f"{self._REDIS_KEY_PREFIX}:*", count=500):
+                    r.delete(key)
+            else:
+                r.delete(self._redis_key(category))
+        except Exception as exc:
+            logger.debug("Redis leaderboard clear failed: %s", exc)
+
     def update_leaderboard(self, category: str, user_id: str, score: Decimal) -> None:
         r = _get_sync_redis()
         if r:

@@ -22,16 +22,40 @@ Endpoints:
 
 from __future__ import annotations
 
+import os
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from strategies.strategy_execution_boundary import ExecutionScope
+
 logger = logging.getLogger(__name__)
+
+# Router-level authentication so a new route cannot be added without it. Four
+# read endpoints (/list, /active, /versions, /health) previously carried no
+# dependency at all, exposing registered strategy source and state. The write
+# endpoints keep their stricter per-route admin requirement on top of this.
+# See docs/HARDENING_BACKLOG.md S6-01.
+from api.auth import require_role as _router_require_role
+
+
+def _activation_scope() -> ExecutionScope:
+    """The scope this deployment actually activates at.
+
+    Derived from BROKER_TYPE rather than defaulted. The gate this feeds
+    (`StrategyExecutionBoundary`) previously took `ExecutionScope.RESEARCH` as
+    its default and short-circuited every check on it, so activation happened
+    under a scope no caller had chosen. Choosing here means the claim matches
+    what the registry then does -- it sets StrategyState.ACTIVE either way.
+    """
+    return ExecutionScope.PAPER if os.getenv("BROKER_TYPE", "paper").strip().lower() == "paper" else ExecutionScope.LIVE
+
 
 router = APIRouter(
     prefix="/api/strategies/dynamic",
     tags=["Dynamic Strategies"],
+    dependencies=[Depends(_router_require_role("trader"))],
 )
 
 
@@ -78,24 +102,26 @@ class StrategyVersionResponse(BaseModel):
 # ── Auth dependency ───────────────────────────────────────────────────────────
 
 
-def _get_current_user():
-    """Get the current authenticated user."""
-    try:
-        from api.auth import get_current_user
+# These helpers used to swallow ImportError and return None. As default
+# arguments they are evaluated ONCE at import, so a failed `api.auth` import —
+# a circular import, a missing transitive dependency, a syntax error during a
+# refactor — mounted every endpoint below with NO authentication for the
+# lifetime of the process. That includes POST /register, which accepts and
+# compiles arbitrary Python source. An auth module that cannot be imported must
+# take this router down loudly, not open it quietly.
+# See docs/HARDENING_BACKLOG.md S6-01.
+from api.auth import get_current_user as _get_current_user_dep
+from api.auth import require_role as _require_role
 
-        return Depends(get_current_user)
-    except ImportError:
-        return None
+
+def _get_current_user():
+    """Dependency: the current authenticated user."""
+    return Depends(_get_current_user_dep)
 
 
 def _require_admin():
-    """Require admin role."""
-    try:
-        from api.auth import require_role
-
-        return Depends(require_role("admin"))
-    except ImportError:
-        return None
+    """Dependency: caller must hold the admin role."""
+    return Depends(_require_role("admin"))
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -120,7 +146,7 @@ async def register_strategy(request: RegisterStrategyRequest, user=_require_admi
             source_code=request.source_code,
             symbol=request.symbol,
             timeframe=request.timeframe,
-            author_id="system",  # Will be replaced with actual user ID from auth
+            author_id=str(getattr(user, "sub", None) or getattr(user, "id", None) or "unknown"),
         )
         return {
             "status": "success",
@@ -147,7 +173,7 @@ async def activate_strategy(request: ActivateStrategyRequest, user=_require_admi
     registry = get_dynamic_registry()
 
     try:
-        await registry.activate_strategy(request.version_id)
+        await registry.activate_strategy(scope=_activation_scope(), version_id=request.version_id)
         return {
             "status": "success",
             "message": f"Strategy version '{request.version_id}' activated.",
@@ -219,7 +245,7 @@ async def strategy_action(name: str, action_type: str, user=_require_admin()):
         if not versions:
             raise HTTPException(status_code=404, detail=f"No versions found for '{name}'")
         latest = versions[-1]
-        await registry.activate_strategy(latest.version_id)
+        await registry.activate_strategy(scope=_activation_scope(), version_id=latest.version_id)
         return {"status": "success", "message": f"Strategy '{name}' activated."}
     elif action_type in ("deactivate", "pause"):
         await registry.deactivate_strategy(name)
@@ -229,7 +255,7 @@ async def strategy_action(name: str, action_type: str, user=_require_admin()):
         if not versions:
             raise HTTPException(status_code=404, detail=f"No versions found for '{name}'")
         latest = versions[-1]
-        await registry.activate_strategy(latest.version_id)
+        await registry.activate_strategy(scope=_activation_scope(), version_id=latest.version_id)
         return {"status": "success", "message": f"Strategy '{name}' resumed."}
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {action_type}")

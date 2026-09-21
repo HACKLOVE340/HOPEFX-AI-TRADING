@@ -241,11 +241,18 @@ def cmd_start(args):
     """Start the API server"""
     import uvicorn
 
-    environment = os.getenv("ENVIRONMENT", "development")
+    # APP_ENV first, then ENVIRONMENT — the precedence used in risk/manager.py,
+    # api/admin.py and api/trading.py. This read ENVIRONMENT alone, so a
+    # deployment configured the documented way (.env.example sets APP_ENV on
+    # line 15; ENVIRONMENT is line 1008, described as controlling uvicorn
+    # reload) was not recognised as production, and the branch below would
+    # quietly install the hardcoded development key that is committed to this
+    # repository as the config-encryption key.
+    environment = (os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "development").strip().lower()
 
     # Refuse to start in production without a real encryption key
     if not os.getenv("CONFIG_ENCRYPTION_KEY"):
-        if environment == "production":
+        if environment in ("production", "staging"):
             logger.error(
                 "CONFIG_ENCRYPTION_KEY must be set for production. "
                 'Generate one with: python -c "import secrets; logger.info(secrets.token_hex(32))"'

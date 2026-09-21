@@ -36,7 +36,9 @@ def verify_circuit_breaker(decline_pct: float, level1: float, level2: float, lev
     if not _is_finite_number(decline_pct):
         return [_v("No Data Corruption", CRITICAL, "decline pct non-finite")]
     if decline_pct >= level3:
-        return [_v("No Unbounded Failure", CONSTITUTIONAL, f"Level-3 circuit breaker: decline {decline_pct}% — HALT day")]
+        return [
+            _v("No Unbounded Failure", CONSTITUTIONAL, f"Level-3 circuit breaker: decline {decline_pct}% — HALT day")
+        ]
     if decline_pct >= level2:
         return [_v("No Unbounded Failure", CRITICAL, f"Level-2 circuit breaker: decline {decline_pct}% — pause")]
     if decline_pct >= level1:
@@ -50,8 +52,13 @@ def verify_luld_band(price: float, reference: float, band_pct: float) -> list[Vi
         return [_v("No Data Corruption", CRITICAL, f"invalid LULD inputs price={price} ref={reference}")]
     dev = abs(price - reference) / reference * 100
     if dev > band_pct:
-        return [_v("No Unauthorized Trade", CRITICAL,
-                   f"price {price} outside LULD band ±{band_pct}% of {reference} ({dev:.2f}%)")]
+        return [
+            _v(
+                "No Unauthorized Trade",
+                CRITICAL,
+                f"price {price} outside LULD band ±{band_pct}% of {reference} ({dev:.2f}%)",
+            )
+        ]
     return []
 
 
@@ -60,8 +67,7 @@ def verify_auction_state(order_type: str, auction_phase: str) -> list[Violation]
     a continuous-only order type submitted into an auction is an error."""
     continuous_only = {"market_on_continuous"}
     if auction_phase in ("opening_auction", "closing_auction") and order_type in continuous_only:
-        return [_v("No Unauthorized Trade", WARNING,
-                   f"order type '{order_type}' not valid during {auction_phase}")]
+        return [_v("No Unauthorized Trade", WARNING, f"order type '{order_type}' not valid during {auction_phase}")]
     return []
 
 

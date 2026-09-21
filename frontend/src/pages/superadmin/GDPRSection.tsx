@@ -10,15 +10,17 @@ import {
 } from './ui';
 import type { DataSubjectRequest } from './types';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
+import { Calendar, CheckCircle2, ClipboardList, Hourglass, Scroll, Trash2 } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const REQUEST_TYPE_COLORS: Record<string, string> = {
-  export:        '#60a5fa',
-  erasure:       '#f87171',
-  rectification: '#fbbf24',
-  portability:   '#a78bfa',
+  export:        'var(--link)',
+  erasure:       'var(--loss)',
+  rectification: 'var(--warn)',
+  portability:   'var(--ai-model)',
 };
 
 interface RetentionPolicy { data_type: string; retention_days: number; legal_basis?: string }
@@ -37,6 +39,7 @@ const GDPRSection: React.FC = () => {
   const [typeFilter, setTypeFilter]     = useState('');
   const [busy, setBusy]             = useState<string | null>(null);
   const [msg, setMsg]               = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm]       = useState<{ id: string; action: 'approve' | 'reject'; label: string } | null>(null);
   const [eraseUserId, setEraseUserId] = useState('');
   const [eraseReason, setEraseReason] = useState('');
@@ -90,9 +93,11 @@ const GDPRSection: React.FC = () => {
     setBusy(id); setMsg('');
     try {
       await superadminApi.processGdprRequest(id, action);
+      setMsgOk(true);
       setMsg(`Request ${action === 'approve' ? 'approved' : 'rejected'}`);
       await load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Action failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -102,10 +107,12 @@ const GDPRSection: React.FC = () => {
     setBusy('erase'); setMsg('');
     try {
       await superadminApi.gdprEraseUser(eraseUserId.trim(), eraseReason || 'Superadmin GDPR erasure');
+      setMsgOk(true);
       setMsg(`User ${eraseUserId} erased — PII anonymised`);
       setEraseUserId(''); setEraseReason('');
       await load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Erasure failed'));
     } finally { setBusy(null); setEraseConfirm(false); }
   };
@@ -114,8 +121,10 @@ const GDPRSection: React.FC = () => {
     setBusy(`export-${userId}`); setMsg('');
     try {
       await superadminApi.gdprExportUser(userId);
+      setMsgOk(true);
       setMsg(`Export queued for ${userId} — user will receive download link`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Export failed'));
     } finally { setBusy(null); }
   };
@@ -126,10 +135,12 @@ const GDPRSection: React.FC = () => {
     setBusy(`policy-${dataType}`); setMsg('');
     try {
       await superadminApi.updateRetentionPolicy({ data_type: dataType, retention_days: days });
+      setMsgOk(true);
       setMsg(`Retention for "${dataType}" updated to ${days} days`);
       // Update local state
       setPolicies(prev => prev.map(p => p.data_type === dataType ? { ...p, retention_days: days } : p));
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Update failed'));
     } finally { setBusy(null); }
   };
@@ -166,24 +177,19 @@ const GDPRSection: React.FC = () => {
         />
       )}
 
-      {msg && (
-        <div style={{ background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)', border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80', display: 'flex', justifyContent: 'space-between' }}>
-          {msg}
-          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Pending Requests"  value={pending}           icon="⏳" accent={pending > 0 ? '#fbbf24' : '#22c55e'} />
-        <KpiTile label="Total Requests"    value={requests.length}   icon="📋" accent="#60a5fa" />
-        <KpiTile label="Erasure Requests"  value={erasures}          icon="🗑️" accent="#f87171" />
-        <KpiTile label="Retention Policies" value={policies.length}  icon="📅" accent="#a78bfa" />
+        <KpiTile label="Pending Requests"  value={pending}           icon={<Hourglass size={18} aria-hidden />} accent={pending > 0 ? '#fbbf24' : '#22c55e'} />
+        <KpiTile label="Total Requests"    value={requests.length}   icon={<ClipboardList size={18} aria-hidden />} accent="#60a5fa" />
+        <KpiTile label="Erasure Requests"  value={erasures}          icon={<Trash2 size={18} aria-hidden />} accent="#f87171" />
+        <KpiTile label="Retention Policies" value={policies.length}  icon={<Calendar size={18} aria-hidden />} accent="#a78bfa" />
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['requests', 'policies', 'consent'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? '#1e293b' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: tab === t ? '#f8fafc' : '#64748b', padding: '7px 16px', fontSize: 13, cursor: 'pointer' }}>
+          <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${tab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: tab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
             {{ requests: 'Data Subject Requests', policies: 'Retention Policies', consent: 'Consent Log' }[t]}
           </button>
         ))}
@@ -193,7 +199,7 @@ const GDPRSection: React.FC = () => {
       {tab === 'requests' && (
         <>
           {/* Manual Erasure */}
-          <SectionCard title="Manual Erasure (Art. 17)" icon="🗑️" accent="#f87171"
+          <SectionCard title="Manual Erasure (Art. 17)" icon={<Trash2 size={18} aria-hidden />} accent="#f87171"
             subtitle="Directly erase a user's PII without a formal request">
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: 200 }}>
@@ -214,33 +220,33 @@ const GDPRSection: React.FC = () => {
               options={[{ value: '', label: 'All types' }, { value: 'export', label: 'Export (Art. 15)' }, { value: 'erasure', label: 'Erasure (Art. 17)' }, { value: 'rectification', label: 'Rectification (Art. 16)' }, { value: 'portability', label: 'Portability (Art. 20)' }]} />
           </div>
 
-          <SectionCard title="Data Subject Requests" icon="📋" accent="#60a5fa" noPad>
+          <SectionCard title="Data Subject Requests" icon={<ClipboardList size={18} aria-hidden />} accent="#60a5fa" noPad>
             {requests.length === 0 ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No requests match this filter</div>
+              <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 32 }}>No requests match this filter</div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                 <thead>
                   <tr>
                     {['User', 'Type', 'Status', 'Submitted', 'Completed', 'Actions'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {requests.map(r => (
-                    <tr key={r.request_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                    <tr key={r.request_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                       <td style={{ padding: '10px 16px' }}>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{r.username || r.user_id}</div>
-                        <div style={{ fontSize: 11, color: '#64748b' }}>{r.email}</div>
+                        <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)'}}>{r.username || r.user_id}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.email}</div>
                       </td>
                       <td style={{ padding: '10px 16px' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8'}22`, color: REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8', border: `1px solid ${REQUEST_TYPE_COLORS[r.request_type] ?? '#94a3b8'}44` }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)'}22`, color: REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)', border: `1px solid ${REQUEST_TYPE_COLORS[r.request_type] ?? 'var(--text-dim)'}44` }}>
                           {r.request_type.toUpperCase()}
                         </span>
                       </td>
                       <td style={{ padding: '10px 16px' }}><StatusBadge status={r.status} /></td>
-                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(r.submitted_at)}</td>
-                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{fmtDate(r.completed_at)}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(r.submitted_at)}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(r.completed_at)}</td>
                       <td style={{ padding: '10px 16px' }}>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {r.request_type === 'export' && (
@@ -265,34 +271,35 @@ const GDPRSection: React.FC = () => {
 
       {/* ── TAB: Retention Policies ── */}
       {tab === 'policies' && (
-        <SectionCard title="Data Retention Policies" icon="📅" accent="#a78bfa"
+        <SectionCard title="Data Retention Policies" icon={<Calendar size={18} aria-hidden />} accent="#a78bfa"
           subtitle="GDPR Art. 5(1)(e) — data minimisation and storage limitation. Edit retention days and save per row.">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
               <tr>
                 {['Data Type', 'Retention (days)', 'Legal Basis', ''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {policies.map((p) => (
-                <tr key={p.data_type} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                <tr key={p.data_type} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                   <td style={{ padding: '10px 16px', fontWeight: 600 }}>{p.data_type.replace(/_/g, ' ')}</td>
                   <td style={{ padding: '10px 16px' }}>
                     <input
                       type="number" min={1} max={3650}
+                      aria-label={`Retention days for ${p.data_type.replace(/_/g, ' ')}`}
                       value={policyEdits[p.data_type] ?? p.retention_days}
                       onChange={e => setPolicyEdits(prev => ({ ...prev, [p.data_type]: Number(e.target.value) }))}
-                      style={{ width: 80, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '4px 8px', fontSize: 13 }}
+                      style={{ width: 80, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 'var(--fs-body)'}}
                     />
-                    <span style={{ marginLeft: 8, color: '#475569', fontSize: 11 }}>
+                    <span style={{ marginLeft: 8, color: 'var(--text-faint)', fontSize: 11 }}>
                       {(policyEdits[p.data_type] ?? p.retention_days) >= 365
                         ? `(${((policyEdits[p.data_type] ?? p.retention_days) / 365).toFixed(1)} yrs)`
                         : 'days'}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{p.legal_basis ?? '—'}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{p.legal_basis ?? '—'}</td>
                   <td style={{ padding: '10px 16px' }}>
                     <ActionBtn
                       label="Save"
@@ -312,7 +319,7 @@ const GDPRSection: React.FC = () => {
 
       {/* ── TAB: Consent Log ── */}
       {tab === 'consent' && (
-        <SectionCard title="Consent Log" icon="✅" accent="#22c55e"
+        <SectionCard title="Consent Log" icon={<CheckCircle2 size={18} aria-hidden />} accent="#22c55e"
           subtitle="GDPR Art. 7 — audit trail of all consent events"
           actions={
             <div style={{ display: 'flex', gap: 8 }}>
@@ -329,24 +336,24 @@ const GDPRSection: React.FC = () => {
           {consentLoading ? (
             <LoadingRows rows={4} />
           ) : consentLog.length === 0 ? (
-            <EmptyState compact icon="📜" title="No consent events found" description="User consent records will appear here as users accept or withdraw consent." />
+            <EmptyState compact icon={Scroll} title="No consent events found" description="User consent records will appear here as users accept or withdraw consent." />
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
                 <tr>
                   {['User', 'Event', 'Details', 'IP', 'Timestamp'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '8px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #1e293b' }}>{h}</th>
+                    <th key={h} style={{ textAlign: 'left', padding: '8px 16px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {consentLog.map((c, i) => (
-                  <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 11, color: '#a78bfa' }}>{c.user_id}</td>
-                    <td style={{ padding: '8px 16px', fontWeight: 600, color: '#f1f5f9' }}>{c.event}</td>
-                    <td style={{ padding: '8px 16px', color: '#64748b', fontSize: 12 }}>{c.details}</td>
-                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', color: '#334155', fontSize: 11 }}>{c.ip ?? '—'}</td>
-                    <td style={{ padding: '8px 16px', color: '#475569', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(c.timestamp)}</td>
+                  <tr key={i} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--ai-model)' }}>{c.user_id}</td>
+                    <td style={{ padding: '8px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{c.event}</td>
+                    <td style={{ padding: '8px 16px', color: 'var(--text-muted)', fontSize: 12 }}>{c.details}</td>
+                    <td style={{ padding: '8px 16px', fontFamily: 'monospace', color: 'var(--text-faint)', fontSize: 11 }}>{c.ip ?? '—'}</td>
+                    <td style={{ padding: '8px 16px', color: 'var(--text-faint)', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDate(c.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>

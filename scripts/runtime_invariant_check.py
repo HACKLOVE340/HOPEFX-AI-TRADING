@@ -225,7 +225,15 @@ class Endpoint:
 
 
 ENDPOINTS: list[Endpoint] = [
-    Endpoint("/api/health", auth=False, expect_keys=("status",)),
+    # /api/health 302-redirects to /api/health/ready, which is specified to
+    # answer 503 when a critical dependency is degraded. Treated as a warning
+    # for the same reason as the probes in check_route_coverage: a fail-closed
+    # readiness probe doing its job is not an output-invariant violation.
+    # ``expect_keys`` was ("status",), which this endpoint has never returned:
+    # it redirects to /api/health/ready, whose ReadinessResponse is
+    # {ready, timestamp, failed_critical, components}. The mismatch was hidden
+    # because the 503 was reported first and the body was never checked.
+    Endpoint("/api/health", auth=False, expect_keys=("ready",), allow_503=True),
     Endpoint("/api/superadmin/overview", expect_keys=("total_users", "system_health", "ml_model_accuracy")),
     Endpoint("/api/superadmin/users", list_key="users"),
     Endpoint("/api/superadmin/ml/models", list_key="models", max_same_type=3, type_fields=("name",)),
@@ -625,7 +633,31 @@ def check_route_coverage(base: str, token: str | None, res: CheckResult) -> None
         return
 
     # OK = sane non-500 responses; 5xx is never acceptable for a GET probe.
-    allowed = {200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 405, 422, 429, 503}
+    #
+    # 503 was in this set and could never be reached: the `st >= 500` branch
+    # below runs first, so every 503 was reported as a server error regardless.
+    # For most routes that is the behaviour we want and the set entry was simply
+    # dead. For the Kubernetes probes it was wrong — `/health/ready` and
+    # `/health/startup` are *specified* to answer 503 (see the contract at the
+    # top of api/health.py: "MUST return 503, not 200, when any CRITICAL
+    # component is degraded"). Flagging them meant this check failed hardest
+    # exactly when a fail-closed probe was doing its job, and the four errors it
+    # produced on a machine with no database were indistinguishable from four
+    # real defects.
+    allowed = {200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 405, 422, 429}
+    # Every one of these is documented to answer 503 when a dependency is
+    # degraded: /ready and /startup per the contract in api/health.py, /deep
+    # because it reports 503 if any real-I/O probe errors, and /api/health
+    # because it 302-redirects to /ready.
+    probes_that_may_503 = {
+        "/api/health",
+        "/api/health/deep",
+        "/api/health/ready",
+        "/api/health/startup",
+        "/health/deep",
+        "/health/ready",
+        "/health/startup",
+    }
     checked = 0
     for path, methods in paths.items():
         if "{" in path or "get" not in {m.lower() for m in methods}:
@@ -634,6 +666,10 @@ def check_route_coverage(base: str, token: str | None, res: CheckResult) -> None
         st, _ = _http("GET", f"{base}{path}", token=token)
         if st is None:
             res.add("ERROR", path, "route_coverage", "GET route unreachable")
+        elif st == 503 and path in probes_that_may_503:
+            # Still surfaced, because a readiness probe that is red in CI is
+            # worth knowing about — just not a build failure by itself.
+            res.add("WARN", path, "route_coverage", "readiness probe reports 503 (a dependency is degraded)")
         elif st >= 500:
             res.add("ERROR", path, "route_coverage", f"GET {path} returned {st} (server error)")
         elif st not in allowed:

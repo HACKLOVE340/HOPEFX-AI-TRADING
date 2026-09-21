@@ -172,13 +172,64 @@ def _load_regime_size_map() -> dict[str, float]:
 _REGIME_SIZE_MAP: dict[str, float] = _load_regime_size_map()
 
 
+#: Set once the "regime is permanently unknown" warning has been emitted. This
+#: runs on the per-signal sizing path, so warning per order would bury the log it
+#: exists to make readable.
+_regime_unknown_warned: bool = False
+
+
 def get_regime_position_scalar(regime_name: str) -> float:
     """Return the position size scalar for the given regime name (0–1).
 
     Used by the risk manager and execution engine to scale lot size based on
     the current market regime detected by RegimeDetector.
+
+    **The scalars themselves are unchanged, deliberately.** ``UNKNOWN: 0.5`` is
+    an explicit entry in ``_DEFAULT_REGIME_SIZE_MAP``, overridable via the
+    ``REGIME_SIZE_MAP`` env var. It is a risk policy — "when you do not know the
+    regime, take half a position" — and the caller describes this overlay as one
+    that "never increases size above the risk-manager-approved maximum, only
+    reduces it in adverse regimes". Raising UNKNOWN to 1.0 would double every
+    position on the platform, which is weakening a risk control and the
+    dangerous direction to be wrong in.
+
+    What was wrong was the silence. ``RegimeRouter.route()`` is never called
+    anywhere in the repo, so the regime is the constructor's "unknown" for the
+    life of the process and the conservative fallback became the *universal*
+    case — with no signal that detection was not running at all (F94). The
+    warning below is that signal. Fixing the cause means wiring ``route()``,
+    which changes sizing behaviour and is tracked separately.
     """
-    return _REGIME_SIZE_MAP.get(regime_name.upper(), 0.5)
+    global _regime_unknown_warned
+
+    key = regime_name.upper()
+    scalar = _REGIME_SIZE_MAP.get(key)
+
+    if scalar is None:
+        # Not merely undetected — a name the size map has never heard of, which
+        # means the detector and the map disagree. Always logged: unlike a
+        # permanently-unknown regime this should be rare, and silence would hide
+        # a genuine mismatch.
+        logger.warning(
+            "Regime %r is not in the size map %s — falling back to the conservative "
+            "0.5 scalar. The regime detector and REGIME_SIZE_MAP disagree.",
+            regime_name,
+            sorted(_REGIME_SIZE_MAP),
+        )
+        return 0.5
+
+    if key == "UNKNOWN" and not _regime_unknown_warned:
+        _regime_unknown_warned = True
+        logger.warning(
+            "Regime is UNKNOWN — every position is being scaled by %.2f. If this "
+            "is constant, RegimeRouter.route() is not being called and detection "
+            "is not running at all (F94); the scalar is a conservative fallback "
+            "being applied universally rather than a detected adverse regime. "
+            "Logged once per process.",
+            scalar,
+        )
+
+    return scalar
 
 
 def _get_deep_ensemble_store() -> Any | None:
@@ -226,6 +277,45 @@ def _get_deep_ensemble_store() -> Any | None:
     return _deep_ensemble_store or None
 
 
+def _phase_gate_permits(phase: str, feature: str) -> bool:
+    """Return True when the paper-trading gate for *phase* has passed.
+
+    ``research/pipeline/paper_trading_gate.py`` implements both gates properly —
+    elapsed calendar days since PAPER_RUN_START_UTC plus a minimum fill count,
+    with a state file so they survive restarts. **Nothing consulted them before
+    enabling the feature.** ``phase3_ready()`` was called once, in
+    ``ml/inference_engine.py``, and its result went into a health dict: measured
+    and reported, gating nothing (F214).
+
+    Combined with F215 — the template shipped FEATURE_ONLINE_LEARNING=true —
+    every deployment ran an unvalidated online learner against live signals
+    while a gate sat next to it reporting that it was not ready.
+
+    Fails closed: a gate that cannot answer has not said yes.
+    """
+    try:
+        from research.pipeline.paper_trading_gate import get_gate
+
+        passed, reason = getattr(get_gate(), f"{phase}_ready")()
+    except Exception as exc:
+        logger.warning(
+            "%s: %s gate could not be evaluated (%s) — feature stays OFF (fail closed).",
+            feature,
+            phase,
+            exc,
+        )
+        return False
+
+    if not passed:
+        logger.warning(
+            "%s is enabled by flag but its %s gate has not passed: %s The feature stays OFF until the gate passes.",
+            feature,
+            phase,
+            reason,
+        )
+    return bool(passed)
+
+
 def _get_online_learner_store() -> Any | None:
     """Return the module-level OnlineLearnerStore singleton, creating it on first call."""
     global _online_learner_store
@@ -242,6 +332,11 @@ def _get_online_learner_store() -> Any | None:
         enabled = os.getenv("FEATURE_ONLINE_LEARNING", "").lower() in ("1", "true", "yes")
 
     if not enabled:
+        return None
+
+    # The flag is permission to try, not permission to run. The Phase-3 gate is
+    # the actual precondition and used to gate nothing at all (F214).
+    if not _phase_gate_permits("phase3", "FEATURE_ONLINE_LEARNING"):
         return None
 
     if _online_learner_store is None:
@@ -271,6 +366,11 @@ def _get_anomaly_store() -> Any | None:
         enabled = os.getenv("FEATURE_ANOMALY_WEIGHTING", "").lower() in ("1", "true", "yes")
 
     if not enabled:
+        return None
+
+    # Same shape as Phase 3: the flag was the only condition checked, and the
+    # Phase-2 gate that exists for this feature gated nothing (F214).
+    if not _phase_gate_permits("phase2", "FEATURE_ANOMALY_WEIGHTING"):
         return None
 
     if _anomaly_store is None:
@@ -303,46 +403,109 @@ _INTERVAL_SECONDS = int(os.getenv("SIGNAL_ENGINE_INTERVAL", "60"))
 _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 
+def _is_degenerate(bars: list[dict[str, Any]]) -> bool:
+    """True when *bars* carry no price movement at all.
+
+    A flat close series across every bar is not a quiet market — it is the
+    signature of synthesised data (``RealTimePriceEngine._get_ohlcv_from_broker``
+    repeats the paper broker's static ``market_prices`` for every bar, with
+    ``volume=0``). Those bars produce zero ATR, zero range and zero volume
+    features, which the ML predictor consumes as if they were real.
+    """
+    if len(bars) < 2:
+        return True
+    closes = [float(b["close"]) for b in bars]
+    return max(closes) - min(closes) <= 0.0
+
+
+def _shape_bars(symbol: str, bars: list[dict[str, Any]]) -> dict[str, Any]:
+    last = bars[-1]
+    return {
+        "symbol": symbol,
+        "open": float(last["open"]),
+        "high": float(last["high"]),
+        "low": float(last["low"]),
+        "close": float(last["close"]),
+        "volume": float(last.get("volume", 0)),
+        "prices": [float(b["close"]) for b in bars],
+        "highs": [float(b["high"]) for b in bars],
+        "lows": [float(b["low"]) for b in bars],
+        "volumes": [float(b.get("volume", 0)) for b in bars],
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
 async def _fetch_market_data(
     symbol: str,
     app_state: Any | None = None,
 ) -> dict[str, Any] | None:
     """
-    Fetch latest OHLCV data for a symbol from the broker's market data feed.
+    Fetch the latest OHLCV history for *symbol* from a real market data source.
 
     Returns None when OHLCV history is unavailable — callers must skip the
     signal tick rather than proceeding with insufficient data. A single-point
     degenerate bar (open=high=low=close, volume=0) produces zero ATR, zero
     range, and zero volume features that corrupt ML model inputs.
-    """
-    broker = getattr(app_state, "broker", None) if app_state is not None else None
 
+    Resolution order is the price engine first, then the broker. It used to be
+    broker-only, which meant that under APP_ENV=production this function could
+    not return anything at all: ``PaperTradingBroker.get_market_data`` raises
+    there by design, precisely so synthetic bars never reach the predictor. The
+    engine caught that RuntimeError, logged it, and returned None on every tick,
+    so the signal loop ran to completion every cycle and produced ``signal=none,
+    approved=false`` forever. The refusal was right; there was simply no real
+    source wired up behind it. ``price_engine.get_ohlcv`` is that source, and it
+    is already serving the same bars to ``/api/trading/ohlcv``.
+
+    Its last-resort tier synthesises flat bars from the paper broker, so the
+    result is checked for movement before it is returned — otherwise this fix
+    would trade a loud refusal for the silent corruption the refusal existed to
+    prevent.
+    """
+    engine = getattr(app_state, "price_engine", None) if app_state is not None else None
+
+    if engine is not None:
+        try:
+            data = await asyncio.wait_for(engine.get_ohlcv(symbol, "1h", 100), timeout=25.0)
+            bars = [
+                {
+                    "open": d.open,
+                    "high": d.high,
+                    "low": d.low,
+                    "close": d.close,
+                    "volume": getattr(d, "volume", 0.0),
+                }
+                for d in (data or [])
+            ]
+            if bars and not _is_degenerate(bars):
+                return _shape_bars(symbol, bars)
+            if bars:
+                logger.warning(
+                    "Price engine returned %d flat bars for %s (no price movement) — "
+                    "discarding rather than feeding zero-range features to the predictor. "
+                    "This is the synthetic last-resort tier: no real OHLCV source is "
+                    "reachable for this symbol.",
+                    len(bars),
+                    symbol,
+                )
+        except TimeoutError:
+            logger.warning("Price engine OHLCV timed out for %s", symbol)
+        except Exception as exc:
+            logger.warning("Price engine OHLCV fetch failed for %s: %s", symbol, exc)
+
+    broker = getattr(app_state, "broker", None) if app_state is not None else None
     if broker is not None:
         try:
-            bars = broker.get_market_data(symbol, timeframe="1h", limit=100)
-            if bars:
-                last = bars[-1]
-                prices = [float(b["close"]) for b in bars]
-                highs = [float(b["high"]) for b in bars]
-                lows = [float(b["low"]) for b in bars]
-                volumes = [float(b.get("volume", 0)) for b in bars]
-                return {
-                    "symbol": symbol,
-                    "open": float(last["open"]),
-                    "high": float(last["high"]),
-                    "low": float(last["low"]),
-                    "close": float(last["close"]),
-                    "volume": float(last.get("volume", 0)),
-                    "prices": prices,
-                    "highs": highs,
-                    "lows": lows,
-                    "volumes": volumes,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
+            raw = broker.get_market_data(symbol, timeframe="1h", limit=100)
+            bars = [dict(b) for b in (raw or [])]
+            if bars and not _is_degenerate(bars):
+                return _shape_bars(symbol, bars)
         except Exception as exc:
+            # In production the paper broker refuses on purpose; that is the
+            # guard working, not an incident.
             logger.warning("Broker OHLCV fetch failed for %s: %s", symbol, exc)
-    else:
-        logger.warning("No broker available — cannot fetch market data for %s", symbol)
+    elif engine is None:
+        logger.warning("No price engine or broker available — cannot fetch market data for %s", symbol)
 
     return None
 

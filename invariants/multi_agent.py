@@ -42,15 +42,21 @@ def verify_no_collusion(off_book_messages: int) -> list[Violation]:
     """Agents must coordinate only through audited channels — off-book coordination
     that could manipulate markets is collusion."""
     if off_book_messages > 0:
-        return [_v("No Compliance Breach", CONSTITUTIONAL,
-                   f"{off_book_messages} off-book inter-agent message(s) — possible collusion")]
+        return [
+            _v(
+                "No Compliance Breach",
+                CONSTITUTIONAL,
+                f"{off_book_messages} off-book inter-agent message(s) — possible collusion",
+            )
+        ]
     return []
 
 
 def verify_conflict_rate(conflict_rate: float, threshold: float) -> list[Violation]:
     if _is_finite_number(conflict_rate) and conflict_rate > threshold:
-        return [_v("No Unexplained System Behavior", WARNING,
-                   f"inter-agent conflict rate {conflict_rate} > {threshold}")]
+        return [
+            _v("No Unexplained System Behavior", WARNING, f"inter-agent conflict rate {conflict_rate} > {threshold}")
+        ]
     return []
 
 
@@ -59,8 +65,13 @@ def verify_resource_fairness(allocations: Iterable[float], max_share: float = 0.
     vals = [a for a in allocations if _is_finite_number(a) and a >= 0]
     total = sum(vals)
     if total > 0 and max(vals) / total > max_share:
-        return [_v("No Unbounded Failure", WARNING,
-                   f"resource unfairness: one agent holds {max(vals) / total:.0%} (> {max_share:.0%})")]
+        return [
+            _v(
+                "No Unbounded Failure",
+                WARNING,
+                f"resource unfairness: one agent holds {max(vals) / total:.0%} (> {max_share:.0%})",
+            )
+        ]
     return []
 
 
@@ -71,8 +82,7 @@ def verify_no_circular_delegation(delegations: Mapping[Any, Any]) -> list[Violat
         node = start
         while node in delegations:
             if node in seen:
-                return [_v("No Loss Of Human Control", CONSTITUTIONAL,
-                           "circular authority delegation detected")]
+                return [_v("No Loss Of Human Control", CONSTITUTIONAL, "circular authority delegation detected")]
             seen.add(node)
             node = delegations[node]
     return []
@@ -82,14 +92,20 @@ def verify_emergent_behavior(anomaly_score: float, threshold: float) -> list[Vio
     """Unexpected collective behavior (unplanned coordination, capital flows) must
     be flagged for human review."""
     if _is_finite_number(anomaly_score) and anomaly_score > threshold:
-        return [_v("No Unexplained System Behavior", CRITICAL,
-                   f"emergent-behavior anomaly score {anomaly_score} > {threshold} — needs review")]
+        return [
+            _v(
+                "No Unexplained System Behavior",
+                CRITICAL,
+                f"emergent-behavior anomaly score {anomaly_score} > {threshold} — needs review",
+            )
+        ]
     return []
 
 
 def verify_agent_count_bounded(active_agents: int, max_agents: int) -> list[Violation]:
     """Guard against uncontrolled agent proliferation."""
     if active_agents > max_agents:
-        return [_v("No Loss Of Human Control", CRITICAL,
-                   f"agent proliferation: {active_agents} active > max {max_agents}")]
+        return [
+            _v("No Loss Of Human Control", CRITICAL, f"agent proliferation: {active_agents} active > max {max_agents}")
+        ]
     return []

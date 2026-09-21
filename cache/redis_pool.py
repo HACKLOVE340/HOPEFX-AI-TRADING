@@ -43,6 +43,7 @@ import asyncio
 import logging
 import os
 import threading
+from utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +149,7 @@ def get_redis_pool() -> ConnectionPool:
             )
             logger.info(
                 "Redis connection pool created: url=%s max_connections=%d",
-                _REDIS_URL,
+                redact_url(_REDIS_URL),
                 _MAX_CONNECTIONS,
             )
     return _sync_pool

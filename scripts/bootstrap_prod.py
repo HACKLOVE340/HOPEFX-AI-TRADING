@@ -62,7 +62,7 @@ def main() -> None:
     try:
         from auth.service import AuthService
         from database.connection import SessionLocal
-        from database.user_models import User
+        from database.user_models import User, UserStatus
 
         svc = AuthService(session_factory=SessionLocal)
 
@@ -72,8 +72,20 @@ def main() -> None:
             logger.info("Superadmin already exists: %s — skipping seed.", email)
             return
 
-        # Register the superadmin account
-        ok, msg, user_id = svc.register(
+        # register() returns (success, message, email_verify_token). The third
+        # value is a TOKEN, not a user id — see its docstring. This script
+        # unpacked it as `user_id` and then looked the account up with
+        # `filter_by(id=user_id)`, which matched nothing, so `if user:` was
+        # always False and the verification flag was never set. The script
+        # reported "Superadmin seeded successfully" regardless.
+        #
+        # In production that is fatal: REQUIRE_EMAIL_VERIFICATION defaults to
+        # true when APP_ENV=production, so register() creates the account
+        # PENDING_VERIFICATION, and login rejects it with "Please verify your
+        # email before logging in." No verification email is sent during
+        # deployment bootstrap, so there was no way through. Every fresh
+        # production install produced a superadmin nobody could log in as.
+        ok, msg, _verify_token = svc.register(
             email=email,
             username=username,
             password=password,
@@ -84,13 +96,35 @@ def main() -> None:
             logger.error("Superadmin registration failed: %s", msg)
             sys.exit(1)
 
-        # Mark email as verified immediately — no verification email needed for
-        # the initial superadmin created during deployment.
+        # Look the account up by the identifier we actually have. Both fields
+        # matter: login() checks is_email_verified AND status == ACTIVE, and
+        # register() sets status to PENDING_VERIFICATION when verification is
+        # required.
         with svc._sf() as session:
-            user = session.query(User).filter_by(id=user_id).first()
-            if user:
-                user.is_email_verified = True
-                session.commit()
+            user = session.query(User).filter_by(email=email).first()
+            if user is None:
+                logger.error(
+                    "Registered %s but could not read it back — the account is not usable. "
+                    "This should be impossible; do not treat the deployment as seeded.",
+                    email,
+                )
+                sys.exit(1)
+            user.is_email_verified = True
+            user.status = UserStatus.ACTIVE.value
+            session.commit()
+
+        # Confirm the outcome rather than the action. The bug above survived
+        # because the script verified that it had *run* the fix-up, not that the
+        # fix-up had *worked*.
+        check = svc.get_user_by_email(email)
+        if check is None or not check.is_email_verified or check.status != UserStatus.ACTIVE.value:
+            logger.error(
+                "Superadmin %s cannot log in after seeding (verified=%s status=%s). Not reporting success.",
+                email,
+                getattr(check, "is_email_verified", None),
+                getattr(check, "status", None),
+            )
+            sys.exit(1)
 
         logger.info("──────────────────────────────────────────────")
         logger.info("  Superadmin seeded successfully")

@@ -69,6 +69,80 @@ class CodeIssue:
         }
 
 
+# ── Suppression ───────────────────────────────────────────────────────────────
+
+# Every marker this analyzer has ever honoured, in one place.
+#
+# `tests/unit/test_fixes.py::TestCodeAnalyzerClean` requires zero findings
+# repo-wide. That is a good forcing function and it is only workable if a false
+# positive can be annotated with something obvious. It could not be: each rule
+# had grown its own vocabulary —
+#
+# (markers written below without their leading "#", so this table is not itself
+#  parsed as a pile of lint directives)
+#
+#   null-object         healer: ignore, noqa: healer
+#   look-ahead (line)   lookahead-ok, noqa
+#   bare except         nosec, noqa
+#   silent except       noqa, healer: ignore
+#   look-ahead (block)  lookahead-ok, nosec, intentional, noqa
+#   nan leak            healer: ignore  ONLY
+#
+# so "noqa", honoured by four of them and the ordinary Python idiom, did
+# nothing for nan_leak. A developer hitting that rule got a CI failure they
+# could not resolve without reading this file, and the natural next move is to
+# weaken the gate rather than annotate the line.
+#
+# This is a union of the existing markers, so it only ever widens what is
+# accepted — no line that suppresses today stops suppressing.
+_SUPPRESSION_MARKERS = (
+    "# noqa",
+    "# healer: ignore",
+    "nosec",
+    "lookahead-ok",
+    "intentional",
+)
+
+
+def _strip_string_literals(line: str) -> str:
+    """Blank out quoted spans so a marker inside data is not read as an annotation.
+
+    ``MESSAGE = "add # noqa to silence this"`` documents the marker; it does not
+    apply it to that statement.
+    """
+    out: list[str] = []
+    quote: str | None = None
+    escaped = False
+    for ch in line:
+        if quote is None:
+            if ch in ("'", '"'):
+                quote = ch
+                out.append(" ")
+                continue
+            out.append(ch)
+        else:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == quote:
+                quote = None
+            out.append(" ")
+    return "".join(out)
+
+
+def _is_suppressed(line_text: str) -> bool:
+    """True when a line carries an explicit reviewer annotation.
+
+    One predicate, used by every rule, so the escape hatch is the same wherever
+    a finding lands.
+    """
+    if not line_text:
+        return False
+    scannable = _strip_string_literals(line_text)
+    return any(marker in scannable for marker in _SUPPRESSION_MARKERS)
+
+
 # ── Regex-based detectors (fast, no AST needed) ───────────────────────────────
 
 # Look-ahead bias: shift(-N) on price/return columns
@@ -100,7 +174,28 @@ _NAN_LEAK_RE = re.compile(
     |(?<=[)\w])\.merge\(
     """,
 )
-_NAN_GUARD_RE = re.compile(r"""dropna\(|fillna\(|isnan\(|notna\(|notnull\(|np\.nan_to_num\(|\.replace\(.*np\.nan""")
+# `isfinite(` is accepted alongside `isnan(` because it is a strictly stronger
+# guard: it excludes NaN *and* ±inf, where isnan() lets an infinity through.
+# Without it, code that guards correctly —
+#
+#     if not np.isfinite(mean) or not np.isfinite(var) or var <= 0:
+#         continue
+#     stats[key] = {"mean": float(mean), "std": float(np.sqrt(var))}
+#
+# — was reported as an unguarded NaN leak at HIGH severity. The codebase has
+# ~57 isfinite guards, including in risk/manager.py and invariants/constitution.py,
+# so this was a repo-wide false-positive waiting on proximity to a matching op.
+_NAN_GUARD_RE = re.compile(
+    r"""dropna\(|fillna\(|isnan\(|isfinite\(|notna\(|notnull\(|np\.nan_to_num\(|\.replace\(.*np\.nan"""
+)
+
+# np.log/sqrt/exp of a NUMERIC LITERAL. The rule flags those calls because they
+# produce NaN for invalid inputs — but `np.sqrt(252)` is decided at authoring
+# time and cannot be NaN unless it was written that way, so an annualisation
+# constant tripped a high-severity gate with no defect behind it. Only a bare
+# literal argument is exempt; a variable can hold a negative number, which is
+# exactly what the rule exists for.
+_NAN_SAFE_LITERAL_CALL_RE = re.compile(r"""np\.(?:log|sqrt|exp)\(\s*[-+]?\d[\d_]*(?:\.\d*)?(?:[eE][-+]?\d+)?\s*\)""")
 
 # Division by zero risk — dividing by a variable without a zero-check nearby
 _DIV_ZERO_RE = re.compile(r"""(?<![=!<>])/(?![/=])""")  # bare / operator
@@ -260,8 +355,15 @@ class _ASTAnalyzer(ast.NodeVisitor):
             # Honor an explicit reviewer escape for intentional null-object /
             # no-op stubs (e.g. fallback classes when an optional lib is absent),
             # consistent with the line-based checks' "# healer: ignore" support.
-            def_line = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
-            if "# healer: ignore" in def_line or "# noqa: healer" in def_line:
+            # Scan the whole signature span (node.lineno through the line
+            # before the body starts), not just node.lineno itself — a
+            # multi-line signature's closing "` -> None:  # healer: ignore`"
+            # line is where the marker is conventionally placed, and it is
+            # never on node.lineno (the `def foo(` line) in that case.
+            sig_end = node.body[0].lineno if node.body else node.lineno
+            header_lines = self.lines[max(0, node.lineno - 1) : max(node.lineno, sig_end - 1)]
+            header = "\n".join(header_lines)
+            if "# healer: ignore" in header or "# noqa: healer" in header:
                 return
             self._add(
                 node.lineno,
@@ -331,7 +433,7 @@ class _ASTAnalyzer(ast.NodeVisitor):
                 return
             # Check the except line itself for a nosec annotation
             except_line = self.lines[node.lineno - 1] if 1 <= node.lineno <= len(self.lines) else ""
-            if "nosec" in except_line or "# noqa" in except_line:
+            if _is_suppressed(except_line):
                 self.generic_visit(node)
                 return
             self._add(
@@ -599,12 +701,17 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
             "scripts/e2e_production_validation.py",
             "scripts/e2e_hardening_audit.py",
         )
+        # Ignore marker may be on a later line of the same multi-line
+        # statement (e.g. a call's closing paren), not on `line` itself —
+        # look forward only, so an unrelated ignore comment above a prior
+        # finding can't falsely suppress this one.
+        _synthetic_forward_window = "\n".join(lines[i - 1 : min(len(lines), i + 3)])
         if (
             _SYNTHETIC_RE.search(line)
             and not is_test
             and not in_doc
             and "# smoke" not in line.lower()
-            and "# healer: ignore" not in line
+            and "# healer: ignore" not in _synthetic_forward_window
             and not _is_negation
             and not _is_log_diagnostic
             and not _is_self_referential
@@ -637,14 +744,47 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
             )
 
         # NaN leak — numeric aggregation without a NaN guard in the surrounding context
-        if _NAN_LEAK_RE.search(line) and not is_test and "# healer: ignore" not in line:
+        #
+        # `in_doc` is consulted here for the same reason the look-ahead rule
+        # consults it: a docstring that *describes* an aggregation — "this
+        # replaces ``returns[returns < 0].std()``" — is not executed. The
+        # exemption already existed and this rule simply never invoked it, so
+        # documenting a numeric expression raised a high-severity finding in a
+        # repo whose gate requires zero.
+        #
+        # Literal-argument np.sqrt/log/exp calls are removed before the match so
+        # a constant like np.sqrt(252) does not stand in for a real leak; any
+        # other occurrence on the same line still matches.
+        # Comment text is not executed either. `in_doc` covers triple-quoted
+        # strings only, so a `#` comment describing an aggregation still tripped
+        # the rule — the comment block above this one did, which is how the gap
+        # was found. `_strip_string_literals` locates the real comment marker so
+        # a `#` inside a string is not mistaken for one. Suppression markers are
+        # read from the raw lines elsewhere and are unaffected.
+        _code_only = _strip_string_literals(line)
+        _hash = _code_only.find("#")
+        _leak_probe = line[:_hash] if _hash != -1 else line
+        _leak_probe = _NAN_SAFE_LITERAL_CALL_RE.sub("", _leak_probe)
+        if _NAN_LEAK_RE.search(_leak_probe) and not is_test and not in_doc:
             # Check a window of ±5 lines for a NaN guard
             window_start = max(0, i - 6)
             window_end = min(len(lines), i + 5)
             window = "\n".join(lines[window_start:window_end])
             # Also accept aliased nan_to_num calls (e.g. _torch.nan_to_num, _np.nan_to_num)
             _extended_guard = _NAN_GUARD_RE.search(window) or re.search(r"\.nan_to_num\(", window)
-            if not _extended_guard:
+            # The ignore marker is conventionally placed on the closing line of
+            # a multi-line expression, which can be a few lines AFTER the line
+            # the regex actually matched — not on `line` itself. Look forward
+            # only (never backward) so an unrelated ignore comment placed
+            # above a different, prior finding can't falsely suppress this one.
+            _forward_window = "\n".join(lines[i - 1 : min(len(lines), i + 3)])
+            # Any of the analyzer's suppression markers, not just
+            # "healer: ignore". This rule accepted that one alone, so a plain
+            # "noqa" — honoured by four other rules here, and the ordinary
+            # Python idiom — silently did nothing and left the finding
+            # unresolvable without reading this file.
+            _ignored = _is_suppressed(_forward_window)
+            if not _extended_guard and not _ignored:
                 issues.append(
                     CodeIssue(
                         file=rel,
@@ -830,6 +970,13 @@ _SKIP_DIRS = {
     "data",
     "logs",
     "quarantine",
+    # Vendored agent-skill assets (.claude/skills/**) are third-party reference
+    # material, not HOPEFX production code: upstream templates deliberately ship
+    # `...` placeholders for a developer to fill in, and their helper scripts are
+    # not ours to edit. Scanning them made this gate fail on files no HOPEFX
+    # runtime ever imports. Scope correction, not a severity relaxation — every
+    # rule still applies at full strength to all first-party code.
+    ".claude",
 }
 
 # File patterns to include

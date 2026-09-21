@@ -81,11 +81,29 @@ venv.bak/
 .env
 .env.local
 .env.*.local
+# deployments/gen_env.sh and vps_bootstrap.sh move a previous .env aside before
+# writing a new one. Those backups hold REAL secrets — never let them be
+# committed. Covers .env.bak.<timestamp>, .env.old, and similar.
+.env.bak
+.env.bak.*
+.env.old
+.env.save
+# deployments/gen_env.sh also writes .env.paste.txt — the same secrets with
+# comments stripped, for pasting into a hosting panel's Environment form.
+.env.paste.txt
+.env.paste.min.txt
 !.env.example
 
 # Database
 *.db
 *.sqlite
+# SQLite write-ahead-log / shared-memory sidecar files (transient, local-only)
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Generated platform-doctor health reports (local diagnostics, not source)
+diagnostics/
 *.sqlite3
 # data/ — source package, not ignored
 # /data/  # uncomment to ignore data download cache
@@ -291,3 +309,40 @@ paper_run_*.json
 -e
 # Auto-generated at runtime by security/antivirus.py
 security/yara_rules/
+
+# Playwright sweep session (contains a live token)
+frontend/.auth.json
+
+# k6 load-test output. The directory is tracked (via .gitkeep) because CI writes
+# summaries into it and tests/unit/test_k6_load_tests.py checks it exists; the
+# run artifacts themselves are per-run and belong in the workflow's upload.
+k6/results/*
+!k6/results/.gitkeep
+
+# Runtime state written by the paper-trading gate and the regulatory DLQ during
+# a test run or a local session. Both are per-deployment state, not source.
+data/paper_gate_state.json
+data/reg_dlq/
+
+# Built by the CI Trivy step from requirements.lock; never committed.
+.trivy-pinned/
+
+# ── §18 hand-landmark model and runtime ───────────────────────────────────────
+# Fetched at deploy time by `python scripts/fetch_hand_model.py`, not committed:
+# the model is 7.8 MB and the WASM runtime tens more, both vendor artifacts with
+# published checksums. `check-added-large-files` caps a new file at 500 KB and
+# the cap is right — a history carrying rebuilt binary blobs is one nobody can
+# clone quickly. Their absence is a STATE, not a break: landmarkStatus reports
+# `unconfigured` and says pointer gestures still work.
+frontend/public/models/
+frontend/public/vendor/
+# Generated from frontend/proof/hand.jpg by scripts/make_swipe_y4m.py — 11 MB of
+# raw frames, rebuilt on demand rather than carried in the history.
+frontend/proof/swipe.y4m
+frontend/proof/shots/
+
+# Runtime backup output. Nothing here is source: database/restore.py and the
+# superadmin backup trigger write real archives into it, including from the
+# test that exercises that endpoint, and a committed .db.gz is both noise and
+# a potential data leak.
+backups/

@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# HOPEFX - override that leaves Alertmanager out of the stack
+# ---------------------------------------------------------------------------
+# Use this until alert delivery is actually configured:
+#
+#   docker compose -f docker-compose.yml \
+#                  -f deployments/docker-compose.no-alerting.yml up -d
+#
+# Or set it once so plain `docker compose` picks it up (combine with the Caddy
+# override using ':' if you use that too):
+#
+#   echo 'COMPOSE_FILE=docker-compose.yml:deployments/docker-compose.no-alerting.yml' >> .env
+#
+# WHY THIS EXISTS
+# monitoring/alertmanager/alertmanager.yml.tmpl declares a telegram_config, an
+# email_config and a pagerduty_config. When the credentials behind them are
+# unset the template renders empty values - bot_token: '', chat_id: 0, to: '' -
+# and Alertmanager rejects those at config-parse time instead of disabling the
+# receiver. The container then restart-loops forever.
+#
+# That is the correct outcome for a deployment that has no Telegram bot, no
+# SMTP relay and no PagerDuty account: there is nothing to deliver alerts to,
+# so running a delivery daemon achieves nothing except log noise that hides
+# real failures.
+#
+# Prometheus and Grafana are unaffected - metrics collection, dashboards and
+# alert RULES all keep working. What you lose is delivery: a firing rule shows
+# up in Prometheus and Grafana but nobody gets paged.
+#
+# TO TURN ALERTING BACK ON
+# Set these in .env, then drop this override:
+#
+#   ALERTMANAGER_TELEGRAM_BOT_TOKEN   from @BotFather
+#   ALERTMANAGER_TELEGRAM_CHAT_ID     integer, from @userinfobot
+#   ALERTMANAGER_SMTP_HOST            host:port, e.g. smtp.sendgrid.net:587
+#   ALERTMANAGER_SMTP_FROM            sender address
+#   ALERTMANAGER_SMTP_TO              recipient address
+#   ALERTMANAGER_SMTP_USERNAME        SMTP auth user
+#   ALERTMANAGER_SMTP_PASSWORD        SMTP auth password
+#
+# Optional: ALERTMANAGER_PAGERDUTY_KEY, ALERTMANAGER_SLACK_WEBHOOK_URL.
+# You do not need all of them - but every receiver block that survives in the
+# rendered config must have its credentials present.
+#
+# HOW IT WORKS
+# Assigning the service to a profile that is never activated is the supported
+# Compose way to exclude an inherited service; an override cannot delete one.
+# Nothing starts it unless you explicitly pass --profile alerting.
+# ---------------------------------------------------------------------------
+services:
+  alertmanager:
+    profiles:
+      - alerting

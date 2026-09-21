@@ -17,7 +17,14 @@ Fetches the macro series that most directly drive gold prices:
   - Fed Funds Rate (FEDFUNDS)
   - M2 Money Supply (M2SL) — Monetary expansion proxy
 
-Free tier: 120 req/day without key, 500 req/day with free key.
+FRED_API_KEY is required. Without it ``fetch_series`` returns an empty Series
+without sending a request, so nothing is retrieved and MacroStoreBridge falls
+back to the bundled CSVs in data/macro/ — which go stale.
+
+This docstring previously read "Free tier: 120 req/day without key, 500 req/day
+with free key", contradicting the comment in ``fetch_series`` a hundred lines
+below it and implying a keyless deployment would still get data. It gets none.
+
 Get a free key at: https://fred.stlouisfed.org/docs/api/api_key.html
 """
 
@@ -72,6 +79,9 @@ class FREDFeed:
         # Suppress repeated "unreachable" warnings — log once per series per
         # provider lifetime so the log is not flooded when FRED is offline.
         self._warned_series: set[str] = set()
+        # One-shot guard for the missing-API-key warning: there are many series
+        # and a daily refresh loop, so this must not become a log flood.
+        self._key_warned: bool = False
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -104,7 +114,18 @@ class FREDFeed:
         # every request returns HTTP 400.
         fred_key = os.getenv("FRED_API_KEY", "")
         if not fred_key:
-            logger.debug("FRED fetch_series %s skipped — FRED_API_KEY not set", series_id)
+            # Say this once, at WARNING. At DEBUG it was invisible in
+            # production, and it is the root cause of every downstream macro
+            # symptom: no key means every series comes back empty, which means
+            # the bridge falls through to the bundled CSVs and serves months-old
+            # observations. One warning, not one per series per refresh cycle.
+            if not self._key_warned:
+                logger.warning(
+                    "FRED_API_KEY is not set — no macro series can be fetched. Macro features will "
+                    "fall back to the bundled CSVs in data/macro/, which may be months old. "
+                    "Get a free key at https://fred.stlouisfed.org/docs/api/api_key.html"
+                )
+                self._key_warned = True
             return pd.Series(dtype=float)
 
         params = {

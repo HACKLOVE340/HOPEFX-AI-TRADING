@@ -274,7 +274,7 @@ class TestPropFirmGuardFailSafe:
             patch.object(trading_mod, "app_state", fake_state),
             patch.object(
                 trading_mod,
-                "_broker_call",
+                "_user_broker_call",
                 new_callable=AsyncMock,
                 return_value=MagicMock(),
             ),
@@ -284,7 +284,7 @@ class TestPropFirmGuardFailSafe:
             ),
             pytest.raises(HTTPException) as exc_info,
         ):
-            await trading_mod._validate_order(MagicMock())
+            await trading_mod._validate_order(MagicMock(), "user-1")
         assert exc_info.value.status_code == 503
 
     @pytest.mark.asyncio
@@ -301,7 +301,7 @@ class TestPropFirmGuardFailSafe:
             patch.object(trading_mod, "app_state", fake_state),
             patch.object(
                 trading_mod,
-                "_broker_call",
+                "_user_broker_call",
                 new_callable=AsyncMock,
                 return_value=MagicMock(),
             ),
@@ -311,7 +311,7 @@ class TestPropFirmGuardFailSafe:
             ),
             pytest.raises(HTTPException) as exc_info,
         ):
-            await trading_mod._validate_order(MagicMock())
+            await trading_mod._validate_order(MagicMock(), "user-1")
         assert exc_info.value.status_code == 403
 
 

@@ -106,7 +106,14 @@ class NoCodeStrategyBuilder:
 
         logger.info("Created %s strategy templates", len(self.templates))
 
-    def create_strategy(self, name: str, description: str, symbol: str, timeframe: str) -> NoCodeStrategy:
+    def create_strategy(
+        self,
+        name: str,
+        description: str,
+        symbol: str,
+        timeframe: str,
+        user_id: str | None = None,
+    ) -> NoCodeStrategy:
         """
         Create a new no-code strategy.
 
@@ -123,6 +130,7 @@ class NoCodeStrategyBuilder:
 
         strategy = NoCodeStrategy(
             strategy_id=strategy_id,
+            user_id=user_id,
             name=name,
             description=description,
             symbol=symbol,
@@ -234,7 +242,13 @@ class NoCodeStrategyBuilder:
         }
         return op_map.get(op_str, ConditionOperator.GREATER_THAN)
 
-    def parse_plain_english(self, description: str, symbol: str, timeframe: str) -> NoCodeStrategy | None:
+    def parse_plain_english(
+        self,
+        description: str,
+        symbol: str,
+        timeframe: str,
+        user_id: str | None = None,
+    ) -> NoCodeStrategy | None:
         """
         Parse a plain English strategy description.
 
@@ -259,6 +273,7 @@ class NoCodeStrategyBuilder:
             description=description,
             symbol=symbol,
             timeframe=timeframe,
+            user_id=user_id,
         )
 
         # Parse buy conditions
@@ -454,7 +469,14 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
             out = [t for t in out if str(t.get("category", "")).lower() == cat]
         return out
 
-    def create_from_template(self, template_id: str, name: str, symbol: str, timeframe: str) -> NoCodeStrategy | None:
+    def create_from_template(
+        self,
+        template_id: str,
+        name: str,
+        symbol: str,
+        timeframe: str,
+        user_id: str | None = None,
+    ) -> NoCodeStrategy | None:
         """Create a new strategy from a template."""
         template = self.templates.get(template_id)
         if not template:
@@ -465,6 +487,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
             description=template.description,
             symbol=symbol,
             timeframe=timeframe,
+            user_id=user_id,
         )
 
         # Copy rules from template

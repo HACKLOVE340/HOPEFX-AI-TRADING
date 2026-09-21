@@ -75,15 +75,39 @@ _FALLBACK_ORDER = ["yfinance", "alpha_vantage", "twelve_data"]
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _resolve_env(v: Any) -> str:
-    """Expand ``${VAR:default}`` placeholders in YAML string values."""
+def _resolve_env(v: Any, _depth: int = 0) -> str:
+    """Expand ``${VAR:default}`` placeholders in YAML string values.
+
+    The default may itself be a placeholder — the feed config uses
+    ``"${ALPHA_VANTAGE_KEY:${ALPHA_VANTAGE_API_KEY:}}"`` to accept either
+    variable name. This used to `partition(":")` once and return the default
+    verbatim, so with neither variable set it produced the *literal string*
+    ``"${ALPHA_VANTAGE_API_KEY:}"``.
+
+    That string is truthy, which had three consequences: the `or os.getenv(...)`
+    fallbacks after it were never reached, an unset key looked configured, and
+    AlphaVantageSource sent ``apikey=${ALPHA_VANTAGE_API_KEY:}`` upstream on
+    every fetch — a request guaranteed to fail, once per symbol per cycle.
+
+    Resolving recursively returns "" when nothing is set, which is what the
+    callers already treat as "not configured".
+    """
     if not isinstance(v, str):
         return v
-    if v.startswith("${") and v.endswith("}"):
-        inner = v[2:-1]
-        var, _, default = inner.partition(":")
-        return os.environ.get(var.strip(), default)
-    return v
+    if not (v.startswith("${") and v.endswith("}")):
+        return v
+    if _depth > 8:  # pathological nesting — do not spin
+        logger.warning("_resolve_env: placeholder nested too deeply, giving up: %r", v)
+        return ""
+
+    inner = v[2:-1]
+    var, sep, default = inner.partition(":")
+    resolved = os.environ.get(var.strip())
+    if resolved:
+        return resolved
+    if not sep:
+        return ""
+    return _resolve_env(default, _depth + 1)
 
 
 def _load_config(path: Path = _CONFIG_PATH) -> dict:
@@ -123,6 +147,7 @@ class _SymbolState:
         "price_min",
         "price_max",
         "last_price_for_anomaly",
+        "stale_warned",
     )
 
     def __init__(self, symbol: str, price_min: float, price_max: float, history_size: int) -> None:
@@ -136,6 +161,10 @@ class _SymbolState:
         self.price_min = price_min
         self.price_max = price_max
         self.last_price_for_anomaly: float | None = None
+        # Suppress repeated stale-rotation warnings: WARNING on the first stale
+        # detection, DEBUG while it stays stale (e.g. a market-closed weekend or a
+        # source with no coverage). Reset on the next successful update.
+        self.stale_warned: bool = False
 
     def is_circuit_open(self, source: str, cooldown: float) -> bool:
         open_at = self.circuit_open_at.get(source)
@@ -174,6 +203,7 @@ class _SymbolState:
         self.last_update = datetime.now(tz=UTC)
         self.history.append((price, self.last_update))
         self.last_price_for_anomaly = price
+        self.stale_warned = False  # fresh data — re-arm the stale warning
 
     def pick_source(self, fallback_order: list[str], cooldown: float) -> str:
         for src in fallback_order:
@@ -317,7 +347,38 @@ class MultiSourceTickFeed:
                 timeout=self._timeout_s,
                 session=self._session,
             )
+
+        self._warn_unusable_sources(av_key=av_key, td_key=td_key)
         return sources
+
+    def _warn_unusable_sources(self, *, av_key: str, td_key: str) -> None:
+        """Log, once at startup, any source that is enabled but cannot be used.
+
+        A keyed source with no key skips every fetch and returns None, at DEBUG
+        level — so at normal log levels an unset key is indistinguishable from
+        an upstream outage, and both look like "no data" in the UI.
+
+        This matters most for the metals. XAUUSD, XAGUSD and XPTUSD have no
+        yfinance ticker on purpose (Yahoo delisted spot, and quoting GLD against
+        spot gold would be far worse than quoting nothing), so they can ONLY be
+        priced by alpha_vantage or twelve_data. Without a key there is no spot
+        gold price on a platform whose primary instrument is gold.
+        """
+        keyed = {"alpha_vantage": av_key, "twelve_data": td_key}
+        unusable = [name for name, key in keyed.items() if self._source_enabled.get(name, True) and not key]
+        if not unusable:
+            return
+
+        # Symbols that depend entirely on the keyed sources.
+        keyless_only = sorted(sym for sym, cfg in self._symbol_cfgs.items() if not (cfg or {}).get("yfinance_ticker"))
+        logger.warning(
+            "Data feed: %s enabled but no API key configured — every fetch from "
+            "%s will be skipped. Set %s. Affected symbols (no yfinance fallback): %s",
+            ", ".join(unusable),
+            "them" if len(unusable) > 1 else "it",
+            " / ".join({"alpha_vantage": "ALPHA_VANTAGE_KEY", "twelve_data": "TWELVE_API_KEY"}[n] for n in unusable),
+            ", ".join(keyless_only) or "none",
+        )
 
     # ── Subscription ──────────────────────────────────────────────────────────
 
@@ -364,14 +425,43 @@ class MultiSourceTickFeed:
                 src._owns_session = False
 
         # Connect Redis tick writer (non-fatal if Redis is unavailable).
+        # Bound before the try so no path can reach the banner with it unset.
+        tick_writer_started = False
         try:
             from .redis_tick_writer import RedisTickWriter
 
             self._tick_writer = RedisTickWriter(tick_key_ttl=self._tick_key_ttl)
-            await self._tick_writer.connect()
+            # start(), NOT connect(). connect() only acquires the Redis client;
+            # start() also launches the background worker that drains the write
+            # queue into Redis.
+            #
+            # With only connect(), RedisTickWriter.write() enqueued every tick
+            # and returned True — self._redis was set, so it reported success —
+            # while no worker existed to consume the queue. The queue filled to
+            # its maxsize and from then on each new tick evicted the oldest.
+            # Every tick the feed fetched was silently discarded, nothing was
+            # ever published to hopefx:tick, and the startup banner still logged
+            # "redis=connected" because self._tick_writer was truthy.
+            #
+            # Downstream that is: frozen prices in the UI (ws_live had nothing to
+            # broadcast), charts stuck on "Loading market data…", and
+            # "No OHLCV data available" on the indicator builder — one silent
+            # failure presenting as a dozen broken pages.
+            # The banner below reports this flag, not the truthiness of
+            # self._tick_writer. The object exists whether or not Redis answered,
+            # so the old check logged "redis=connected" on the very same startup
+            # that warned ticks would NOT be persisted — two adjacent lines
+            # contradicting each other, with the reassuring one last.
+            tick_writer_started = await self._tick_writer.start()
+            if not tick_writer_started:
+                logger.warning(
+                    "MultiSourceTickFeed: RedisTickWriter did not start — ticks will NOT be "
+                    "persisted or broadcast. Check Redis connectivity (REDIS_URL/REDIS_PASSWORD)."
+                )
         except Exception as exc:
             logger.warning("MultiSourceTickFeed: RedisTickWriter init failed (non-fatal): %s", exc)
             self._tick_writer = None
+            tick_writer_started = False
 
         # Launch one polling task per symbol plus the health monitor.
         for sym in self._states:
@@ -382,7 +472,7 @@ class MultiSourceTickFeed:
             "MultiSourceTickFeed started | %d symbol(s) | refresh=%.1fs | redis=%s",
             len(self._states),
             self._refresh_s,
-            "connected" if self._tick_writer else "unavailable",
+            "connected" if tick_writer_started else "UNAVAILABLE — ticks not persisted",
         )
 
     async def stop(self) -> None:
@@ -408,26 +498,137 @@ class MultiSourceTickFeed:
         return st.last_update if st else None
 
     def status(self) -> dict:
+        symbols = {sym: st.status() for sym, st in self._states.items()}
+        redis = self._tick_writer.status() if self._tick_writer else {"redis_connected": False}
+        healthy, message = self._health_summary(symbols, redis)
         return {
             "running": self._running,
-            "symbols": {sym: st.status() for sym, st in self._states.items()},
+            # `healthy` and `message` are part of this contract, not decoration.
+            # security/diagnostics.py has always read them:
+            #     return status.get("healthy", False), status.get("message", "")
+            # and this dict has never contained either key, so the check could
+            # only ever return False. The deployed superadmin page reported
+            # "data_feeds_module: Data feed module unhealthy" continuously,
+            # whether the feed was streaming perfectly or not running at all —
+            # a check with exactly one possible answer tells you nothing, and
+            # having it on screen in red trains you to ignore the panel.
+            "healthy": healthy,
+            "message": message,
+            "symbols": symbols,
             "sources": {n: s.status() if hasattr(s, "status") else {} for n, s in self._sources.items()},
             "source_enabled": self._source_enabled,
             "active_fallback_order": self._active_order,
-            "redis": (self._tick_writer.status() if self._tick_writer else {"redis_connected": False}),
+            "redis": redis,
             "subscriber_count": len(self._subscribers),
             "redis_errors": self._redis_errors,
+            "max_stale_seconds": self._max_stale_s,
         }
 
+    def _health_summary(self, symbols: dict, redis: dict) -> tuple[bool, str]:
+        """Reduce the status snapshot to one boolean and one sentence.
+
+        Healthy means the feed is running *and* at least one symbol has ticked
+        recently. "Running" alone is not health: the poll loop stays alive with
+        every source circuit-open, which is precisely the state worth alerting
+        on.
+        """
+        if not self._running:
+            return False, "Data feed is not running"
+        if not symbols:
+            return False, "Data feed is running but no symbols are configured"
+
+        # Twice max_stale_seconds: max_stale is the per-tick validity window,
+        # and a symbol one refresh past it is not yet a fault.
+        cutoff = max(self._max_stale_s * 2, 10.0)
+        now = datetime.now(UTC)
+        fresh: list[str] = []
+        stale: list[str] = []
+        for sym, st in symbols.items():
+            last = st.get("last_update")
+            if not last:
+                stale.append(sym)
+                continue
+            try:
+                age = (now - datetime.fromisoformat(last)).total_seconds()
+            except (TypeError, ValueError):
+                stale.append(sym)
+                continue
+            (fresh if age <= cutoff else stale).append(sym)
+
+        redis_note = "" if redis.get("redis_connected") else "; Redis not connected — ticks are not persisted"
+        if not fresh:
+            return False, (
+                f"Data feed is running but all {len(stale)} symbol(s) are stale (>{cutoff:.0f}s){redis_note}"
+            )
+        return True, (f"Data feed healthy — {len(fresh)}/{len(symbols)} symbol(s) fresh{redis_note}")
+
     # ── Internal polling ──────────────────────────────────────────────────────
+
+    def _serviceable_order(self, symbol: str, sym_cfg: dict) -> list[str]:
+        """The subset of the fallback chain that *could* price *symbol*.
+
+        A source with no ticker mapping for this symbol — or, for the keyed
+        sources, no API key — cannot answer, and that is knowable from config
+        without a single request. Asking it anyway and then calling
+        ``record_failure`` on the None it returns conflates "not configured"
+        with "upstream is down".
+
+        That conflation is what filled the production log: XAUUSD, XAGUSD,
+        XPTUSD and USOIL carry a blank ``yfinance_ticker`` on purpose, so every
+        2-second poll spent three retries on yfinance, tripped the breaker at 5
+        failures, waited out the 60 s cooldown, closed the breaker, and tripped
+        it again — for as long as the process ran. The visible cost was noise;
+        the real cost was that ``circuit OPEN for 'yfinance'`` and the
+        ``msf_source_errors`` counter, the two signals that would tell an
+        operator Yahoo had *actually* gone down, were saturated by design.
+
+        Sources that do not implement ``can_serve`` are assumed capable, so a
+        custom or stubbed adapter keeps its current behaviour.
+        """
+        out: list[str] = []
+        for name in self._active_order:
+            adapter = self._sources.get(name)
+            if adapter is None:
+                continue
+            check = getattr(adapter, "can_serve", None)
+            if check is None or check(symbol, sym_cfg):
+                out.append(name)
+        return out
 
     async def _poll_symbol(self, symbol: str) -> None:
         state = self._states[symbol]
         sym_cfg = self._symbol_cfgs.get(symbol, {})
 
+        # Serviceability is fixed once start() has built the sources: it depends
+        # only on the symbol config and the API keys, both read at build time.
+        # So decide once here rather than re-deciding every poll.
+        order = self._serviceable_order(symbol, sym_cfg)
+        if not order:
+            logger.warning(
+                "MultiSourceFeed[%s]: no configured source can price this symbol "
+                "(checked %s) — not polling. It will have no live price until a "
+                "source is configured for it: set ALPHA_VANTAGE_KEY or "
+                "TWELVE_API_KEY, or give it a ticker in config/multi_source_feed.yaml.",
+                symbol,
+                ", ".join(self._active_order) or "none",
+            )
+            return
+        if len(order) < len(self._active_order):
+            logger.info(
+                "MultiSourceFeed[%s]: chain=%s (skipping %s — not configured for this symbol)",
+                symbol,
+                order,
+                ", ".join(s for s in self._active_order if s not in order),
+            )
+        # _SymbolState defaults active_source to the head of the global chain,
+        # which status() would report as "yfinance" for a symbol yfinance can
+        # never serve. Start it on a source that could actually answer.
+        if state.active_source not in order:
+            state.active_source = order[0]
+
         while self._running:
             t0 = time.monotonic()
-            source = state.pick_source(self._active_order, self._cb_cooldown)
+            source = state.pick_source(order, self._cb_cooldown)
             price = await self._fetch_with_retry(symbol, source, sym_cfg)
 
             if price is not None:
@@ -474,7 +675,7 @@ class MultiSourceTickFeed:
                     await self._broadcast(symbol, price)
             else:
                 state.record_failure(source, self._cb_threshold)
-                nxt = state.pick_source(self._active_order, self._cb_cooldown)
+                nxt = state.pick_source(order, self._cb_cooldown)
                 if nxt != source:
                     state.active_source = nxt
                     logger.warning(
@@ -571,9 +772,23 @@ class MultiSourceTickFeed:
                     continue
                 age_s = (now - state.last_update).total_seconds()
                 if age_s > self._max_stale_s:
-                    logger.warning("MultiSourceFeed[%s]: stale (%.0f s) — rotating source", sym, age_s)
+                    # First stale detection logs at WARNING; while it stays stale
+                    # (market closed / no source coverage) drop to DEBUG to avoid
+                    # flooding the logs every 15 s.
+                    if not state.stale_warned:
+                        logger.warning("MultiSourceFeed[%s]: stale (%.0f s) — rotating source", sym, age_s)
+                        state.stale_warned = True
+                    else:
+                        logger.debug(
+                            "MultiSourceFeed[%s]: still stale (%.0f s) — rotating source (suppressed)", sym, age_s
+                        )
                     state.record_failure(state.active_source, self._cb_threshold)
-                    state.active_source = state.pick_source(self._active_order, self._cb_cooldown)
+                    # Rotate only among sources that could actually price this
+                    # symbol — rotating onto one with no ticker mapping just
+                    # guarantees the next poll fails too.
+                    order = self._serviceable_order(sym, self._symbol_cfgs.get(sym, {}))
+                    if order:
+                        state.active_source = state.pick_source(order, self._cb_cooldown)
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
@@ -600,5 +815,11 @@ def get_feed_status() -> dict:
     been initialised yet.  Used by security/diagnostics.py and health checks.
     """
     if _feed_instance is None:
-        return {"running": False, "symbols": {}, "redis": {"redis_connected": False}}
+        return {
+            "running": False,
+            "healthy": False,
+            "message": "Data feed singleton has not been initialised",
+            "symbols": {},
+            "redis": {"redis_connected": False},
+        }
     return _feed_instance.status()

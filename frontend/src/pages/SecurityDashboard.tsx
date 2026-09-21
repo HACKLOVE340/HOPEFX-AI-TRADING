@@ -18,7 +18,9 @@ import { api } from '../hooks/useApi';
 import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../components/GlobalAttackMap';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
+import { extractApiError } from '../lib/utils';
+import { Ban, Globe, Lock, Siren } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,7 +127,9 @@ const SecurityDashboard: React.FC = () => {
       setError(null);
     } catch (err) {
       if (!mountedRef.current) return;
-      setError('Failed to load security data. Retrying in 15 s…');
+      // Keep the retry promise, but lead with what the server actually said
+      // rather than replacing it (F189).
+      setError(`${extractApiError(err, 'Failed to load security data')} — retrying in 15 s.`);
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -185,23 +189,22 @@ const SecurityDashboard: React.FC = () => {
   }, {});
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Security Operations"
         subtitle="HOPEFXBrain — 24/7 autonomous threat monitoring"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => navigate('/')}
-              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: 'var(--link)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               📊 Dashboard
             </button>
             <button onClick={() => navigate('/audit-log')}
-              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: 'var(--ai-model)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               📋 Audit Log
             </button>
           </div>
         }
-      />
+    >
 
       {/* Lockdown banner + toggle */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -221,8 +224,8 @@ const SecurityDashboard: React.FC = () => {
           style={{
             background: lockdown.lockdown_active ? '#14532d' : '#450a0a',
             border: `1px solid ${lockdown.lockdown_active ? '#166534' : '#7f1d1d'}`,
-            borderRadius: 8, color: lockdown.lockdown_active ? '#4ade80' : '#f87171',
-            cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '8px 18px',
+            borderRadius: 8, color: lockdown.lockdown_active ? 'var(--gain)' : 'var(--loss)',
+            cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 700, padding: '8px 18px',
             flexShrink: 0,
           }}
         >
@@ -235,36 +238,42 @@ const SecurityDashboard: React.FC = () => {
         <div style={errorBannerStyle}>{error}</div>
       )}
 
-      {/* KPI strip */}
+      {/* KPI strip
+          When the fetch failed these counters hold their initial values, which
+          are zeros — and a security panel rendering "0 threats · All systems go"
+          on data it never received is worse than rendering an error, because it
+          reads as an all-clear. Zero is a claim; unknown is the truth. While
+          `error` is set every tile shows an em dash and no reassuring subtitle. */}
       <div style={kpiGridStyle}>
         <MetricCard
           label="Total Threats"
-          value={totalAttacks}
-          delta={highSeverity > 0 ? `${highSeverity} high severity` : undefined}
+          value={error ? '—' : totalAttacks}
+          delta={error ? 'Data unavailable' : highSeverity > 0 ? `${highSeverity} high severity` : undefined}
           deltaPositive={false}
-          icon="🌐"
+          icon={<Globe size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Lockdown"
-          value={lockdown.lockdown_active ? 'ACTIVE' : 'Clear'}
-          delta={lockdown.lockdown_active ? 'Trading paused' : 'All systems go'}
-          deltaPositive={!lockdown.lockdown_active}
-          icon="🔒"
+          value={error ? '—' : lockdown.lockdown_active ? 'ACTIVE' : 'Clear'}
+          delta={error ? 'Status unknown' : lockdown.lockdown_active ? 'Trading paused' : 'All systems go'}
+          deltaPositive={!error && !lockdown.lockdown_active}
+          icon={<Lock size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Blocked IPs"
-          value={blockedIPs.length}
-          icon="🚫"
+          value={error ? '—' : blockedIPs.length}
+          delta={error ? 'Data unavailable' : undefined}
+          icon={<Ban size={18} aria-hidden />}
           loading={loading}
         />
         <MetricCard
           label="Critical Alerts"
-          value={alerts.length}
-          delta={alerts.length > 0 ? 'Requires review' : undefined}
-          deltaPositive={alerts.length === 0}
-          icon="🚨"
+          value={error ? '—' : alerts.length}
+          delta={error ? 'Data unavailable' : alerts.length > 0 ? 'Requires review' : undefined}
+          deltaPositive={!error && alerts.length === 0}
+          icon={<Siren size={18} aria-hidden />}
           loading={loading}
         />
       </div>
@@ -299,7 +308,7 @@ const SecurityDashboard: React.FC = () => {
             <span style={panelCountStyle}>{blockedIPs.length}</span>
           </div>
           {unblockErr && (
-            <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 6, color: '#f87171', fontSize: 12, padding: '6px 10px', margin: '0 0 8px' }}>
+            <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 6, color: 'var(--loss)', fontSize: 12, padding: '6px 10px', margin: '0 0 8px' }}>
               {unblockErr}
             </div>
           )}
@@ -317,8 +326,8 @@ const SecurityDashboard: React.FC = () => {
                     onClick={() => handleUnblockIp(ip)}
                     disabled={unblockingIp === ip}
                     style={{
-                      background: 'transparent', border: '1px solid #334155',
-                      borderRadius: 5, color: '#94a3b8', cursor: 'pointer',
+                      background: 'transparent', border: '1px solid var(--border-strong)',
+                      borderRadius: 5, color: 'var(--text-dim)', cursor: 'pointer',
                       fontSize: 11, padding: '2px 8px',
                     }}
                   >
@@ -345,7 +354,7 @@ const SecurityDashboard: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#ef4444', fontSize: 10 }}>⬤</span>
                     <span style={ipTextStyle}>{(alert.type ?? 'unknown').toUpperCase()}</span>
-                    <span style={{ color: '#94a3b8', fontSize: 11 }}>{alert.ip}</span>
+                    <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>{alert.ip}</span>
                   </div>
                   <span style={timeStyle}>
                     {alert.ts ? new Date(alert.ts).toLocaleTimeString() : '—'}
@@ -356,7 +365,7 @@ const SecurityDashboard: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 
@@ -365,7 +374,7 @@ const SecurityDashboard: React.FC = () => {
 const INTENT_COLOUR: Record<string, string> = {
   probe: '#facc15',
   bruteforce: '#f97316',
-  unknown: '#94a3b8',
+  unknown: 'var(--text-dim)',
   exfil: '#ef4444',
   ddos: '#dc2626',
 };
@@ -385,15 +394,6 @@ function intentChipStyle(intent: string): React.CSSProperties {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-
-const pageStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 16,
-  padding: '20px 24px',
-  maxWidth: 1400,
-  margin: '0 auto',
-};
 
 const lockdownBannerStyle: React.CSSProperties = {
   alignItems: 'center',
@@ -453,8 +453,8 @@ const bottomGridStyle: React.CSSProperties = {
 };
 
 const panelStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
+  background: 'var(--surface, var(--raised))',
+  border: '1px solid var(--border, var(--border-strong))',
   borderRadius: 10,
   display: 'flex',
   flexDirection: 'column',
@@ -463,29 +463,29 @@ const panelStyle: React.CSSProperties = {
 
 const panelHeaderStyle: React.CSSProperties = {
   alignItems: 'center',
-  borderBottom: '1px solid var(--border, #334155)',
+  borderBottom: '1px solid var(--border, var(--border-strong))',
   display: 'flex',
   justifyContent: 'space-between',
   padding: '12px 16px',
 };
 
 const panelTitleStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
-  fontSize: 13,
+  color: 'var(--text, var(--text-strong))',
+  fontSize: 'var(--fs-body)',
   fontWeight: 700,
 };
 
 const panelCountStyle: React.CSSProperties = {
-  background: '#334155',
+  background: 'var(--surface-hover)',
   borderRadius: 10,
-  color: '#94a3b8',
+  color: 'var(--text-dim)',
   fontSize: 11,
   fontWeight: 700,
   padding: '2px 8px',
 };
 
 const emptyStyle: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--text-muted)',
   fontSize: 12,
   padding: '20px 16px',
   textAlign: 'center',
@@ -500,7 +500,7 @@ const ipListStyle: React.CSSProperties = {
 
 const ipRowStyle: React.CSSProperties = {
   alignItems: 'center',
-  borderBottom: '1px solid #1e293b',
+  borderBottom: '1px solid var(--border)',
   display: 'flex',
   justifyContent: 'space-between',
   padding: '8px 16px',
@@ -508,14 +508,14 @@ const ipRowStyle: React.CSSProperties = {
 
 const alertRowStyle: React.CSSProperties = {
   alignItems: 'center',
-  borderBottom: '1px solid #1e293b',
+  borderBottom: '1px solid var(--border)',
   display: 'flex',
   justifyContent: 'space-between',
   padding: '8px 16px',
 };
 
 const ipTextStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
+  color: 'var(--text, var(--text-strong))',
   fontFamily: 'monospace',
   fontSize: 12,
 };
@@ -524,14 +524,14 @@ const blockedBadgeStyle: React.CSSProperties = {
   background: '#ef444422',
   border: '1px solid #ef4444',
   borderRadius: 10,
-  color: '#f87171',
+  color: 'var(--loss)',
   fontSize: 10,
   fontWeight: 700,
   padding: '2px 7px',
 };
 
 const timeStyle: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--text-muted)',
   fontSize: 11,
   flexShrink: 0,
 };

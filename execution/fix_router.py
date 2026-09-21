@@ -32,7 +32,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 UTC = timezone.utc
 
@@ -45,6 +45,9 @@ from execution.fix_adapter import (
     FIXOrdType,
     FIXSide,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from execution.order_gate import OrderGate
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +172,17 @@ class FIXRouter:
     await router.start()   # runs until cancelled or kill received
     """
 
-    def __init__(self) -> None:
+    def __init__(self, gate: OrderGate | None = None) -> None:
+        # Pre-trade gate. None means no risk layer at all, which AlwaysAllowGate
+        # announces on every order rather than passing silently — a quiet default
+        # here would recreate F142 inside its own fix.
+        from execution.order_gate import AlwaysAllowGate
+
+        self._gate: OrderGate = gate if gate is not None else AlwaysAllowGate()
+        #: Orders refused by the pre-trade risk gate. Distinct from
+        #: ``_reject_count``, which counts rejections that came back from a
+        #: broker — these never reached one.
+        self._gate_refused_count: int = 0
         self._adapter: FIXAdapter | None = None
         self._fallback = _OandaFallback()
         self._paper_broker: Any | None = None
@@ -329,6 +342,25 @@ class FIXRouter:
         if self._halted:
             logger.warning("FIXRouter: order rejected — router is halted.")
             return
+
+        # The halt above is a kill switch, not a risk assessment. Everything
+        # below it used to run with no gate of any kind: no RiskManager, no
+        # position sizing, no stop-loss, no drawdown, exposure or correlation
+        # limit — and size came from the constant PAPER_ORDER_UNITS (F142).
+        # This is the path run.py takes when PAPER_TRADING=true.
+        decision = await self._gate.check(order_request)
+        if not decision.allowed:
+            self._gate_refused_count += 1
+            logger.warning(
+                "FIXRouter: order REFUSED by pre-trade gate — %s (%s)",
+                order_request.get("symbol"),
+                decision.reason,
+            )
+            return
+        if decision.quantity is not None:
+            # Copy rather than mutate: order_request came off the event bus and
+            # may still be held by whatever published it.
+            order_request = {**order_request, "units": decision.quantity}
 
         symbol = order_request.get("symbol", "XAU/USD")
         direction = order_request.get("direction", "BUY").upper()
@@ -573,6 +605,7 @@ class FIXRouter:
             "order_count": self._order_count,
             "fill_count": self._fill_count,
             "reject_count": self._reject_count,
+            "gate_refused_count": self._gate_refused_count,
             "halted": self._halted,
             "fix_available": self._fix_available,
             "paper_mode": _PAPER_MODE,

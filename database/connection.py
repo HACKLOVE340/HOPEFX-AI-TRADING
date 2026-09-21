@@ -295,8 +295,45 @@ class DatabaseManager:
             # counts that caused premature re-opening on the next error.
             self._failure_count = 0
 
+    # Exceptions that can only come from the *caller's* code inside the
+    # with-block, never from the database being unhealthy.
+    #
+    # session() yields inside its try, so anything a caller raises while holding
+    # the session lands in the trailing `except Exception` and used to be booked
+    # as a database failure. A wrong column name (Configuration.key, which is
+    # actually config_key) therefore opened the shared circuit breaker after five
+    # calls, and from then on every DB consumer in the process got
+    # "Database circuit breaker is open" — health endpoints included. A typo took
+    # out health reporting process-wide.
+    #
+    # Deliberately narrow: only pure-Python programming errors are excluded.
+    # Everything SQLAlchemy or DBAPI raises — OperationalError, timeouts,
+    # ProgrammingError (which can mean an unapplied migration) — still counts,
+    # so the breaker's protection against a genuinely sick database is unchanged.
+    # ValueError is NOT excluded: drivers do raise it on bad data.
+    _CALLER_SIDE_ERRORS = (AttributeError, TypeError, NameError, ImportError, KeyError, IndexError)
+
+    def _is_caller_side(self, exc: BaseException | None) -> bool:
+        """True when *exc* is a programming error, not a database fault."""
+        if exc is None:
+            return False
+        from sqlalchemy.exc import SQLAlchemyError
+
+        if isinstance(exc, SQLAlchemyError):
+            return False
+        return isinstance(exc, self._CALLER_SIDE_ERRORS)
+
     def _record_failure(self, exc: Exception | None = None):
         """Record failed operation; re-open circuit from half-open if probe fails."""
+        if self._is_caller_side(exc):
+            # Still rolled back and re-raised by the caller — just not counted as
+            # evidence that the database is unwell.
+            logger.error(
+                "Application error inside a DB session (not counted toward the circuit breaker): %s: %s",
+                type(exc).__name__,
+                exc,
+            )
+            return
         self._failure_count += 1
         self._last_failure_time = time.time()
         with self._metrics_lock:

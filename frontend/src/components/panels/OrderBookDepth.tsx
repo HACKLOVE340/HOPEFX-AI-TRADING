@@ -38,7 +38,7 @@ function DepthRow({ price, size, maxSize, side, isBest }: DepthRowProps) {
     <div
       className={cn(
         'relative flex items-center justify-between px-3 py-0.5 text-[10px] font-mono tabular-nums',
-        isBest && 'bg-[#1e2d3d]/40',
+        isBest && 'bg-[var(--border)]/40',
       )}
     >
       {/* Background fill bar */}
@@ -74,14 +74,14 @@ function DepthImbalanceBar({ imbalance }: { imbalance: number }) {
   const askPct  = 100 - bidPct;
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-t border-[#1e2d3d]">
+    <div className="flex items-center gap-2 px-3 py-2 border-t border-[var(--border)]">
       <span className="text-[9px] text-slate-600 uppercase tracking-wider w-16 shrink-0">Depth Imbal</span>
       <div className="flex-1 flex h-1.5 rounded-full overflow-hidden">
-        <div className="h-full bg-[#00e676] transition-all duration-300" style={{ width: `${bidPct}%` }} />
-        <div className="h-full bg-[#ff1744] transition-all duration-300" style={{ width: `${askPct}%` }} />
+        <div className="h-full bg-[var(--bull)] transition-all duration-300" style={{ width: `${bidPct}%` }} />
+        <div className="h-full bg-[var(--bear)] transition-all duration-300" style={{ width: `${askPct}%` }} />
       </div>
-      <span className="text-[9px] font-mono text-[#00e676] w-8 text-right">{bidPct.toFixed(0)}%</span>
-      <span className="text-[9px] font-mono text-[#ff1744] w-8 text-right">{askPct.toFixed(0)}%</span>
+      <span className="text-[9px] font-mono text-[var(--bull)] w-8 text-right">{bidPct.toFixed(0)}%</span>
+      <span className="text-[9px] font-mono text-[var(--bear)] w-8 text-right">{askPct.toFixed(0)}%</span>
     </div>
   );
 }
@@ -153,17 +153,17 @@ export function OrderBookDepth() {
       ) : (
         <div className="flex flex-col h-full">
           {/* Disclaimer — not a real L2 book */}
-          <div className="px-3 py-1 bg-[#0d1421] border-b border-[#1e2d3d]">
+          <div className="px-3 py-1 bg-[var(--surface)] border-b border-[var(--border)]">
             <span className="text-[9px] text-slate-600 italic">
               Estimated from microstructure — not real L2 resting orders
             </span>
           </div>
           {/* Column headers */}
-          <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#1e2d3d]">
-            <span className="text-[9px] text-[#00e676] uppercase tracking-wider">Price (Bid)</span>
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border)]">
+            <span className="text-[9px] text-[var(--bull)] uppercase tracking-wider">Price (Bid)</span>
             <span className="text-[9px] text-slate-600 uppercase tracking-wider">Size</span>
             <span className="text-[9px] text-slate-600 uppercase tracking-wider">Size</span>
-            <span className="text-[9px] text-[#ff1744] uppercase tracking-wider">Price (Ask)</span>
+            <span className="text-[9px] text-[var(--bear)] uppercase tracking-wider">Price (Ask)</span>
           </div>
 
           {/* Asks (reversed — best ask at bottom) */}
@@ -188,8 +188,8 @@ export function OrderBookDepth() {
           </div>
 
           {/* Mid price spread row */}
-          <div className="flex items-center justify-between px-3 py-1.5 bg-[#111827] border-y border-[#1e2d3d]">
-            <span className="font-mono tabular-nums text-sm font-bold text-[#00d4ff]">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--raised)] border-y border-[var(--border)]">
+            <span className="font-mono tabular-nums text-sm font-bold text-[var(--accent)]">
               {fmtPrice(bid)}
             </span>
             <div className="flex flex-col items-center">
@@ -198,7 +198,7 @@ export function OrderBookDepth() {
                 {(spread * 100).toFixed(1)} pts
               </span>
             </div>
-            <span className="font-mono tabular-nums text-sm font-bold text-[#00d4ff]">
+            <span className="font-mono tabular-nums text-sm font-bold text-[var(--accent)]">
               {fmtPrice(ask)}
             </span>
           </div>

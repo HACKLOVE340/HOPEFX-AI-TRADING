@@ -22,13 +22,23 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from functools import lru_cache
 
 UTC = timezone.utc
 from pathlib import Path as _Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+# Imported only under the underscored alias. It used to be imported under both
+# names, and `get_account` assigns `margin_level` locally, which silently turned
+# every bare read in that function into an unbound local — a guaranteed 500 on
+# the paper branch. Keeping one name means the shadow cannot be reintroduced by
+# accident, and ruff's F811 now catches it if anyone tries.
+from core.account_metrics import margin_level as _margin_level
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
+
+from core import idempotency as _idem
 from pydantic import BaseModel, Field, field_validator
 
 from api.auth import (
@@ -369,6 +379,11 @@ class OrderResponse(BaseModel):
     order_id: str
     filled_price: float | None = None
     filled_quantity: float | None = None
+    # True only when a requested stop_loss/take_profit was actually placed with
+    # the broker. Clients that collected a stop from a user MUST check this —
+    # a filled order with stop_loss_placed=False is an UNPROTECTED position.
+    # Null when no bracket was requested. See F151.
+    stop_loss_placed: bool | None = None
 
 
 class ClosePositionResponse(BaseModel):
@@ -414,21 +429,57 @@ def set_state(state) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _broker_call(method_name: str, *args, **kwargs):
-    """
-    Call a broker method whether it is sync or async.
-    PaperTradingBroker uses sync methods; OANDA uses async.
-    This wrapper handles both transparently.
+async def _call_on(broker: Any, method_name: str, *args, **kwargs):
+    """Call a broker method whether it is sync or async.
+
+    PaperTradingBroker uses sync methods; OANDA uses async. Sync methods run in
+    an executor so they do not block the event loop.
     """
     import asyncio
 
-    broker = app_state.broker
+    if broker is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised",
+        )
     method = getattr(broker, method_name)
     if asyncio.iscoroutinefunction(method):
         return await method(*args, **kwargs)
-    # Sync method — run in executor to avoid blocking the event loop
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: method(*args, **kwargs))
+
+
+async def _broker_call(method_name: str, *args, **kwargs):
+    """Call a method on the **shared** process-wide broker.
+
+    This is the deployment's own account — the autonomous engine's book. It is
+    NOT any particular user's, so it must not back a request handler; use
+    :func:`_user_broker_call` there. See ``core/account_registry.py`` and
+    backlog T-01 for why: the shared engine nets every user's fills into one
+    position per symbol.
+    """
+    return await _call_on(app_state.broker, method_name, *args, **kwargs)
+
+
+async def _resolve_account(user_id: str):
+    """The account the request acts on, per ``core.account_registry``."""
+    from core.account_registry import get_account_registry
+
+    return await get_account_registry().resolve(user_id)
+
+
+async def _user_broker_call(user_id: str, method_name: str, *args, **kwargs):
+    """Call a broker method on *user_id*'s own account.
+
+    Every request handler that touches positions, orders or balances goes
+    through here. On a paper deployment this is an account belonging to that
+    user alone; on a live single-account venue the registry hands back the
+    shared broker and says so, and the deployment is genuinely single-account —
+    ``GET /api/trading/account`` reports that in ``isolated`` so the caller is
+    not misled about whose money it is looking at.
+    """
+    resolution = await _resolve_account(user_id)
+    return await _call_on(resolution.broker, method_name, *args, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -444,9 +495,14 @@ async def _broker_call(method_name: str, *args, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-async def _validate_order(order: "OrderRequest") -> None:
+async def _validate_order(order: "OrderRequest", user_id: str) -> None:
     """
     Validate broker availability and prop-firm rules before touching risk.
+
+    The prop-firm rules are evaluated against *this user's* account. Read from
+    the shared engine they were checked against the deployment's combined book,
+    so one user's drawdown could block another user's order — or, worse, let one
+    through because somebody else's profit was covering the breach.
 
     Raises HTTP 503 if the broker is not ready.
     Raises HTTP 403 if prop-firm rules are violated.
@@ -463,7 +519,7 @@ async def _validate_order(order: "OrderRequest") -> None:
     try:
         from brokers.prop_firms.guard import check_prop_firm_rules
 
-        account_info = await _broker_call("get_account_info")
+        account_info = await _user_broker_call(user_id, "get_account_info")
         check_prop_firm_rules(account_info)
     except HTTPException:
         raise
@@ -515,8 +571,8 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
     Raises HTTP 503 when the check itself fails (fail-safe: block the order).
     """
     try:
-        account_info = await _broker_call("get_account_info")
-        positions = await _broker_call("get_positions")
+        account_info = await _user_broker_call(user_id, "get_account_info")
+        positions = await _user_broker_call(user_id, "get_positions")
         positions_dicts = [
             {
                 "symbol": p.symbol,
@@ -628,7 +684,7 @@ def _log_compliance(order: "OrderRequest", user_id: str) -> None:
         logger.error("Compliance log error: %s", comp_exc)
 
 
-async def _route_to_broker(order: "OrderRequest") -> Any:
+async def _route_to_broker(order: "OrderRequest", user_id: str) -> Any:
     """
     Submit the order to the broker and return the fill result.
 
@@ -640,13 +696,26 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
             kwargs["stop_loss"] = order.stop_loss
         if order.take_profit is not None:
             kwargs["take_profit"] = order.take_profit
-        result = await _broker_call(
+        result = await _user_broker_call(
+            user_id,
             "place_market_order",
             symbol=order.symbol,
             side=order.side,
             quantity=order.quantity,
             **kwargs,
         )
+        # A stop the broker never received must not be reported as accepted.
+        # brokers/base.py cannot attach brackets at market entry for adapters
+        # without bracket support, so it flags the discard here rather than
+        # letting the caller believe the position is protected. See F151.
+        if getattr(result, "brackets_requested", False) and not getattr(result, "brackets_applied", True):
+            logger.error(
+                "Order %s filled but its stop_loss/take_profit was NOT placed with the "
+                "broker — position is UNPROTECTED (symbol=%s user=%s)",
+                getattr(result, "order_id", "?"),
+                order.symbol,
+                user_id,
+            )
         return result
     except HTTPException:
         raise
@@ -663,8 +732,18 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
         ) from None
 
 
-async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
-    """Broadcast the fill over WebSocket. Best-effort — logs on failure."""
+async def _broadcast_fill_ws(order: "OrderRequest", result: Any, user_id: str) -> None:
+    """Send the fill to the trader who placed it. Best-effort — logs on failure.
+
+    This used ``broadcast("trades", …)``, so every fill — symbol, side, size and
+    price — went to every subscriber of the trades channel. That is the reported
+    behaviour in its most direct form: place an order and everyone else sees it
+    appear. Fills go to their owner now.
+
+    The legacy ``app_state.ws_manager`` fallback broadcast too and has no
+    per-user send, so it is used only when there is genuinely no ws_live manager
+    to route through, and it is logged when it happens.
+    """
     trade_msg = {
         "type": "trade_fill",
         "data": {
@@ -679,18 +758,20 @@ async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
     try:
         from api.ws_live import get_live_manager as _get_live_mgr
 
-        await _get_live_mgr().broadcast("trades", trade_msg)
+        await _get_live_mgr().send_to_user(user_id, "trades", trade_msg)
         return
     except Exception as exc:
-        logger.debug("ws_live broadcast failed, trying ws_manager: %s", exc)
+        logger.debug("ws_live send_to_user failed, trying ws_manager: %s", exc)
 
-    # Fallback: legacy WebSocketManager on app_state (websockets-based).
+    # Fallback: legacy WebSocketManager on app_state (websockets-based). It has
+    # no per-user delivery, so the fill is dropped rather than shown to everyone.
     if not (hasattr(app_state, "ws_manager") and app_state.ws_manager is not None):
         return
-    try:
-        await app_state.ws_manager.broadcast(trade_msg)
-    except Exception as exc:
-        logger.warning("WebSocket broadcast failed: %s", exc)
+    logger.warning(
+        "Fill notification for user=%s not delivered: ws_live unavailable and the "
+        "legacy ws_manager cannot address a single user.",
+        user_id,
+    )
 
 
 def _send_fill_push(order: "OrderRequest", result: Any, user_id: str) -> None:
@@ -839,17 +920,23 @@ async def _record_fill(
         order.quantity,
         order_id,
     )
-    await _broadcast_fill_ws(order, result)
+    await _broadcast_fill_ws(order, result, user_id)
     _send_fill_push(order, result, user_id)
     _send_fill_email(order, result, user_id)
     _increment_fill_metrics(order)
     _notify_paper_gate_and_online_learner(order, result)
+
+    # Report the bracket outcome truthfully. None when the caller asked for no
+    # stop; False when they asked and the broker never received it (F151).
+    _brackets_req = getattr(result, "brackets_requested", False)
+    _sl_placed = getattr(result, "brackets_applied", True) if _brackets_req else None
 
     return {
         "status": "success",
         "order_id": order_id,
         "filled_price": fill_price,
         "filled_quantity": filled_qty,
+        "stop_loss_placed": _sl_placed,
     }
 
 
@@ -915,9 +1002,21 @@ def _check_subscription_gate(user_id: str, role: str = "user") -> None:
 )
 async def place_order(
     order: OrderRequest,
+    response: Response,
     user: TokenPayload = Depends(require_kyc),
     _role: TokenPayload = Depends(require_role("trader")),
     _rl: None = Depends(_order_rate_limit_dep),
+    idempotency_key: str | None = Header(
+        None,
+        alias="Idempotency-Key",
+        max_length=200,
+        description=(
+            "Optional. Send a unique value per intended order and this endpoint "
+            "will place it at most once, returning the original response if the "
+            "request is retried. Strongly recommended for any client that retries "
+            "on timeout."
+        ),
+    ),
 ):
     """
     Place a new order.
@@ -939,11 +1038,51 @@ async def place_order(
     _check_trading_paused()  # soft halt set by superadmin /engine/pause
     _check_live_deployment_gates()  # Sharpe gate + CI model guard
     # Rate limit enforced via Depends(_order_rate_limit_dep) above.
-    await _validate_order(order)
-    await _apply_risk_checks(order, user.sub)
-    _log_compliance(order, user.sub)
-    result = await _route_to_broker(order)
-    return await _record_fill(order, result, user.sub)
+
+    # ── Idempotency ───────────────────────────────────────────────────────────
+    # Claimed before any side effect, so a retry cannot slip past the checks and
+    # reach the broker a second time. This guards client→API, which nothing
+    # covered.
+    #
+    # This block used to add that "UNIQUE(client_order_id) from migration
+    # b2c3d4e5f6a7 guards the engine→broker hop". It does not — see the column
+    # comment in database/models.py: no production writer sets it, so the
+    # constraint never fires. That hop is guarded by the write-ahead intent
+    # journal in execution/trade_executor.py::_journal_intent (S7-02). Naming a
+    # control that does not run is worse than recording the gap, because it
+    # closes the question.
+    body = order.model_dump()
+    if idempotency_key:
+        try:
+            replayed = _idem.begin(user.sub, idempotency_key, body)
+        except _idem.IdempotencyKeyReused as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
+        except _idem.IdempotencyConflict as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        if replayed is not None:
+            # The order already exists. Return the original response rather than
+            # placing a second one.
+            response.headers["Idempotency-Replayed"] = "true"
+            logger.info("order replay served from idempotency store for user %s", user.sub)
+            return replayed
+
+    try:
+        await _validate_order(order, user.sub)
+        await _apply_risk_checks(order, user.sub)
+        _log_compliance(order, user.sub)
+        result = await _route_to_broker(order, user.sub)
+        placed = await _record_fill(order, result, user.sub)
+    except Exception:
+        # Release rather than cache the failure: a rejected order (risk gate,
+        # broker error) must remain retryable with the same key, otherwise the
+        # client is locked out of ever placing it.
+        if idempotency_key:
+            _idem.release(user.sub, idempotency_key)
+        raise
+
+    if idempotency_key:
+        _idem.complete(user.sub, idempotency_key, body, jsonable_encoder(placed))
+    return placed
 
 
 @router.get("/orders", summary="List open and recent orders")
@@ -968,8 +1107,18 @@ async def get_orders(
     """
     orders: list[dict] = []
 
-    # 1. Live orders from broker
-    broker = getattr(app_state, "broker", None) if app_state else None
+    # 1. Live orders from this user's own account.
+    #
+    # This read used app_state.broker directly and applied no ownership filter
+    # of any kind, so every authenticated user saw every other user's live
+    # orders — symbol, side, size and price. It was the least protected of the
+    # trading reads: /positions at least filtered, this did not.
+    #
+    # On a live single-account venue the orders belong to the deployment rather
+    # than to the caller, and the broker cannot attribute them, so they are not
+    # shown at all; the DB fallback below returns the caller's own filled orders.
+    resolution = await _resolve_account(user.sub)
+    broker = resolution.broker if resolution.isolated else None
     if broker is not None:
         try:
             raw_orders = []
@@ -1066,7 +1215,7 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Broker not available",
         )
-    raw = await _broker_call("get_account_info")
+    raw = await _user_broker_call(user.sub, "get_account_info")
 
     def _f(obj, *keys, default=0.0):
         for k in keys:
@@ -1101,11 +1250,58 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
     }
 
 
+def _owned_position_ids(user: TokenPayload) -> set[str]:
+    """IDs of the open positions belonging to *user*.
+
+    Used **only** when the caller's account is not isolated — i.e. on a live
+    single-account venue, where one real account is shared by the deployment and
+    the broker cannot tell two users apart. On a paper deployment each user has
+    their own broker (``core.account_registry``), so its ``get_positions()``
+    already returns their rows and only theirs; filtering on top of that would
+    hide a user's own positions, because paper position ids are symbols and do
+    not match the database row ids.
+
+    Fail closed: a broker position with no owning DB row is hidden rather than
+    shown to everyone.
+
+    Operators are not exempt. This used to return ``None`` — meaning *apply no
+    filter* — for admin and superadmin, which is why a superadmin saw, and was
+    seen in, the whole book. Whole-book access now lives on the operator
+    endpoints, which name the account explicitly and are audited.
+    """
+    if app_state is None or getattr(app_state, "db_session_factory", None) is None:
+        # No database to establish ownership. Showing the shared book to an
+        # ordinary user would leak other traders' activity, so show nothing.
+        logger.warning(
+            "Position ownership cannot be established (no DB session factory) — "
+            "returning an empty book for user=%s rather than leaking the shared engine.",
+            user.sub,
+        )
+        return set()
+    try:
+        from database.models import Position as _Pos
+
+        with app_state.db_session_factory() as _db:
+            rows = _db.query(_Pos.id).filter(_Pos.user_id == user.sub).all()
+        return {str(r[0]) for r in rows}
+    except Exception as exc:
+        logger.warning(
+            "Position ownership lookup failed for user=%s (%s) — returning an empty book.",
+            user.sub,
+            exc,
+        )
+        return set()
+
+
 @router.get("/positions", response_model=list[PositionResponse])
 async def get_positions(
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get all open positions. Requires: any authenticated user.
+    """Get the authenticated user's open positions — theirs and only theirs.
+
+    Every role, including admin and superadmin, sees its own account here. The
+    whole book is available on the operator endpoints, which say so and are
+    audited.
 
     Returns an empty list when the broker is not yet initialised so the
     frontend positions table renders cleanly during cold-start.
@@ -1113,7 +1309,26 @@ async def get_positions(
     if not app_state or not app_state.broker:
         return []
 
-    positions = await _broker_call("get_positions")
+    resolution = await _resolve_account(user.sub)
+    positions = await _call_on(resolution.broker, "get_positions")
+
+    if not resolution.isolated:
+        # Live single-account venue: one real account behind every user, so the
+        # broker cannot separate them and database ownership is the only
+        # attribution available. Fails closed — an unattributable position is
+        # hidden rather than shown to everyone.
+        owned = _owned_position_ids(user)
+        total = len(positions)
+        positions = [p for p in positions if str(getattr(p, "id", "")) in owned]
+        if total != len(positions):
+            logger.debug(
+                "Positions filtered by ownership: user=%s visible=%d hidden=%d (%s)",
+                user.sub,
+                len(positions),
+                total - len(positions),
+                resolution.reason,
+            )
+
     result = []
     for p in positions:
         entry = float(getattr(p, "entry_price", 0) or 0)
@@ -1170,12 +1385,13 @@ async def close_position(
 
             with app_state.db_session_factory() as _db:
                 _pos_row = _db.query(_Pos).filter(_Pos.id == position_id).first()
-                if (
-                    _pos_row is not None
-                    and _pos_row.user_id
-                    and _pos_row.user_id != user.sub
-                    and user.role not in ("admin", "superadmin")
-                ):
+                # No operator exemption. This used to let admin and superadmin
+                # close another user's position through the ordinary endpoint.
+                # It is also dead weight now — close_position acts on the
+                # caller's own account, which physically cannot hold somebody
+                # else's position — but leaving the carve-out in would say the
+                # opposite of what the code does.
+                if _pos_row is not None and _pos_row.user_id and _pos_row.user_id != user.sub:
                     logger.warning(
                         "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
                         user.sub,
@@ -1191,7 +1407,7 @@ async def close_position(
         except Exception as _idor_exc:
             logger.debug("Ownership check skipped (non-fatal): %s", _idor_exc)
 
-    success = await _broker_call("close_position", position_id)
+    success = await _user_broker_call(user.sub, "close_position", position_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1271,8 +1487,38 @@ async def close_all_positions(
             detail="Broker not initialised — cannot close positions. The paper trading engine starts automatically on server startup.",
         )
 
-    closed = await _broker_call("close_all_positions")
-    logger.info("All positions closed: user=%s count=%s", user.sub, closed)
+    resolution = await _resolve_account(user.sub)
+
+    if resolution.isolated:
+        # The account holds this user's positions and nobody else's, so
+        # close-all means exactly what it says and cannot reach another book.
+        closed = await _call_on(resolution.broker, "close_all_positions")
+        count = len(closed) if isinstance(closed, list) else closed
+        logger.info("All own positions closed: user=%s count=%s", user.sub, count)
+        return {"status": "success", "closed_positions": count}
+
+    # Live single-account venue: the broker's own close_all_positions() would
+    # liquidate every other trader's book as well — a destructive cross-user
+    # action reachable from the "Close All" button — so close only the positions
+    # attributable to this user.
+    owned = _owned_position_ids(user)
+    if not owned:
+        return {"status": "success", "closed_positions": 0}
+
+    closed = 0
+    failed: list[str] = []
+    for pos_id in owned:
+        try:
+            if await _user_broker_call(user.sub, "close_position", pos_id):
+                closed += 1
+            else:
+                failed.append(pos_id)
+        except Exception as exc:
+            failed.append(pos_id)
+            logger.warning("close_all: could not close position=%s for user=%s: %s", pos_id, user.sub, exc)
+    if failed:
+        logger.warning("close_all partially completed: user=%s closed=%d failed=%d", user.sub, closed, len(failed))
+    logger.info("Own positions closed: user=%s count=%d", user.sub, closed)
     return {"status": "success", "closed_positions": closed}
 
 
@@ -1406,7 +1652,7 @@ async def hedge_position(
         )
 
     # Fetch the position to mirror
-    positions = await _broker_call("get_positions")
+    positions = await _user_broker_call(user.sub, "get_positions")
     target = next((p for p in positions if str(p.id) == position_id), None)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found.") from None
@@ -1422,7 +1668,7 @@ async def hedge_position(
         quantity=hedge_qty,
         order_type="market",
     )
-    result = await _route_to_broker(hedge_order)
+    result = await _route_to_broker(hedge_order, user.sub)
     logger.info(
         "Hedge placed: user=%s position_id=%s hedge_side=%s qty=%s",
         user.sub,
@@ -1924,13 +2170,31 @@ async def get_account(
     """
     Return a complete AccountMetrics payload for the authenticated user.
 
-    Fields returned (all required by the frontend AccountMetrics type):
+    Fields returned:
       balance, equity, margin_used, margin_free, margin_level,
       daily_pnl, daily_pnl_pct, total_pnl, win_rate, sharpe_ratio,
       sortino_ratio, max_drawdown, open_trades, open_risk_pct,
       cvar_95, kill_switch, unrealized_pnl, currency, account_id
+
+    **win_rate, sharpe_ratio, sortino_ratio and max_drawdown are nullable.**
+    Each is a statistic over closed trades, and AccountMetrics documents every
+    one of them as absent until there are enough of those to compute it — a
+    decision recorded under audit #37. `null` means "not measurable yet", and
+    is not the same claim as 0.
+
+    This docstring previously said every field was "required by the frontend
+    AccountMetrics type". That was the opposite of what the type says, and the
+    code matched the docstring: a new account was sent win_rate 0.0 and
+    sharpe_ratio 0.0, which the Dashboard rendered as a 0.0% win rate in red
+    and a 0.00 Sharpe in red, while the same absence of trades made
+    max_drawdown 0.0 and painted it green. Three statistics, one cause, two
+    failures and a success — none of them measuring anything.
+
+    win_rate and max_drawdown are percentages 0-100 on both paths.
     """
     import math as _math
+
+    from analytics.ratios import downside_deviation as _downside_deviation
     import os as _os
 
     # ── Broker account info ───────────────────────────────────────────────────
@@ -1938,11 +2202,21 @@ async def get_account(
         # Paper mode: seed balance from env, enrich with real DB trade stats
         starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
 
-        # Pull real trade stats from DB even in paper mode
-        _win_rate = 0.0
-        _sharpe = 0.0
-        _sortino = 0.0
-        _max_dd = 0.0
+        # Pull real trade stats from DB even in paper mode.
+        #
+        # These four start as None, not 0.0. Every one of them is a statistic
+        # over closed trades, and AccountMetrics documents each as absent until
+        # there are enough of those to compute it. Sending 0.0 instead makes a
+        # claim the server cannot support, and the Dashboard's own `has()`
+        # helper exists to render an em-dash for exactly this case — its
+        # comment reads "a fabricated zero Sharpe reads as a real, terrible
+        # Sharpe". It was doing that correctly against a payload that never
+        # gave it the chance.
+        _win_rate: float | None = None
+        _sharpe: float | None = None
+        _sortino: float | None = None
+        _max_dd: float | None = None
+        _dd_peak = 0.0
         _total_pnl = 0.0
         _open_trades = 0
         _open_risk_pct = 0.0
@@ -1982,7 +2256,7 @@ async def get_account(
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
                     # win_rate as percentage 0-100 (consistent with live-broker path)
-                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else None
 
                     # Equity curve for drawdown + Sharpe
                     eq_vals: list[float] = []
@@ -1995,9 +2269,9 @@ async def get_account(
                     for v in eq_vals:
                         peak = max(peak, v)
                         dd = (peak - v) / peak if peak > 0 else 0.0
-                        _max_dd = max(_max_dd, dd)
+                        _dd_peak = max(_dd_peak, dd)
                     # max_drawdown as percentage 0-100 (consistent with live-broker path)
-                    _max_dd = round(_max_dd * 100, 2)
+                    _max_dd = round(_dd_peak * 100, 2) if pnls else None
 
                     if len(pnls) >= 10:
                         rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
@@ -2005,12 +2279,15 @@ async def get_account(
                             mean_r = sum(rets) / len(rets)
                             var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
                             std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
-                            _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
-                            neg_rets = [r for r in rets if r < 0]
-                            if neg_rets:
-                                down_var = sum(r**2 for r in neg_rets) / len(neg_rets)
-                                down_std = _math.sqrt(down_var)
-                                _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                            _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else None
+                            # Downside deviation divides the summed shortfall by
+                            # ALL periods, not just the losing ones — dividing by
+                            # len(neg_rets) is a different statistic and read
+                            # ~30% high on the negatively skewed shape strategies
+                            # produce (F120). Shared with every other Sortino in
+                            # the repository via analytics.ratios.
+                            down_std = _downside_deviation(rets)
+                            _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else None
                             sorted_rets = sorted(rets)
                             cutoff = max(1, int(len(sorted_rets) * 0.05))
                             _cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
@@ -2042,7 +2319,7 @@ async def get_account(
         _margin_used = 0.0
         _MARGIN_RATE = 0.02  # 2% paper margin requirement (matches PaperTradingBroker)
         try:
-            _bpos = await _broker_call("get_positions")
+            _bpos = await _user_broker_call(user.sub, "get_positions")
             if _bpos:
                 _open_trades = len(_bpos)
                 _unrealized = round(sum(float(getattr(p, "unrealized_pnl", 0) or 0.0) for p in _bpos), 2)
@@ -2075,7 +2352,18 @@ async def get_account(
             "equity": _equity,
             "margin_used": _margin_used,
             "margin_free": round(max(_equity - _margin_used, 0.0), 2),
-            "margin_level": round((_equity / _margin_used * 100) if _margin_used > 0 else 0.0, 2),
+            # `_margin_level`, not `margin_level`. Both names are imported at the
+            # top of this module for the same function, but further down this
+            # same function `margin_level` is *assigned* (twice, in the live
+            # branch). An assignment anywhere in a function makes the name local
+            # for the whole function, so reading it here — before those lines
+            # run, and on a path where they never run — raised
+            #     UnboundLocalError: cannot access local variable 'margin_level'
+            # This is the paper branch, which is the branch that executes in the
+            # current deployment: GET /api/trading/account returned 500 for
+            # every user, every time. It is what the diagnostics suite reported
+            # as "route_health: 1 route(s) returning 5xx errors".
+            "margin_level": _margin_level(_equity, _margin_used),
             "daily_pnl": _daily_pnl,
             "daily_pnl_pct": _daily_pnl_pct,
             "total_pnl": _total_pnl,
@@ -2091,7 +2379,7 @@ async def get_account(
             "currency": "USD",
         }
 
-    raw = await _broker_call("get_account_info")
+    raw = await _user_broker_call(user.sub, "get_account_info")
 
     def _f(obj, *keys, default=0.0):
         for k in keys:
@@ -2114,16 +2402,19 @@ async def get_account(
     equity = _f(raw, "equity", "balance", "nav") or balance
     margin_used = _f(raw, "margin_used", "margin", "used_margin")
     margin_free = _f(raw, "margin_available", "free_margin", "available_margin") or max(equity - margin_used, 0.0)
-    margin_level = round((equity / margin_used * 100) if margin_used > 0 else 0.0, 2)
+    margin_level = _margin_level(equity, margin_used)
     unrealized = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
     daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
     daily_pnl_pct = round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4)
 
     # ── Trade statistics from DB ──────────────────────────────────────────────
-    win_rate = 0.0
-    sharpe_ratio = 0.0
-    sortino_ratio = 0.0
-    max_drawdown = 0.0
+    # None until there are closed trades to compute them from — see the paper
+    # branch above for why these four are not 0.0.
+    win_rate: float | None = None
+    sharpe_ratio: float | None = None
+    sortino_ratio: float | None = None
+    max_drawdown: float | None = None
+    _dd_peak_live = 0.0
     total_pnl = 0.0
     open_trades = 0
     open_risk_pct = 0.0
@@ -2156,7 +2447,7 @@ async def get_account(
                 pnls = [float(t.realized_pnl or 0.0) for t in closed]
                 total_pnl = round(sum(pnls), 2)
                 wins = [p for p in pnls if p > 0]
-                win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+                win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else None
 
                 # Equity curve for drawdown + Sharpe
                 starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
@@ -2171,8 +2462,8 @@ async def get_account(
                 for v in eq_vals:
                     peak = max(peak, v)
                     dd = (peak - v) / peak if peak > 0 else 0.0
-                    max_drawdown = max(max_drawdown, dd)
-                max_drawdown = round(max_drawdown * 100, 2)  # as %
+                    _dd_peak_live = max(_dd_peak_live, dd)
+                max_drawdown = round(_dd_peak_live * 100, 2) if pnls else None  # as %
 
                 # Sharpe (annualised, daily returns)
                 if len(pnls) >= 10:
@@ -2181,14 +2472,15 @@ async def get_account(
                         mean_r = sum(rets) / len(rets)
                         var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
                         std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
-                        sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
+                        sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else None
 
-                        # Sortino (downside deviation only)
-                        neg_rets = [r for r in rets if r < 0]
-                        if neg_rets:
-                            down_var = sum(r**2 for r in neg_rets) / len(neg_rets)
-                            down_std = _math.sqrt(down_var)
-                            sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                        # Sortino: RMS shortfall below zero over ALL periods.
+                        # Dividing by len(neg_rets) instead is a different
+                        # statistic and read ~30% high on negatively skewed
+                        # returns (F120); shared now via analytics.ratios so the
+                        # dashboard and the backtester cannot disagree.
+                        down_std = _downside_deviation(rets)
+                        sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else None
 
                         # CVaR 95% (average of worst 5% returns)
                         sorted_rets = sorted(rets)
@@ -2212,7 +2504,7 @@ async def get_account(
     # summary reports 0 open trades / $0 margin while positions are actually
     # open. Use get_positions() so /account always agrees with /positions.
     try:
-        _bpos = await _broker_call("get_positions")
+        _bpos = await _user_broker_call(user.sub, "get_positions")
         if _bpos:
             _MARGIN_RATE = 0.02  # matches PaperTradingBroker paper margin
             open_trades = len(_bpos)
@@ -2225,7 +2517,7 @@ async def get_account(
             margin_used = round(_bnotional * _MARGIN_RATE, 2)
             equity = round(balance + unrealized, 2)
             margin_free = round(max(equity - margin_used, 0.0), 2)
-            margin_level = round((equity / margin_used * 100) if margin_used > 0 else 0.0, 2)
+            margin_level = _margin_level(equity, margin_used)
             open_risk_pct = round((_bnotional / equity * 100) if equity > 0 else 0.0, 2)
     except Exception as _exc:
         logger.debug("Broker position reconciliation (live branch) failed: %s", _exc)
@@ -2258,6 +2550,11 @@ async def get_account(
         "cvar_95": cvar_95,
         "kill_switch": kill_switch_active,
         "currency": _s(raw, "currency", "base_currency", default="USD"),
+        # Whether these figures are this user's alone. False means the
+        # deployment is on a live single-account venue where one real account
+        # sits behind every user, so the balance shown is the deployment's. The
+        # caller is told rather than left to assume.
+        "isolated": (await _resolve_account(user.sub)).isolated,
     }
 
 
@@ -2315,18 +2612,30 @@ async def get_prices(
     # Path 3: yfinance real-time fallback (no broker required)
     # Maps internal symbol → yfinance ticker. Only used when no broker/engine
     # is running (API-only mode). Returns real market prices, not synthetic data.
+    # Tickers come from config/multi_source_feed.yaml so this path cannot drift
+    # from the feed config. Symbols configured with an empty ticker (spot metals
+    # and oil, whose Yahoo futures contracts are delisted) are dropped rather
+    # than substituted: the tracking ETFs quote a different number, and a
+    # plausible wrong price on XAUUSD is far more dangerous than no price.
     _YF_MAP = {
-        "XAUUSD": "GC=F",
-        "XAGUSD": "SI=F",
-        "EURUSD": "EURUSD=X",
-        "GBPUSD": "GBPUSD=X",
-        "USDJPY": "USDJPY=X",
-        "BTCUSD": "BTC-USD",
-        "ETHUSD": "ETH-USD",
-        "USDCAD": "USDCAD=X",
-        "AUDUSD": "AUDUSD=X",
-        "USDCHF": "USDCHF=X",
-        "NZDUSD": "NZDUSD=X",
+        sym: ticker
+        for sym, ticker in (
+            (s, _yf_ticker_map().get(s, ""))
+            for s in (
+                "XAUUSD",
+                "XAGUSD",
+                "EURUSD",
+                "GBPUSD",
+                "USDJPY",
+                "BTCUSD",
+                "ETHUSD",
+                "USDCAD",
+                "AUDUSD",
+                "USDCHF",
+                "NZDUSD",
+            )
+        )
+        if ticker
     }
     _SPREAD_MAP = {
         "XAUUSD": 0.30,
@@ -2346,6 +2655,8 @@ async def get_prices(
         import yfinance as _yf
 
         tickers = list(_YF_MAP.values())
+        if not tickers:
+            raise RuntimeError("no yfinance tickers configured for any quoted symbol")
         data = await asyncio.wait_for(
             asyncio.to_thread(_yf.download, tickers, period="1d", interval="1m", progress=False, auto_adjust=True),
             timeout=10.0,
@@ -2383,6 +2694,57 @@ async def get_prices(
     # All paths exhausted — return empty dict (not 503) so the frontend
     # REST poll doesn't hang and can show the no_live_feed banner instead.
     return {}
+
+
+# Timeframes `_load_gold_history_csv` can actually serve. Kept beside it so the
+# two cannot drift: a list that promised a timeframe the loader refuses would
+# send the operator to a second failure.
+_CSV_FALLBACK_TIMEFRAMES: tuple[str, ...] = ("1d", "1w")
+
+
+def _servable_fallback_timeframes(symbol: str) -> tuple[str, ...]:
+    """Timeframes this deployment can serve for *symbol* with no live feed.
+
+    Only the bundled gold history qualifies — it is the one source that needs
+    neither the price engine nor the network. Everything else depends on a feed
+    that is either up or is not, and claiming otherwise would be a promise the
+    next request breaks.
+    """
+    return _CSV_FALLBACK_TIMEFRAMES if symbol.upper() == "XAUUSD" else ()
+
+
+def _ohlcv_unavailable_detail(symbol: str, timeframe: str) -> dict:
+    """The 503 body, naming what WOULD work.
+
+    The refusal itself was already honest: it declines to fabricate bars and
+    names the feed to configure. What it did not say is that another timeframe
+    is sitting right there.
+
+    That matters most on `/ai-chart-dashboard`, which renders six panels at 1h.
+    Measured 2026-09-15, five of those six symbols have a working yfinance
+    ticker and one does not — XAUUSD, the instrument this platform trades,
+    whose ticker is deliberately empty because Yahoo delisted the contract. So
+    the gold panel is the one that fails, it is first in the grid, and an
+    operator reading "no data" concludes the instrument is broken rather than
+    the timeframe.
+    """
+    available = _servable_fallback_timeframes(symbol)
+    message = (
+        f"No real OHLCV data available for {symbol} {timeframe}. "
+        "The price engine and all fallback feeds are currently unavailable. "
+        "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
+    )
+    if available:
+        message += " Bundled history can still serve " + ", ".join(available) + " for this symbol without any feed."
+    return {
+        "error": "ohlcv_unavailable",
+        "message": message,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        # Machine-readable so a chart can offer the switch rather than making
+        # the operator parse a sentence.
+        "available_timeframes": list(available),
+    }
 
 
 def _load_gold_history_csv(timeframe: str, limit: int) -> list[dict]:
@@ -2448,6 +2810,47 @@ def _load_gold_history_csv(timeframe: str, limit: int) -> list[dict]:
         return []
 
 
+# Symbols that have no yfinance equivalent and are absent from
+# multi_source_feed.yaml. Kept empty deliberately: the futures contracts that
+# used to serve them (ES=F, BZ=F) are delisted on Yahoo alongside the rest
+# (see b439bef), and the tracking ETFs quote a different number entirely, so a
+# substitute would be worse than no quote. Real data must come from
+# twelve_data / alpha_vantage.
+_YF_TICKER_EXTRA: dict[str, str] = {"US500": "", "UKOIL": ""}
+
+
+@lru_cache(maxsize=1)
+def _yf_ticker_map() -> dict[str, str]:
+    """Canonical symbol → yfinance ticker, read from ``multi_source_feed.yaml``.
+
+    The mapping lives in the feed config so there is exactly one place where a
+    ticker can be wrong. A previous hand-maintained copy of this table in this
+    module silently kept serving Yahoo's delisted futures contracts (XAUUSD →
+    ``GC=F``) for every chart request long after the config had been corrected.
+
+    An empty string is meaningful and must be preserved: it means "Yahoo does
+    not serve this instrument, skip yfinance entirely" rather than "unknown".
+    """
+    mapping = dict(_YF_TICKER_EXTRA)
+    try:
+        import yaml
+
+        cfg_path = _Path(__file__).resolve().parent.parent / "config" / "multi_source_feed.yaml"
+        with cfg_path.open("r", encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+        symbols = (cfg.get("multi_source_feed") or {}).get("symbols") or {}
+        for sym, scfg in symbols.items():
+            if isinstance(scfg, dict) and "yfinance_ticker" in scfg:
+                mapping[str(sym).upper()] = str(scfg["yfinance_ticker"] or "")
+    except Exception as exc:
+        logger.warning(
+            "OHLCV: could not read yfinance tickers from multi_source_feed.yaml (%s) — "
+            "yfinance fallback limited to symbols whose ticker equals their name",
+            exc,
+        )
+    return mapping
+
+
 @router.get(
     "/ohlcv/{symbol:path}",
     response_model=list[OHLCVBar],
@@ -2508,89 +2911,94 @@ async def get_ohlcv(
 
     # ── Direct yfinance fallback ──────────────────────────────────────────────
     # Used when price engine is unavailable or returns flat bars.
-    try:
-        import yfinance as _yf
+    #
+    # The ticker is resolved *before* the try block on purpose. An empty mapping
+    # entry means "Yahoo does not serve this instrument" — a configured fact, not
+    # a failure — so it must not travel through the `except Exception` below,
+    # which would log it as a fallback error. `_yf_ticker_map` handles its own
+    # I/O errors and always returns a dict, so this lookup cannot raise.
+    ticker_sym = _yf_ticker_map().get(symbol, symbol)
+    if not ticker_sym:
+        # Skip the fetch rather than spend the 20s timeout on a ticker known to
+        # return nothing; fall through to the CSV history / 503 below.
+        logger.info("OHLCV: no yfinance ticker configured for %s — skipping to next source", symbol)
+    else:
+        try:
+            import yfinance as _yf
 
-        _YF_MAP = {
-            "XAUUSD": "GC=F",
-            "XAGUSD": "SI=F",
-            "XPTUSD": "PL=F",
-            "EURUSD": "EURUSD=X",
-            "GBPUSD": "GBPUSD=X",
-            "USDJPY": "JPY=X",
-            "USDCHF": "CHF=X",
-            "AUDUSD": "AUDUSD=X",
-            "NZDUSD": "NZDUSD=X",
-            "USDCAD": "CAD=X",
-            "BTCUSD": "BTC-USD",
-            "ETHUSD": "ETH-USD",
-            "US30": "YM=F",
-            "US500": "ES=F",
-            "NAS100": "NQ=F",
-            "USOIL": "CL=F",
-            "UKOIL": "BZ=F",
-        }
-        # Map timeframe → (yfinance interval, fetch period).
-        # Periods are capped to avoid slow downloads; 4h is resampled from 1h.
-        # yfinance only provides 1h data for up to 730 days but fetching that
-        # much is slow — cap at 60d which gives ~1440 bars (enough for any chart).
-        _TF_MAP = {
-            "1m": ("1m", "7d"),
-            "5m": ("5m", "60d"),
-            "15m": ("15m", "60d"),
-            "30m": ("30m", "60d"),
-            "1h": ("1h", "60d"),  # ~1440 bars — fast, plenty of history
-            "4h": ("1h", "60d"),  # fetch 1h then resample → 4h
-            "1d": ("1d", "max"),  # full daily history (gold back to ~2000)
-            "1w": ("1wk", "max"),  # full weekly history
-        }
-        ticker_sym = _YF_MAP.get(symbol, symbol)
-        interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
-        resample_4h = timeframe == "4h"
+            # Map timeframe → (yfinance interval, fetch period).
+            # Periods are capped to avoid slow downloads; 4h is resampled from 1h.
+            # yfinance only provides 1h data for up to 730 days but fetching that
+            # much is slow — cap at 60d which gives ~1440 bars (enough for any chart).
+            _TF_MAP = {
+                # Periods are the maximum each interval supports at the source.
+                # 1h and 4h were pinned to "60d" with the note "~1440 bars —
+                # fast, plenty of history". It is not plenty: 60 days of hourly
+                # candles is what the deployed chart showed on the 1h tab —
+                # roughly Jul→Aug — and there was no way to scroll further back
+                # because the data had never been fetched. Yahoo serves 1h out
+                # to 730 days, so two years were available and unused.
+                #
+                # 1m/5m/15m/30m stay where they are: those are Yahoo's own hard
+                # limits, not ours.
+                "1m": ("1m", "7d"),
+                "5m": ("5m", "60d"),
+                "15m": ("15m", "60d"),
+                "30m": ("30m", "60d"),
+                "1h": ("1h", "730d"),  # Yahoo's maximum for hourly (~2 years)
+                "4h": ("1h", "730d"),  # fetch 1h then resample → 4h
+                "1d": ("1d", "max"),  # full daily history (gold back to ~2000)
+                "1w": ("1wk", "max"),  # full weekly history
+            }
+            interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
+            resample_4h = timeframe == "4h"
 
-        loop = asyncio.get_running_loop()
+            loop = asyncio.get_running_loop()
 
-        def _fetch_yf() -> list:
-            t = _yf.Ticker(ticker_sym)
-            df = t.history(period=period, interval=interval, auto_adjust=True, progress=False)
-            if df.empty:
-                return []
-            # Resample 1h → 4h when requested
-            if resample_4h:
-                df = (
-                    df.resample("4h")
-                    .agg(
+            def _fetch_yf() -> list:
+                t = _yf.Ticker(ticker_sym)
+                # NB: no `progress=` argument — that is a yf.download() parameter.
+                # Ticker.history() rejects it with TypeError before any network I/O,
+                # which silently disabled this entire fallback for every symbol.
+                df = t.history(period=period, interval=interval, auto_adjust=True)
+                if df.empty:
+                    return []
+                # Resample 1h → 4h when requested
+                if resample_4h:
+                    df = (
+                        df.resample("4h")
+                        .agg(
+                            {
+                                "Open": "first",
+                                "High": "max",
+                                "Low": "min",
+                                "Close": "last",
+                                "Volume": "sum",
+                            }
+                        )
+                        .dropna(subset=["Open", "Close"])
+                    )
+                df = df.tail(limit)
+                bars = []
+                for ts, row in df.iterrows():
+                    bars.append(
                         {
-                            "Open": "first",
-                            "High": "max",
-                            "Low": "min",
-                            "Close": "last",
-                            "Volume": "sum",
+                            "timestamp": int(ts.timestamp()),
+                            "open": round(float(row["Open"]), 5),
+                            "high": round(float(row["High"]), 5),
+                            "low": round(float(row["Low"]), 5),
+                            "close": round(float(row["Close"]), 5),
+                            "volume": round(float(row.get("Volume", 0)), 2),
                         }
                     )
-                    .dropna(subset=["Open", "Close"])
-                )
-            df = df.tail(limit)
-            bars = []
-            for ts, row in df.iterrows():
-                bars.append(
-                    {
-                        "timestamp": int(ts.timestamp()),
-                        "open": round(float(row["Open"]), 5),
-                        "high": round(float(row["High"]), 5),
-                        "low": round(float(row["Low"]), 5),
-                        "close": round(float(row["Close"]), 5),
-                        "volume": round(float(row.get("Volume", 0)), 2),
-                    }
-                )
-            return bars
+                return bars
 
-        bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=20.0)
-        if bars:
-            logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
-            return bars
-    except Exception as exc:
-        logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
+            bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=20.0)
+            if bars:
+                logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
+                return bars
+        except Exception as exc:
+            logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
 
     # ── Bundled deep-history CSV fallback (gold daily/weekly) ─────────────────
     # When live feeds and yfinance are both unavailable, serve real gold history
@@ -2612,16 +3020,7 @@ async def get_ohlcv(
     )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "ohlcv_unavailable",
-            "message": (
-                f"No real OHLCV data available for {symbol} {timeframe}. "
-                "The price engine and all fallback feeds are currently unavailable. "
-                "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
-            ),
-            "symbol": symbol,
-            "timeframe": timeframe,
-        },
+        detail=_ohlcv_unavailable_detail(symbol, timeframe),
     )
 
 
@@ -3374,240 +3773,78 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
 # response: id, timestamp, context, regime, summary, keyDrivers, etc.
 
 
+_AI_ANALYSIS_RATE = {}  # user_id → [monotonic timestamps]
+_AI_ANALYSIS_MAX_PER_MIN = int(os.getenv("AI_ANALYSIS_RATE_PER_MIN", "30"))
+
+
+def _ai_analysis_rate_limit(user_id: str) -> None:
+    """Bound chart-click analyses per user per minute.
+
+    Each analysis loads 200 bars and runs a model. The endpoint previously had
+    no limit at all — only ``get_current_user`` — while the order endpoints next
+    to it carry ``_order_rate_limit_dep``. A user dragging across a chart could
+    issue one uncached 25-second-timeout fetch per click into the shared
+    executor pool.
+    """
+    import time as _t
+
+    now = _t.monotonic()
+    hits = [t for t in _AI_ANALYSIS_RATE.get(user_id, []) if now - t < 60.0]
+    if len(hits) >= _AI_ANALYSIS_MAX_PER_MIN:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Chart analysis is limited to {_AI_ANALYSIS_MAX_PER_MIN} requests per minute.",
+        )
+    hits.append(now)
+    _AI_ANALYSIS_RATE[user_id] = hits
+
+
 @router.post("/ai-analysis", response_model=None, summary="AI chart-click analysis")
 async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_current_user)):
     """
     Accept a ChartClickContext payload and return an AIAnalysis object.
 
-    Fetches real OHLCV via yfinance for regime detection and ATR calculation.
-    Falls back gracefully when the ML stack is unavailable.
+    Delegates to ``analysis.chart_analysis``: OHLCV from the platform price
+    engine, a real ``InferenceEngine`` prediction with calibrated confidence and
+    model version, feature importances from the loaded model, and the data
+    quality and drift gates surfaced as warnings.
+
+    This handler used to hold 230 lines of hand-rolled indicator maths and no ML
+    at all. See ``analysis/chart_analysis.py`` for what was wrong with it.
     """
-    import uuid as _uuid
-    import time as _time
+    from analysis.chart_analysis import ChartClickContext, analyze
 
-    symbol: str = context.get("symbol", "XAUUSD")
-    # Normalise XAU/USD, XAU_USD → XAUUSD
-    symbol_norm = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
-    price: float = float(context.get("price", 0.0))
-    timeframe: str = context.get("timeframe", "1h")
-    timestamp: int = int(context.get("timestamp", _time.time() * 1000))
+    _ai_analysis_rate_limit(user.sub)
 
-    # ── Fetch real OHLCV via yfinance for analysis ────────────────────────────
-    _YF_MAP = {
-        "XAUUSD": "GC=F",
-        "XAGUSD": "SI=F",
-        "EURUSD": "EURUSD=X",
-        "GBPUSD": "GBPUSD=X",
-        "USDJPY": "JPY=X",
-        "USDCHF": "CHF=X",
-        "AUDUSD": "AUDUSD=X",
-        "BTCUSD": "BTC-USD",
-        "ETHUSD": "ETH-USD",
-        "US500": "ES=F",
-        "NAS100": "NQ=F",
-        "USOIL": "CL=F",
-    }
-    _TF_MAP = {
-        "1m": ("1m", "7d"),
-        "5m": ("5m", "60d"),
-        "15m": ("15m", "60d"),
-        "1h": ("1h", "60d"),
-        "4h": ("1h", "60d"),
-        "1d": ("1d", "1y"),
-    }
-    ticker_sym = _YF_MAP.get(symbol_norm, symbol_norm)
-    interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
-
-    ohlcv_bars: list[dict] = []
-    try:
-        import yfinance as _yf
-
-        loop = asyncio.get_running_loop()
-
-        def _fetch():
-            t = _yf.Ticker(ticker_sym)
-            df = t.history(period=period, interval=interval, auto_adjust=True)
-            if df.empty:
-                return []
-            df = df.tail(100)
-            return [
-                {
-                    "open": float(r["Open"]),
-                    "high": float(r["High"]),
-                    "low": float(r["Low"]),
-                    "close": float(r["Close"]),
-                    "volume": float(r.get("Volume", 0)),
-                }
-                for _, r in df.iterrows()
-            ]
-
-        ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
-    except TimeoutError:
-        logger.warning("ai-analysis: yfinance fetch timed out for %s — using price-only fallback", symbol_norm)
-    except Exception as exc:
-        logger.warning("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
-
-    # Use last close as price if not provided
-    if price <= 0 and ohlcv_bars:
-        price = ohlcv_bars[-1]["close"]
-
-    # ── ATR (14-period) ───────────────────────────────────────────────────────
-    atr_estimate = price * 0.005  # 0.5% fallback
-    if len(ohlcv_bars) >= 14:
-        trs = []
-        for i in range(1, min(15, len(ohlcv_bars))):
-            h = ohlcv_bars[-i]["high"]
-            l = ohlcv_bars[-i]["low"]
-            pc = ohlcv_bars[-i - 1]["close"] if i + 1 <= len(ohlcv_bars) else l
-            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-        if trs:
-            atr_estimate = sum(trs) / len(trs)
-
-    # ── Regime detection from OHLCV ───────────────────────────────────────────
-    regime = "ranging"
-    regime_confidence = 0.5
-    volatility = "medium"
-    trend = "neutral"
-
-    if len(ohlcv_bars) >= 20:
-        closes = [b["close"] for b in ohlcv_bars]
-        # EMA-based trend
-        ema20 = closes[-1]
-        for c in reversed(closes[-20:]):
-            ema20 = ema20 * 0.9 + c * 0.1
-        ema50 = closes[-1]
-        for c in reversed(closes[-min(50, len(closes)) :]):
-            ema50 = ema50 * 0.96 + c * 0.04
-
-        price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
-        ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
-
-        # Volatility: ATR as % of price
-        atr_pct = atr_estimate / price if price > 0 else 0
-        if atr_pct > 0.015:
-            volatility = "high"
-        elif atr_pct < 0.005:
-            volatility = "low"
-
-        # Regime classification
-        if abs(ema_spread) > 0.005 and abs(price_vs_ema20) > 0.003:
-            if ema_spread > 0:
-                regime = "trending_up"
-                trend = "bullish"
-                regime_confidence = min(0.85, 0.5 + abs(ema_spread) * 20)
-            else:
-                regime = "trending_down"
-                trend = "bearish"
-                regime_confidence = min(0.85, 0.5 + abs(ema_spread) * 20)
-        else:
-            regime = "ranging"
-            trend = "neutral"
-            regime_confidence = 0.6
-
-    # ── Signal / recommended action ───────────────────────────────────────────
-    recommended_action = "hold"
-    action_confidence = 0.5
-    key_drivers: list[str] = []
-    warnings: list[str] = []
-
-    if ohlcv_bars:
-        closes = [b["close"] for b in ohlcv_bars]
-        # RSI (14)
-        gains, losses = [], []
-        for i in range(1, min(15, len(closes))):
-            d = closes[-i] - closes[-i - 1]
-            (gains if d > 0 else losses).append(abs(d))
-        avg_gain = sum(gains) / 14 if gains else 0
-        avg_loss = sum(losses) / 14 if losses else 0.001
-        rsi = 100 - (100 / (1 + avg_gain / avg_loss))
-
-        if rsi < 35:
-            recommended_action = "buy"
-            action_confidence = round(0.5 + (35 - rsi) / 70, 3)
-            key_drivers.append(f"RSI oversold ({rsi:.1f})")
-        elif rsi > 65:
-            recommended_action = "sell"
-            action_confidence = round(0.5 + (rsi - 65) / 70, 3)
-            key_drivers.append(f"RSI overbought ({rsi:.1f})")
-        else:
-            key_drivers.append(f"RSI neutral ({rsi:.1f})")
-
-        if regime in ("trending_up",):
-            key_drivers.append("Uptrend confirmed by EMA alignment")
-            if recommended_action == "hold":
-                recommended_action = "buy"
-                action_confidence = 0.6
-        elif regime in ("trending_down",):
-            key_drivers.append("Downtrend confirmed by EMA alignment")
-            if recommended_action == "hold":
-                recommended_action = "sell"
-                action_confidence = 0.6
-
-        key_drivers.append(f"ATR: {atr_estimate:.4f} ({atr_estimate / price * 100:.2f}% of price)")
-        key_drivers.append(f"Volatility: {volatility}")
-
-        if volatility == "high":
-            warnings.append("High volatility — widen stops")
-
-    summary = (
-        f"{symbol} is in a {regime.replace('_', ' ')} regime "
-        f"({regime_confidence * 100:.0f}% confidence). "
-        f"Trend: {trend}. "
-        f"Recommended: {recommended_action.upper()} at {price:.4f}."
-    )
-
-    # Map buy/sell/hold → long/short/neutral for frontend AIResult.direction
-    _dir_map = {"buy": "long", "sell": "short", "hold": "neutral"}
-    direction = _dir_map.get(recommended_action, "neutral")
-
-    sl = round(price - atr_estimate * 1.5, 5)
-    tp = round(price + atr_estimate * 2.5, 5)
-    if direction == "short":
-        sl = round(price + atr_estimate * 1.5, 5)
-        tp = round(price - atr_estimate * 2.5, 5)
-
-    return {
-        "id": str(_uuid.uuid4()),
-        "timestamp": timestamp,
-        "context": context,
-        # Fields expected by AIResult interface
-        "direction": direction,
-        "confidence": round(min(action_confidence, 0.95), 3),
-        "reasoning": summary,
-        "regime": regime,
-        "stop_loss": sl,
-        "take_profit": tp,
-        "entry_zone": [round(price - atr_estimate * 0.3, 5), round(price + atr_estimate * 0.3, 5)],
-        "key_levels": [
-            round(price - atr_estimate * 2, 5),
-            round(price - atr_estimate, 5),
-            round(price + atr_estimate, 5),
-            round(price + atr_estimate * 2, 5),
-        ],
-        # Extended fields
-        "regimeConfidence": round(regime_confidence, 3),
-        "volatility": volatility,
-        "trend": trend,
-        "summary": summary,
-        "keyDrivers": key_drivers,
-        "riskAssessment": f"ATR({len(ohlcv_bars)}): {atr_estimate:.4f} | SL: {sl:.4f} | TP: {tp:.4f}",
-        "recommendedAction": recommended_action,
-        "actionConfidence": round(min(action_confidence, 0.95), 3),
-        "priceTargets": {
-            "bull": round(price + atr_estimate * 2, 5),
-            "bear": round(price - atr_estimate * 2, 5),
-            "base": round(price + atr_estimate * (1 if direction == "long" else -1), 5),
-            "stop_loss": sl,
-            "take_profit": tp,
-        },
-        "timeHorizon": "4H–1D",
-        "warnings": warnings,
-        "data_source": "yfinance" if ohlcv_bars else "fallback",
-        "bars_analyzed": len(ohlcv_bars),
-    }
+    ctx = ChartClickContext.model_validate(context)
+    return await analyze(ctx, app_state)
 
 
 # ── Regime status endpoint ────────────────────────────────────────────────────
+
+
+def _ema(values: list[float], alpha: float) -> float:
+    """Exponential moving average over *values*, oldest first.
+
+    Seeded on the oldest value and folded forward, so the newest bar carries the
+    full ``alpha`` and each earlier one decays by ``1 - alpha``.
+
+    This was written as ``ema = closes[-1]`` followed by
+    ``for c in reversed(window)``, which walks newest -> oldest. In that
+    recurrence the value folded in LAST carries the full coefficient, so the
+    weighting was inverted end to end and the oldest bar in a 20-bar window
+    weighed 7.4x the newest (0.10000 against 0.01351). The regime badge's
+    classification still came out right — the EMA still sat below price in an
+    uptrend — but it lagged far more than a 20-period EMA should, and the
+    confidence figure shown to the trader was derived from a spread that was not
+    the spread between a 20- and a 50-period EMA (F125).
+    """
+    if not values:
+        return 0.0
+    ema = values[0]
+    for value in values[1:]:
+        ema = ema * (1 - alpha) + value * alpha
+    return ema
 
 
 @router.get("/regime", response_model=None, summary="Current market regime and active strategy")
@@ -3639,12 +3876,16 @@ async def get_regime_status(
         "NAS100": "NQ=F",
     }
     ticker_sym = _YF_MAP.get(symbol_norm, "GC=F")
+    app_env = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "")).lower()
+    allow_remote_market_fetch = app_env not in {"ci", "test", "testing"}
 
     closes: list[float] = []
     highs: list[float] = []
     lows: list[float] = []
 
     try:
+        if not allow_remote_market_fetch:
+            raise RuntimeError("remote market-data fetch disabled in CI/test environment")
         import yfinance as _yf
 
         loop = asyncio.get_running_loop()
@@ -3676,12 +3917,8 @@ async def get_regime_status(
 
     if len(closes) >= 20:
         # EMA 20 and EMA 50
-        ema20 = closes[-1]
-        for c in reversed(closes[-20:]):
-            ema20 = ema20 * 0.9 + c * 0.1
-        ema50 = closes[-1]
-        for c in reversed(closes[-min(50, len(closes)) :]):
-            ema50 = ema50 * 0.96 + c * 0.04
+        ema20 = _ema(closes[-20:], 0.1)
+        ema50 = _ema(closes[-min(50, len(closes)) :], 0.04)
 
         ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
         price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
@@ -3844,15 +4081,210 @@ def _ohlcv_to_df(ohlcv_list: list):
         return None
 
 
+def _bars_are_usable(bars) -> bool:
+    """True when `bars` carry enough varying closes to be worth analysing.
+
+    Mirrors the guardrail `/ohlcv` applies to price-engine output: at least two
+    bars, with some movement between them. A flat run is the paper engine's
+    placeholder, and handing it to the pattern/level detectors yields
+    confident-looking output derived from data that says nothing — so it is
+    treated as a miss, letting the yfinance/CSV fallbacks take their turn.
+
+    Accepts both the attribute-style bars the price engine yields and the
+    dict-style bars the fallbacks build. Bars with no readable close are
+    unusable too: `_ohlcv_to_df` consumers index `df["close"]` directly.
+    """
+    if not bars or len(bars) < 2:
+        return False
+    closes: list[float] = []
+    for bar in bars:
+        value = bar.get("close") if isinstance(bar, dict) else getattr(bar, "close", None)
+        try:
+            closes.append(float(value))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return False
+    return max(closes) - min(closes) > 0.0
+
+
+# Total wall-clock budget for one _get_ohlcv_for_symbol call, shared across
+# every fallback leg.
+#
+# The legs used to carry independent 25s and 20s timeouts, which sum to 45s. That
+# is a genuine hazard on its own: one request could pin a worker for 45 seconds
+# while upstreams were degraded, and 45s is also exactly the runtime invariant
+# checker's HTTP_TIMEOUT.
+#
+# Note what this does NOT claim. Bounding the fetch did not stop
+# /api/trading/patterns timing out in CI — it still does, so that probe has a
+# cause upstream of this function that is still being tracked down. What this
+# does guarantee is that the fetch itself can no longer be the one responsible:
+# each leg gets whatever is left of the budget, and a leg is skipped outright
+# once nothing is left, so the total is bounded however many sources are tried.
+#
+# The bundled gold CSV at the end of the chain is local, but it only answers
+# daily/weekly timeframes (_load_gold_history_csv returns [] for intraday), so
+# it is not a universal backstop — on a 1h request the chain really can come
+# back empty.
+
+
+def _ohlcv_budget_from_env(raw: str | None, default: float = 20.0) -> float:
+    """Parse OHLCV_FETCH_BUDGET_S, falling back rather than killing the import.
+
+    This is evaluated at module import, so a bare ``float(os.getenv(...))`` turns
+    a typo'd env var into a ValueError that stops ``api.trading`` — and therefore
+    every trading route — from loading at all. A misconfigured tuning knob must
+    not be able to take the API down, so an unusable value logs and falls back.
+    Non-positive values are rejected too: a zero or negative budget would skip
+    every leg and silently return no data.
+    """
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logger.warning("OHLCV_FETCH_BUDGET_S=%r is not a number — using %.0fs", raw, default)
+        return default
+    if value <= 0:
+        logger.warning("OHLCV_FETCH_BUDGET_S=%r must be > 0 — using %.0fs", raw, default)
+        return default
+    return value
+
+
+# The literal default is passed inline as well as being the function's
+# fallback: Gate B reads os.getenv() calls statically and treats a var with
+# no inline default as one the compose file is required to forward.
+_OHLCV_TOTAL_BUDGET_S = _ohlcv_budget_from_env(os.getenv("OHLCV_FETCH_BUDGET_S", "20"))
+_OHLCV_ENGINE_TIMEOUT_S = 25.0
+_OHLCV_YFINANCE_TIMEOUT_S = 20.0
+# Below this there is no point starting a network leg — it cannot finish, and
+# trying only delays the local fallback.
+_OHLCV_MIN_LEG_S = 1.0
+
+
+def _ohlcv_leg_timeout(deadline: float, leg_cap: float) -> float | None:
+    """Seconds this leg may use, or None when the shared budget is spent.
+
+    None means "skip this leg": fall through to the next source rather than
+    starting a request there is no time left to finish.
+    """
+    remaining = deadline - time.monotonic()
+    if remaining < _OHLCV_MIN_LEG_S:
+        return None
+    return min(leg_cap, remaining)
+
+
 async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
-    """Fetch OHLCV bars from the price engine for a given symbol."""
+    """Fetch OHLCV bars for a symbol: price engine, then yfinance, then gold CSV.
+
+    Used by /patterns and /levels. This previously asked the price engine and
+    nothing else, returning [] on any miss — so both endpoints reported "no
+    patterns" / "no levels" whenever the engine simply had no data for that
+    symbol, which is a very different statement. /ohlcv already had the full
+    fallback chain; these two never used it.
+
+    Note the symbol form. Callers arrive via `_normalise_symbol` (OANDA style,
+    `XAU_USD`) while `_yf_ticker_map` is keyed on the compact form used in
+    config/multi_source_feed.yaml (`XAUUSD`), so the ticker lookup is done on
+    the compact spelling. Passing the OANDA form straight through would miss
+    every entry and silently disable the fallback again.
+
+    The price-engine call carries the same usability check `/ohlcv` applies, so
+    placeholder bars do not suppress the fallbacks.
+
+    Every leg draws from one shared `_OHLCV_TOTAL_BUDGET_S` deadline, so the
+    whole call is bounded no matter how many sources it has to try.
+    """
+    deadline = time.monotonic() + _OHLCV_TOTAL_BUDGET_S
     try:
         from core.app_state import app_state
 
-        if app_state and app_state.price_engine:
-            return await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
+        leg = _ohlcv_leg_timeout(deadline, _OHLCV_ENGINE_TIMEOUT_S)
+        if app_state and app_state.price_engine and leg is not None:
+            engine_get = app_state.price_engine.get_ohlcv
+            if asyncio.iscoroutinefunction(engine_get):
+                bars = await asyncio.wait_for(engine_get(symbol, timeframe, limit), timeout=leg)
+            else:
+                # A *synchronous* get_ohlcv cannot be passed to wait_for: calling
+                # it runs the blocking work inline on the event loop first — for
+                # however long it takes, with the timeout doing nothing — and
+                # wait_for then raises TypeError on the returned list, so the
+                # result is discarded and the price engine is silently skipped.
+                # data_layer.orchestrator.get_ohlcv is exactly this shape, so the
+                # bug is one swapped engine away. Run it off-loop and bounded.
+                _loop = asyncio.get_running_loop()
+                bars = await asyncio.wait_for(
+                    _loop.run_in_executor(None, engine_get, symbol, timeframe, limit),
+                    timeout=leg,
+                )
+            if _bars_are_usable(bars):
+                return bars
+            logger.debug(
+                "Price engine returned %d unusable bar(s) for %s — trying yfinance",
+                len(bars or []),
+                symbol,
+            )
+    except TimeoutError:
+        logger.warning("Price engine OHLCV timed out for %s — falling back to yfinance", symbol)
     except Exception as exc:
         logger.debug("Price engine OHLCV fetch failed for %s: %s", symbol, exc)
+
+    compact = symbol.replace("/", "").replace("_", "").upper()
+
+    # yfinance — same ticker table and "" == no Yahoo source convention as /ohlcv.
+    ticker_sym = _yf_ticker_map().get(compact, compact)
+    yf_leg = _ohlcv_leg_timeout(deadline, _OHLCV_YFINANCE_TIMEOUT_S)
+    if ticker_sym and yf_leg is None:
+        logger.debug("OHLCV budget spent before yfinance for %s — using local sources only", compact)
+    if ticker_sym and yf_leg is not None:
+        try:
+            import yfinance as _yf
+
+            interval, period = {
+                "1m": ("1m", "7d"),
+                "5m": ("5m", "60d"),
+                "15m": ("15m", "60d"),
+                "30m": ("30m", "60d"),
+                "1h": ("1h", "60d"),
+                "4h": ("1h", "60d"),
+                "1d": ("1d", "max"),
+                "1w": ("1wk", "max"),
+            }.get(timeframe, ("1h", "60d"))
+
+            def _fetch() -> list:
+                df = _yf.Ticker(ticker_sym).history(period=period, interval=interval, auto_adjust=True)
+                if df.empty:
+                    return []
+                if timeframe == "4h":
+                    df = (
+                        df.resample("4h")
+                        .agg({"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"})
+                        .dropna(subset=["Open", "Close"])
+                    )
+                return [
+                    {
+                        "timestamp": int(ts.timestamp()),
+                        "open": round(float(row["Open"]), 5),
+                        "high": round(float(row["High"]), 5),
+                        "low": round(float(row["Low"]), 5),
+                        "close": round(float(row["Close"]), 5),
+                        "volume": round(float(row.get("Volume", 0)), 2),
+                    }
+                    for ts, row in df.tail(limit).iterrows()
+                ]
+
+            loop = asyncio.get_running_loop()
+            bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=yf_leg)
+            if bars:
+                return bars
+        except Exception as exc:
+            logger.debug("yfinance OHLCV fallback failed for %s: %s", compact, exc)
+
+    # Bundled deep-history gold CSV — the last real source, as in /ohlcv.
+    if compact == "XAUUSD":
+        csv_bars = _load_gold_history_csv(timeframe, limit)
+        if csv_bars:
+            return csv_bars
+
     return []
 
 
@@ -4045,7 +4477,23 @@ async def get_chart_patterns(
     engines, each with entry/target/stop price levels.
     """
     norm = _normalise_symbol(symbol)
+    # The runtime invariant checker reports this endpoint as "timed out" at its
+    # 45s HTTP_TIMEOUT, and bounding the fetch did not stop it — so log how long
+    # the fetch actually took. Without this the next failure is as opaque as the
+    # last one.
+    _t0 = time.perf_counter()
     ohlcv = await _get_ohlcv_for_symbol(norm, timeframe, limit)
+    _fetch_s = time.perf_counter() - _t0
+    if _fetch_s > 5.0:
+        logger.warning(
+            "/patterns OHLCV fetch took %.1fs for %s %s (limit=%s, budget=%.0fs) — %d bars",
+            _fetch_s,
+            norm,
+            timeframe,
+            limit,
+            _OHLCV_TOTAL_BUDGET_S,
+            len(ohlcv or []),
+        )
     df = _ohlcv_to_df(ohlcv)
 
     if df is None or df.empty:

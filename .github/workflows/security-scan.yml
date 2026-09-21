@@ -15,12 +15,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.11'
 
@@ -28,17 +28,15 @@ jobs:
         run: pip install bandit[toml]
 
       - name: Run bandit
-        # Reports HIGH-severity findings but does not block CI — pre-existing
-        # HIGH findings are tracked in the security dashboard.
-        # Change || true to a hard exit once all HIGH findings are resolved.
+        # HIGH-severity findings are merge blockers. The JSON report is written
+        # before the human-readable check so it is retained on failure.
         run: |
+          set -o pipefail
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
             --severity-level high \
-            -f json -o bandit-report.json || true
-          # Ensure report file always exists so the upload step never errors
-          test -f bandit-report.json || echo '{"results":[],"errors":[]}' > bandit-report.json
+            -f json -o bandit-report.json
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
-            --severity-level high -q || true
+            --severity-level high -q
 
       - name: Upload report
         if: always()
@@ -55,12 +53,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.11'
 
@@ -70,19 +68,36 @@ jobs:
       - name: Run safety check
         # safety scan requires authentication since Safety CLI 3.x.
         # Falls back to pip-audit (no auth required) when SAFETY_API_KEY is absent.
-        # Both paths use || true — CVE reports go to the security dashboard,
-        # not as CI blockers, until all transitive CVEs have fixes available.
+        # Vulnerability findings are merge blockers; reports remain available
+        # through the always-run artifact upload.
         run: |
+          set -o pipefail
           if [ -n "$SAFETY_API_KEY" ]; then
-            safety scan -r requirements.txt --output json > safety-report.json || true
-            safety scan -r requirements.txt --severity high || true
+            safety scan -r requirements.txt --output json > safety-report.json
+            safety scan -r requirements.txt --severity high
           else
             echo "SAFETY_API_KEY not set — using pip-audit as fallback"
             pip-audit -r requirements.txt --desc --no-deps \
               --format json -o safety-report.json || true
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("safety-report.json").read_text())
+          fixable = [
+              vulnerability
+              for dependency in report.get("dependencies", [])
+              for vulnerability in dependency.get("vulns", [])
+              if vulnerability.get("fix_versions")
+          ]
+          if fixable:
+              print(f"BLOCKED: {len(fixable)} vulnerability(s) have a published fix")
+              for vulnerability in fixable:
+                  print(f"  {vulnerability['id']}: {vulnerability.get('description', '')[:120]}")
+              raise SystemExit(1)
+          print("pip-audit: no fixable CVEs found")
+          PY
           fi
-          # Ensure report file always exists so the upload step never errors
-          test -f safety-report.json || echo '[]' > safety-report.json
         env:
           SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
 
@@ -93,6 +108,74 @@ jobs:
           name: safety-report
           path: safety-report.json
           # Short retention — vulnerability details should not persist publicly
+          retention-days: 14
+
+  npm-audit:
+    # The npm dependency trees were audited by nothing.
+    #
+    # This repository already gates Python dependencies (the job above), runs
+    # bandit, and runs Trivy — but no workflow ever ran `npm audit`, so
+    # frontend/ and dashboard/ accumulated 23 advisories, 18 of them high,
+    # entirely unwatched. Every one was in build tooling rather than shipped
+    # code, which is why nothing broke; a compromised build chain still writes
+    # the bundle a browser executes.
+    #
+    # Same policy as the Python gate: block only on advisories that have a
+    # published fix, since an unfixable one is information, not an action.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [frontend, dashboard]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Audit ${{ matrix.workspace }}
+        working-directory: ${{ matrix.workspace }}
+        run: |
+          set -o pipefail
+          npm audit --json > npm-audit-${{ matrix.workspace }}.json || true
+          node -e '
+            const fs = require("fs");
+            const report = JSON.parse(
+              fs.readFileSync("npm-audit-${{ matrix.workspace }}.json", "utf8")
+            );
+            const vulns = report.vulnerabilities || {};
+            const fixable = Object.entries(vulns).filter(
+              ([, v]) => v.fixAvailable && ["high", "critical"].includes(v.severity)
+            );
+            const counts = (report.metadata || {}).vulnerabilities || {};
+            console.log("severity counts:", JSON.stringify(counts));
+            if (fixable.length) {
+              console.log(
+                `BLOCKED: ${fixable.length} high/critical advisory(s) have a published fix`
+              );
+              for (const [name, v] of fixable) {
+                const fix = typeof v.fixAvailable === "object"
+                  ? `${v.fixAvailable.name}@${v.fixAvailable.version}`
+                  : "npm audit fix";
+                console.log(`  ${v.severity} ${name} -> ${fix}`);
+              }
+              console.log("Run: cd ${{ matrix.workspace }} && npm audit fix");
+              process.exit(1);
+            }
+            console.log("npm audit: no fixable high/critical advisories");
+          '
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
+        with:
+          name: npm-audit-${{ matrix.workspace }}
+          path: ${{ matrix.workspace }}/npm-audit-${{ matrix.workspace }}.json
           retention-days: 14
 
   trivy:
@@ -106,13 +189,27 @@ jobs:
       # failing the whole job.
       security-events: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Run Trivy vulnerability scanner
         # Download pinned release asset directly — avoids executing a remote
         # shell script from main and makes failures easier to diagnose.
+        #
+        # This step used to pass --ignore-unfixed, which drops every CVE with no
+        # upstream fix — permanently, and with no record anywhere. All six of
+        # the chromadb/ecdsa/nltk findings have no fix, so all six vanished
+        # here: this job reported success on the same commit where ci.yml
+        # reported two criticals, and a green "Trivy" check meant "no CVE
+        # somebody else has already fixed" rather than "no CVE" (audit F271).
+        #
+        # It is gone. This job's output is the SARIF that populates the Security
+        # tab, which is precisely where an unfixed CVE belongs: it cannot be
+        # resolved by a version bump and needs a human decision. Suppression now
+        # goes through .trivyignore.yaml — the same file ci.yml uses, so there
+        # is one list of accepted risks with one set of expiry dates, and an
+        # acceptance has to be written down and re-argued when it lapses.
         run: |
           set -euo pipefail
           TRIVY_VERSION="0.69.3"
@@ -123,17 +220,15 @@ jobs:
           trivy version
           trivy fs . \
             --severity CRITICAL,HIGH \
-            --exit-code 0 \
-            --ignore-unfixed \
+            --exit-code 1 \
+            --ignorefile .trivyignore.yaml \
             --format sarif \
-            --output trivy-results.sarif || true
-          # Ensure file always exists so the upload step never errors
-          test -f trivy-results.sarif || echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
+            --output trivy-results.sarif
 
       - name: Upload Trivy scan results to GitHub Security tab
         # continue-on-error: SARIF upload requires GHAS; fails gracefully
         # on repos without it rather than blocking CI.
-        uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699  # v3.35.1
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
         if: always()
         continue-on-error: true
         with:
@@ -145,19 +240,17 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Secret Detection
-        # Pinned to SHA for supply-chain safety (tag: v3.88.1)
-        # continue-on-error: TruffleHog exits non-zero when verified secrets
-        # are found; we report but do not block CI until the finding backlog
-        # is cleared.  Also handles the zero-SHA edge case on first push to
-        # a new branch where github.event.before is all zeros.
-        uses: trufflesecurity/trufflehog@37b77001d0174ebec2fcca2bd83ff83a6d45a3ab
-        continue-on-error: true
+        # Pinned to SHA for supply-chain safety (tag: v3.88.1). Verified
+        # credentials are a merge blocker; unverified matches are intentionally
+        # excluded to avoid turning ordinary documentation examples into false
+        # positives.
+        uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11
         with:
           path: ./
           base: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD~1' }}

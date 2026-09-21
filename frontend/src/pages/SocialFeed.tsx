@@ -3,11 +3,30 @@
  * Features: opt-in/out toggle, real-time WS signal injection, pagination,
  * reactions (👍/👎), comments, copy counts.
  */
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase, extractApiError, fmtPrice, fmtPctRaw, fmtTime } from '../lib/utils';
+import { extractApiError, fmtPrice, fmtPctRaw, fmtTime } from '../lib/utils';
+import { openAuthenticatedWebSocket } from '../lib/ws';
+import { EmptyState, RelatedPages } from '../components';
+import {
+  Radio,
+  Check,
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+  ChevronUp,
+  ChevronDown,
+  Zap,
+  Trophy,
+  Users,
+  Sparkles,
+  BookOpen,
+  LineChart,
+  Lightbulb,
+} from 'lucide-react';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;
@@ -73,10 +92,9 @@ const SocialFeed: React.FC = () => {
   const wsToken = useStore(s => s.token);
   useEffect(() => {
     if (!wsToken) return;
-    const wsUrl = `${getWsBase()}/ws/social-feed?token=${wsToken}`;
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(wsUrl);
+      ws = openAuthenticatedWebSocket('/ws/social-feed', wsToken);
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data as string) as { type?: string; signal?: FeedItem };
@@ -166,27 +184,32 @@ const SocialFeed: React.FC = () => {
   });
 
   return (
-    <div className="page-content">
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Community Signal Feed</h1>
-          <p style={s.subtitle}>High-confidence AI signals from the community (≥70% confidence)</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: '#64748b' }}>Share my signals:</span>
+    <PageShell width="wide"
+        title="Community signal feed"
+        icon={Radio}
+        subtitle="High-confidence AI signals shared by the community — 70% confidence and above."
+        actions={
           <button
             onClick={handleOptToggle}
             disabled={optLoading || optedIn === null}
-            style={{
-              ...s.toggleBtn,
-              background: optedIn ? '#059669' : '#334155',
-              color: optedIn ? '#fff' : '#94a3b8',
-            }}
+            aria-pressed={optedIn === true}
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-4 text-[12.5px]
+                        font-semibold cursor-pointer transition-colors duration-150
+                        disabled:cursor-not-allowed disabled:opacity-50
+                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                        focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]
+                        ${optedIn
+                          ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/40 hover:bg-emerald-500/25'
+                          : 'text-slate-400 ring-1 ring-inset ring-[var(--border)] hover:bg-[var(--surface-hover)] hover:text-slate-200'}`}
           >
-            {optLoading ? '…' : optedIn ? '✅ Opted In' : 'Opt In'}
+            {optLoading
+              ? 'Saving…'
+              : optedIn
+                ? <><Check size={14} strokeWidth={2.5} aria-hidden /> Sharing my signals</>
+                : 'Share my signals'}
           </button>
-        </div>
-      </div>
+        }
+    >
 
       {/* Symbol filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -195,9 +218,9 @@ const SocialFeed: React.FC = () => {
             key={sym}
             onClick={() => setSymbolFilter(sym)}
             style={{
-              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13,
-              background: symbolFilter === sym ? '#3b82f6' : '#1e293b',
-              color: symbolFilter === sym ? '#fff' : '#94a3b8',
+              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 'var(--fs-body)',
+              background: symbolFilter === sym ? '#3b82f6' : 'var(--raised)',
+              color: symbolFilter === sym ? '#fff' : 'var(--text-dim)',
             }}
           >
             {sym}
@@ -206,7 +229,7 @@ const SocialFeed: React.FC = () => {
         <select
           value={sortBy}
           onChange={e => setSortBy(e.target.value as typeof sortBy)}
-          style={{ marginLeft: 'auto', background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
+          style={{ marginLeft: 'auto', background: 'var(--raised)', color: 'var(--text-dim)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '4px 8px', fontSize: 'var(--fs-body)'}}
         >
           <option value="confidence">Sort: Confidence</option>
           <option value="return">Sort: Return</option>
@@ -217,15 +240,19 @@ const SocialFeed: React.FC = () => {
       {error && <div style={s.errorBox}>{error}</div>}
 
       {filteredItems.length === 0 && !loading && !error && (
-        <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 36 }}>📡</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>No signals yet</div>
-          <div style={{ fontSize: 13, color: '#64748b' }}>Check back soon or generate AI signals now.</div>
-          <button onClick={() => navigate('/ai-strategy')}
-            style={{ padding: '7px 18px', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', borderRadius: 8, color: '#a78bfa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-            ✨ Generate AI Signals
-          </button>
-        </div>
+        <EmptyState
+          icon={Radio}
+          title={symbolFilter === 'All' ? 'No community signals yet' : `No signals for ${symbolFilter}`}
+          description={
+            symbolFilter === 'All'
+              ? 'Signals appear here when a member shares one at 70% confidence or above. You can generate your own in the meantime.'
+              : 'Clear the symbol filter to see the whole feed, or generate a signal for this instrument.'
+          }
+          links={[
+            { label: 'Generate AI signals', href: '/ai-strategy' },
+            { label: 'Open the ticket', href: '/trade' },
+          ]}
+        />
       )}
 
       <div style={s.feed}>
@@ -233,48 +260,75 @@ const SocialFeed: React.FC = () => {
           <div key={item.signal_id} style={s.card}>
             <div style={s.cardTop}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ ...s.dirBadge, background: item.direction === 'BUY' ? '#14532d' : '#450a0a', color: item.direction === 'BUY' ? '#4ade80' : '#f87171' }}>
+                <span style={{ ...s.dirBadge, background: item.direction === 'BUY' ? '#14532d' : '#450a0a', color: item.direction === 'BUY' ? 'var(--gain)' : 'var(--loss)' }}>
                   {item.direction}
                 </span>
                 <span style={s.symbol}>{item.symbol}</span>
                 <span style={s.confidence}>{Number.isFinite(item.confidence) ? (item.confidence * 100).toFixed(0) : '—'}% conf</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, color: '#64748b' }}>by <strong style={{ color: '#94a3b8' }}>{item.username}</strong></span>
-                <span style={{ fontSize: 11, color: '#475569' }}>{fmtTime(item.created_at)}</span>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>by <strong style={{ color: 'var(--text-dim)' }}>{item.username}</strong></span>
+                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fmtTime(item.created_at)}</span>
               </div>
             </div>
 
             <div style={s.metrics}>
               <span style={s.metric}>Entry: <strong>${fmtPrice(item.entry_price, 4)}</strong></span>
-              <span style={{ ...s.metric, color: (item.pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+              <span style={{ ...s.metric, color: (item.pnl ?? 0) >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
                 P&L: <strong>{fmtPctRaw(item.pnl, 2)}</strong>
               </span>
               <span style={s.metric}>Copies: <strong>{item.copies}</strong></span>
             </div>
 
             <div style={s.actions}>
-              <button onClick={() => handleReact(item.signal_id, 'up')}
-                style={{ ...s.reactBtn, color: item.your_reaction === 'up' ? '#4ade80' : '#64748b' }}>
-                👍 {item.thumbs_up}
+              <button
+                onClick={() => handleReact(item.signal_id, 'up')}
+                aria-pressed={item.your_reaction === 'up'}
+                aria-label={`Agree with this ${item.symbol} signal (${item.thumbs_up} so far)`}
+                className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]
+                            cursor-pointer transition-colors duration-150 hover:bg-emerald-500/10
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500
+                            ${item.your_reaction === 'up' ? 'text-emerald-400' : 'text-slate-500'}`}
+              >
+                <ThumbsUp size={14} strokeWidth={1.75} aria-hidden /> {item.thumbs_up}
               </button>
-              <button onClick={() => handleReact(item.signal_id, 'down')}
-                style={{ ...s.reactBtn, color: item.your_reaction === 'down' ? '#f87171' : '#64748b' }}>
-                👎 {item.thumbs_down}
+              <button
+                onClick={() => handleReact(item.signal_id, 'down')}
+                aria-pressed={item.your_reaction === 'down'}
+                aria-label={`Disagree with this ${item.symbol} signal (${item.thumbs_down} so far)`}
+                className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]
+                            cursor-pointer transition-colors duration-150 hover:bg-red-500/10
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500
+                            ${item.your_reaction === 'down' ? 'text-red-400' : 'text-slate-500'}`}
+              >
+                <ThumbsDown size={14} strokeWidth={1.75} aria-hidden /> {item.thumbs_down}
               </button>
-              <button onClick={() => toggleExpand(item.signal_id)} style={s.commentToggle}>
-                💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
+              <button
+                onClick={() => toggleExpand(item.signal_id)}
+                aria-expanded={expanded === item.signal_id}
+                aria-label={`${expanded === item.signal_id ? 'Hide' : 'Show'} ${item.comment_count} comments`}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2.5 text-[12.5px]
+                           text-slate-500 cursor-pointer transition-colors duration-150
+                           hover:bg-[var(--surface-hover)] hover:text-slate-300 focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-sky-500"
+              >
+                <MessageSquare size={14} strokeWidth={1.75} aria-hidden /> {item.comment_count}
+                {expanded === item.signal_id
+                  ? <ChevronUp size={12} strokeWidth={2.5} aria-hidden />
+                  : <ChevronDown size={12} strokeWidth={2.5} aria-hidden />}
               </button>
               <button
                 onClick={() => navigate('/trade', { state: { signal: { symbol: item.symbol, direction: item.direction } } })}
-                style={{
-                  marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer',
-                  background: item.direction === 'BUY' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
-                  border: `1px solid ${item.direction === 'BUY' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
-                  color: item.direction === 'BUY' ? '#4ade80' : '#f87171',
-                }}
+                aria-label={`Open a ${item.direction} ticket for ${item.symbol}`}
+                className={`ml-auto inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5
+                            text-[12.5px] font-bold cursor-pointer transition-colors duration-150
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+                            focus-visible:ring-offset-[var(--surface)]
+                            ${item.direction === 'BUY'
+                              ? 'bg-emerald-500/12 text-emerald-400 ring-1 ring-inset ring-emerald-500/40 hover:bg-emerald-500/22 focus-visible:ring-emerald-500'
+                              : 'bg-red-500/12 text-red-400 ring-1 ring-inset ring-red-500/40 hover:bg-red-500/22 focus-visible:ring-red-500'}`}
               >
-                ⚡ Trade
+                <Zap size={13} strokeWidth={2} aria-hidden /> Trade {item.direction}
               </button>
             </div>
 
@@ -282,14 +336,14 @@ const SocialFeed: React.FC = () => {
               <div style={s.commentsSection}>
                 {(comments[item.signal_id] ?? []).map(c => (
                   <div key={c.comment_id} style={s.comment}>
-                    <strong style={{ color: '#94a3b8', fontSize: 12 }}>{c.username}</strong>
-                    <span style={{ color: '#64748b', fontSize: 11, marginLeft: 8 }}>{fmtTime(c.created_at)}</span>
-                    <p style={{ margin: '4px 0 0', fontSize: 13, color: '#cbd5e1' }}>{c.text}</p>
+                    <strong style={{ color: 'var(--text-dim)', fontSize: 12 }}>{c.username}</strong>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 8 }}>{fmtTime(c.created_at)}</span>
+                    <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>{c.text}</p>
                   </div>
                 ))}
                 {user && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    <input
+                    <input aria-label="Add a comment"
                       value={commentText}
                       onChange={e => setCommentText(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && !e.shiftKey && submitComment(item.signal_id)}
@@ -315,43 +369,55 @@ const SocialFeed: React.FC = () => {
         </div>
       )}
 
+      <RelatedPages
+        links={[
+          { to: '/leaderboard',  label: 'Leaderboard',   hint: 'Who is performing best right now', icon: Trophy },
+          { to: '/copy-trading', label: 'Copy trading',  hint: 'Follow a trader automatically',    icon: Users },
+          { to: '/ai-strategy',  label: 'AI strategy',   hint: 'Generate your own signals',        icon: Sparkles },
+          { to: '/journal',      label: 'Trade journal', hint: 'How signals worked out for you',   icon: BookOpen },
+          { to: '/ai-chart',     label: 'Charts',        hint: 'Study a symbol before you act',    icon: LineChart },
+        ]}
+      />
+
       {optedIn !== null && (
         <div style={s.infoBanner}>
           {optedIn
-            ? '✅ Your high-confidence signals are visible to the community. Toggle off to stop sharing.'
-            : '💡 Opt in to share your AI signals with the community and build your reputation.'}
+            ? <><Check size={13} strokeWidth={2.5} aria-hidden className="inline mr-1.5 align-[-2px] text-emerald-400" />
+                Your high-confidence signals are visible to the community. Turn sharing off to stop.</>
+            : <><Lightbulb size={13} strokeWidth={1.75} aria-hidden className="inline mr-1.5 align-[-2px] text-amber-400" />
+                Share your AI signals with the community to build your reputation.</>}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page:           { maxWidth: 800, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui,-apple-system,sans-serif', color: '#f1f5f9', background: '#0f172a', minHeight: '100vh' },
+  page:           { maxWidth: 800, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui,-apple-system,sans-serif', color: 'var(--text-strong)', background: 'var(--surface)', minHeight: '100vh' },
   header:         { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
-  title:          { fontSize: 24, fontWeight: 700, color: '#f8fafc', margin: '0 0 4px' },
-  subtitle:       { fontSize: 13, color: '#64748b', margin: 0 },
-  toggleBtn:      { border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px', transition: 'background 0.2s' },
-  errorBox:       { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#f87171' },
-  empty:          { color: '#475569', fontSize: 14, textAlign: 'center', padding: 48 },
+  title:          { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 4px' },
+  subtitle:       { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: 0 },
+  toggleBtn:      { border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px', transition: 'background 0.2s' },
+  errorBox:       { background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 'var(--fs-body)', color: 'var(--loss)' },
+  empty:          { color: 'var(--text-faint)', fontSize: 14, textAlign: 'center', padding: 48 },
   feed:           { display: 'flex', flexDirection: 'column', gap: 12 },
-  card:           { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' },
+  card:           { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '14px 16px' },
   cardTop:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   dirBadge:       { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 },
-  symbol:         { fontSize: 15, fontWeight: 700, color: '#f1f5f9' },
-  confidence:     { fontSize: 11, background: '#1e3a5f', color: '#60a5fa', padding: '2px 8px', borderRadius: 10 },
+  symbol:         { fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text-strong)' },
+  confidence:     { fontSize: 11, background: '#1e3a5f', color: 'var(--link)', padding: '2px 8px', borderRadius: 10 },
   metrics:        { display: 'flex', gap: 20, marginBottom: 10 },
-  metric:         { fontSize: 13, color: '#64748b' },
+  metric:         { fontSize: 'var(--fs-body)', color: 'var(--text-muted)' },
   actions:        { display: 'flex', gap: 8 },
-  reactBtn:       { background: 'transparent', border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '4px 10px' },
-  commentToggle:  { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 13, padding: '4px 10px', marginLeft: 'auto' },
-  commentsSection:{ borderTop: '1px solid #334155', marginTop: 12, paddingTop: 12 },
-  comment:        { padding: '6px 0', borderBottom: '1px solid #0f172a' },
-  commentInput:   { flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 13, padding: '6px 10px', outline: 'none' },
-  commentBtn:     { background: '#3b82f6', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 13, padding: '6px 14px' },
-  dim:            { color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 },
-  loadMoreBtn:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: 14, padding: '10px 28px' },
-  infoBanner:     { marginTop: 24, background: '#1e293b', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#94a3b8', border: '1px solid #334155' },
+  reactBtn:       { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 6, cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 10px' },
+  commentToggle:  { background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '4px 10px', marginLeft: 'auto' },
+  commentsSection:{ borderTop: '1px solid var(--border-strong)', marginTop: 12, paddingTop: 12 },
+  comment:        { padding: '6px 0', borderBottom: '1px solid var(--hairline)' },
+  commentInput:   { flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '6px 10px', outline: 'none' },
+  commentBtn:     { background: '#3b82f6', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 'var(--fs-body)', padding: '6px 14px' },
+  dim:            { color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 },
+  loadMoreBtn:    { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 14, padding: '10px 28px' },
+  infoBanner:     { marginTop: 24, background: 'var(--raised)', borderRadius: 8, padding: '12px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)', border: '1px solid var(--border-strong)' },
 };
 
 export default SocialFeed;

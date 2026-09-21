@@ -107,17 +107,17 @@ describe('position edge cases', () => {
 
   it('position with negative unrealized_pnl', () => {
     useStore.getState().upsertPosition(makePos({ unrealized_pnl: -500 }));
-    expect(useStore.getState().positions[0].unrealized_pnl).toBe(-500);
+    expect(useStore.getState().positions[0]?.unrealized_pnl).toBe(-500);
   });
 
   it('position with zero size', () => {
     useStore.getState().upsertPosition(makePos({ size: 0 }));
-    expect(useStore.getState().positions[0].size).toBe(0);
+    expect(useStore.getState().positions[0]?.size).toBe(0);
   });
 
   it('position with fractional size', () => {
     useStore.getState().upsertPosition(makePos({ size: 0.01 }));
-    expect(useStore.getState().positions[0].size).toBe(0.01);
+    expect(useStore.getState().positions[0]?.size).toBe(0.01);
   });
 
   it('upsert preserves other positions', () => {
@@ -141,13 +141,13 @@ describe('position edge cases', () => {
 
   it('position realized_pnl is stored', () => {
     useStore.getState().upsertPosition(makePos({ realized_pnl: 250 }));
-    expect(useStore.getState().positions[0].realized_pnl).toBe(250);
+    expect(useStore.getState().positions[0]?.realized_pnl).toBe(250);
   });
 
   it('position opened_at is stored', () => {
     const ts = '2024-01-15T10:30:00.000Z';
     useStore.getState().upsertPosition(makePos({ opened_at: ts }));
-    expect(useStore.getState().positions[0].opened_at).toBe(ts);
+    expect(useStore.getState().positions[0]?.opened_at).toBe(ts);
   });
 });
 
@@ -163,23 +163,23 @@ describe('signal edge cases', () => {
 
   it('signal with confidence 0', () => {
     useStore.getState().addSignal(makeSig({ confidence: 0 }));
-    expect(useStore.getState().signals[0].confidence).toBe(0);
+    expect(useStore.getState().signals[0]?.confidence).toBe(0);
   });
 
   it('signal with confidence 1', () => {
     useStore.getState().addSignal(makeSig({ confidence: 1 }));
-    expect(useStore.getState().signals[0].confidence).toBe(1);
+    expect(useStore.getState().signals[0]?.confidence).toBe(1);
   });
 
   it('expired signal is stored', () => {
     useStore.getState().addSignal(makeSig({ status: 'expired' }));
-    expect(useStore.getState().signals[0].status).toBe('expired');
+    expect(useStore.getState().signals[0]?.status).toBe('expired');
   });
 
   it('addSignal keeps newest at index 0', () => {
     useStore.getState().addSignal(makeSig({ id: 's1', model: 'first' }));
     useStore.getState().addSignal(makeSig({ id: 's2', model: 'second' }));
-    expect(useStore.getState().signals[0].model).toBe('second');
+    expect(useStore.getState().signals[0]?.model).toBe('second');
   });
 
   it('exactly 50 signals after 50 adds', () => {
@@ -191,19 +191,19 @@ describe('signal edge cases', () => {
     for (let i = 0; i < 51; i++) useStore.getState().addSignal(makeSig({ id: String(i), model: `m${i}` }));
     expect(useStore.getState().signals).toHaveLength(50);
     // Newest is at index 0
-    expect(useStore.getState().signals[0].model).toBe('m50');
+    expect(useStore.getState().signals[0]?.model).toBe('m50');
   });
 
   it('setSignals replaces addSignal results', () => {
     useStore.getState().addSignal(makeSig({ id: 's1' }));
     useStore.getState().setSignals([makeSig({ id: 's2' }), makeSig({ id: 's3' })]);
     expect(useStore.getState().signals).toHaveLength(2);
-    expect(useStore.getState().signals[0].id).toBe('s2');
+    expect(useStore.getState().signals[0]?.id).toBe('s2');
   });
 
   it('neutral direction signal', () => {
     useStore.getState().addSignal(makeSig({ direction: 'neutral' }));
-    expect(useStore.getState().signals[0].direction).toBe('neutral');
+    expect(useStore.getState().signals[0]?.direction).toBe('neutral');
   });
 });
 

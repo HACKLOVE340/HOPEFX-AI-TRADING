@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import { EmptyState } from '../../components/EmptyState';
+import { useConfirm } from '../../components/ConfirmDialog';
 import {
   SectionCard, ActionBtn, Select, Input, StatusBadge,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
@@ -11,6 +12,8 @@ import {
 import type { RevenueStats, SubscriptionStats, Chargeback, TaxReport, ReconciliationRecord, AffiliateStats } from './types';
 import { PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { Plan } from '../../lib/subscription';
+import { asArray } from '../../lib/utils';
+import { AlertTriangle, Banknote, BarChart3, Check, CheckCircle2, CreditCard, Download, FileText, Files, FlaskConical, Handshake, Hourglass, Link2, Minus, Play, Plus, ReceiptText, RefreshCw, Scale, Send, Star, Target, TrendingDown, TrendingUp, Trophy, Users, XCircle } from 'lucide-react';
 
 interface Payment {
   payment_id: string;
@@ -50,15 +53,23 @@ function apiErr(e: unknown, fallback: string): string {
 
 // ── Inline Flash ──────────────────────────────────────────────────────────────
 
-const Flash: React.FC<{ msg: string; onClear: () => void }> = ({ msg, onClear }) => {
-  const isErr = /fail|error/i.test(msg);
+/**
+ * Result of an operator action.
+ *
+ * `ok` is explicit. This used to test /fail|error/i against the message, which
+ * is the server's `detail` — so a rejection worded without those words rendered
+ * green on the panel that resolves money disputes. Same defect as the eighteen
+ * superadmin banners, expressed as a regex instead of .includes().
+ */
+const Flash: React.FC<{ msg: string; ok: boolean; onClear: () => void }> = ({ msg, ok, onClear }) => {
+  const isErr = !ok;
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '11px 16px', borderRadius: 8, marginBottom: 12,
       background: isErr ? '#450a0a' : '#052e16',
-      color: isErr ? '#f87171' : '#4ade80',
-      fontSize: 13, fontWeight: 600, border: `1px solid ${isErr ? '#dc262633' : '#16a34a33'}`,
+      color: isErr ? 'var(--loss)' : 'var(--gain)',
+      fontSize: 'var(--fs-body)', fontWeight: 600, border: `1px solid ${isErr ? '#dc262633' : '#16a34a33'}`,
     }}>
       <span>{msg}</span>
       <button onClick={onClear} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, marginLeft: 12 }}>×</button>
@@ -69,28 +80,28 @@ const Flash: React.FC<{ msg: string; onClear: () => void }> = ({ msg, onClear })
 // ── Chargeback status colours ─────────────────────────────────────────────────
 
 const CB_COLOR: Record<string, string> = {
-  open:              '#fbbf24',
-  won:               '#4ade80',
-  lost:              '#f87171',
-  pending_evidence:  '#60a5fa',
+  open:              'var(--warn)',
+  won:               'var(--gain)',
+  lost:              'var(--loss)',
+  pending_evidence:  'var(--link)',
 };
 
 // ── Tax-report status colours ─────────────────────────────────────────────────
 
 const TAX_COLOR: Record<string, string> = {
-  draft:   '#64748b',
-  filed:   '#60a5fa',
-  paid:    '#4ade80',
-  overdue: '#f87171',
+  draft:   'var(--text-muted)',
+  filed:   'var(--link)',
+  paid:    'var(--gain)',
+  overdue: 'var(--loss)',
 };
 
 // ── Reconciliation status colours ─────────────────────────────────────────────
 
 const RECON_COLOR: Record<string, string> = {
-  matched:     '#4ade80',
-  discrepancy: '#f87171',
-  pending:     '#fbbf24',
-  resolved:    '#94a3b8',
+  matched:     'var(--gain)',
+  discrepancy: 'var(--loss)',
+  pending:     'var(--warn)',
+  resolved:    'var(--text-dim)',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,7 +115,9 @@ const ChargebacksPanel: React.FC = () => {
   const [loading, setLoad]  = useState(true);
   const [error, setError]   = useState('');
   const [msg, setMsg]       = useState('');
+  const [msgOk, setMsgOk]   = useState(true);
   const [statusFilter, setSF] = useState('all');
+  const confirm = useConfirm();
   const [busy, setBusy]     = useState<string | null>(null);
 
   const mountedRef = useRef(true);
@@ -117,7 +130,7 @@ const ChargebacksPanel: React.FC = () => {
       if (statusFilter !== 'all') params['status'] = statusFilter;
       const res = await superadminApi.chargebacks(params);
       if (!mountedRef.current) return;
-      setItems(res.data.chargebacks ?? res.data ?? []);
+      setItems(asArray(res.data, 'chargebacks'));
     } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load chargebacks')); }
     finally { if (mountedRef.current) setLoad(false); }
   }, [statusFilter]);
@@ -130,10 +143,26 @@ const ChargebacksPanel: React.FC = () => {
     setBusy(id);
     try {
       await superadminApi.updateChargeback(id, { status });
+      setMsgOk(true);
       setMsg(`Chargeback ${id.slice(-6)} → ${status}`);
       load();
-    } catch (e) { setMsg(apiErr(e, 'Update failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Update failed')); }
     finally { setBusy(null); }
+  };
+
+  /** Resolving a dispute is a money decision on adjacent buttons in a dense
+   *  table row, and there is no "reopen" in this UI. Name the amount first. */
+  const confirmAndUpdate = async (c: Chargeback, status: 'won' | 'lost') => {
+    const ok = await confirm({
+      title: `Mark chargeback as ${status}?`,
+      description:
+        `$${c.amount.toLocaleString()} — records the dispute outcome` +
+        (status === 'lost' ? ' and concedes the disputed amount.' : '.') +
+        ' This cannot be undone here.',
+      confirmLabel: `Mark ${status}`,
+      variant: status === 'lost' ? 'danger' : undefined,
+    });
+    if (ok) await update(c.chargeback_id, status);
   };
 
   const openCount  = items.filter(c => c.status === 'open').length;
@@ -143,7 +172,7 @@ const ChargebacksPanel: React.FC = () => {
   return (
     <SectionCard
       title="Chargebacks"
-      icon="🔄"
+      icon={<RefreshCw size={18} aria-hidden />}
       accent="#f97316"
       subtitle={`${items.length} total · ${openCount} open · ${fmtMoney(totalAtRisk)} at risk`}
       actions={
@@ -161,35 +190,35 @@ const ChargebacksPanel: React.FC = () => {
         />
       }
     >
-      {msg && <Flash msg={msg} onClear={() => setMsg('')} />}
+      {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
       {loading ? <LoadingRows rows={4} /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User','Amount','Provider','Reason','Status','Opened','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {items.map(c => (
-                <tr key={c.chargeback_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{c.username}</td>
+                <tr key={c.chargeback_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{c.username}</td>
                   <td style={{ padding: '10px 12px', fontWeight: 700, color: '#fb923c' }}>{fmtMoney2(c.amount, c.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{c.provider}</td>
-                  <td style={{ padding: '10px 12px', color: '#cbd5e1', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{c.provider}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: CB_COLOR[c.status] ?? '#94a3b8', background: `${CB_COLOR[c.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: CB_COLOR[c.status] ?? 'var(--text-dim)', background: `${CB_COLOR[c.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {c.status.replace(/_/g, ' ')}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDateShort(c.opened_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(c.opened_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {c.status === 'open' || c.status === 'pending_evidence' ? (
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <ActionBtn label="Won"  onClick={() => update(c.chargeback_id, 'won')}  variant="success" size="sm" loading={busy === c.chargeback_id} />
-                        <ActionBtn label="Lost" onClick={() => update(c.chargeback_id, 'lost')} variant="danger"  size="sm" loading={busy === c.chargeback_id} />
+                        <ActionBtn label="Won"  onClick={() => confirmAndUpdate(c, 'won')}  variant="success" size="sm" loading={busy === c.chargeback_id} />
+                        <ActionBtn label="Lost" onClick={() => confirmAndUpdate(c, 'lost')} variant="danger"  size="sm" loading={busy === c.chargeback_id} />
                       </div>
                     ) : (
                       <StatusBadge status={c.status === 'won' ? 'resolved' : c.status} size="sm" />
@@ -200,7 +229,7 @@ const ChargebacksPanel: React.FC = () => {
             </tbody>
           </table>
           {items.length === 0 && (
-            <EmptyState compact icon="✅" title="No chargebacks found" description="Chargeback disputes will appear here when reported." />
+            <EmptyState compact icon={CheckCircle2} title="No chargebacks found" description="Chargeback disputes will appear here when reported." />
           )}
         </div>
       )}
@@ -215,6 +244,7 @@ const TaxReportsPanel: React.FC = () => {
   const [loading, setLoad]    = useState(true);
   const [error, setError]     = useState('');
   const [msg, setMsg]         = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [busy, setBusy]       = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newPeriod, setNewPeriod]  = useState('');
@@ -228,7 +258,7 @@ const TaxReportsPanel: React.FC = () => {
     try {
       const res = await superadminApi.taxReports();
       if (!mountedRef.current) return;
-      setReports(res.data.reports ?? res.data ?? []);
+      setReports(asArray(res.data, 'reports'));
     } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load tax reports')); }
     finally { if (mountedRef.current) setLoad(false); }
   }, []);
@@ -241,9 +271,10 @@ const TaxReportsPanel: React.FC = () => {
     setBusy(id);
     try {
       await superadminApi.updateTaxReport(id, { status });
+      setMsgOk(true);
       setMsg(`Report ${id.slice(-6)} → ${status}`);
       load();
-    } catch (e) { setMsg(apiErr(e, 'Update failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Update failed')); }
     finally { setBusy(null); }
   };
 
@@ -252,10 +283,11 @@ const TaxReportsPanel: React.FC = () => {
     setBusy('create');
     try {
       await superadminApi.createTaxReport({ period: newPeriod, jurisdiction: newJurisdiction });
+      setMsgOk(true);
       setMsg('Tax report created');
       setCreating(false); setNewPeriod(''); setNewJurisdiction('');
       load();
-    } catch (e) { setMsg(apiErr(e, 'Create failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Create failed')); }
     finally { setBusy(null); }
   };
 
@@ -265,14 +297,14 @@ const TaxReportsPanel: React.FC = () => {
   return (
     <SectionCard
       title="Tax Reports"
-      icon="📑"
+      icon={<Files size={18} aria-hidden />}
       accent="#60a5fa"
       subtitle={`${reports.length} reports · ${overdueCount} overdue · ${fmtMoney(totalOwed)} total owed`}
       actions={
         <ActionBtn label="+ New Report" onClick={() => setCreating(v => !v)} variant="primary" size="sm" />
       }
     >
-      {msg && <Flash msg={msg} onClear={() => setMsg('')} />}
+      {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
       {creating && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginBottom: 16, padding: '14px 16px', background: '#0f1f35', borderRadius: 8, border: '1px solid #1e3a5f' }}>
           <Input label="Period (e.g. 2025-Q1)" value={newPeriod} onChange={e => setNewPeriod(e.target.value)} placeholder="2025-Q1" />
@@ -283,26 +315,26 @@ const TaxReportsPanel: React.FC = () => {
       )}
       {loading ? <LoadingRows rows={4} /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Period','Jurisdiction','Revenue','Taxable','Rate','Tax Owed','Due Date','Status','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {reports.map(r => (
-                <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{r.period}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{r.jurisdiction}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.total_revenue, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.taxable_amount, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{Number.isFinite(r.tax_rate_pct) ? r.tax_rate_pct.toFixed(1) : '—'}%</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.status === 'overdue' ? '#f87171' : '#fbbf24' }}>{fmtMoney(r.tax_owed, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: r.status === 'overdue' ? '#f87171' : '#64748b', fontSize: 12 }}>{fmtDateShort(r.due_date)}</td>
+                <tr key={r.report_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.period}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{r.jurisdiction}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.total_revenue, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.taxable_amount, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{Number.isFinite(r.tax_rate_pct) ? r.tax_rate_pct.toFixed(1) : '—'}%</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.status === 'overdue' ? 'var(--loss)' : 'var(--warn)' }}>{fmtMoney(r.tax_owed, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', color: r.status === 'overdue' ? 'var(--loss)' : 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(r.due_date)}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: TAX_COLOR[r.status] ?? '#94a3b8', background: `${TAX_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: TAX_COLOR[r.status] ?? 'var(--text-dim)', background: `${TAX_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {r.status}
                     </span>
                   </td>
@@ -321,7 +353,7 @@ const TaxReportsPanel: React.FC = () => {
             </tbody>
           </table>
           {reports.length === 0 && (
-            <EmptyState compact icon="📄" title="No tax reports yet" description="Generated tax reports will appear here." />
+            <EmptyState compact icon={FileText} title="No tax reports yet" description="Generated tax reports will appear here." />
           )}
         </div>
       )}
@@ -336,9 +368,16 @@ const ReconciliationPanel: React.FC = () => {
   const [loading, setLoad]    = useState(true);
   const [error, setError]     = useState('');
   const [msg, setMsg]         = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [busy, setBusy]       = useState<string | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const [provider, setProvider] = useState('all');
+  // The run endpoint requires a period and rejects the request without one, so
+  // the button used to fail every time with "period is required (e.g.
+  // '2025-01')" — an error naming a parameter the UI gave you no way to supply.
+  // Defaulted to the current month rather than sent implicitly: reconciling a
+  // period the operator did not choose is worse than asking.
+  const [period, setPeriod]   = useState(() => new Date().toISOString().slice(0, 7));
   const [notes, setNotes]     = useState<Record<string, string>>({});
 
   const mountedRef = useRef(true);
@@ -351,7 +390,7 @@ const ReconciliationPanel: React.FC = () => {
       if (provider !== 'all') params['provider'] = provider;
       const res = await superadminApi.reconciliationRecords(params);
       if (!mountedRef.current) return;
-      setRecords(res.data.records ?? res.data ?? []);
+      setRecords(asArray(res.data, 'records'));
     } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load reconciliation records')); }
     finally { if (mountedRef.current) setLoad(false); }
   }, [provider]);
@@ -363,10 +402,14 @@ const ReconciliationPanel: React.FC = () => {
   const runRecon = async () => {
     setRunBusy(true);
     try {
-      await superadminApi.runReconciliation({ provider: provider !== 'all' ? provider : undefined });
-      setMsg('Reconciliation run started — results will appear shortly');
+      await superadminApi.runReconciliation({
+        period,
+        provider: provider !== 'all' ? provider : undefined,
+      });
+      setMsgOk(true);
+      setMsg(`Reconciliation run started for ${period} — results will appear shortly`);
       setTimeout(load, 3000);
-    } catch (e) { setMsg(apiErr(e, 'Reconciliation run failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Reconciliation run failed')); }
     finally { setRunBusy(false); }
   };
 
@@ -374,9 +417,10 @@ const ReconciliationPanel: React.FC = () => {
     setBusy(id);
     try {
       await superadminApi.resolveReconciliation(id, notes[id]);
+      setMsgOk(true);
       setMsg(`Record ${id.slice(-6)} resolved`);
       load();
-    } catch (e) { setMsg(apiErr(e, 'Resolve failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Resolve failed')); }
     finally { setBusy(null); }
   };
 
@@ -387,56 +431,64 @@ const ReconciliationPanel: React.FC = () => {
   return (
     <SectionCard
       title="Payment Reconciliation"
-      icon="⚖️"
+      icon={<Scale size={18} aria-hidden />}
       accent="#a78bfa"
       subtitle={`${records.length} records · ${discrepancies.length} discrepancies · ${fmtMoney(totalDiscrepancy)} variance`}
       actions={
         <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="month"
+            value={period}
+            onChange={e => setPeriod(e.target.value)}
+            aria-label="Reconciliation period"
+            title="Period to reconcile (YYYY-MM)"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 10px', fontSize: 'var(--fs-body)', width: 150 }}
+          />
           <Select
             value={provider}
             onChange={e => setProvider(e.target.value)}
             options={[{ value: 'all', label: 'All Providers' }, ...providers.map(p => ({ value: p, label: p }))]}
             style={{ width: 160 }}
           />
-          <ActionBtn label="Run Reconciliation" onClick={runRecon} variant="primary" size="sm" loading={runBusy} icon="▶" />
+          <ActionBtn label="Run Reconciliation" onClick={runRecon} variant="primary" size="sm" loading={runBusy} icon={<Play size={18} aria-hidden />} disabled={!period} />
         </div>
       }
     >
-      {msg && <Flash msg={msg} onClear={() => setMsg('')} />}
+      {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
       {loading ? <LoadingRows rows={4} /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Period','Provider','Expected','Actual','Discrepancy','Status','Created','Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {records.map(r => (
-                <tr key={r.recon_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{r.period}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{r.provider}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.expected_amount, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', color: '#e2e8f0' }}>{fmtMoney(r.actual_amount, r.currency)}</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.discrepancy === 0 ? '#4ade80' : r.discrepancy > 0 ? '#4ade80' : '#f87171' }}>
+                <tr key={r.recon_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.period}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{r.provider}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.expected_amount, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text)' }}>{fmtMoney(r.actual_amount, r.currency)}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.discrepancy === 0 ? 'var(--gain)' : r.discrepancy > 0 ? 'var(--gain)' : 'var(--loss)' }}>
                     {r.discrepancy > 0 ? '+' : ''}{fmtMoney(r.discrepancy, r.currency)}
                   </td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: RECON_COLOR[r.status] ?? '#94a3b8', background: `${RECON_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: RECON_COLOR[r.status] ?? 'var(--text-dim)', background: `${RECON_COLOR[r.status] ?? '#475569'}22`, borderRadius: 4, padding: '2px 8px' }}>
                       {r.status}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDateShort(r.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDateShort(r.created_at)}</td>
                   <td style={{ padding: '10px 12px', minWidth: 220 }}>
                     {r.status === 'discrepancy' && (
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <input
+                        <input aria-label="Resolution notes"
                           placeholder="Resolution notes…"
                           value={notes[r.recon_id] ?? ''}
                           onChange={e => setNotes(n => ({ ...n, [r.recon_id]: e.target.value }))}
-                          style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '4px 8px', fontSize: 12 }}
+                          style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 12 }}
                         />
                         <ActionBtn label="Resolve" onClick={() => resolve(r.recon_id)} variant="success" size="sm" loading={busy === r.recon_id} />
                       </div>
@@ -447,7 +499,7 @@ const ReconciliationPanel: React.FC = () => {
             </tbody>
           </table>
           {records.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 28, color: '#475569', fontSize: 13 }}>No reconciliation records. Click "Run Reconciliation" to generate.</div>
+            <div style={{ textAlign: 'center', padding: 28, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No reconciliation records. Click "Run Reconciliation" to generate.</div>
           )}
         </div>
       )}
@@ -479,49 +531,49 @@ const AffiliatePanel: React.FC = () => {
   // Refresh every 60 s — compliance and financial data is not real-time.
   usePolling(load, 60_000);
 
-  if (loading) return <SectionCard title="Affiliate Programme" icon="🤝" accent="#22c55e"><LoadingRows rows={4} /></SectionCard>;
-  if (error)   return <SectionCard title="Affiliate Programme" icon="🤝" accent="#22c55e"><ErrorState message={error} onRetry={load} /></SectionCard>;
+  if (loading) return <SectionCard title="Affiliate Programme" icon={<Handshake size={18} aria-hidden />} accent="#22c55e"><LoadingRows rows={4} /></SectionCard>;
+  if (error)   return <SectionCard title="Affiliate Programme" icon={<Handshake size={18} aria-hidden />} accent="#22c55e"><ErrorState message={error} onRetry={load} /></SectionCard>;
   if (!stats)  return null;
 
   return (
-    <SectionCard title="Affiliate Programme" icon="🤝" accent="#22c55e"
+    <SectionCard title="Affiliate Programme" icon={<Handshake size={18} aria-hidden />} accent="#22c55e"
       subtitle={`${stats.active_affiliates} active / ${stats.total_affiliates} total affiliates`}>
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiTile label="Total Affiliates"    value={stats.total_affiliates}                                           icon="👥" accent="#22c55e" />
-        <KpiTile label="Active Affiliates"   value={stats.active_affiliates}                                          icon="✅" accent="#4ade80" />
-        <KpiTile label="Commissions Paid"    value={fmtMoney(stats.total_commissions_paid, stats.currency)}           icon="💸" accent="#f59e0b" />
-        <KpiTile label="Commissions Pending" value={fmtMoney(stats.commissions_pending, stats.currency)}             icon="⏳" accent="#fbbf24" />
-        <KpiTile label="Total Referrals"     value={stats.total_referrals}                                            icon="🔗" accent="#06b6d4" />
-        <KpiTile label="Conversions MTD"     value={stats.conversions_mtd}                                            icon="🎯" accent="#8b5cf6" />
+        <KpiTile label="Total Affiliates"    value={stats.total_affiliates}                                           icon={<Users size={18} aria-hidden />} accent="#22c55e" />
+        <KpiTile label="Active Affiliates"   value={stats.active_affiliates}                                          icon={<CheckCircle2 size={18} aria-hidden />} accent="#4ade80" />
+        <KpiTile label="Commissions Paid"    value={fmtMoney(stats.total_commissions_paid, stats.currency)}           icon={<Send size={18} aria-hidden />} accent="#f59e0b" />
+        <KpiTile label="Commissions Pending" value={fmtMoney(stats.commissions_pending, stats.currency)}             icon={<Hourglass size={18} aria-hidden />} accent="#fbbf24" />
+        <KpiTile label="Total Referrals"     value={stats.total_referrals}                                            icon={<Link2 size={18} aria-hidden />} accent="#06b6d4" />
+        <KpiTile label="Conversions MTD"     value={stats.conversions_mtd}                                            icon={<Target size={18} aria-hidden />} accent="#8b5cf6" />
       </div>
 
       {/* Top affiliates */}
       {stats.top_affiliates && stats.top_affiliates.length > 0 && (
         <>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
             Top Affiliates
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   {['#','Username','Referrals','Conversions','Earned','Pending'].map((h, i) => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} style={{ padding: '8px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {stats.top_affiliates.map((a, idx) => (
-                  <tr key={a.affiliate_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                    <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? '#fbbf24' : idx === 1 ? '#94a3b8' : '#78350f', fontWeight: 700 }}>
+                  <tr key={a.affiliate_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? 'var(--warn)' : idx === 1 ? 'var(--text-dim)' : '#78350f', fontWeight: 700 }}>
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                     </td>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{a.username}</td>
-                    <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{a.referrals.toLocaleString()}</td>
-                    <td style={{ padding: '10px 12px', color: '#4ade80', fontWeight: 600 }}>{a.conversions.toLocaleString()}</td>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{a.username}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>{a.referrals.toLocaleString()}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--gain)', fontWeight: 600 }}>{a.conversions.toLocaleString()}</td>
                     <td style={{ padding: '10px 12px', fontWeight: 700, color: '#f59e0b' }}>{fmtMoney(a.commission_earned, stats.currency)}</td>
-                    <td style={{ padding: '10px 12px', color: '#fbbf24' }}>{fmtMoney(a.commission_pending, stats.currency)}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--warn)' }}>{fmtMoney(a.commission_pending, stats.currency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -537,14 +589,206 @@ const AffiliatePanel: React.FC = () => {
 // Financial tabs
 // ─────────────────────────────────────────────────────────────────────────────
 
-type FinTab = 'overview' | 'chargebacks' | 'tax' | 'reconciliation' | 'affiliates';
 
-const FIN_TABS: { id: FinTab; label: string; icon: string }[] = [
-  { id: 'overview',       label: 'Overview',        icon: '💰' },
-  { id: 'chargebacks',    label: 'Chargebacks',     icon: '🔄' },
-  { id: 'tax',            label: 'Tax Reports',     icon: '📑' },
-  { id: 'reconciliation', label: 'Reconciliation',  icon: '⚖️' },
-  { id: 'affiliates',     label: 'Affiliates',      icon: '🤝' },
+// ── Refund policy panel ───────────────────────────────────────────────────────
+// Where a creator's money comes from when a sale is refunded after it has already
+// been paid out. The options and their descriptions come from the API
+// (monetization/refund_policy.py) rather than being duplicated here, so the
+// wording that explains where money goes has exactly one source.
+
+interface PolicyOption {
+  value: string;
+  label: string;
+  description: string;
+  recommended: string;
+}
+
+const RefundPolicyPanel: React.FC = () => {
+  const [options, setOptions] = useState<PolicyOption[]>([]);
+  const [saved, setSaved] = useState('');
+  const [selected, setSelected] = useState('');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [msgOk, setMsgOk] = useState(true);
+
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await superadminApi.refundPolicy();
+      if (!mountedRef.current) return;
+      const d = res.data as { policy: string; options: PolicyOption[]; note?: string };
+      setOptions(asArray(d, 'options') as PolicyOption[]);
+      setSaved(d.policy);
+      setSelected(d.policy);
+      setNote(d.note ?? '');
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setError(apiErr(e, 'Failed to load refund policy'));
+    } finally { if (mountedRef.current) setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const res = await superadminApi.setRefundPolicy(selected);
+      const d = res.data as { policy: string };
+      setSaved(d.policy);
+      setSelected(d.policy);
+      setMsgOk(true);
+      setMsg('Refund policy saved. It applies to new refunds only.');
+    } catch (e) {
+      setMsgOk(false);
+      // The API refuses rather than silently defaulting, so the reason it gives
+      // is the reason the setting did not change — show it verbatim.
+      setMsg(apiErr(e, 'Could not save the refund policy — it has not changed.'));
+      setSelected(saved);
+    } finally { setBusy(false); }
+  };
+
+  const dirty = selected !== saved && selected !== '';
+
+  if (loading) {
+    return <SectionCard title="Refund Policy" icon={<Scale size={16} />} accent="#f59e0b"><LoadingRows rows={3} /></SectionCard>;
+  }
+  if (error) {
+    return <SectionCard title="Refund Policy" icon={<Scale size={16} />} accent="#f59e0b"><ErrorState message={error} onRetry={load} /></SectionCard>;
+  }
+
+  return (
+    <SectionCard
+      title="Refund Policy"
+      icon={<Scale size={16} />}
+      accent="#f59e0b"
+      subtitle="Where a creator's money comes from when a settled sale is refunded"
+    >
+      <div
+        style={{
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+          padding: '12px 14px', marginBottom: 18,
+          background: '#f59e0b14', border: '1px solid #f59e0b3a', borderRadius: 10,
+        }}
+      >
+        <AlertTriangle size={16} color="#f59e0b" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+        <div style={{ fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+          Once a payout has settled a sale, the creator&rsquo;s share has left the platform.
+          If that sale is then refunded, this setting decides where the money comes back from.
+          {note && <><br />{note}</>}
+        </div>
+      </div>
+
+      <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+          color: 'var(--text-muted)', marginBottom: 10, padding: 0,
+        }}>
+          Recovery method
+        </legend>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {options.map(opt => {
+            const active = selected === opt.value;
+            const isSaved = saved === opt.value;
+            return (
+              <label
+                key={opt.value}
+                style={{
+                  display: 'flex', gap: 12, alignItems: 'flex-start',
+                  // 44px minimum target height — the whole row is the control,
+                  // not just the radio dot.
+                  minHeight: 44, padding: '14px 16px',
+                  background: active ? '#f59e0b14' : 'var(--surface)',
+                  border: `1px solid ${active ? '#f59e0b66' : '#1e293b'}`,
+                  borderRadius: 10, cursor: 'pointer',
+                  transition: 'background 200ms, border-color 200ms',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="refund-policy"
+                  value={opt.value}
+                  checked={active}
+                  disabled={busy}
+                  onChange={() => setSelected(opt.value)}
+                  style={{
+                    width: 18, height: 18, marginTop: 2, flexShrink: 0,
+                    accentColor: '#f59e0b', cursor: 'pointer',
+                  }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-strong)' }}>{opt.label}</span>
+                    {opt.recommended === 'true' && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                        color: '#22c55e', background: '#22c55e1a', border: '1px solid #22c55e3a',
+                        borderRadius: 999, padding: '2px 8px',
+                      }}>
+                        Recommended
+                      </span>
+                    )}
+                    {isSaved && (
+                      // Not colour alone: the word "Current" carries the meaning.
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                        color: 'var(--link)', background: '#60a5fa1a', border: '1px solid #60a5fa3a',
+                        borderRadius: 999, padding: '2px 8px',
+                      }}>
+                        <Check size={10} aria-hidden="true" /> Current
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.6 }}>
+                    {opt.description}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
+        <ActionBtn
+          variant="primary"
+          label={busy ? 'Saving…' : 'Save policy'}
+          onClick={save}
+          disabled={!dirty || busy}
+          loading={busy}
+        />
+        {dirty && !busy && (
+          <ActionBtn variant="ghost" label="Cancel" onClick={() => setSelected(saved)} />
+        )}
+        {msg && (
+          <span
+            role={msgOk ? 'status' : 'alert'}
+            style={{ fontSize: 12.5, color: msgOk ? '#22c55e' : '#ef4444' }}
+          >
+            {msg}
+          </span>
+        )}
+      </div>
+    </SectionCard>
+  );
+};
+
+type FinTab = 'overview' | 'chargebacks' | 'tax' | 'reconciliation' | 'affiliates' | 'policy';
+
+const FIN_TABS: { id: FinTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'overview',       label: 'Overview',        icon: <Banknote size={16} aria-hidden /> },
+  { id: 'chargebacks',    label: 'Chargebacks',     icon: <RefreshCw size={16} aria-hidden /> },
+  { id: 'tax',            label: 'Tax Reports',     icon: <Files size={16} aria-hidden /> },
+  { id: 'reconciliation', label: 'Reconciliation',  icon: <Scale size={16} aria-hidden /> },
+  { id: 'affiliates',     label: 'Affiliates',      icon: <Handshake size={16} aria-hidden /> },
+  { id: 'policy',         label: 'Refund Policy',   icon: <Scale size={16} aria-hidden /> },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -563,6 +807,7 @@ const FinancialSection: React.FC = () => {
   const [refundReason, setRefundReason] = useState('');
   const [busy, setBusy]         = useState(false);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -577,7 +822,7 @@ const FinancialSection: React.FC = () => {
       ]);
       if (!mountedRef.current) return;
       setRevenue(revRes.data);
-      setPayments(payRes.data.payments ?? payRes.data);
+      setPayments(asArray(payRes.data, 'payments'));
       setSubStats(subRes.data);
     } catch (e) {
       if (!mountedRef.current) return;
@@ -592,10 +837,11 @@ const FinancialSection: React.FC = () => {
     setBusy(true); setMsg('');
     try {
       await superadminApi.refundPayment(refundTarget.payment_id, refundReason);
+      setMsgOk(true);
       setMsg(`Refund issued for ${refundTarget.username} — ${fmtMoney(refundTarget.amount, refundTarget.currency)}`);
       setRefundTarget(null); setRefundReason('');
       load();
-    } catch (e) { setMsg(apiErr(e, 'Refund failed')); }
+    } catch (e) { setMsgOk(false); setMsg(apiErr(e, 'Refund failed')); }
     finally { setBusy(false); }
   };
 
@@ -616,7 +862,7 @@ const FinancialSection: React.FC = () => {
       )}
 
       {/* ── Tab bar ── */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#0a1628', border: '1px solid #1e293b', borderRadius: 10, padding: 6, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#0a1628', border: '1px solid var(--border)', borderRadius: 10, padding: 6, overflowX: 'auto' }}>
         {FIN_TABS.map(t => (
           <button
             key={t.id}
@@ -625,9 +871,9 @@ const FinancialSection: React.FC = () => {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '7px 14px', borderRadius: 7, border: 'none',
               background: activeTab === t.id ? '#0f1f35' : 'transparent',
-              color: activeTab === t.id ? '#f1f5f9' : '#64748b',
+              color: activeTab === t.id ? 'var(--text-strong)' : 'var(--text-muted)',
               fontWeight: activeTab === t.id ? 600 : 400,
-              fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
+              fontSize: 'var(--fs-body)', cursor: 'pointer', whiteSpace: 'nowrap',
               outline: activeTab === t.id ? '1px solid #1e3a5f' : 'none',
               transition: 'background 0.12s, color 0.12s',
             }}
@@ -655,10 +901,10 @@ const FinancialSection: React.FC = () => {
               ]}
               style={{ width: 180 }}
             />
-            <ActionBtn label="Export CSV" onClick={() => superadminApi.paymentHistory({ period, format: 'csv' })} icon="⬇️" size="sm" />
+            <ActionBtn label="Export CSV" onClick={() => superadminApi.paymentHistory({ period, format: 'csv' })} icon={<Download size={18} aria-hidden />} size="sm" />
           </div>
 
-          {msg && <Flash msg={msg} onClear={() => setMsg('')} />}
+          {msg && <Flash msg={msg} ok={msgOk} onClear={() => setMsg('')} />}
 
           {loading ? <LoadingRows rows={8} /> : error ? <ErrorState message={error} onRetry={load} /> : (
             <>
@@ -666,32 +912,32 @@ const FinancialSection: React.FC = () => {
               {revenue && (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-                    <KpiTile label="MRR"           value={fmtMoney(revenue.mrr, revenue.currency)}           icon="📈" accent="#22c55e" />
-                    <KpiTile label="ARR"           value={fmtMoney(revenue.arr, revenue.currency)}           icon="🏆" accent="#3b82f6" />
-                    <KpiTile label="Revenue Today" value={fmtMoney(revenue.revenue_today, revenue.currency)} icon="💰" accent="#f59e0b" />
-                    <KpiTile label="Revenue MTD"   value={fmtMoney(revenue.revenue_mtd, revenue.currency)}   icon="📊" accent="#8b5cf6" />
-                    <KpiTile label="New Subs MTD"  value={revenue.new_subs_mtd}                              icon="➕" accent="#06b6d4" />
-                    <KpiTile label="Cancelled MTD" value={revenue.cancelled_mtd}                             icon="➖" accent="#ef4444" />
-                    <KpiTile label="Churn Rate"    value={`${Number.isFinite(revenue.churn_rate_pct) ? revenue.churn_rate_pct.toFixed(2) : '—'}%`}           icon="📉" accent="#f87171" />
-                    <KpiTile label="Avg LTV"       value={fmtMoney(revenue.ltv_avg, revenue.currency)}       icon="⭐" accent="#fbbf24" />
+                    <KpiTile label="MRR"           value={fmtMoney(revenue.mrr, revenue.currency)}           icon={<TrendingUp size={18} aria-hidden />} accent="#22c55e" />
+                    <KpiTile label="ARR"           value={fmtMoney(revenue.arr, revenue.currency)}           icon={<Trophy size={18} aria-hidden />} accent="#3b82f6" />
+                    <KpiTile label="Revenue Today" value={fmtMoney(revenue.revenue_today, revenue.currency)} icon={<Banknote size={18} aria-hidden />} accent="#f59e0b" />
+                    <KpiTile label="Revenue MTD"   value={fmtMoney(revenue.revenue_mtd, revenue.currency)}   icon={<BarChart3 size={18} aria-hidden />} accent="#8b5cf6" />
+                    <KpiTile label="New Subs MTD"  value={revenue.new_subs_mtd}                              icon={<Plus size={18} aria-hidden />} accent="#06b6d4" />
+                    <KpiTile label="Cancelled MTD" value={revenue.cancelled_mtd}                             icon={<Minus size={18} aria-hidden />} accent="#ef4444" />
+                    <KpiTile label="Churn Rate"    value={`${Number.isFinite(revenue.churn_rate_pct) ? revenue.churn_rate_pct.toFixed(2) : '—'}%`}           icon={<TrendingDown size={18} aria-hidden />} accent="#f87171" />
+                    <KpiTile label="Avg LTV"       value={fmtMoney(revenue.ltv_avg, revenue.currency)}       icon={<Star size={18} aria-hidden />} accent="#fbbf24" />
                   </div>
 
                   {/* Subscription KPIs */}
                   {subStats && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-                      <KpiTile label="Active Subscriptions" value={subStats.total_active}    icon="✅" accent="#22c55e" />
-                      <KpiTile label="Trials"               value={subStats.trial_count}     icon="🧪" accent="#06b6d4" />
-                      <KpiTile label="Expiring Soon"        value={subStats.expiring_soon}   icon="⏳" accent="#f59e0b" />
-                      <KpiTile label="Cancelled"            value={subStats.cancelled_count} icon="❌" accent="#ef4444" />
+                      <KpiTile label="Active Subscriptions" value={subStats.total_active}    icon={<CheckCircle2 size={18} aria-hidden />} accent="#22c55e" />
+                      <KpiTile label="Trials"               value={subStats.trial_count}     icon={<FlaskConical size={18} aria-hidden />} accent="#06b6d4" />
+                      <KpiTile label="Expiring Soon"        value={subStats.expiring_soon}   icon={<Hourglass size={18} aria-hidden />} accent="#f59e0b" />
+                      <KpiTile label="Cancelled"            value={subStats.cancelled_count} icon={<XCircle size={18} aria-hidden />} accent="#ef4444" />
                     </div>
                   )}
 
-                  <SectionCard title="Revenue by Plan" icon="💳" accent="#8b5cf6">
+                  <SectionCard title="Revenue by Plan" icon={<CreditCard size={18} aria-hidden />} accent="#8b5cf6">
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
                       {Object.entries(revenue.plan_breakdown).map(([plan, amount]) => (
-                        <div key={plan} style={{ background: '#1e293b', borderRadius: 8, padding: '14px 16px', borderLeft: `3px solid ${PLAN_COLORS[plan as Plan] ?? '#475569'}` }}>
-                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{PLAN_LABELS[plan as Plan] ?? plan}</div>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: PLAN_COLORS[plan as Plan] ?? '#94a3b8' }}>{fmtMoney(amount, revenue.currency)}</div>
+                        <div key={plan} style={{ background: 'var(--raised)', borderRadius: 8, padding: '14px 16px', borderLeft: `3px solid ${PLAN_COLORS[plan as Plan] ?? '#475569'}` }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{PLAN_LABELS[plan as Plan] ?? plan}</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: PLAN_COLORS[plan as Plan] ?? 'var(--text-dim)' }}>{fmtMoney(amount, revenue.currency)}</div>
                         </div>
                       ))}
                     </div>
@@ -700,39 +946,39 @@ const FinancialSection: React.FC = () => {
               )}
 
               {/* Payments table */}
-              <SectionCard title="Payment History" icon="🧾" accent="#3b82f6" subtitle={`${payments.length} transactions`}>
+              <SectionCard title="Payment History" icon={<ReceiptText size={18} aria-hidden />} accent="#3b82f6" subtitle={`${payments.length} transactions`}>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
                     <thead>
-                      <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         {['User','Amount','Plan','Provider','Status','Date',''].map(h => (
-                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {payments.map(p => (
-                        <tr key={p.payment_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                          <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{p.username}</td>
-                          <td style={{ padding: '10px 12px', fontWeight: 700, color: '#4ade80' }}>{fmtMoney(p.amount, p.currency)}</td>
+                        <tr key={p.payment_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                          <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{p.username}</td>
+                          <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--gain)' }}>{fmtMoney(p.amount, p.currency)}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[p.plan as Plan] ?? '#94a3b8' }}>{PLAN_LABELS[p.plan as Plan] ?? p.plan}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: PLAN_COLORS[p.plan as Plan] ?? 'var(--text-dim)' }}>{PLAN_LABELS[p.plan as Plan] ?? p.plan}</span>
                           </td>
-                          <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{p.provider}</td>
+                          <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{p.provider}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: p.status === 'completed' ? '#4ade80' : p.status === 'refunded' ? '#f87171' : '#fbbf24' }}>{p.status}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: p.status === 'completed' ? 'var(--gain)' : p.status === 'refunded' ? 'var(--loss)' : 'var(--warn)' }}>{p.status}</span>
                           </td>
-                          <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(p.created_at)}</td>
+                          <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(p.created_at)}</td>
                           <td style={{ padding: '10px 12px' }}>
                             {p.status === 'completed' && (
                               <>
                                 {refundTarget?.payment_id === p.payment_id ? (
                                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                    <input
+                                    <input aria-label="Reason"
                                       placeholder="Reason…"
                                       value={refundReason}
                                       onChange={e => setRefundReason(e.target.value)}
-                                      style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '4px 8px', fontSize: 12, width: 120 }}
+                                      style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, color: 'var(--text-strong)', padding: '4px 8px', fontSize: 12, width: 120 }}
                                     />
                                     <ActionBtn label="Confirm" onClick={doRefund} variant="danger" size="sm" loading={busy} />
                                     <ActionBtn label="✕" onClick={() => { setRefundTarget(null); setRefundReason(''); }} variant="ghost" size="sm" />
@@ -748,7 +994,7 @@ const FinancialSection: React.FC = () => {
                     </tbody>
                   </table>
                   {payments.length === 0 && (
-                    <EmptyState compact icon="💳" title="No payments found" description="No payment records match the selected period." />
+                    <EmptyState compact icon={CreditCard} title="No payments found" description="No payment records match the selected period." />
                   )}
                 </div>
               </SectionCard>
@@ -761,6 +1007,7 @@ const FinancialSection: React.FC = () => {
       {activeTab === 'tax'            && <TaxReportsPanel />}
       {activeTab === 'reconciliation' && <ReconciliationPanel />}
       {activeTab === 'affiliates'     && <AffiliatePanel />}
+      {activeTab === 'policy'         && <RefundPolicyPanel />}
     </div>
   );
 };

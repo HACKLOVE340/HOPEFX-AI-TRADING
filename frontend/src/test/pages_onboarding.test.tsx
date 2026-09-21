@@ -162,10 +162,14 @@ describe('Onboarding — Step 1: Broker', () => {
     expect(screen.getByText(/next/i)).not.toBeDisabled();
   });
 
-  it('shows OANDA env var hint when OANDA selected', async () => {
+  it('points OANDA users at Settings, not at a .env file', async () => {
+    // A hosted customer has no filesystem and no .env — the old copy told them
+    // to add BROKER_OANDA_TOKEN to a file they cannot reach.
     await renderOnboarding();
     fireEvent.click(screen.getByText('OANDA'));
-    expect(screen.getByText(/BROKER_OANDA_TOKEN/)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /settings.*broker/i });
+    expect(link).toHaveAttribute('href', '/settings?tab=broker');
+    expect(screen.queryByText(/BROKER_OANDA_TOKEN/)).not.toBeInTheDocument();
   });
 
   it('Skip navigates to /dashboard', async () => {
@@ -174,10 +178,22 @@ describe('Onboarding — Step 1: Broker', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('Skip sets localStorage to "done"', async () => {
+  it('Skip records completion and clears the wizard state', async () => {
+    // Completion used to be recorded by writing the string 'done' into the STEP
+    // key. The next visit read that back through parseInt, got NaN, and matched
+    // no step — so finishing onboarding was what produced the blank wizard.
     await renderOnboarding();
     fireEvent.click(screen.getByText(/skip/i));
-    expect(localStorage.getItem('hopefx_onboarding_step')).toBe('done');
+    expect(localStorage.getItem('hopefx_onboarding_complete')).toBeTruthy();
+    expect(localStorage.getItem('hopefx_onboarding_step')).toBeNull();
+    expect(localStorage.getItem('hopefx_onboarding_answers')).toBeNull();
+  });
+
+  it('renders a usable first step when the saved value is not a number', async () => {
+    localStorage.setItem('hopefx_onboarding_step', 'done');
+    await renderOnboarding();
+    // Step 1 of 5, not an empty shell.
+    expect(screen.getByText(/step 1 of/i)).toBeInTheDocument();
   });
 });
 

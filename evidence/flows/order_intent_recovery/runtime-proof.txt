@@ -1,0 +1,35 @@
+  INFO     PositionManager initialised (redis=False)
+  INFO     fix_adapter: using simplefix backend (message encoding only)
+  INFO     PositionManager initialised (redis=False)
+
+===== BOOT 1 =====
+  journal holds: ['ord-confirmed', 'ord-orphan']
+  INFO     PositionManager: order intent ord-confirmed for XAUUSD resolved — the broker holds the position, so the order completed and only the journal write was lost
+  CRITICAL UNRECONCILED ORDER INTENT | client_order_id=ord-orphan symbol=EURUSD side=BUY qty=0.1 position_now_open=False first_seen=2026-09-04T16:15:44.921876+00:00 boots_survived=1 — this order was submitted but never fully recorded. If it filled while the process was down, the position may be live and unmanaged. Verify against the broker.
+  CRITICAL PositionManager: 1 unreconciled order intent(s) found at boot (oldest survived 1 boot(s))
+  -> orphans reported: [('ord-orphan', 1)]
+
+===== BOOT 2 =====
+  journal holds: ['ord-orphan']
+  CRITICAL UNRECONCILED ORDER INTENT | client_order_id=ord-orphan symbol=EURUSD side=BUY qty=0.1 position_now_open=False first_seen=2026-09-04T16:15:44.921876+00:00 boots_survived=2 — this order was submitted but never fully recorded. If it filled while the process was down, the position may be live and unmanaged. Verify against the broker.
+  CRITICAL PositionManager: 1 unreconciled order intent(s) found at boot (oldest survived 2 boot(s))
+  -> orphans reported: [('ord-orphan', 2)]
+
+===== BOOT 3 =====
+  journal holds: ['ord-orphan']
+  CRITICAL UNRECONCILED ORDER INTENT | client_order_id=ord-orphan symbol=EURUSD side=BUY qty=0.1 position_now_open=False first_seen=2026-09-04T16:15:44.921876+00:00 boots_survived=3 — this order was submitted but never fully recorded. If it filled while the process was down, the position may be live and unmanaged. Verify against the broker.
+  CRITICAL PositionManager: 1 unreconciled order intent(s) found at boot (oldest survived 3 boot(s))
+  -> orphans reported: [('ord-orphan', 3)]
+
+===== a NEW intent arrives after a later crash =====
+  CRITICAL UNRECONCILED ORDER INTENT | client_order_id=ord-orphan symbol=EURUSD side=BUY qty=0.1 position_now_open=False first_seen=2026-09-04T16:15:44.921876+00:00 boots_survived=4 — this order was submitted but never fully recorded. If it filled while the process was down, the position may be live and unmanaged. Verify against the broker.
+  CRITICAL UNRECONCILED ORDER INTENT | client_order_id=ord-new symbol=GBPUSD side=BUY qty=0.1 position_now_open=False first_seen=2026-09-04T16:15:44.922215+00:00 boots_survived=1 — this order was submitted but never fully recorded. If it filled while the process was down, the position may be live and unmanaged. Verify against the broker.
+  CRITICAL PositionManager: 2 unreconciled order intent(s) found at boot (oldest survived 4 boot(s))
+  ord-orphan       boots_survived=4  first_seen=2026-09-04T16:15:44.921876+00:00
+  ord-new          boots_survived=1  first_seen=2026-09-04T16:15:44.922215+00:00
+
+  A new intent is boots_survived=1 and visibly distinct from the
+  known backlog. Before this change every boot printed the same
+  undifferentiated CRITICAL line for both, forever.
+
+  readable after startup: ['ord-orphan', 'ord-new']

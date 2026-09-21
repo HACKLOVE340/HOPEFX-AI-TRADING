@@ -29,6 +29,18 @@ from pydantic import BaseModel, Field, field_validator
 
 from api.auth import TokenPayload, get_current_user
 
+# ── F4-01b (continued) ───────────────────────────────────────────────────────
+#
+# `/calculator/*` is the `risk-calculator` feature, advertised as starter, and
+# was gated in React only. Now gated here too.
+#
+# `/live-price/{symbol}` is deliberately left at authentication-only. It returns
+# a mid price, not the paid feature: the sizing arithmetic runs in the browser,
+# and what a subscription buys is the saved-calculation history above. Gating a
+# quote would protect nothing and would break the entry auto-fill for any user
+# who reaches the page by another route.
+from monetization.subscription import require_plan
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/risk", tags=["Risk Calculator"])
@@ -37,47 +49,102 @@ router = APIRouter(prefix="/api/risk", tags=["Risk Calculator"])
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
+def _yahoo_ticker(canonical_symbol: str) -> str:
+    """Map a canonical symbol (XAUUSD, BTCUSD) to its Yahoo Finance ticker.
+
+    The previous expression was ``sym.replace("_", "=X") if "_" in sym else sym + "=X"``.
+    ``canonical()`` strips every separator, so ``"_" in sym`` is never true and
+    the first branch was dead: every symbol got ``=X`` appended. That is right
+    for FX and metals and wrong for crypto — Yahoo lists Bitcoin as ``BTC-USD``,
+    not ``BTCUSD=X`` — so this level could never price the two crypto
+    instruments the terminal offers, and the endpoint 503'd for them.
+    """
+    if canonical_symbol in _CRYPTO_BASES_TO_YAHOO:
+        return _CRYPTO_BASES_TO_YAHOO[canonical_symbol]
+    return f"{canonical_symbol}=X"
+
+
+_CRYPTO_BASES_TO_YAHOO: dict[str, str] = {
+    "BTCUSD": "BTC-USD",
+    "ETHUSD": "ETH-USD",
+    "SOLUSD": "SOL-USD",
+    "XRPUSD": "XRP-USD",
+}
+
+
 def _get_live_price(symbol: str) -> float | None:
     """Try multiple sources to get a live mid price for the symbol."""
     from utils.symbol import canonical as _canonical
 
     sym = _canonical(symbol)  # canonical MT5 form for internal lookups
 
-    # 1. Try the trading app state (fastest — already in memory)
+    # 1. The shared live-price chain in api/ws_live.
+    #
+    #    This module used to open with its own level 1:
+    #
+    #        state = get_app_state()
+    #        if state.latest_tick and state.latest_tick.mid:
+    #            return float(state.latest_tick.mid)
+    #
+    #    `latest_tick` is the engine's single most recent tick — XAUUSD in every
+    #    deployment — and the branch never looked at `symbol`. So asking for
+    #    EUR/USD returned the price of gold, and the calculator sized a EUR/USD
+    #    position against ~4,400. Because it was the FIRST level and app_state is
+    #    always present, it also short-circuited the two symbol-aware levels
+    #    below for every request. That is the same defect as the paper broker's
+    #    3300.0 seed: an always-available value standing in for a quote.
+    #
+    #    ws_live._get_live_price is the hardened version of this chain — price
+    #    engine, then broker prices screened by has_live_price(), then the Redis
+    #    tick cache, then the EventBus last-known mid — and it is symbol-aware at
+    #    every level. Two copies of a price chain is one too many; this defers to
+    #    the one the WebSocket already uses, so the calculator and the header
+    #    cannot disagree about what an instrument costs.
     try:
-        from core.app_state import get_app_state
+        from api.ws_live import _SLASH_SYMBOL, _get_live_price as _ws_live_price
 
-        state = get_app_state()
-        if state and hasattr(state, "latest_tick") and state.latest_tick:
-            tick = state.latest_tick
-            if hasattr(tick, "mid") and tick.mid:
-                return float(tick.mid)
-    except Exception:  # nosec B110  # noqa: S110
-        pass
+        price = _ws_live_price(_SLASH_SYMBOL.get(sym, sym))
+        if price and price > 0:
+            return float(price)
+    except Exception as exc:
+        logger.debug("risk _get_live_price L1 (%s): %s", symbol, exc)
 
-    # 2. Try the data layer orchestrator
+    # 2. Try the data layer orchestrator.
+    #
+    #    This used to be `from data_layer.orchestrator import get_orchestrator`.
+    #    There is no such factory — the module exposes the singleton directly,
+    #    and `data_layer/__init__.py` spells the supported forms out:
+    #
+    #        OK:  from data_layer import orchestrator
+    #        OK:  from data_layer.orchestrator import orchestrator
+    #
+    #    So the import raised ImportError on every call, the bare `except`
+    #    below swallowed it into a debug log, and this level never ran once:
+    #    the chain was really L1 → L3, with the yfinance fallback standing in
+    #    for the tick store. `get_latest_tick(symbol=...)` is symbol-aware, so
+    #    restoring it does not reintroduce the one-global-tick bug this
+    #    function was rewritten to fix.
     try:
-        from data_layer.orchestrator import get_orchestrator
+        from data_layer.orchestrator import orchestrator as orch
 
-        orch = get_orchestrator()
         tick = orch.get_latest_tick(sym)
-        if tick and hasattr(tick, "mid"):
-            return float(tick.mid)
-    except Exception:  # nosec B110  # noqa: S110
-        pass
+        mid = getattr(tick, "mid", None) if tick else None
+        if mid and float(mid) > 0:
+            return float(mid)
+    except Exception as exc:
+        logger.debug("risk _get_live_price L2 (%s): %s", symbol, exc)
 
     # 3. Try yfinance as a last resort
     try:
         import yfinance as yf
 
-        yf_sym = sym.replace("_", "=X") if "_" in sym else sym + "=X"
-        ticker = yf.Ticker(yf_sym)
+        ticker = yf.Ticker(_yahoo_ticker(sym))
         info = ticker.fast_info
         price = getattr(info, "last_price", None) or getattr(info, "regularMarketPrice", None)
-        if price:
+        if price and float(price) > 0:
             return float(price)
-    except Exception:  # nosec B110  # noqa: S110
-        pass
+    except Exception as exc:
+        logger.debug("risk _get_live_price L3 (%s): %s", symbol, exc)
 
     return None
 
@@ -177,7 +244,7 @@ async def get_live_price(
 
 
 @router.get("/calculator/history", summary="Saved risk/reward calculations")
-async def list_calculations(user: TokenPayload = Depends(get_current_user)):
+async def list_calculations(user: TokenPayload = Depends(require_plan("starter"))):
     """Return the authenticated user's saved R:R calculations, newest first."""
     history = _load_history(user.sub)
     return {"calculations": list(reversed(history)), "total": len(history)}
@@ -186,7 +253,7 @@ async def list_calculations(user: TokenPayload = Depends(get_current_user)):
 @router.post("/calculator/history", summary="Save a risk/reward calculation", status_code=201)
 async def save_calculation(
     body: SaveCalcRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Persist a risk/reward calculation for later reference."""
     # Compute derived fields.
@@ -233,7 +300,7 @@ async def save_calculation(
 @router.delete("/calculator/history/{calc_id}", summary="Delete a saved calculation")
 async def delete_calculation(
     calc_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """Remove a saved R:R calculation by ID."""
     history = _load_history(user.sub)

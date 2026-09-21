@@ -40,6 +40,8 @@ Streaming API keys (at least one required for live ticks):
 from __future__ import annotations
 
 import asyncio
+
+from execution.broker_call import call_broker
 import contextlib
 import logging
 import os
@@ -183,7 +185,11 @@ class OrderGateway:
             from brokers.base import OrderSide, OrderType
 
             side_enum = OrderSide.BUY if side.upper() == "BUY" else OrderSide.SELL
-            order = self._broker.place_order(
+            # S12-04f: `call_broker`, not a bare call. BaseBroker.place_order is
+            # `async def`, so this bound a coroutine and dropped it — the order
+            # never reached the broker, and the caller got a truthy object back.
+            order = await call_broker(
+                self._broker.place_order,
                 symbol=symbol,
                 side=side_enum,
                 order_type=OrderType.MARKET,
@@ -204,7 +210,9 @@ class OrderGateway:
 
     async def cancel_order(self, order_id: str) -> bool:
         try:
-            return self._broker.cancel_order(order_id)
+            # S12-04f: annotated `-> bool` but returned a coroutine, so every
+            # caller's `if success:` was true whatever the broker did.
+            return bool(await call_broker(self._broker.cancel_order, order_id))
         except Exception as exc:
             logger.error("OrderGateway.cancel_order: %s", exc)
             return False
@@ -301,6 +309,23 @@ class MLPredictor:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_orchestrator():
+    """The shared market-data orchestrator, or None when the data layer is absent.
+
+    A separate function so the wiring can be asserted in a test rather than
+    read, and so a missing data layer is survivable: this is a standalone
+    trader and should still start — refusing trades — rather than failing to
+    boot.
+    """
+    try:
+        from data_layer.orchestrator import orchestrator
+
+        return orchestrator
+    except Exception as exc:
+        logger.warning("trader_full: data-layer orchestrator unavailable: %s", exc)
+        return None
+
+
 class RiskManager:
     """Delegates to risk.manager.RiskManager for sizing and circuit-breaker logic."""
 
@@ -309,12 +334,44 @@ class RiskManager:
         self._balance = initial_balance
 
     def setup(self) -> None:
+        """Build the real RiskManager, wired to something it can measure.
+
+        This constructed `_RM(config=..., initial_balance=...)` with no
+        orchestrator, so `_measured_data_quality()` returned None for every
+        signal and `size_order()` refused every trade with
+        `data_quality:unmeasured`.
+
+        Before MASTER_OUTSTANDING §E12 that was invisible rather than harmless:
+        a missing orchestrator scored a perfect 1.0 and the data-quality gate
+        passed everything. Closing that turned a silent fail-open into a loud
+        refuse-everything — safer, and still not working. A gate that refuses
+        every trade teaches an operator to ignore its reason.
+
+        Every other construction site already resolves the orchestrator this
+        way: `risk/manager.py::_make_risk_manager`,
+        `core/startup_factories.py::init_risk_manager`, `hopefx_engine.py`.
+        This was the one that did not.
+        """
         try:
             from risk.manager import RiskConfig
             from risk.manager import RiskManager as _RM
 
-            self._rm = _RM(config=RiskConfig(), initial_balance=self._balance)
-            logger.info("RiskManager: initialised with balance=%.2f", self._balance)
+            orchestrator = _resolve_orchestrator()
+            self._rm = _RM(
+                config=RiskConfig(),
+                initial_balance=self._balance,
+                orchestrator=orchestrator,
+            )
+            if orchestrator is None:
+                logger.warning(
+                    "RiskManager: no data-layer orchestrator — data quality is unmeasurable, "
+                    "so every trade will be refused with data_quality:unmeasured"
+                )
+            logger.info(
+                "RiskManager: initialised with balance=%.2f orchestrator=%s",
+                self._balance,
+                type(orchestrator).__name__ if orchestrator is not None else "None",
+            )
         except Exception as exc:
             logger.warning("RiskManager.setup: %s", exc)
 
@@ -340,7 +397,7 @@ class RiskManager:
                 "reason": result.reason,
             }
         except Exception:
-            logger.exception("RiskManager.approve_trade: %s")
+            logger.exception("RiskManager.approve_trade")
             return {"approved": False, "reason": "Risk check failed — check server logs"}
 
 

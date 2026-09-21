@@ -5,9 +5,10 @@
  */
 
 import React from 'react';
+import { Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, selectUser, selectPlan } from '../store';
-import { isAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS, requiredPlan } from '../lib/subscription';
+import { hasFeatureAccess, PLAN_LABELS, PLAN_COLORS, requiredPlan } from '../lib/subscription';
 import type { Plan } from '../lib/subscription';
 
 interface Props {
@@ -25,12 +26,12 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
   if (!user) {
     return (
       <div style={{
-        minHeight: '60vh', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', background: '#0f172a',
+        minHeight: '60vh', flex: '1 0 auto', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: 'var(--surface)',
       }}>
         <div style={{
           width: 28, height: 28, borderRadius: '50%',
-          border: '3px solid #1e293b', borderTopColor: '#3b82f6',
+          border: '3px solid var(--border)', borderTopColor: '#3b82f6',
           animation: 'spin 0.7s linear infinite',
         }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -48,12 +49,12 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
 
   return (
     <div style={{
-      minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#0f172a', padding: 40,
+      minHeight: '60vh', flex: '1 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--surface)', padding: 40,
     }}>
       <div style={{
         maxWidth: 440, textAlign: 'center',
-        background: '#1e293b', border: '1px solid #334155',
+        background: 'var(--raised)', border: '1px solid var(--border-strong)',
         borderRadius: 16, padding: '40px 36px',
       }}>
         <div style={{
@@ -62,13 +63,13 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           margin: '0 auto 20px', fontSize: 24,
         }}>
-          🔒
+          <Lock size={26} strokeWidth={1.75} aria-hidden />
         </div>
 
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc', margin: '0 0 10px' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 10px' }}>
           {neededLabel} plan required
         </h2>
-        <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 28px', lineHeight: 1.6 }}>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 0 28px', lineHeight: 1.6 }}>
           This feature is available on the{' '}
           <span style={{ color: neededColor, fontWeight: 600 }}>{neededLabel}</span> plan and above.
           Upgrade to unlock it.
@@ -88,8 +89,8 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
           <button
             onClick={() => navigate(-1)}
             style={{
-              background: 'transparent', border: '1px solid #334155', borderRadius: 8,
-              color: '#94a3b8', cursor: 'pointer', fontSize: 14, fontWeight: 500,
+              background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 8,
+              color: 'var(--text-dim)', cursor: 'pointer', fontSize: 14, fontWeight: 500,
               padding: '10px 20px',
             }}
           >

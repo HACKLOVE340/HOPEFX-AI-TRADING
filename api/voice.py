@@ -39,6 +39,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from core.ai_quota import ai_quota
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ async def voice_status(_user: TokenPayload = Depends(get_current_user)) -> Voice
 @router.post("/tts")
 async def tts(
     req: TTSRequest,
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(ai_quota(feature="voice")),
 ) -> Response:
     """Synthesize ``req.text`` to speech and return the audio bytes. Returns 503
     when no cloud provider is configured so the client falls back to Web Speech."""
@@ -155,7 +156,7 @@ async def tts(
 @router.post("/stt")
 async def stt(
     audio: UploadFile = File(...),
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(ai_quota(feature="voice")),
 ) -> dict[str, str]:
     """Transcribe an uploaded audio clip to text via OpenAI Whisper. Returns 503
     when no provider is configured so the client falls back to Web Speech."""

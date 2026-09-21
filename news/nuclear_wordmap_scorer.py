@@ -37,6 +37,8 @@ import logging
 import re
 from pathlib import Path
 
+from news.keyword_match import keyword_spans
+
 logger = logging.getLogger(__name__)
 
 # ── WORDMAP nuclear/risk keyword dictionary ───────────────────────────────────
@@ -239,10 +241,105 @@ class NuclearWordMapScorer:
         self._vol_amplifier = vol_amplifier
         self._sentiment_weight = sentiment_weight
         self._keywords = self._load_keywords(wordmap_path)
+        self._term_patterns = self._compile_terms(self._keywords)
         logger.info(
             "NuclearWordMapScorer loaded: %d categories, %d total keywords",
             len(self._keywords),
             sum(len(v) for v in self._keywords.values()),
+        )
+
+    # Phrases in which an otherwise-real term is being used in a non-market
+    # sense. Word boundaries fix the substring collisions ("coup" in "coupon");
+    # these two are whole-word matches where the *word* is genuinely present:
+    #     "Tropical depression forms off the Florida coast"  -> depression, 7.5
+    #     "ETF seen as the gold standard of liquidity"       -> gold standard, 6.0
+    # Deliberately narrow. A term is only suppressed for the occurrences that
+    # fall inside one of these phrases — "economists warn of a depression" and
+    # "a return to the gold standard" still fire at full weight, and a text that
+    # uses the term both ways still scores on the market use. Add a phrase here
+    # only with a real headline that motivates it.
+    AMBIGUOUS_TERM_CONTEXTS: dict[str, tuple[str, ...]] = {
+        "depression": ("tropical depression", "post tropical depression", "clinical depression"),
+        "gold standard": ("gold standard of", "gold standard for", "gold standard in"),
+    }
+
+    @staticmethod
+    def _normalise(text: str) -> str:
+        """Lower-case and replace every non-word character with a space.
+
+        The single place this transformation is defined, so a term and the text
+        it is matched against cannot drift apart.
+        """
+        return re.sub(r"[^\w\s]", " ", text.lower())
+
+    @classmethod
+    def _compile_terms(cls, keywords: dict[str, dict[str, float]]) -> dict[str, dict[str, re.Pattern[str]]]:
+        r"""Compile each term to a word-boundary pattern, once at load.
+
+        Matching was ``if term in text_lower`` — a bare substring test. "coup"
+        (weight 7.0, hedge_mode, a real short on XAU_USD) fired inside "coupon";
+        "nuclear war" (10.0, kill switch) inside "nuclear warning";
+        "depression" (7.5) inside "tropical depression". The text arrives from
+        public news feeds, so the collisions are both accident-prone and
+        attacker-influenceable (F80).
+
+        Terms are normalised the same way the text is, and internal whitespace
+        becomes ``\s+``, so a term keeps matching exactly what it matched
+        before — only now it has to be a whole word.
+        """
+        compiled: dict[str, dict[str, re.Pattern[str]]] = {}
+        for category, terms in keywords.items():
+            for term in terms:
+                pattern = cls._term_pattern(term)
+                if pattern is None:
+                    logger.warning("WORDMAP term %r normalises to nothing — it can never match", term)
+                    continue
+                compiled.setdefault(category, {})[term] = pattern
+        return compiled
+
+    @classmethod
+    def _term_pattern(cls, term: str) -> re.Pattern[str] | None:
+        normalised = cls._normalise(term).strip()
+        if not normalised:
+            return None
+        body = r"\s+".join(re.escape(part) for part in normalised.split())
+        return re.compile(rf"\b{body}\b")
+
+    @classmethod
+    def _excluded_spans(cls, term: str, text: str) -> list[tuple[int, int]]:
+        """Character spans in *text* where *term* is used in a non-market sense."""
+        spans: list[tuple[int, int]] = []
+        for phrase in cls.AMBIGUOUS_TERM_CONTEXTS.get(term, ()):
+            phrase_pattern = cls._term_pattern(phrase)
+            if phrase_pattern is None:
+                continue
+            spans.extend(m.span() for m in phrase_pattern.finditer(text))
+        return spans
+
+    @classmethod
+    def _count_market_sense(cls, term: str, text: str) -> int:
+        """Occurrences of *term* that are not inside a non-market phrase.
+
+        This is where `_excluded_spans` is actually consumed. It briefly was
+        not: this scorer's own matching loop was replaced by the shared
+        `news.keyword_match` matcher -- rightly, it handles inflections and
+        punctuation-anchored keywords that this module did not -- and the
+        ambiguity guard was left defined, documented and called by nothing.
+        "Tropical depression forms off the Florida coast" scored severity 8 and
+        returned action hedge_mode again, exactly as before the guard was
+        written (F80, and the dead-control shape the audit is about).
+
+        Counting is delegated to the shared matcher; only the decision about
+        which of its matches count is made here.
+        """
+        spans = keyword_spans(text, term)
+        if not spans:
+            return 0
+        excluded = cls._excluded_spans(term, text)
+        if not excluded:
+            return len(spans)
+        return sum(
+            1 for start, end in spans if not any(start >= ex_start and end <= ex_end for ex_start, ex_end in excluded)
         )
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -271,8 +368,7 @@ class NuclearWordMapScorer:
         raw_score   : float  pre-clamp score before integer rounding
         meta        : dict  {matched_terms, category_scores, confidence, vol_factor, sentiment_factor}
         """
-        text_lower = text.lower()
-        text_lower = re.sub(r"[^\w\s]", " ", text_lower)
+        text_lower = self._normalise(text)
 
         # ── Step 1: WORDMAP keyword matching ─────────────────────────────────
         category_scores: dict[str, float] = {}
@@ -281,9 +377,10 @@ class NuclearWordMapScorer:
         for category, terms in self._keywords.items():
             cat_score = 0.0
             for term, weight in terms.items():
-                if term in text_lower:
+                hits = self._count_market_sense(term, text_lower)
+                if hits:
                     # Count occurrences (capped at 3 to avoid spam amplification)
-                    count = min(text_lower.count(term), 3)
+                    count = min(hits, 3)
                     contribution = weight * (1 + 0.2 * (count - 1))
                     cat_score = max(cat_score, contribution)
                     matched_terms.append(

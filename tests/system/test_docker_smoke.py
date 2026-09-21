@@ -575,6 +575,40 @@ def test_smoke_app_redis_url_is_plain() -> None:
     )
 
 
+def test_smoke_app_supplies_production_startup_secrets() -> None:
+    """
+    The smoke override must satisfy the app's production startup validator.
+
+    The CI stack intentionally boots the app with APP_ENV=production so the
+    smoke job exercises the real pre-flight checks. That means the override
+    must provide a non-empty Redis password and a 32+ character crypto webhook
+    secret, otherwise the app exits before reaching healthy.
+    """
+    override = _load_yaml(COMPOSE_SMOKE)
+    app_env = _get_services(override).get("app", {}).get("environment", {})
+
+    if isinstance(app_env, list):
+        env_dict: dict[str, str] = {}
+        for item in app_env:
+            if "=" in item:
+                k, v = item.split("=", 1)
+                env_dict[k] = v
+        app_env = env_dict
+
+    redis_password = str(app_env.get("REDIS_PASSWORD", ""))
+    crypto_webhook_secret = str(app_env.get("CRYPTO_WEBHOOK_SECRET", ""))
+
+    assert redis_password.strip(), (
+        "docker-compose.smoke.yml app.REDIS_PASSWORD is empty.\n"
+        "The production startup validator rejects unauthenticated Redis, so the\n"
+        "smoke override must provide a non-empty CI placeholder password."
+    )
+    assert len(crypto_webhook_secret) >= 32, (
+        "docker-compose.smoke.yml app.CRYPTO_WEBHOOK_SECRET is missing or too short.\n"
+        "Provide a 32+ character CI placeholder so the production startup validator passes."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Gate C12 — compose files reference the same Dockerfile
 # ---------------------------------------------------------------------------

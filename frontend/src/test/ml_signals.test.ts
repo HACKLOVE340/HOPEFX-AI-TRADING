@@ -204,16 +204,16 @@ describe('signal store integration', () => {
 
   it('high confidence signals are stored', () => {
     useStore.getState().addSignal(makeSig('s1', 0.92));
-    expect(useStore.getState().signals[0].confidence).toBe(0.92);
+    expect(useStore.getState().signals[0]?.confidence).toBe(0.92);
   });
 
   it('signals sorted by insertion (newest first)', () => {
     useStore.getState().addSignal(makeSig('s1', 0.80));
     useStore.getState().addSignal(makeSig('s2', 0.90));
     useStore.getState().addSignal(makeSig('s3', 0.85));
-    expect(useStore.getState().signals[0].id).toBe('s3');
-    expect(useStore.getState().signals[1].id).toBe('s2');
-    expect(useStore.getState().signals[2].id).toBe('s1');
+    expect(useStore.getState().signals[0]?.id).toBe('s3');
+    expect(useStore.getState().signals[1]?.id).toBe('s2');
+    expect(useStore.getState().signals[2]?.id).toBe('s1');
   });
 
   it('active signals count', () => {

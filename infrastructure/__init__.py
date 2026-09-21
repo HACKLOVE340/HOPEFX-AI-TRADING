@@ -9,10 +9,10 @@ infrastructure — Observability and operational infrastructure.
 Public API
 ----------
     MetricsRegistry     Prometheus-compatible metrics collection with custom
-                        collectors. Exposes Counter, Gauge, Histogram, Summary.
+                        collectors. Exposes Counter, Gauge, Histogram.
     HealthChecker       Comprehensive health monitoring with dependency checks.
                         Supports async health check functions and HTTP endpoint.
-    StructuredLogger    JSON-structured logging with rotation and remote shipping.
+    HOPEFXLogger        JSON-structured logging with rotation and remote shipping.
 
 Usage
 -----
@@ -33,7 +33,6 @@ try:
         Gauge,
         Histogram,
         MetricsRegistry,
-        Summary,
         get_metrics_registry,
     )
 except Exception as _exc:
@@ -48,20 +47,19 @@ except Exception as _exc:
     HealthChecker = None  # type: ignore[assignment,misc]
 
 try:
-    from infrastructure.logging import StructuredLogger, get_logger
+    from infrastructure.logging import HOPEFXLogger, get_logger
 except Exception as _exc:
     logger.debug("infrastructure.logging unavailable: %s", _exc)
-    StructuredLogger = None  # type: ignore[assignment,misc]
+    HOPEFXLogger = None  # type: ignore[assignment,misc]
     get_logger = None  # type: ignore[assignment]
 
 __all__ = [
     "Counter",
     "Gauge",
+    "HOPEFXLogger",
     "HealthChecker",
     "Histogram",
     "MetricsRegistry",
-    "StructuredLogger",
-    "Summary",
     "get_logger",
     "get_metrics_registry",
 ]

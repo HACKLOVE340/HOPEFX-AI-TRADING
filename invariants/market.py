@@ -46,8 +46,14 @@ def verify_feed_agreement(prices: dict[str, float], max_dev_pct: float = 1.0) ->
     lo, hi = min(vals), max(vals)
     dev = (hi - lo) / lo * 100 if lo > 0 else float("inf")
     if dev > max_dev_pct:
-        return [_v("No Hidden Risk", CRITICAL, f"feed divergence {dev:.2f}% > {max_dev_pct}% across {list(prices)}",
-                   spread_pct=round(dev, 4))]
+        return [
+            _v(
+                "No Hidden Risk",
+                CRITICAL,
+                f"feed divergence {dev:.2f}% > {max_dev_pct}% across {list(prices)}",
+                spread_pct=round(dev, 4),
+            )
+        ]
     return []
 
 
@@ -56,8 +62,15 @@ def verify_data_freshness(age_seconds: float, max_age_seconds: float, name: str 
     if not _is_finite_number(age_seconds):
         return [_v(_RULE, CRITICAL, f"{name} age is non-finite")]
     if age_seconds > max_age_seconds:
-        return [_v("No Hidden Risk", CRITICAL, f"{name} stale: {age_seconds:.1f}s > {max_age_seconds}s",
-                   age=age_seconds, limit=max_age_seconds)]
+        return [
+            _v(
+                "No Hidden Risk",
+                CRITICAL,
+                f"{name} stale: {age_seconds:.1f}s > {max_age_seconds}s",
+                age=age_seconds,
+                limit=max_age_seconds,
+            )
+        ]
     return []
 
 
@@ -102,8 +115,9 @@ def verify_market_open(is_open: bool, halted: bool = False) -> list[Violation]:
     return out
 
 
-def verify_symbol_tradeable(symbol: str, delisted: set[str] | None = None,
-                            tradeable: set[str] | None = None) -> list[Violation]:
+def verify_symbol_tradeable(
+    symbol: str, delisted: set[str] | None = None, tradeable: set[str] | None = None
+) -> list[Violation]:
     """Delisted/unknown instruments must be blocked."""
     if delisted and symbol in delisted:
         return [_v("No Unauthorized Trade", CRITICAL, f"symbol {symbol} is delisted")]

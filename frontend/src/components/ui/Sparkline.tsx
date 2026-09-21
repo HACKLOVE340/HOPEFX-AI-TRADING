@@ -48,7 +48,10 @@ export function Sparkline({
     return `M ${points.join(' L ')}`;
   }, [data, width, height]);
 
-  const trend = data.length >= 2 ? data[data.length - 1] - data[0] : 0;
+  // Bind both ends: `data.length >= 2` does not narrow data[n] (audit #38).
+  const sparkLast  = data[data.length - 1];
+  const sparkFirst = data[0];
+  const trend = sparkLast !== undefined && sparkFirst !== undefined ? sparkLast - sparkFirst : 0;
   const autoColor  = trend >= 0 ? '#00e676' : '#ff1744';
   const strokeColor = color ?? autoColor;
 

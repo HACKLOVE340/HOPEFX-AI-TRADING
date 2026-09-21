@@ -2,10 +2,18 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
+      # Generated artifacts are excluded from the whitespace fixers below.
+      # They are regenerated verbatim by their producers (vite, the retrain
+      # workflows, the tutorial generator), so a hook that appends a newline
+      # does not "fix" anything: it makes the committed file differ from the
+      # build output, and the difference reappears on the next regeneration.
+      # `pre-commit run --all-files` was failing on five such files every time,
+      # which is exactly the pressure that gets people reaching for
+      # `--no-verify` — the thing CLAUDE.md forbids.
       - id: trailing-whitespace
-        exclude: ^frontend/package-lock\.json$
+        exclude: ^(frontend/package-lock\.json|dashboard/dist/|ml/saved_models/|tutorials/generated/)
       - id: end-of-file-fixer
-        exclude: ^frontend/package-lock\.json$
+        exclude: ^(frontend/package-lock\.json|dashboard/dist/|ml/saved_models/|tutorials/generated/)
       - id: check-yaml
         # Helm templates use Go {{ }} syntax — not valid YAML.
         # config/ultimate_config.yaml and deployment/k8s_config.yaml have
@@ -13,6 +21,15 @@ repos:
         args: [--unsafe]
         exclude: ^(helm/|config/ultimate_config\.yaml|deployment/k8s_config\.yaml)
       - id: check-added-large-files
+        # This hook only inspects files with `--diff-filter=A`, i.e. newly
+        # *added* paths. Vite gives every rebuilt bundle a new content hash, so
+        # `dashboard/dist/assets/index-<hash>.js` is an added file on every
+        # single rebuild and trips the 500 KB limit every time — while its
+        # 738 KB predecessor sat in the tree unchallenged. The same applies to
+        # retrained model artifacts. Both trees are committed on purpose
+        # (see CLAUDE.md); this exclusion is what makes that decision and this
+        # hook consistent, instead of unbuildable.
+        exclude: ^(dashboard/dist/|ml/saved_models/|ml/rl_models/)
       - id: check-json
         # devcontainer.json uses JSONC (comments) — excluded; kept as plain JSON now.
         exclude: ^\.devcontainer/
@@ -21,7 +38,7 @@ repos:
       - id: mixed-line-ending
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.10
+    rev: v0.16.0
     hooks:
       - id: ruff
         args: [--fix]
@@ -88,10 +105,12 @@ repos:
         language: python
         entry: python scripts/pre_commit_healer.py
         types: [python]
-        # Exclude test files, examples, and generated code — the healer only
-        # checks production source files for stubs, TODOs, and mock classes.
+        # Exclude test files, examples, generated code, and vendored agent
+        # skills — the healer only checks production source files for stubs,
+        # TODOs, and mock classes.
         exclude: >-
           (?x)^(
+            \.claude/.*|
             tests/.*|
             examples/.*|
             scripts/.*|
@@ -107,13 +126,24 @@ repos:
 
       - id: coverage-gate
         name: Per-module coverage gate (≥80%)
-        language: python
+        # system, not python: this shells out to pytest against real test
+        # files that import the full production stack (fastapi, sqlalchemy,
+        # ...). An isolated `language: python` venv has none of that unless
+        # additional_dependencies lists the whole project, so every
+        # measurement silently failed with "No module named pytest" and
+        # every module read as unmeasurable rather than measured — the same
+        # failure shape this gate already had to be fixed against once.
+        # Matches every sibling hook here that needs project code importable
+        # (docs-freshness, gate-evidence, doc-metrics, ...).
+        language: system
         entry: python scripts/pre_commit_coverage.py
         types: [python]
         # Only run on production source files that have corresponding test files.
-        # Excluded: tests, scripts, examples, generated/infra code.
+        # Excluded: tests, scripts, examples, generated/infra code, vendored
+        # agent skills under .claude/.
         exclude: >-
           (?x)^(
+            \.claude/.*|
             tests/.*|
             examples/.*|
             scripts/.*|
@@ -133,11 +163,249 @@ repos:
         # Coverage gate is slower than other hooks — run last
         stages: [pre-commit]
 
+      - id: change-record
+        name: Change record states its expected effect (Group 2 Ch 6)
+        # commit-msg, not pre-commit: the trailer being checked lives in the
+        # message, which does not exist yet at the pre-commit stage.
+        language: system
+        entry: python -m deployment.change_records --check-message
+        stages: [commit-msg]
+        pass_filenames: true
+        always_run: true
+
+      - id: adr-check
+        name: Decision records (Group 3 Ch 6)
+        # system, not python: it shells out to git to enforce immutability, and
+        # an isolated venv has neither the repository nor its history.
+        language: system
+        entry: python scripts/adr.py --check
+        files: ^docs/decisions/
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: check-secrets
         name: Block plaintext credentials
         language: script
         entry: scripts/check_secrets.sh
         types: [yaml]
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Group 3 Chapter 2. Blocks a NEW unregistered document, a new duplicate
+      # subject claim, and any increase in unowned documents. Existing debt is
+      # baselined in docs/REGISTRY.toml and may only shrink — a check that failed
+      # on all 198 documents on day one would simply be removed.
+      - id: docs-registry
+        name: Document registry (Group 3 Ch 2)
+        language: system
+        entry: python scripts/docs_registry.py --check
+        files: '(^docs/.*\.(md|txt)$|^[A-Z_-]+\.md$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Group 3 Chapter 15. Two layers: referential (paths and links) and CLAIMS
+      # (gitignore status, pinned interpreter version) — because a pure
+      # referential check would have caught NONE of the three documentation
+      # errors this repository has already made. Scoped to living documents:
+      # a record is correct at its date and an archived document is not
+      # maintained, so staleness there is a fact rather than a defect.
+      - id: docs-freshness
+        name: Documentation freshness (Group 3 Ch 15)
+        language: system
+        entry: python scripts/docs_freshness.py --check
+        files: '(^docs/.*\.md$|^[A-Z_-]+\.md$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The Group 4 source opens with one rule: ADD AND EXPAND; NEVER SILENTLY
+      # REMOVE. Two sources exist and neither is a superset of the other, so a
+      # title can be dropped by adopting either one alone. Enforced rather than
+      # intended: a rule nobody runs is not a rule.
+      - id: group4-preservation
+        name: Group 4 source preservation (nothing dropped)
+        language: system
+        entry: python scripts/group4_preservation.py
+        files: '^docs/ai/specs/GROUP4_.*$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The volume index claims to be generated. Without this, that claim is
+      # unverifiable and discourages the checking a hand-written file would get.
+      - id: group4-index
+        name: Group 4 volume index matches its sources
+        language: system
+        entry: python scripts/group4_index.py --check
+        files: '^(docs/ai/specs/GROUP4_.*|scripts/group4_index\.py)$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Group 2 Rule 1: a control that cannot fail is not a control. Seven such
+      # controls have been found here, two of them in code running nightly. The
+      # ledger is discovered rather than hand-listed, so a new gate cannot be
+      # added and quietly omitted; recorded debt may only shrink.
+      - id: gate-evidence
+        name: Gate injection evidence (Rule 1)
+        language: system
+        entry: python scripts/gate_evidence.py --check
+        files: '^(scripts/ci/gate_.*\.py|\.pre-commit-config\.yaml|docs/GATE_EVIDENCE\.toml)$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The owner's standing rule: documentation ships with every push. The
+      # failure it guards against is not a missing file but a document that
+      # still looks current while carrying a figure that stopped being true.
+      # docs-freshness checks paths and claims; this one checks arithmetic.
+      - id: doc-metrics
+        name: Documents state the measured figures
+        language: system
+        entry: python scripts/doc_metrics.py --sync
+        files: '^(docs/.*\.(md|toml)$|[A-Z_-]+\.md$|scripts/(gate_evidence|group4_preservation|docs_registry|doc_metrics|aos_conformance|spatial_capabilities)\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # docs/audit/CORRECTION_REGISTER.md is the single list of outstanding work,
+      # and its status column is probed from the code rather than typed. This
+      # hook fails when the document and the probes disagree — including when a
+      # fix lands and the register still calls the item open, which is the drift
+      # that made fifteen separate fix lists untrustworthy in the first place.
+      # `--selftest` demonstrates the gate refusing a wrong count.
+      - id: correction-register
+        name: Correction register matches what the code measures
+        language: system
+        entry: python scripts/correction_register.py --check
+        files: '^(docs/audit/CORRECTION_REGISTER\.md$|scripts/correction_register\.py$|\.coveragerc$|\.github/workflows/.*\.yml$|(api|brokers|execution|monetization|payments|database|invariants|core|ml|scripts)/.*\.py$|(k8s|deployments/k8s)/.*\.ya?ml$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # ml/saved_models/model_checksums.json gates the load: ml/__init__.py
+      # ::_verify_checksum reads it on every model load and refuses in
+      # production when the bytes do not match. Two artefacts mismatch today
+      # because a leaking test suite got them committed alongside unrelated
+      # work and nobody regenerated the manifest (MASTER_OUTSTANDING §A8). This
+      # refuses the next one: a staged artefact whose recorded checksum did not
+      # change with it. A mismatch that predates the commit is deliberately NOT
+      # blocked -- resolving those is an owner decision, and a gate that blocked
+      # every commit until it was made would decide it by attrition.
+      - id: model-artifact-manifest
+        name: A model artefact changes only with its checksum
+        language: system
+        entry: python scripts/model_artifact_manifest_gate.py
+        files: '^ml/saved_models/'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The frontend's twelve semantic tokens are declared and almost unused:
+      # 8,021 hardcoded colour literals across frontend/src against 58 uses of
+      # var(--...). That is why the light/dark toggle changes nothing (no
+      # [data-theme="light"] rule exists anywhere) and why a white-label
+      # tenant's brand colour cannot reach the product. Replacing them is a
+      # codemod and the owner's call; keeping the number from growing is not.
+      # Reads the whole tree, not the staged subset: the "delete the line once
+      # a file reaches zero" rule cannot be evaluated from a partial view.
+      - id: frontend-colour-ratchet
+        name: Frontend colour literals may only decrease
+        language: system
+        entry: python scripts/frontend_colour_ratchet.py --check
+        files: '^(frontend/src/.*\.(tsx?|jsx?|css)$|docs/FRONTEND_COLOUR_DEBT\.json$|scripts/frontend_colour_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The same defect in the size dimension, and the same remedy. `data-density`
+      # is stamped on every route and redefines eleven tokens per tier; a literal
+      # `fontSize: 12` or `p-4` is not in the cascade, so no tier can move it.
+      # 763 sizes reached the token layer via frontend_size_codemod.py and the
+      # rest need a per-bucket DECISION (12px x638 and 11px x532 sit BETWEEN
+      # tokens) that is the owner's, not a substitution. Keeping the number from
+      # growing while that is decided is not the owner's call, and is this.
+      - id: frontend-size-ratchet
+        name: Sizes the density control cannot reach may only decrease
+        language: system
+        entry: python scripts/frontend_size_ratchet.py --check
+        files: '^(frontend/src/.*\.tsx$|docs/FRONTEND_SIZE_DEBT\.json$|scripts/frontend_size_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The frame around the colours. 74 pages had chosen twelve different
+      # widths one at a time, 43 rendered no PageHeader at all, and 40 ended
+      # with no outbound link. PageShell is the standard page; this keeps the
+      # count of pages without it falling, and refuses a NEW page that skips
+      # it -- which is where new inconsistency actually arrives.
+      - id: frontend-page-shell-ratchet
+        name: Pages off the standard shell may only decrease
+        language: system
+        entry: python scripts/frontend_page_shell_ratchet.py --check
+        files: '^(frontend/src/pages/.*\.tsx$|frontend/src/components/system/PageShell\.tsx$|docs/FRONTEND_PAGE_SHELL_DEBT\.json$|scripts/frontend_page_shell_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Same shape, different debt. navConfig.ts records why emoji cannot be
+      # icons -- no currentColor, so they ignore theme, hover and disabled
+      # state, and a screen reader announces them literally (F170) -- and the
+      # sidebar was converted to Lucide on that basis. 1,389 emoji across 145
+      # other files were not, concentrated exactly where icons live. Converting
+      # them is a codemod; keeping the number from growing is not. Reads the
+      # whole tree for the same reason the colour ratchet does.
+      - id: frontend-emoji-ratchet
+        name: Frontend emoji may only decrease
+        language: system
+        entry: python scripts/frontend_emoji_ratchet.py --check
+        files: '^(frontend/src/.*\.(tsx?|jsx?|css)$|docs/FRONTEND_EMOJI_DEBT\.json$|scripts/frontend_emoji_ratchet\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # 2 of 14 ml/ modules that load a model reach any integrity check, and
+      # ml/__init__.py::_verify_checksum gates a pickle.load -- so what the
+      # other twelve permit is arbitrary code execution, not merely a wrong
+      # prediction. Closing them is a deployment decision with a blast radius
+      # (a fail-closed check on inference_engine.py would refuse a model that
+      # loads today and halt live inference), and the two MISMATCH artifacts are
+      # an owner decision (A8). Neither is forced here. What this refuses is the
+      # THIRTEENTH ungated loader and the eighth unlisted artifact.
+      - id: model-provenance-ratchet
+        name: Ungated model loaders may only decrease
+        language: system
+        entry: python scripts/model_provenance_report.py --check
+        files: '^(ml/.*\.py$|docs/MODEL_PROVENANCE_DEBT\.json$|scripts/model_provenance_report\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Base.metadata.create_all() creates what is missing and never ALTERs, so
+      # a table with no migration drifts between a fresh install and an upgraded
+      # one and nothing notices until a query fails on one of them (F218). The
+      # check resolves names with the AST rather than matching text: 35 of the
+      # 47 tables are created through a local `_tbl()` idempotency wrapper and
+      # four via a module-level constant, neither of which a regex sees.
+      - id: schema-migration-check
+        name: Every ORM table is created by a migration
+        language: system
+        entry: python scripts/schema_migration_check.py --check
+        files: '^(database/(models|user_models)\.py$|alembic/versions/.*\.py$|scripts/schema_migration_check\.py$)'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # The AOS specification's §30 register maps 26 named invariants onto what
+      # this repository enforces. Every claim in it names a live predicate or a
+      # file on disk, so a rename anywhere under invariants/ can turn a row into
+      # fiction that still reads as coverage. That is why invariants/*.py is in
+      # the trigger set and not just the register itself.
+      # The spatial specification's status table is the answer to "what can this
+      # system actually do". As prose it rots the moment a module is renamed: the
+      # row keeps saying `partial` while pointing at a file that is gone. So
+      # ai/spatial/ and invariants/spatial.py are in the trigger set, not just the
+      # register itself.
+      - id: spatial-capabilities
+        name: Spatial capability register resolves against the code
+        language: system
+        entry: python scripts/spatial_capabilities.py --check
+        files: '^(docs/ai/specs/SPATIAL_CAPABILITIES\.toml|scripts/spatial_capabilities\.py|ai/spatial/.*\.py|invariants/spatial\.py)$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: aos-conformance
+        name: AOS invariant register resolves against live predicates
+        language: system
+        entry: python scripts/aos_conformance.py --check
+        files: '^(docs/ai/specs/AOS_INVARIANT_REGISTER\.toml|scripts/aos_conformance\.py|invariants/.*\.py)$'
         pass_filenames: false
         stages: [pre-commit]
 

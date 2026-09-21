@@ -15,14 +15,36 @@
 	// bootstrap_dev.py generates .env with stable secrets and seeds the DB —
 	// idempotent, safe to re-run. Must run after pip install so all deps exist.
 	"postCreateCommand": "apt-get update -qq && apt-get install -y --no-install-recommends redis-server clamav clamav-daemon cmake libzmq3-dev pkg-config ninja-build && pip install -q --upgrade pip && pip install -q -r requirements-ci.txt && pip install -q joblib numba matplotlib psutil stable-baselines3 gymnasium pyotp 'ib_insync==0.9.86' clamd slowapi && python scripts/bootstrap_dev.py && cd frontend && npm install && npm run build",
+	// Bring the stack up on every container start.
+	//
+	// `.gitpod/automations.yaml` and `.devcontainer/automations.yaml` describe
+	// redis/backend/frontend services, and AGENTS.md says to start them with
+	// `gitpod automations service start backend`. That is a Gitpod CLI command
+	// and a Gitpod file format — **GitHub Codespaces reads neither**, and only
+	// devcontainer.json is honoured here. Without this line a Codespace built
+	// the whole environment and then served nothing, with no error saying why.
+	//
+	// postStartCommand (not postCreate) so it also runs when a stopped
+	// Codespace is resumed. The script is idempotent and backgrounds the
+	// server itself, so this does not hold the container open.
+	"postStartCommand": "bash .devcontainer/start-services.sh",
 	"forwardPorts": [5173, 8000, 6379],
 	"portsAttributes": {
-		"5173": {
-			"label": "Frontend (Vite)",
+		"8000": {
+			// The one to open. The backend serves the built SPA from static/,
+			// so this is the whole application — the Vite dev server on 5173 is
+			// only for hot reload while editing the frontend.
+			//
+			// Codespaces forwards privately by default and that is left alone
+			// deliberately: this ships a seeded superadmin account, so making
+			// the port public would put a trading admin console on the open
+			// internet. Change it from the Ports panel as a decision, not a
+			// side effect.
+			"label": "HOPEFX app (FastAPI + SPA)",
 			"onAutoForward": "openPreview"
 		},
-		"8000": {
-			"label": "Backend (FastAPI)",
+		"5173": {
+			"label": "Frontend (Vite dev, hot reload)",
 			"onAutoForward": "silent"
 		},
 		"6379": {

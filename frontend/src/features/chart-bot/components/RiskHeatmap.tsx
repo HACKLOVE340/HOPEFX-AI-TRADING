@@ -4,7 +4,7 @@
  * kill switch status, and data quality score from the orchestrator.
  */
 
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { useRiskMetrics } from '../hooks/useChartData';
 import { COLORS } from '../utils/design-tokens';

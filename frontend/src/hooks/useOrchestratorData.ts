@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useStore, useHasHydrated, selectIsAuth } from '../store';
+import { useStore, useHasHydrated, selectIsAuth, selectFeedLive } from '../store';
 import {
   dataLayerApi, performanceApi, tradingApi, signalsApi, mlExtendedApi, calendarApi,
   newsApi, regimeApi, positionSizingApi, drawdownApi, allocatorApi,
@@ -261,7 +261,7 @@ export function usePerformanceSummary() {
 export function useAccount() {
   const setAccount = useStore((s) => s.setAccount);
   const account    = useStore((s) => s.account);
-  const wsStatus   = useStore((s) => s.wsStatus);
+  const feedLive   = useStore(selectFeedLive);
   const isAuth     = useStore(selectIsAuth);
   const hydrated   = useHasHydrated();
 
@@ -274,7 +274,13 @@ export function useAccount() {
     enabled: hydrated && isAuth,
     // When WS is connected: suppress interval polling (WS pushes changes),
     // but still allow the initial fetch (staleTime=0 when account is null).
-    refetchInterval: wsStatus === 'connected' ? false : 10_000,
+    // F3-01: keyed to `selectFeedLive`, not `wsStatus`. This fallback exists
+    // for a dead feed, and `wsStatus` stays 'connected' through the one failure
+    // mode that matters — the server's broadcast loop stalls, the socket stays
+    // open, nothing errors. Keyed to the connection flag, the fallback was
+    // switched off during precisely the outage it was written for. Keyed to the
+    // feed, a stall now repairs itself within one interval.
+    refetchInterval: feedLive ? false : 10_000,
     // If account is already populated from WS, treat cached data as fresh for
     // 30s. If account is null (first load), staleTime=0 forces an immediate fetch.
     staleTime: account !== null ? 30_000 : 0,
@@ -304,7 +310,7 @@ function normalizePosition(raw: Record<string, unknown>): Position {
 
 export function usePositions() {
   const setPositions = useStore((s) => s.setPositions);
-  const wsStatus     = useStore((s) => s.wsStatus);
+  const feedLive     = useStore(selectFeedLive);
   const isAuth       = useStore(selectIsAuth);
   const hydrated     = useHasHydrated();
 
@@ -318,7 +324,13 @@ export function usePositions() {
       return arr.map(normalizePosition);
     },
     enabled:         hydrated && isAuth,
-    refetchInterval: wsStatus === 'connected' ? false : 10_000,
+    // F3-01: keyed to `selectFeedLive`, not `wsStatus`. This fallback exists
+    // for a dead feed, and `wsStatus` stays 'connected' through the one failure
+    // mode that matters — the server's broadcast loop stalls, the socket stays
+    // open, nothing errors. Keyed to the connection flag, the fallback was
+    // switched off during precisely the outage it was written for. Keyed to the
+    // feed, a stall now repairs itself within one interval.
+    refetchInterval: feedLive ? false : 10_000,
     // staleTime=0 ensures an immediate fetch on mount even when WS is up,
     // since WS only pushes changes — not the initial snapshot.
     staleTime: 0,
@@ -338,7 +350,7 @@ export function usePositions() {
 
 export function useSignals() {
   const setSignals = useStore((s) => s.setSignals);
-  const wsStatus   = useStore((s) => s.wsStatus);
+  const feedLive   = useStore(selectFeedLive);
   const isAuth     = useStore(selectIsAuth);
   const hydrated   = useHasHydrated();
 
@@ -351,7 +363,13 @@ export function useSignals() {
       return Array.isArray(raw) ? raw : (raw.signals ?? []);
     },
     enabled:         hydrated && isAuth,
-    refetchInterval: wsStatus === 'connected' ? false : 15_000,
+    // F3-01: keyed to `selectFeedLive`, not `wsStatus`. This fallback exists
+    // for a dead feed, and `wsStatus` stays 'connected' through the one failure
+    // mode that matters — the server's broadcast loop stalls, the socket stays
+    // open, nothing errors. Keyed to the connection flag, the fallback was
+    // switched off during precisely the outage it was written for. Keyed to the
+    // feed, a stall now repairs itself within one interval.
+    refetchInterval: feedLive ? false : 15_000,
     // staleTime=0 ensures an immediate fetch on mount even when WS is up,
     // since WS only pushes new signals — not the existing backlog.
     staleTime: 0,

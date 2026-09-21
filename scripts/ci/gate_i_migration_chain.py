@@ -25,8 +25,10 @@ VERSIONS_DIR = REPO_ROOT / "alembic" / "versions"
 # Matches: revision: str = "abc123"  (with optional pragma comment)
 _REVISION_RE = re.compile(r'^revision\s*(?::\s*\S+)?\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
 # Matches: down_revision: str | ... = "abc123" or = None or = ("a", "b")
+# The optional type annotation is matched as "anything up to the = sign"
+# ([^=\n]*) — linear, with no nested quantifier that could backtrack (ReDoS).
 _DOWN_RE = re.compile(
-    r"^down_revision\s*(?::\s*\S+(?:\s*\|\s*\S+)*)?\s*=\s*(.+)$",
+    r"^down_revision\s*(?::[^=\n]*)?=\s*(.+)$",
     re.MULTILINE,
 )
 

@@ -7,6 +7,8 @@ import {
   ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
+import { Mail, Megaphone, Radio, Settings, Wrench } from 'lucide-react';
 
 interface PlatformConfig {
   platform_name: string;
@@ -41,6 +43,7 @@ const PlatformSection: React.FC = () => {
   const [testingSmtp, setTestingSmtp] = useState(false);
   const [error, setError]           = useState('');
   const [msg, setMsg]               = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm]       = useState<string | null>(null);
   const [broadcast, setBroadcast]   = useState({ title: '', body: '', type: 'info' });
   const [smtpTest, setSmtpTest]     = useState({ host: '', port: 587, user: '', password: '', from_addr: '', tls: true });
@@ -78,8 +81,10 @@ const PlatformSection: React.FC = () => {
     setSaving(true); setMsg('');
     try {
       await superadminApi.updatePlatformConfig(cfg);
+      setMsgOk(true);
       setMsg('Configuration saved');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
@@ -89,8 +94,10 @@ const PlatformSection: React.FC = () => {
     setSaving(true); setMsg('');
     try {
       await superadminApi.savePlatformConfigFull(cfg);
+      setMsgOk(true);
       setMsg('Full configuration saved and applied');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Full save failed'));
     } finally { setSaving(false); }
   };
@@ -101,11 +108,17 @@ const PlatformSection: React.FC = () => {
       const res = await superadminApi.validatePlatformConfig();
       const d = res.data as { valid?: boolean; errors?: string[] };
       if (d.valid) {
+        setMsgOk(true);
         setMsg('✅ Configuration is valid');
       } else {
+        // The call succeeded; the configuration did not. Reporting an invalid
+        // config as a green banner is the exact failure-renders-as-success bug
+        // this sweep exists to remove.
+        setMsgOk(false);
         setMsg('⚠️ Validation errors: ' + (d.errors?.join('; ') ?? 'Unknown errors'));
       }
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Validation failed'));
     } finally { setValidating(false); }
   };
@@ -114,8 +127,10 @@ const PlatformSection: React.FC = () => {
     setTestingSmtp(true); setMsg('');
     try {
       await superadminApi.testSmtpConfig(smtpTest);
+      setMsgOk(true);
       setMsg('✅ SMTP connection successful');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'SMTP test failed'));
     } finally { setTestingSmtp(false); }
   };
@@ -126,8 +141,10 @@ const PlatformSection: React.FC = () => {
     try {
       await superadminApi.maintenanceMode(!cfg.maintenance_mode, cfg.maintenance_message);
       setCfg(c => c ? { ...c, maintenance_mode: !c.maintenance_mode } : c);
+      setMsgOk(true);
       setMsg(`Maintenance mode ${!cfg.maintenance_mode ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Failed'));
     } finally { setSaving(false); setConfirm(null); }
   };
@@ -136,9 +153,11 @@ const PlatformSection: React.FC = () => {
     setSaving(true); setMsg('');
     try {
       await superadminApi.broadcastMessage(broadcast);
+      setMsgOk(true);
       setMsg('Broadcast sent to all active users');
       setBroadcast({ title: '', body: '', type: 'info' });
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Broadcast failed'));
     } finally { setSaving(false); }
   };
@@ -166,7 +185,7 @@ const PlatformSection: React.FC = () => {
       )}
 
       {/* General */}
-      <SectionCard title="General Settings" icon="⚙️" accent="#3b82f6"
+      <SectionCard title="General Settings" icon={<Settings size={18} aria-hidden />} accent="#3b82f6"
         actions={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <ActionBtn label={validating ? 'Validating…' : 'Validate'} onClick={validateConfig} variant="ghost" loading={validating} size="sm" />
@@ -198,7 +217,7 @@ const PlatformSection: React.FC = () => {
             ]}
           />
         </div>
-        <div style={{ marginTop: 14, borderTop: '1px solid #1e293b', paddingTop: 14 }}>
+        <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
           <Toggle label="Allow New Registrations"     checked={cfg.allow_registrations}          onChange={v => set('allow_registrations', v)} />
           <Toggle label="Require Email Verification"  checked={cfg.require_email_verification}   onChange={v => set('require_email_verification', v)} />
           <Toggle label="Force 2FA for Admins"        checked={cfg.force_2fa_for_admins}         onChange={v => set('force_2fa_for_admins', v)} accent="#f59e0b" />
@@ -212,7 +231,7 @@ const PlatformSection: React.FC = () => {
       </SectionCard>
 
       {/* SMTP Test */}
-      <SectionCard title="SMTP Configuration Test" icon="📧" accent="#06b6d4"
+      <SectionCard title="SMTP Configuration Test" icon={<Mail size={18} aria-hidden />} accent="#06b6d4"
         subtitle="Verify email delivery settings before saving">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <Input label="SMTP Host"  value={smtpTest.host}     onChange={e => setSmtpTest(s => ({ ...s, host: e.target.value }))} placeholder="smtp.example.com" />
@@ -227,14 +246,14 @@ const PlatformSection: React.FC = () => {
           label={testingSmtp ? 'Testing SMTP…' : 'Test SMTP Connection'}
           onClick={runSmtpTest}
           variant="ghost"
-          icon="📧"
+          icon={<Mail size={18} aria-hidden />}
           loading={testingSmtp}
           disabled={!smtpTest.host}
         />
       </SectionCard>
 
       {/* Maintenance */}
-      <SectionCard title="Maintenance Mode" icon="🔧" accent="#f59e0b"
+      <SectionCard title="Maintenance Mode" icon={<Wrench size={18} aria-hidden />} accent="#f59e0b"
         subtitle={cfg.maintenance_mode ? '⚠️ Currently ACTIVE — users see downtime page' : 'Platform is live'}>
         <div style={{ marginBottom: 14 }}>
           <Input
@@ -254,7 +273,7 @@ const PlatformSection: React.FC = () => {
       </SectionCard>
 
       {/* Announcement Banner */}
-      <SectionCard title="Announcement Banner" icon="📢" accent="#8b5cf6">
+      <SectionCard title="Announcement Banner" icon={<Megaphone size={18} aria-hidden />} accent="#8b5cf6">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <Select label="Type"
             value={cfg.announcement_type}
@@ -277,7 +296,7 @@ const PlatformSection: React.FC = () => {
       </SectionCard>
 
       {/* Broadcast */}
-      <SectionCard title="Broadcast Message" icon="📡" accent="#06b6d4"
+      <SectionCard title="Broadcast Message" icon={<Radio size={18} aria-hidden />} accent="#06b6d4"
         subtitle="Send an in-app notification to all active users">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
           <Input label="Title" value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
@@ -291,15 +310,15 @@ const PlatformSection: React.FC = () => {
           />
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500, display: 'block', marginBottom: 5 }}>Message Body</label>
-          <textarea
+          <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500, display: 'block', marginBottom: 5 }}>Message Body</label>
+          <textarea aria-label="Message body"
             value={broadcast.body}
             onChange={e => setBroadcast(b => ({ ...b, body: e.target.value }))}
             placeholder="Message body…"
             rows={3}
             style={{
-              width: '100%', background: '#1e293b', border: '1px solid #334155',
-              borderRadius: 7, color: '#f1f5f9', fontSize: 13, padding: '8px 12px',
+              width: '100%', background: 'var(--raised)', border: '1px solid var(--border-strong)',
+              borderRadius: 7, color: 'var(--text-strong)', fontSize: 'var(--fs-body)', padding: '8px 12px',
               resize: 'vertical', outline: 'none', boxSizing: 'border-box',
             }}
           />
@@ -308,22 +327,13 @@ const PlatformSection: React.FC = () => {
           label="Send Broadcast"
           onClick={sendBroadcast}
           variant="primary"
-          icon="📡"
+          icon={<Radio size={18} aria-hidden />}
           loading={saving}
           disabled={!broadcast.title || !broadcast.body}
         />
       </SectionCard>
 
-      {msg && (
-        <div style={{
-          padding: '12px 16px', borderRadius: 8, marginTop: 4,
-          background: msg.includes('failed') || msg.includes('Failed') || msg.includes('⚠️') ? '#450a0a' : '#052e16',
-          color: msg.includes('failed') || msg.includes('Failed') || msg.includes('⚠️') ? '#f87171' : '#4ade80',
-          fontSize: 13, fontWeight: 600,
-        }}>
-          {msg}
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} />
     </div>
   );
 };

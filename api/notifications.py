@@ -207,7 +207,14 @@ class SubscribeBody(BaseModel):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 
+# Registered at both "" and "/" on purpose. The SPA catch-all
+# (core/page_routes.py) matches "/{full_path:path}" and returns a bare 404 for
+# any unmatched /api/* path, which pre-empts Starlette's automatic
+# trailing-slash redirect. So a client calling /api/notifications (no slash)
+# would 404 if the route existed only at /api/notifications/, and vice versa.
+# Declaring both makes the endpoint reachable whichever slash the client sends.
 @router.get("")
+@router.get("/")
 async def list_notifications(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),

@@ -894,11 +894,11 @@ class TestMonetizationModels:
         assert r.monthly_price == 1800.0
 
     def test_subscribe_request_defaults(self):
-        r = SubscribeRequest(user_id="u1", tier="starter")
+        r = SubscribeRequest(tier="starter")
         assert r.billing_cycle == "monthly"
 
     def test_subscribe_request_annual(self):
-        r = SubscribeRequest(user_id="u1", tier="professional", billing_cycle="annual")
+        r = SubscribeRequest(tier="professional", billing_cycle="annual")
         assert r.billing_cycle == "annual"
 
     def test_subscribe_response(self):
@@ -913,7 +913,7 @@ class TestMonetizationModels:
         assert r.checkout_url is not None
 
     def test_activate_code_request(self):
-        r = ActivateCodeRequest(user_id="u1", code="HOPE-TEST-CODE")
+        r = ActivateCodeRequest(code="HOPE-TEST-CODE")
         assert r.code == "HOPE-TEST-CODE"
 
     def test_activate_code_response_success(self):
@@ -931,14 +931,13 @@ class TestMonetizationModels:
 
     def test_affiliate_signup_request(self):
         r = AffiliateSignupRequest(
-            user_id="u1",
             payment_email="pay@test.com",
             custom_code="MY_CODE",
         )
         assert r.custom_code == "MY_CODE"
 
     def test_affiliate_signup_request_minimal(self):
-        r = AffiliateSignupRequest(user_id="u2")
+        r = AffiliateSignupRequest()
         assert r.payment_email is None
         assert r.custom_code is None
 
@@ -954,12 +953,11 @@ class TestMonetizationModels:
         assert r.commission_rate == 0.10
 
     def test_referral_request(self):
-        r = ReferralRequest(affiliate_code="CODE123", referred_user_id="newuser")
+        r = ReferralRequest(affiliate_code="CODE123")
         assert r.affiliate_code == "CODE123"
 
     def test_strategy_list_request_defaults(self):
         r = StrategyListRequest(
-            creator_id="c1",
             name="My Strategy",
             description="desc",
             category="scalping",
@@ -970,12 +968,11 @@ class TestMonetizationModels:
         assert r.tags is None
 
     def test_strategy_purchase_request(self):
-        r = StrategyPurchaseRequest(buyer_id="b1", strategy_id="strat_001", stripe_customer_id="cus_test")
-        assert r.buyer_id == "b1"
+        r = StrategyPurchaseRequest(strategy_id="strat_001", stripe_customer_id="cus_test")
+        assert r.strategy_id == "strat_001"
 
     def test_review_request_valid(self):
         r = ReviewRequest(
-            user_id="u1",
             strategy_id="strat_001",
             rating=5,
             title="Excellent",
@@ -988,7 +985,6 @@ class TestMonetizationModels:
 
         with pytest.raises(ValidationError):
             ReviewRequest(
-                user_id="u1",
                 strategy_id="strat_001",
                 rating=6,  # out of range
                 title="T",
@@ -1257,15 +1253,35 @@ class TestLiveConnectionManager:
     # ── send_to_user ─────────────────────────────────────────────────────────
 
     async def test_send_to_user_reaches_correct_connection(self):
+        """Routing: only the addressed user's connection receives the message.
+
+        Both connections now subscribe explicitly. `account` is a private
+        channel, and send_to_user no longer delivers private channels via the
+        "empty subscription = all channels" fallback — broadcast() already
+        guarded that and the guard was missing here (audit finding S8-02).
+        This test's subject is user routing, which the explicit subscription
+        preserves; the fallback behaviour it previously depended on is asserted
+        against in test_send_to_user_skips_unsubscribed_private_channel below.
+        """
         ws_a, ws_b = _MockWS(), _MockWS()
         cid_a = await self.mgr.connect(ws_a)
         cid_b = await self.mgr.connect(ws_b)
         self.mgr.authenticate(cid_a, "alice")
         self.mgr.authenticate(cid_b, "bob")
+        self.mgr.subscribe(cid_a, ["account"])
+        self.mgr.subscribe(cid_b, ["account"])
         msg = {"type": "account_update", "data": {"balance": 5000.0}}
         await self.mgr.send_to_user("alice", "account", msg)
         assert len(ws_a.sent) == 1
         assert len(ws_b.sent) == 0
+
+    async def test_send_to_user_skips_unsubscribed_private_channel(self):
+        """A connection that never opted in must not receive private data (S8-02)."""
+        ws_a = _MockWS()
+        cid_a = await self.mgr.connect(ws_a)
+        self.mgr.authenticate(cid_a, "alice")  # no subscribe() call
+        await self.mgr.send_to_user("alice", "account", {"type": "account_update", "data": {}})
+        assert len(ws_a.sent) == 0
 
     # ── heartbeat helpers ─────────────────────────────────────────────────────
 

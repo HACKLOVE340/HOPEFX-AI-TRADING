@@ -27,9 +27,17 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# The POST routes below already required admin individually, but the GET routes
+# did not — drift reports, shadow-deployment state, retrain history and
+# per-version model metrics were readable without a token. Those describe the
+# live model's behaviour and are the same class of secret as the model itself,
+# so the guard belongs on the router rather than on the write routes only.
+# The frontend's /ml-ops page is adminOnly() already; this makes it true of the
+# API too.
 router = APIRouter(
     prefix="/api/mlops",
     tags=["MLOps"],
+    dependencies=[Depends(require_role("admin"))],
 )
 
 

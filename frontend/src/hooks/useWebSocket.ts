@@ -10,8 +10,9 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store';
 import { tradingApi } from './useApi';
+import { getWsBase } from '../lib/utils';
 import type { PriceTick, Position, Signal, AccountMetrics, MicrostructureSnapshot } from '../types';
-import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAlert } from '../store';
+import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAlert, AiJobUpdate } from '../store';
 
 // Module-level map: symbol → last known mid price, used to compute change_pct
 // when the server sends 0 or omits the field.
@@ -35,17 +36,32 @@ function _setLastMid(symbol: string, mid: number): void {
 export const _setLastMid_testOnly = _setLastMid;
 export const _lastMid_testOnly    = _lastMid;
 
-const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
-const WS_URL: string = _envWsUrl ?? (() => {
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.host}/ws/live`;
-})();
+// VITE_WS_URL is an origin, not a complete socket URL — `.env.example`
+// documents it as `wss://api.YOUR_DOMAIN`. Using it verbatim (the previous
+// `_envWsUrl ?? ...`) dropped the `/ws/live` path whenever it was set, and
+// resolved an empty value to '' rather than falling back. Both via getWsBase.
+const WS_URL: string = `${getWsBase()}/ws/live`;
 
 const HEARTBEAT_INTERVAL_MS  = 30_000;
 const INITIAL_RECONNECT_MS   = 1_000;
 const MAX_RECONNECT_MS       = 30_000;
+// Cap auto-reconnect so a permanently-dead server doesn't retry forever. With
+// exponential backoff capped at 30s, 15 attempts ≈ several minutes of trying.
+// After the cap we fall back to REST polling and re-arm on a browser 'online'
+// event (or a page refresh), so a transient outage still recovers.
+const MAX_RECONNECT_ATTEMPTS = 15;
 // Poll REST prices when WS is not connected so the UI shows live-ish data.
 const REST_POLL_INTERVAL_MS  = 5_000;
+// How long without ANY server message before the feed is treated as stale.
+// The socket can stay OPEN while the server sends nothing — a stalled
+// broadcast loop, a frozen upstream — in which case wsStatus remains
+// 'connected' and onclose never fires. Without this the UI rendered the last
+// price it received indefinitely under a green indicator, with no age shown
+// anywhere. Two missed heartbeats is the threshold.
+// See docs/HARDENING_BACKLOG.md S9-01 / S10-05.
+const FEED_STALE_AFTER_MS    = HEARTBEAT_INTERVAL_MS * 2;
+// How often to re-evaluate that condition.
+const FEED_STALE_CHECK_MS    = 5_000;
 
 interface WsMessage {
   type:
@@ -75,7 +91,9 @@ interface WsMessage {
     | 'news_item'
     // System events (nuclear halt, circuit breaker)
     | 'system_event'
-    | 'nuclear_halt';
+    | 'nuclear_halt'
+    // AI generations, pushed while they run (private `ai_jobs` channel)
+    | 'ai_job_update';
   data?:          unknown;
   auth_required?: boolean;
   code?:          string;
@@ -88,8 +106,10 @@ interface WsMessage {
 export function useWebSocket(enabled = true) {
   const wsRef          = useRef<WebSocket | null>(null);
   const reconnectDelay = useRef(INITIAL_RECONNECT_MS);
+  const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const staleTimer     = useRef<ReturnType<typeof setInterval> | null>(null);
   const restPollTimer  = useRef<ReturnType<typeof setInterval> | null>(null);
   const unmounted      = useRef(false);
   const authedRef      = useRef(false);
@@ -112,8 +132,12 @@ export function useWebSocket(enabled = true) {
       upsertPosition, removePosition, addSignal, setAccount,
       setMicrostructure, setVolumeDelta, setSentiment,
       setRiskSnapshot, setEquitySnapshot, addNewsItem, setSystemAlert,
-      setNoLiveFeed,
+      setNoLiveFeed, markDataReceived, upsertAiJob,
     } = getState();
+
+    // Any parsed server message is evidence the feed is alive. Recorded before
+    // the switch so it covers every message type, including ones added later.
+    markDataReceived();
 
     switch (msg.type) {
       case 'connected':
@@ -155,7 +179,12 @@ export function useWebSocket(enabled = true) {
           wsRef.current?.send(JSON.stringify({
             type: 'subscribe',
             channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                       'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
+                       'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system',
+                       // `ai_jobs` is a PRIVATE channel: the server refuses to
+                       // deliver it on the implicit "no subscription = all
+                       // channels" path, so it has to be asked for by name here
+                       // or nothing arrives and the workbench polls forever.
+                       'ai_jobs'],
           }));
         }
         break;
@@ -171,7 +200,9 @@ export function useWebSocket(enabled = true) {
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
           channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
+                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system',
+                     // Private channel — see the note on the other subscribe.
+                     'ai_jobs'],
         }));
         break;
 
@@ -267,6 +298,16 @@ export function useWebSocket(enabled = true) {
         break;
       }
 
+      case 'ai_job_update': {
+        // A generation said something while it was running. The workbench also
+        // polls, so this is an improvement in latency rather than the only way
+        // the panel ever learns anything — which is why a malformed frame is
+        // dropped silently instead of surfaced.
+        const job = msg.data as AiJobUpdate | undefined;
+        if (job && typeof job.id === 'string') upsertAiJob(job);
+        break;
+      }
+
       // ── server acknowledgements ───────────────────────────────────────────
 
       case 'subscribed':
@@ -306,6 +347,28 @@ export function useWebSocket(enabled = true) {
       }
     }, HEARTBEAT_INTERVAL_MS);
   }, []);
+
+  /**
+   * Watchdog: flip `feedStale` when nothing has arrived for
+   * FEED_STALE_AFTER_MS.
+   *
+   * This is the consumer that was missing. `lastHeartbeat` was written to the
+   * store on every heartbeat and read nowhere outside test files — no
+   * component, selector or interval ever compared it against `Date.now()`. The
+   * `noLiveFeed` banner is not a substitute: it only fires when the *server*
+   * volunteers that condition, which a stalled server cannot do.
+   * See docs/HARDENING_BACKLOG.md S9-01.
+   */
+  const startFeedWatchdog = useCallback(() => {
+    if (staleTimer.current) clearInterval(staleTimer.current);
+    staleTimer.current = setInterval(() => {
+      const { lastDataAt, feedStale, setFeedStale, wsStatus } = getState();
+      if (wsStatus !== 'connected') return;   // disconnection is already surfaced
+      if (lastDataAt == null) return;         // nothing received yet
+      const stale = Date.now() - lastDataAt > FEED_STALE_AFTER_MS;
+      if (stale !== feedStale) setFeedStale(stale);
+    }, FEED_STALE_CHECK_MS);
+  }, [getState]);
 
   /**
    * Normalise a symbol key from the REST /trading/prices response to the
@@ -393,8 +456,10 @@ export function useWebSocket(enabled = true) {
     ws.onopen = () => {
       if (unmounted.current) { ws.close(); return; }
       reconnectDelay.current = INITIAL_RECONNECT_MS;
+      reconnectAttempts.current = 0; // connected — reset the attempt counter
       stopRestPoll(); // WS is up — stop REST polling
       startHeartbeat(ws);
+      startFeedWatchdog();
     };
 
     ws.onmessage = (event) => handleMessage(event.data as string);
@@ -408,6 +473,7 @@ export function useWebSocket(enabled = true) {
 
     ws.onclose = () => {
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+      if (staleTimer.current) clearInterval(staleTimer.current);
       if (unmounted.current) return;
       getState().setWsStatus('disconnected');
       authedRef.current = false;
@@ -415,6 +481,12 @@ export function useWebSocket(enabled = true) {
       // the connection is gone (fires after onerror when there is an error,
       // and directly when the server closes cleanly).
       startRestPoll();
+      // Stop retrying after the cap — REST polling stays as the live-data
+      // fallback. The 'online' listener (below) re-arms on network recovery.
+      if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+        return;
+      }
+      reconnectAttempts.current += 1;
       const delay = reconnectDelay.current;
       // Add ±10% jitter to prevent thundering herd when many clients reconnect
       const jitter = delay * (0.9 + Math.random() * 0.2);
@@ -423,7 +495,7 @@ export function useWebSocket(enabled = true) {
       // rather than the stale closure captured when this WebSocket was created.
       reconnectTimer.current = setTimeout(() => connectRef.current(), jitter);
     };
-  }, [handleMessage, getState, startHeartbeat, startRestPoll, stopRestPoll]);
+  }, [handleMessage, getState, startHeartbeat, startFeedWatchdog, startRestPoll, stopRestPoll]);
 
   // Keep connectRef current so onclose setTimeout always calls the latest version.
   useEffect(() => {
@@ -434,10 +506,25 @@ export function useWebSocket(enabled = true) {
     if (!enabled) return;
     unmounted.current = false;
     connect();
+
+    // Re-arm reconnect when the browser regains connectivity, so a long outage
+    // that exhausted MAX_RECONNECT_ATTEMPTS recovers without a page refresh.
+    const onOnline = () => {
+      if (unmounted.current) return;
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+      reconnectAttempts.current = 0;
+      reconnectDelay.current = INITIAL_RECONNECT_MS;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      connectRef.current();
+    };
+    window.addEventListener('online', onOnline);
+
     return () => {
       unmounted.current = true;
+      window.removeEventListener('online', onOnline);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+      if (staleTimer.current) clearInterval(staleTimer.current);
       stopRestPoll();
       wsRef.current?.close();
     };

@@ -24,6 +24,8 @@ from typing import Any
 
 import numpy as np
 
+from analytics.ratios import downside_deviation
+
 logger = logging.getLogger(__name__)
 
 
@@ -604,7 +606,7 @@ class PerformanceAnalytics:
 
     def _calculate_sortino_ratio(self, trades: list[TradeRecord]) -> float:
         """
-        Annualised Sortino ratio using downside deviation of negative returns.
+        Annualised Sortino ratio over the RMS shortfall below the target.
 
         Returns 0.0 when there are fewer than 2 trades.
         Returns 0.0 (not ±inf) when there are no negative returns — callers
@@ -620,20 +622,22 @@ class PerformanceAnalytics:
             posinf=0.0,
             neginf=0.0,
         )
-        negative_returns = returns[returns < 0]
-
         daily_rf = self.risk_free_rate / 252.0
         mean_return = float(np.mean(returns))
 
-        if len(negative_returns) == 0:
-            # No losing trades — downside deviation is zero; ratio is undefined.
-            # Return a large but finite sentinel rather than inf so downstream
-            # JSON serialisation and DB writes don't break.
-            return 0.0
-
-        downside_std = float(np.std(negative_returns, ddof=0))  # healer: ignore — isfinite guard below
+        # Downside deviation: RMS shortfall below the target over ALL trades.
+        # This was `np.std(negative_returns, ddof=0)` — the dispersion among the
+        # losses about the mean loss, over the losing trades only. F120 named
+        # that defect and fixed it in the backtesting engines; this call site
+        # kept its own copy. A run of identical losses has zero dispersion, so
+        # the old denominator vanished and the ratio was reported as +inf for
+        # exactly the series a downside measure exists to penalise.
+        downside_std = downside_deviation(returns, target=daily_rf)
 
         if downside_std < 1e-12:
+            # No shortfall below the target at all — the ratio is undefined.
+            # Return 0.0 rather than inf: callers serialise this to JSON and
+            # write it to a numeric column, and neither survives inf.
             return 0.0
 
         ratio = float(np.sqrt(252.0) * (mean_return - daily_rf) / downside_std)  # healer: ignore — isfinite guard below

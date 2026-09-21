@@ -9,7 +9,7 @@ events — Domain event store and typed event definitions.
 Public API
 ----------
     EventStore      Append-only event store with Redis pub/sub publishing.
-    DomainEvent     Base class for all typed domain events.
+    EventEnvelope   Generic envelope every typed event is wrapped in.
     typed_events    Module containing all concrete event types.
 """
 
@@ -25,9 +25,9 @@ except Exception as _exc:
     EventStore = None  # type: ignore[assignment,misc]
 
 try:
-    from events.typed_events import DomainEvent
+    from events.typed_events import EventEnvelope
 except Exception as _exc:
     logger.debug("events.typed_events unavailable: %s", _exc)
-    DomainEvent = None  # type: ignore[assignment,misc]
+    EventEnvelope = None  # type: ignore[assignment,misc]
 
-__all__ = ["DomainEvent", "EventStore"]
+__all__ = ["EventEnvelope", "EventStore"]

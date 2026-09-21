@@ -9,12 +9,9 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
-import {
-  BookOpen, Zap, BarChart2, Brain, Shield, Globe,
-  Code2, Settings, Users, ChevronRight, ExternalLink,
-  Search, Activity,
-} from 'lucide-react';
+import { Activity, Banknote, BarChart2, BarChart3, BookOpen, Bot, Brain, ChevronRight, CircleDot, Code2, ExternalLink, Globe, Search, Settings, Shield, Trophy, Users, Zap } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -204,82 +201,91 @@ const DocsPage: React.FC = () => {
     : SECTIONS;
 
   return (
-    <div className="page-content" style={{ padding: 0 }}>
-      {/* Header */}
-      <div
-        style={{
-          borderBottom: '1px solid #1e293b',
-          background: '#0a0f1a',
-          padding: '48px 24px 40px',
-        }}
-      >
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          {/* Breadcrumb */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}>
-            <Link to="/home" style={{ color: '#475569', fontSize: 13, textDecoration: 'none' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
-            >Home</Link>
-            <ChevronRight size={12} style={{ color: '#334155' }} />
-            <span style={{ color: '#94a3b8', fontSize: 13 }}>Documentation</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 10,
-              background: '#00d4ff18', border: '1px solid #00d4ff40',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <BookOpen size={20} style={{ color: '#00d4ff' }} />
+    <PageShell
+      // The brand band runs the width of the page and the sections keep their
+      // own 900px column, so a max-width here would letterbox the band — a
+      // migration that changes what the page displays. `full` is the width
+      // that does not. The band still sits inside the shell's horizontal
+      // padding (12-24px by breakpoint) rather than touching the viewport
+      // edge; that is the one visual difference, and it is the gutter every
+      // other page already has.
+      width="full"
+      hero={
+        <div
+          style={{
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg)',
+            padding: '48px 24px 40px',
+          }}
+        >
+          <div style={{ maxWidth: 900, margin: '0 auto' }}>
+            {/* Breadcrumb */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}>
+              <Link to="/home" style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
+              >Home</Link>
+              <ChevronRight size={12} style={{ color: 'var(--text-faint)' }} />
+              <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>Documentation</span>
             </div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', margin: 0 }}>
-              HOPE<span style={{ color: '#00d4ff' }}>FX</span> Documentation
-            </h1>
-          </div>
 
-          <p style={{ color: '#64748b', fontSize: 15, margin: '0 0 28px', lineHeight: 1.6 }}>
-            AI-powered gold and forex trading platform. Automated strategies, real-time signals,
-            and institutional-grade risk management.
-          </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                background: '#00d4ff18', border: '1px solid #00d4ff40',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <BookOpen size={20} style={{ color: 'var(--accent)' }} />
+              </div>
+              <h1 style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, letterSpacing: '-0.5px', margin: 0 }}>
+                HOPE<span style={{ color: 'var(--accent)' }}>FX</span> Documentation
+              </h1>
+            </div>
 
-          {/* System status badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28 }}>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: '#00ff8810', border: '1px solid #00ff8830',
-              color: '#00ff88', fontSize: 12, fontWeight: 600,
-              padding: '4px 12px', borderRadius: 20,
-            }}>
-              <Activity size={11} />
-              ML model: 66.4% OOS accuracy · 108 API endpoints · 2,560+ tests
-            </span>
-          </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-value)', margin: '0 0 28px', lineHeight: 1.6 }}>
+              AI-powered gold and forex trading platform. Automated strategies, real-time signals,
+              and institutional-grade risk management.
+            </p>
 
-          {/* Search */}
-          <div style={{ position: 'relative', maxWidth: 480 }}>
-            <Search
-              size={15}
-              style={{
-                position: 'absolute', left: 14, top: '50%',
-                transform: 'translateY(-50%)', color: '#475569',
-              }}
-            />
-            <input
-              type="text"
-              placeholder="Search documentation…"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                background: '#0f172a', border: '1px solid #1e293b',
-                borderRadius: 10, color: '#e2e8f0', fontSize: 14,
-                padding: '10px 14px 10px 40px', outline: 'none',
-              }}
-            />
+            {/* System status badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: '#00ff8810', border: '1px solid #00ff8830',
+                color: '#00ff88', fontSize: 12, fontWeight: 600,
+                padding: '4px 12px', borderRadius: 20,
+              }}>
+                <Activity size={11} />
+                ML model: 66.4% OOS accuracy · 108 API endpoints · 2,560+ tests
+              </span>
+            </div>
+
+            {/* Search */}
+            <div style={{ position: 'relative', maxWidth: 480 }}>
+              <Search
+                size={15}
+                style={{
+                  position: 'absolute', left: 14, top: '50%',
+                  transform: 'translateY(-50%)', color: 'var(--text-faint)',
+                }}
+              />
+              <input aria-label="Search documentation"
+                type="text"
+                placeholder="Search documentation…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: 10, color: 'var(--text)', fontSize: 14,
+                  padding: '10px 14px 10px 40px', outline: 'none',
+                }}
+              />
+            </div>
           </div>
         </div>
-      </div>
-
+      }
+    >
       {/* Doc sections grid */}
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
         <div style={{
@@ -292,8 +298,8 @@ const DocsPage: React.FC = () => {
             <div
               key={section.id}
               style={{
-                background: '#0f172a',
-                border: '1px solid #1e293b',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 14,
                 padding: '20px 22px',
               }}
@@ -309,7 +315,7 @@ const DocsPage: React.FC = () => {
                 }}>
                   {section.icon}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)' }}>
                   {section.title}
                 </span>
               </div>
@@ -324,17 +330,17 @@ const DocsPage: React.FC = () => {
                       rel={entry.external ? 'noopener noreferrer' : undefined}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6,
-                        color: '#94a3b8', fontSize: 13, textDecoration: 'none',
+                        color: 'var(--text-dim)', fontSize: 'var(--fs-body)', textDecoration: 'none',
                         padding: '5px 0',
                         transition: 'color 0.15s',
                       }}
                       onMouseOver={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#e2e8f0'; }}
                       onMouseOut={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
                     >
-                      <ChevronRight size={12} style={{ color: '#334155', flexShrink: 0 }} />
+                      <ChevronRight size={12} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
                       {entry.label}
                       {entry.external && (
-                        <ExternalLink size={10} style={{ color: '#334155', marginLeft: 'auto' }} />
+                        <ExternalLink size={10} style={{ color: 'var(--text-faint)', marginLeft: 'auto' }} />
                       )}
                     </a>
                   </li>
@@ -347,7 +353,7 @@ const DocsPage: React.FC = () => {
         {/* FAQ section */}
         <div style={{ marginBottom: 56 }}>
           <h2 style={{
-            fontSize: 20, fontWeight: 700, color: '#f1f5f9',
+            fontSize: 20, fontWeight: 700, color: 'var(--text-strong)',
             marginBottom: 20, letterSpacing: '-0.3px',
           }}>
             Frequently Asked Questions
@@ -357,13 +363,13 @@ const DocsPage: React.FC = () => {
               <FAQItem key={item.q} q={item.q} a={item.a} />
             ))}
           </div>
-          <p style={{ marginTop: 16, fontSize: 13, color: '#475569' }}>
+          <p style={{ marginTop: 16, fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
             More questions?{' '}
             <a
               href={`${GITHUB_BASE}/FAQ.md`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#00d4ff', textDecoration: 'none' }}
+              style={{ color: 'var(--accent)', textDecoration: 'none' }}
             >
               Read the full FAQ on GitHub
             </a>
@@ -372,17 +378,17 @@ const DocsPage: React.FC = () => {
 
         {/* Quick navigation */}
         <CrossLinkBar title="Quick Links" style={{ marginBottom: 32 }} links={[
-          { label: 'Dashboard',    href: '/dashboard',  icon: '📊', color: '#3b82f6' },
-          { label: 'Trade',        href: '/trade',      icon: '⚡', color: '#4ade80' },
-          { label: 'Pricing',      href: '/pricing',    icon: '💰', color: '#f59e0b' },
-          { label: 'Status',       href: '/status',     icon: '🟢', color: '#22c55e' },
-          { label: 'AI Strategy',  href: '/ai-strategy',icon: '🤖', color: '#a78bfa' },
-          { label: 'Leaderboard',  href: '/leaderboard',icon: '🏆', color: '#fbbf24' },
+          { label: 'Dashboard',    href: '/dashboard',  icon: BarChart3, color: '#3b82f6' },
+          { label: 'Trade',        href: '/trade',      icon: Zap, color: '#4ade80' },
+          { label: 'Pricing',      href: '/pricing',    icon: Banknote, color: '#f59e0b' },
+          { label: 'Status',       href: '/status',     icon: CircleDot, color: '#22c55e' },
+          { label: 'AI Strategy',  href: '/ai-strategy',icon: Bot, color: '#a78bfa' },
+          { label: 'Leaderboard',  href: '/leaderboard',icon: Trophy, color: '#fbbf24' },
         ]} />
 
         {/* Footer links */}
         <div style={{
-          borderTop: '1px solid #1e293b',
+          borderTop: '1px solid var(--border)',
           paddingTop: 28,
           display: 'flex',
           flexWrap: 'wrap',
@@ -402,7 +408,7 @@ const DocsPage: React.FC = () => {
               <Link
                 key={l.label}
                 to={l.to}
-                style={{ color: '#475569', fontSize: 13, textDecoration: 'none' }}
+                style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
               >
@@ -416,7 +422,7 @@ const DocsPage: React.FC = () => {
             rel="noopener noreferrer"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              color: '#475569', fontSize: 13, textDecoration: 'none',
+              color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textDecoration: 'none',
             }}
             onMouseOver={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
             onMouseOut={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
@@ -426,7 +432,7 @@ const DocsPage: React.FC = () => {
           </a>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

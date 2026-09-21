@@ -10,7 +10,7 @@ Public API
 ----------
     OrderBookFeed       L2 order book feed with bid/ask depth tracking.
                         Supports IBKR, MT5, and simulated feeds.
-    IBKRFeed            Interactive Brokers real-time market data feed.
+    IBKRMarketDataFeed            Interactive Brokers real-time market data feed.
     MT5LiveFeed         MetaTrader 5 live price and tick feed.
     MarketDataValidator Validates incoming tick and OHLCV data quality.
 
@@ -34,10 +34,10 @@ except Exception as _exc:
     get_order_book_feed = None  # type: ignore[assignment]
 
 try:
-    from market_data.ibkr_feed import IBKRFeed
+    from market_data.ibkr_feed import IBKRMarketDataFeed
 except Exception as _exc:
     logger.debug("market_data.ibkr_feed unavailable: %s", _exc)
-    IBKRFeed = None  # type: ignore[assignment,misc]
+    IBKRMarketDataFeed = None  # type: ignore[assignment,misc]
 
 try:
     from market_data.mt5_live_feed import MT5LiveFeed
@@ -52,7 +52,7 @@ except Exception as _exc:
     MarketDataValidator = None  # type: ignore[assignment,misc]
 
 __all__ = [
-    "IBKRFeed",
+    "IBKRMarketDataFeed",
     "MT5LiveFeed",
     "MarketDataValidator",
     "OrderBookFeed",

@@ -51,7 +51,7 @@ interface ChartSlice {
   setSymbol:    (symbol: string) => void;
   setTimeframe: (tf: string) => void;
   setBars:      (bars: OHLCVBar[]) => void;
-  setLiveTick:  (tick: PriceTick) => void;
+  setLiveTick:  (tick: PriceTick | null) => void;
   addVolumeDelta:(bar: VolumeDeltaBar) => void;
 }
 

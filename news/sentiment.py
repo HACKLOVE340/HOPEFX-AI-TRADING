@@ -20,6 +20,8 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from news.keyword_match import contains_keyword
+
 logger = logging.getLogger(__name__)
 
 # Try importing sentiment libraries
@@ -236,7 +238,7 @@ class FinancialSentimentAnalyzer:
         self._finbert = None
         if use_finbert:
             try:
-                from data_layer.sentiment.engine import FinBERTScorer
+                from data_layer.orchestrator import FinBERTScorer
 
                 self._finbert = FinBERTScorer()
             except Exception as exc:  # pragma: no cover - import guard
@@ -263,8 +265,8 @@ class FinancialSentimentAnalyzer:
                 magnitude = min(abs(polarity), 1.0)
                 return SentimentScore(
                     polarity=polarity,
-                    subjectivity=magnitude,            # strong sentiment ≈ more subjective
-                    confidence=max(magnitude, 0.5),    # softmax prob of winning class
+                    subjectivity=magnitude,  # strong sentiment ≈ more subjective
+                    confidence=max(magnitude, 0.5),  # softmax prob of winning class
                     label=self._get_label(polarity),
                     compound_score=polarity,
                 )
@@ -305,8 +307,8 @@ class FinancialSentimentAnalyzer:
         text_lower = text.lower()
 
         # Count bullish and bearish keywords
-        bullish_count = sum(1 for word in self.BULLISH_KEYWORDS if word in text_lower)
-        bearish_count = sum(1 for word in self.BEARISH_KEYWORDS if word in text_lower)
+        bullish_count = sum(1 for word in self.BULLISH_KEYWORDS if contains_keyword(text_lower, word))
+        bearish_count = sum(1 for word in self.BEARISH_KEYWORDS if contains_keyword(text_lower, word))
 
         # Calculate polarity
         total = bullish_count + bearish_count

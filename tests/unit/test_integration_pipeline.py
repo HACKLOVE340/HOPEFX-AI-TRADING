@@ -318,7 +318,7 @@ def test_fcm_log_only_when_no_key(capsys):
         mgr = PushNotificationManager()
         assert mgr.fcm_enabled is False
         result = mgr.send_notification("user1", "Test", "Body")
-        assert result is True
+        assert result is False  # log-only: nothing delivered (F219)
 
     captured = capsys.readouterr()
     assert "FCM-LOG" in captured.out

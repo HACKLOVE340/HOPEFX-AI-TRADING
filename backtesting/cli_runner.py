@@ -57,9 +57,7 @@ def load_ohlcv_csv(path: str | Path) -> pd.DataFrame:
 
     date_col = next((c for c in _DATE_COLS if c in df.columns), None)
     if date_col is None:
-        raise ValueError(
-            f"{p.name}: no date column found (looked for {_DATE_COLS}); columns={list(df.columns)}"
-        )
+        raise ValueError(f"{p.name}: no date column found (looked for {_DATE_COLS}); columns={list(df.columns)}")
 
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     df = df.dropna(subset=[date_col]).set_index(date_col).sort_index()
@@ -258,7 +256,13 @@ def run_backtest(
 
     logger.info(
         "Backtest: %s strategy=%s %s bars=%d range=%s→%s capital=$%.0f",
-        symbol, strategy, data_file, len(df), start.date(), end.date(), initial_capital,
+        symbol,
+        strategy,
+        data_file,
+        len(df),
+        start.date(),
+        end.date(),
+        initial_capital,
     )
     metrics = engine.run(start_date=start, end_date=end)
     if strategy == "ml":

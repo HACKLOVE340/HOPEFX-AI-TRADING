@@ -1,0 +1,22 @@
+  WARNING ml: PyTorch is not installed. The following ML components will be disabled: LSTM signal layer, RL/PPO agent (RLAgent), EWC online learner. Install with: pip install torch>=2.1.1  These components will fall back to stubs — predictions may be degraded.
+packaged dir: /home/user/HOPEFX-AI-TRADING/ml/saved_models
+unset ML_MODEL_DIR -> model_dir(): /home/user/HOPEFX-AI-TRADING/ml/saved_models
+
+=== Production shape: Helm sets ML_MODEL_DIR=/app/data/models ===
+ML_MODEL_DIR = /tmp/hopefx-models-bj_itb7h
+model_dir() (where trainers write): /tmp/hopefx-models-bj_itb7h
+
+-- empty configured dir: readers fall back AND say so --
+  WARNING ml.model_paths: ML_MODEL_DIR is set to /tmp/hopefx-models-bj_itb7h but 'registry.json' is not there; falling back to the packaged /home/user/HOPEFX-AI-TRADING/ml/saved_models. Retrained artifacts in the configured directory are not being served.
+  find_model_file('registry.json') -> /home/user/HOPEFX-AI-TRADING/ml/saved_models/registry.json
+  came from packaged dir: True
+
+-- a retrain lands a fresh artifact there --
+  find_model_file('registry.json') -> /tmp/hopefx-models-bj_itb7h/registry.json
+  now served from the configured dir: True
+  (before this change, inference read the packaged copy and this file was ignored)
+
+=== The writers all agree now ===
+  ml.hourly_trainer._MODEL_DIR = /home/user/HOPEFX-AI-TRADING/ml/saved_models
+  ml.run_training.MODEL_DIR = /home/user/HOPEFX-AI-TRADING/ml/saved_models
+  scripts.retrain_model._DEFAULT_MODEL_DIR = /home/user/HOPEFX-AI-TRADING/ml/saved_models

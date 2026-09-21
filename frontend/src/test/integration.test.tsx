@@ -9,7 +9,6 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useStore } from '../store';
-import type { PriceTick, Position, Signal, AccountMetrics } from '../store';
 import * as useApiModule from '../hooks/useApi';
 
 /** Build a minimal valid JWT with exp 1 hour in the future. */
@@ -299,7 +298,7 @@ describe('store → Dashboard integration', () => {
       useStore.getState().setAccount({
         balance: 250_000, equity: 255_000, margin_used: 5_000, margin_free: 245_000,
         margin_level: 5100, daily_pnl: 1000, daily_pnl_pct: 0.4, total_pnl: 5_000,
-        win_rate: 0.70, sharpe_ratio: 2.1, max_drawdown: 0.02, open_trades: 3,
+        win_rate: 70, sharpe_ratio: 2.1, max_drawdown: 2, open_trades: 3,
       });
     });
 
@@ -347,7 +346,7 @@ describe('store → Dashboard integration', () => {
       useStore.getState().setAccount({
         balance: 100_000, equity: 101_000, margin_used: 0, margin_free: 100_000,
         margin_level: 0, daily_pnl: 0, daily_pnl_pct: 0, total_pnl: 1_000,
-        win_rate: 0.72, sharpe_ratio: 1.5, max_drawdown: 0.03, open_trades: 0,
+        win_rate: 72, sharpe_ratio: 1.5, max_drawdown: 3, open_trades: 0,
       });
     });
 
@@ -390,8 +389,27 @@ describe('store → Dashboard integration', () => {
     const Dashboard = await getDashboard();
     wrap(<Dashboard />);
 
-    act(() => { useStore.getState().setWsStatus('connected'); });
+    // "Live" now means the feed is delivering, not merely that the socket is
+    // open — an open socket that has sent nothing is the S9-01 failure, and
+    // this test used to require the badge to call it Live (F1-02).
+    act(() => {
+      useStore.getState().setWsStatus('connected');
+      useStore.getState().markDataReceived();
+    });
     expect(screen.getByText('Live')).toBeInTheDocument();
+  });
+
+  it('WS badge says Stalled when connected but nothing is arriving', async () => {
+    const Dashboard = await getDashboard();
+    wrap(<Dashboard />);
+
+    act(() => {
+      useStore.getState().setWsStatus('connected');
+      useStore.getState().markDataReceived();
+      useStore.getState().setFeedStale(true);
+    });
+    expect(screen.getByText('Stalled')).toBeInTheDocument();
+    expect(screen.queryByText('Live')).not.toBeInTheDocument();
   });
 
   it('WS disconnected shows Disconnected', async () => {

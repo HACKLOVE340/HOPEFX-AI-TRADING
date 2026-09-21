@@ -174,6 +174,17 @@ class TestAPIConfig:
 class TestDatabaseConfig:
     """Tests for DatabaseConfig dataclass."""
 
+    @pytest.fixture(autouse=True)
+    def _no_database_url(self, monkeypatch):
+        """These cover the field-composition branch specifically.
+
+        `get_connection_string()` returns `DATABASE_URL` verbatim when it is
+        set — that is the deployment's source of truth. CI sets it, so without
+        this the assertions below would read the CI Postgres URL instead of the
+        dataclass fields they are testing.
+        """
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+
     def test_database_config_sqlite(self):
         """Test SQLite database config."""
         config = DatabaseConfig(

@@ -18,8 +18,12 @@ pytestmark = pytest.mark.unit
 _REPO = Path(__file__).resolve().parent.parent.parent
 
 _FULL_TRACE = {
-    "decision_id": "d1", "model_version": "m", "prompt_hash": "p",
-    "features_hash": "f", "data_snapshot": "s", "trade_id": "t",
+    "decision_id": "d1",
+    "model_version": "m",
+    "prompt_hash": "p",
+    "features_hash": "f",
+    "data_snapshot": "s",
+    "trade_id": "t",
 }
 
 
@@ -39,7 +43,10 @@ def test_decision_incomplete_trace_not_reconstructable():
 
 
 def test_decision_bad_signal_would_not_pass():
-    rec = {**_FULL_TRACE, "signal": {"confidence": float("nan"), "probability": 0.6, "tick_mid": 2000.0, "tick_spread": 0.5}}
+    rec = {
+        **_FULL_TRACE,
+        "signal": {"confidence": float("nan"), "probability": 0.6, "tick_mid": 2000.0, "tick_spread": 0.5},
+    }
     out = replay.replay_decision(rec)
     assert out["would_pass_today"] is False
     assert out["violations"]
@@ -54,24 +61,33 @@ def test_decision_risk_appetite_breach():
 
 # ── failure replay (regression checks) ──────────────────────────────────────────────
 def test_failure_reconciliation_reproduces():
-    rec = {"kind": "reconciliation", "inputs": {"internal_value": 10_000, "external_value": 8_000, "value_tol": 1.0},
-           "expected_violation": True}
+    rec = {
+        "kind": "reconciliation",
+        "inputs": {"internal_value": 10_000, "external_value": 8_000, "value_tol": 1.0},
+        "expected_violation": True,
+    }
     out = replay.replay_failure(rec)
     assert out["reproduced"] is True
     assert out["observed_violation"] is True
 
 
 def test_failure_fixed_case_does_not_reproduce():
-    rec = {"kind": "reconciliation", "inputs": {"internal_value": 10_000, "external_value": 10_000, "value_tol": 1.0},
-           "expected_violation": False}
+    rec = {
+        "kind": "reconciliation",
+        "inputs": {"internal_value": 10_000, "external_value": 10_000, "value_tol": 1.0},
+        "expected_violation": False,
+    }
     out = replay.replay_failure(rec)
-    assert out["reproduced"] is True          # observed (no violation) matches expected (no violation)
+    assert out["reproduced"] is True  # observed (no violation) matches expected (no violation)
     assert out["observed_violation"] is False
 
 
 def test_failure_pre_trade_kind():
-    rec = {"kind": "pre_trade", "inputs": {"signal": {"confidence": float("nan"), "probability": 0.6,
-           "tick_mid": 2000.0, "tick_spread": 0.5}}, "expected_violation": True}
+    rec = {
+        "kind": "pre_trade",
+        "inputs": {"signal": {"confidence": float("nan"), "probability": 0.6, "tick_mid": 2000.0, "tick_spread": 0.5}},
+        "expected_violation": True,
+    }
     assert replay.replay_failure(rec)["reproduced"] is True
 
 
@@ -84,7 +100,11 @@ def test_failure_unknown_kind_is_reported():
 # ── batch + loading ─────────────────────────────────────────────────────────────────
 def test_replay_batch_summary():
     records = [
-        {"kind": "reconciliation", "inputs": {"internal_value": 1, "external_value": 9, "value_tol": 0.01}, "expected_violation": True},
+        {
+            "kind": "reconciliation",
+            "inputs": {"internal_value": 1, "external_value": 9, "value_tol": 0.01},
+            "expected_violation": True,
+        },
         {"kind": "var", "inputs": {"portfolio_var": 100, "approved_var": 50}, "expected_violation": True},
     ]
     report = replay.replay_batch(records, mode="failure")

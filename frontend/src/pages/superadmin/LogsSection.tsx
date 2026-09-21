@@ -7,13 +7,20 @@ import {
   ErrorState,
 } from './ui';
 import type { LogEntry } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
+import { ClipboardList, Download, RefreshCw, SlidersHorizontal } from 'lucide-react';
+
+/** Fallback for an unrecognised key. Named so it is not itself an
+    index access, which `noUncheckedIndexedAccess` types as possibly
+    undefined (audit #38). Value is unchanged. */
+const LEVEL_COLORS_DEFAULT = { color: 'var(--link)', bg: '#0c1a2e' };
 
 const LEVEL_COLORS: Record<string, { color: string; bg: string }> = {
-  DEBUG:    { color: '#94a3b8', bg: '#1e293b' },
-  INFO:     { color: '#60a5fa', bg: '#0c1a2e' },
-  WARNING:  { color: '#fbbf24', bg: '#1c1200' },
-  ERROR:    { color: '#f87171', bg: '#1a0000' },
+  DEBUG:    { color: 'var(--text-dim)', bg: '#1e293b' },
+  INFO: LEVEL_COLORS_DEFAULT,
+  WARNING:  { color: 'var(--warn)', bg: '#1c1200' },
+  ERROR:    { color: 'var(--loss)', bg: '#1a0000' },
   CRITICAL: { color: '#fca5a5', bg: '#2d0000' },
 };
 
@@ -28,6 +35,7 @@ const LogsSection: React.FC = () => {
   const [logLevels, setLogLevels] = useState<Record<string, string>>({});
   const [savingLevel, setSavingLevel] = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -44,7 +52,7 @@ const LogsSection: React.FC = () => {
         superadminApi.logLevels(),
       ]);
       if (!mountedRef.current) return;
-      setLogs(logRes.data.logs ?? logRes.data);
+      setLogs(asArray(logRes.data, 'logs'));
       setLogLevels(lvlRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
@@ -68,8 +76,10 @@ const LogsSection: React.FC = () => {
     try {
       await superadminApi.setLogLevel(logger, level);
       setLogLevels(prev => ({ ...prev, [logger]: level }));
+      setMsgOk(true);
       setMsg(`Log level for ${logger} set to ${level}`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Failed to set log level'));
     } finally { setSavingLevel(null); }
   };
@@ -84,7 +94,7 @@ const LogsSection: React.FC = () => {
       const a = document.createElement('a');
       a.href = url; a.download = `hopefx-logs-${Date.now()}.txt`;
       a.click(); URL.revokeObjectURL(url);
-    } catch { setMsg('Export failed'); }
+    } catch { setMsgOk(false); setMsg('Export failed'); }
   };
 
   const filteredLogs = logs.filter(l => {
@@ -99,22 +109,22 @@ const LogsSection: React.FC = () => {
 
       {/* Log level controls */}
       {Object.keys(logLevels).length > 0 && (
-        <SectionCard title="Log Level Controls" icon="🎚️" accent="#8b5cf6"
+        <SectionCard title="Log Level Controls" icon={<SlidersHorizontal size={18} aria-hidden />} accent="#8b5cf6"
           subtitle="Adjust verbosity per logger without restarting">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             {Object.entries(logLevels).map(([logger, level]) => (
               <div key={logger} style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                background: '#1e293b', borderRadius: 8, padding: '8px 12px',
+                background: 'var(--raised)', borderRadius: 8, padding: '8px 12px',
               }}>
-                <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>{logger}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', minWidth: 120 }}>{logger}</span>
                 <select
                   value={level}
                   onChange={e => setLevel(logger, e.target.value)}
                   disabled={savingLevel === logger}
                   style={{
-                    background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
-                    color: LEVEL_COLORS[level]?.color ?? '#94a3b8',
+                    background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 5,
+                    color: LEVEL_COLORS[level]?.color ?? 'var(--text-dim)',
                     fontSize: 12, padding: '4px 8px', cursor: 'pointer',
                   }}
                 >
@@ -123,37 +133,35 @@ const LogsSection: React.FC = () => {
                   ))}
                 </select>
                 {savingLevel === logger && (
-                  <div style={{ width: 12, height: 12, border: '2px solid #334155', borderTopColor: '#60a5fa', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
+                  <div style={{ width: 12, height: 12, border: '2px solid var(--border-strong)', borderTopColor: 'var(--link)', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
                 )}
               </div>
             ))}
           </div>
-          {msg && (
-            <div style={{ marginTop: 10, fontSize: 12, color: msg.includes('failed') ? '#f87171' : '#4ade80' }}>{msg}</div>
-          )}
+          <ActionBanner message={msg} ok={msgOk} />
         </SectionCard>
       )}
 
       {/* Log viewer */}
       <SectionCard
         title="System Logs"
-        icon="📋"
+        icon={<ClipboardList size={18} aria-hidden />}
         accent="#3b82f6"
         subtitle={`${filteredLogs.length} entries · Auto-refresh 10s`}
         noPad
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#64748b', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
               <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
               Auto-scroll
             </label>
-            <ActionBtn label="Export" onClick={exportLogs} icon="⬇️" size="sm" />
-            <ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />
+            <ActionBtn label="Export" onClick={exportLogs} icon={<Download size={18} aria-hidden />} size="sm" />
+            <ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />
           </div>
         }
       >
         {/* Filters */}
-        <div style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid #1e293b', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
           <Select
             value={levelFilter}
             onChange={e => setLevelFilter(e.target.value)}
@@ -190,19 +198,19 @@ const LogsSection: React.FC = () => {
             fontSize: 12, background: '#020817',
           }}>
             {loading && filteredLogs.length === 0 ? (
-              <div style={{ padding: 20, color: '#475569' }}>Loading logs…</div>
+              <div style={{ padding: 20, color: 'var(--text-faint)' }}>Loading logs…</div>
             ) : filteredLogs.length === 0 ? (
-              <div style={{ padding: 20, color: '#475569' }}>No log entries match the current filters.</div>
+              <div style={{ padding: 20, color: 'var(--text-faint)' }}>No log entries match the current filters.</div>
             ) : (
               filteredLogs.map((l, i) => {
-                const lc = LEVEL_COLORS[l.level] ?? LEVEL_COLORS.INFO;
+                const lc = LEVEL_COLORS[l.level] ?? LEVEL_COLORS_DEFAULT;
                 return (
                   <div key={i} style={{
                     display: 'flex', gap: 0, padding: '3px 0',
-                    background: i % 2 === 0 ? 'transparent' : '#0a0f1a',
+                    background: i % 2 === 0 ? 'transparent' : 'var(--bg)',
                     borderLeft: `3px solid ${lc.color}33`,
                   }}>
-                    <span style={{ color: '#334155', padding: '0 10px', flexShrink: 0, minWidth: 160 }}>
+                    <span style={{ color: 'var(--text-faint)', padding: '0 10px', flexShrink: 0, minWidth: 160 }}>
                       {new Date(l.ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                     <span style={{
@@ -212,14 +220,14 @@ const LogsSection: React.FC = () => {
                     }}>
                       {l.level}
                     </span>
-                    <span style={{ color: '#475569', padding: '0 10px', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: 'var(--text-faint)', padding: '0 10px', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {l.logger}
                     </span>
-                    <span style={{ color: '#94a3b8', paddingRight: 12, flex: 1 }}>
+                    <span style={{ color: 'var(--text-dim)', paddingRight: 12, flex: 1 }}>
                       {l.message}
                     </span>
                     {l.trace_id && (
-                      <span style={{ color: '#334155', paddingRight: 12, flexShrink: 0, fontSize: 10 }}>
+                      <span style={{ color: 'var(--text-faint)', paddingRight: 12, flexShrink: 0, fontSize: 10 }}>
                         {l.trace_id.slice(0, 8)}
                       </span>
                     )}

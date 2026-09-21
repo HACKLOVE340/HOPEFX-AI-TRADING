@@ -181,25 +181,60 @@ def _before_send(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any] 
     """
     Sentry before_send hook.
 
-    - Scrubs sensitive fields from request data, extra, and contexts.
+    - Scrubs sensitive fields from request data, headers, query string, extra,
+      logentry, breadcrumbs and contexts.
     - Adds trading-specific context tags.
     - Drops health-check noise (GET /health 200 events).
+
+    This used to cover only request.data, request.headers and extra — the
+    docstring already claimed contexts, which was untrue. The three regions it
+    missed are the ones carrying the most free text: `logentry` holds the log
+    message and its interpolation params, so every
+    ``logger.error("auth failed for %s", token)`` landed there verbatim;
+    `breadcrumbs` holds the trail leading up to the error; and query strings
+    carry tokens for the WebSocket endpoints that accept them in the URL.
+
+    The scrubbing machinery was never the problem — _scrub_dict already walks
+    nested dicts and lists and _scrub_string already matches Bearer tokens,
+    JWTs, 32-hex keys, IPv4 and email. It simply was not pointed at most of the
+    event.
     """
     # Drop noisy health-check transactions
     transaction = event.get("transaction", "")
     if transaction in ("/health", "/metrics", "/favicon.ico"):
         return None
 
-    # Scrub request data
-    request = event.get("request", {})
-    if "data" in request and isinstance(request["data"], dict):
-        request["data"] = _scrub_dict(request["data"])
-    if "headers" in request and isinstance(request["headers"], dict):
-        request["headers"] = _scrub_dict(request["headers"])
+    # Scrub request data, headers and query string
+    request = event.get("request")
+    if isinstance(request, dict):
+        if isinstance(request.get("data"), dict):
+            request["data"] = _scrub_dict(request["data"])
+        if isinstance(request.get("headers"), dict):
+            request["headers"] = _scrub_dict(request["headers"])
+        # A token passed in the URL lands here. Sentry sends this as either a
+        # raw string or a list of [key, value] pairs depending on the integration.
+        if "query_string" in request:
+            request["query_string"] = _scrub_value(request["query_string"])
 
     # Scrub extra context
-    if "extra" in event and isinstance(event["extra"], dict):
+    if isinstance(event.get("extra"), dict):
         event["extra"] = _scrub_dict(event["extra"])
+
+    # Scrub the log record itself — message, formatted text and params
+    if isinstance(event.get("logentry"), dict):
+        event["logentry"] = _scrub_dict(event["logentry"])
+
+    # Scrub breadcrumbs. Modern SDKs send {"values": [...]}; older ones send a
+    # bare list, and both shapes appear in this codebase's event stream.
+    crumbs = event.get("breadcrumbs")
+    if isinstance(crumbs, dict) and isinstance(crumbs.get("values"), list):
+        crumbs["values"] = [_scrub_value(c) for c in crumbs["values"]]
+    elif isinstance(crumbs, list):
+        event["breadcrumbs"] = [_scrub_value(c) for c in crumbs]
+
+    # Scrub contexts — what the docstring always claimed
+    if isinstance(event.get("contexts"), dict):
+        event["contexts"] = _scrub_dict(event["contexts"])
 
     # Add trading context
     try:

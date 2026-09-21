@@ -42,6 +42,12 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── Forbidden imports that disqualify a strategy ─────────────────────────────
+#: Modules a marketplace strategy has no business importing.
+#:
+#: `"exec"` and `"eval"` used to be in here. They are builtins, not modules —
+#: `import exec` is a syntax error — so listing them caught nothing while making
+#: the gate look as though it covered them. They are handled properly below, as
+#: calls.
 _FORBIDDEN_MODULES = frozenset(
     {
         "os",
@@ -52,8 +58,51 @@ _FORBIDDEN_MODULES = frozenset(
         "multiprocessing",
         "threading",
         "importlib",
-        "exec",
+        "builtins",
+        "pickle",
+        "marshal",
+        "pty",
+    }
+)
+
+#: Builtins that turn "some source code" into "arbitrary code or file access".
+#: The old check walked import statements only, so every one of these was
+#: auto-approved: `__import__('os').system(...)`, `eval(x)`, `exec(payload)`.
+_FORBIDDEN_CALLS = frozenset(
+    {
+        "__import__",
         "eval",
+        "exec",
+        "compile",
+        "open",
+        "input",
+        "breakpoint",
+        "globals",
+        "vars",
+    }
+)
+
+#: Attribute and string names that exist to reach out of an object graph.
+#: `().__class__.__bases__[0].__subclasses__()` is the classic route from a
+#: literal to every loaded class, and `f.__globals__` reaches the module's
+#: namespace. Defining `__init__` or `__repr__` is not on this list: writing a
+#: class is not an escape.
+_ESCAPE_ATTRIBUTES = frozenset(
+    {
+        "__subclasses__",
+        "__globals__",
+        "__builtins__",
+        "__code__",
+        "__mro__",
+        "__bases__",
+        "__reduce__",
+        "__reduce_ex__",
+        "__getattribute__",
+        "__import__",
+        "__dict__",
+        "__closure__",
+        "__func__",
+        "__self__",
     }
 )
 
@@ -170,6 +219,7 @@ class StrategyAuditor:
 
         report.checks.append(self._check_syntax(submission.strategy_code))
         report.checks.append(self._check_forbidden_imports(submission.strategy_code))
+        report.checks.append(self._check_containment(submission.strategy_code))
         report.checks.append(self._check_sharpe(submission.backtest_results))
         report.checks.append(self._check_drawdown(submission.backtest_results))
         report.checks.append(self._check_trade_count(submission.backtest_results))
@@ -188,28 +238,114 @@ class StrategyAuditor:
             return AuditCheck("syntax_check", False, f"Syntax error: {e}", "error")
 
     def _check_forbidden_imports(self, code: str) -> AuditCheck:
+        """Refuse the obvious routes from submitted source to arbitrary execution.
+
+        **A filter, not containment.** A static check on adversarial source can
+        always be worked around; what it buys is that the obvious attempts do
+        not sail through an *automatic* approval, which is what this gate grants
+        with no human in the path. Real containment is `ai/sandbox/`, which runs
+        code under rlimits with no network and a scrubbed environment. The two
+        are complementary and neither replaces the other.
+
+        It used to walk import statements only, so `__import__('os').system()`,
+        `eval(x)` and `exec(payload)` were all approved for sale.
+        """
         try:
             tree = ast.parse(code)
         except SyntaxError:
             return AuditCheck("security_check", False, "Cannot parse code", "error")
 
-        found = []
+        found: set[str] = set()
         for node in ast.walk(tree):
+            # 1. Imports — what this check used to look at, and only this.
             if isinstance(node, ast.Import | ast.ImportFrom):
                 names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""]
                 for name in names:
                     root = name.split(".")[0]
                     if root in _FORBIDDEN_MODULES:
-                        found.append(root)
+                        found.add(f"import {root}")
+
+            # 2. Calls to builtins that execute code or touch the filesystem.
+            #    `__import__('os')` is not an import node, which is how it
+            #    reached APPROVED.
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                if node.func.id in _FORBIDDEN_CALLS:
+                    found.add(f"{node.func.id}()")
+
+            # 3. Attribute routes out of the object graph.
+            elif isinstance(node, ast.Attribute) and node.attr in _ESCAPE_ATTRIBUTES:
+                found.add(f".{node.attr}")
+
+            # 4. The same names reached as strings, e.g.
+            #    `getattr(builtins, "__import__")`.
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if node.value in _ESCAPE_ATTRIBUTES or node.value in _FORBIDDEN_CALLS:
+                    found.add(f"{node.value!r}")
 
         if found:
             return AuditCheck(
                 "security_check",
                 False,
-                f"Forbidden imports detected: {', '.join(found)}",
+                f"Forbidden constructs detected: {', '.join(sorted(found))}",
                 "error",
             )
-        return AuditCheck("security_check", True, "No forbidden imports found")
+        return AuditCheck("security_check", True, "No forbidden imports or code-execution constructs found")
+
+    #: A submission is executed under containment for no longer than this. A
+    #: strategy that cannot import and define itself in a few seconds is not a
+    #: strategy this audit can vouch for.
+    CONTAINMENT_TIMEOUT_S = 15.0
+
+    def _check_containment(self, code: str) -> AuditCheck:
+        """Run the submission under real containment before approving it.
+
+        `ai/sandbox/` had zero production callers. Until this, the only thing
+        in front of strategy source submitted by a stranger was the static
+        screen above — which says in its own docstring that it is "a filter,
+        not containment", and names this sandbox as the containment it needs.
+        The code identified the gap and nothing routed to it.
+
+        The screen is NOT replaced. `sandbox.run()` calls it as a pre-filter so
+        an obvious payload is refused before a process is spawned, and the
+        containment guarantees are tested with the screen off so neither layer
+        is load-bearing alone.
+
+        **An unavailable sandbox FAILS the submission.** No `resource` module,
+        a platform that cannot fork, any error at all — "we could not contain
+        this" must never resolve to "approved for sale". This gate grants
+        automatic approval with no human in the path, so the safe direction is
+        the only defensible one.
+        """
+        try:
+            from ai.sandbox import runner
+        except Exception as exc:
+            return AuditCheck(
+                "containment_check",
+                False,
+                f"Sandbox unavailable ({exc}); refusing to approve uncontained code",
+                "error",
+            )
+
+        try:
+            result = runner.run(code, timeout_s=self.CONTAINMENT_TIMEOUT_S, net=False)
+        except Exception as exc:
+            logger.warning("marketplace: containment run failed (%s)", exc)
+            return AuditCheck(
+                "containment_check",
+                False,
+                f"Could not run the submission under containment ({exc})",
+                "error",
+            )
+
+        if not getattr(result, "ok", False):
+            codes = ", ".join(getattr(result, "reason_codes", ()) or ()) or "refused"
+            return AuditCheck(
+                "containment_check",
+                False,
+                f"Submission refused by the sandbox: {codes}",
+                "error",
+            )
+        return AuditCheck("containment_check", True, "Submission ran under containment without incident")
 
     def _check_sharpe(self, bt: dict) -> AuditCheck:
         sharpe = float(bt.get("sharpe_ratio", 0))

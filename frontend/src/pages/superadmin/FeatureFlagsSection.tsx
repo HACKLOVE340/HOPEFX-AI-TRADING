@@ -3,11 +3,13 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
-  SectionCard, ActionBtn, Input, Toggle,
+  SectionCard, ActionBtn, Input,
   ErrorState, LoadingRows,
 } from './ui';
 import type { FeatureFlag } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
+import { Flag, RefreshCw, User } from 'lucide-react';
 
 interface UserOverride { flag: string; enabled: boolean }
 
@@ -17,10 +19,12 @@ const FeatureFlagsSection: React.FC = () => {
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [userIdInput, setUserIdInput] = useState('');
   const [userOverrides, setUserOverrides] = useState<UserOverride[]>([]);
   const [overrideLoading, setOverrideLoading] = useState(false);
   const [overrideMsg, setOverrideMsg] = useState('');
+  const [overrideMsgOk, setOverrideMsgOk] = useState(true);
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -30,7 +34,7 @@ const FeatureFlagsSection: React.FC = () => {
     try {
       const res = await superadminApi.featureFlags();
       if (!mountedRef.current) return;
-      setFlags(res.data.flags ?? res.data);
+      setFlags(asArray(res.data, 'flags'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Failed to load feature flags'));
@@ -46,8 +50,10 @@ const FeatureFlagsSection: React.FC = () => {
     try {
       await superadminApi.setFeatureFlag(name, enabled);
       setFlags(prev => prev.map(f => f.name === name ? { ...f, enabled } : f));
+      setMsgOk(true);
       setMsg(`Flag "${name}" ${enabled ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Toggle failed'));
     } finally { setBusy(null); }
   };
@@ -57,8 +63,9 @@ const FeatureFlagsSection: React.FC = () => {
     setOverrideLoading(true); setOverrideMsg('');
     try {
       const res = await superadminApi.userFlagOverrides(userIdInput.trim());
-      setUserOverrides(res.data.overrides ?? res.data);
+      setUserOverrides(asArray(res.data, 'overrides'));
     } catch (e: unknown) {
+      setOverrideMsgOk(false);
       setOverrideMsg(extractApiError(e, 'Failed to load overrides'));
     } finally { setOverrideLoading(false); }
   };
@@ -72,8 +79,10 @@ const FeatureFlagsSection: React.FC = () => {
         if (exists) return prev.map(o => o.flag === flag ? { ...o, enabled } : o);
         return [...prev, { flag, enabled }];
       });
+      setOverrideMsgOk(true);
       setOverrideMsg(`Override for "${flag}" set to ${enabled ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
+      setOverrideMsgOk(false);
       setOverrideMsg(extractApiError(e, 'Override failed'));
     } finally { setBusy(null); }
   };
@@ -97,30 +106,30 @@ const FeatureFlagsSection: React.FC = () => {
           { label: 'With Overrides', value: flags.filter(f => f.user_overrides > 0).length, color: '#f59e0b' },
         ].map(s => (
           <div key={s.label} style={{
-            flex: 1, background: '#0f172a', border: '1px solid #1e293b',
+            flex: 1, background: 'var(--surface)', border: '1px solid var(--border)',
             borderTop: `3px solid ${s.color}`, borderRadius: 10, padding: '14px 16px',
           }}>
-            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{s.label}</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: s.color, marginTop: 4 }}>{s.value}</div>
           </div>
         ))}
       </div>
 
       {/* Global flags */}
-      <SectionCard title="Global Feature Flags" icon="🚩" accent="#3b82f6"
+      <SectionCard title="Global Feature Flags" icon={<Flag size={18} aria-hidden />} accent="#3b82f6"
         subtitle="Changes take effect immediately for all users"
-        actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />}>
         {flags.map(flag => (
           <div key={flag.name} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 0', borderBottom: '1px solid #1e293b',
+            padding: '12px 0', borderBottom: '1px solid var(--border)',
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{flag.name}</span>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{flag.name}</span>
                 {flag.user_overrides > 0 && (
                   <span style={{
-                    fontSize: 10, fontWeight: 700, color: '#fbbf24',
+                    fontSize: 10, fontWeight: 700, color: 'var(--warn)',
                     background: '#78350f', border: '1px solid #d97706',
                     borderRadius: 4, padding: '1px 6px',
                   }}>
@@ -129,7 +138,7 @@ const FeatureFlagsSection: React.FC = () => {
                 )}
                 {flag.rollout_pct < 100 && flag.enabled && (
                   <span style={{
-                    fontSize: 10, fontWeight: 700, color: '#60a5fa',
+                    fontSize: 10, fontWeight: 700, color: 'var(--link)',
                     background: '#1e3a5f', border: '1px solid #1d4ed8',
                     borderRadius: 4, padding: '1px 6px',
                   }}>
@@ -137,16 +146,17 @@ const FeatureFlagsSection: React.FC = () => {
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{flag.description}</div>
-              <div style={{ fontSize: 10, color: '#334155', marginTop: 1, fontFamily: 'monospace' }}>{flag.env_var}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{flag.description}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1, fontFamily: 'monospace' }}>{flag.env_var}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 16 }}>
               {busy === flag.name && (
-                <div style={{ width: 14, height: 14, border: '2px solid #334155', borderTopColor: '#60a5fa', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
+                <div style={{ width: 14, height: 14, border: '2px solid var(--border-strong)', borderTopColor: 'var(--link)', borderRadius: '50%', animation: 'sa-spin 0.7s linear infinite' }} />
               )}
               <div
                 role="switch"
                 aria-checked={flag.enabled}
+                aria-label={`Enable ${flag.name}`}
                 tabIndex={0}
                 onClick={() => !busy && toggleFlag(flag.name, !flag.enabled)}
                 onKeyDown={e => !busy && (e.key === 'Enter' || e.key === ' ') && toggleFlag(flag.name, !flag.enabled)}
@@ -168,22 +178,13 @@ const FeatureFlagsSection: React.FC = () => {
           </div>
         ))}
         {flags.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No feature flags configured.</div>
+          <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No feature flags configured.</div>
         )}
-        {msg && (
-          <div style={{
-            marginTop: 12, padding: '10px 14px', borderRadius: 8,
-            background: msg.includes('failed') ? '#450a0a' : '#052e16',
-            color: msg.includes('failed') ? '#f87171' : '#4ade80',
-            fontSize: 12, fontWeight: 600,
-          }}>
-            {msg}
-          </div>
-        )}
+        <ActionBanner message={msg} ok={msgOk} />
       </SectionCard>
 
       {/* Per-user overrides */}
-      <SectionCard title="Per-User Flag Overrides" icon="👤" accent="#f59e0b"
+      <SectionCard title="Per-User Flag Overrides" icon={<User size={18} aria-hidden />} accent="#f59e0b"
         subtitle="Override global flags for a specific user">
         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
           <Input
@@ -203,8 +204,8 @@ const FeatureFlagsSection: React.FC = () => {
 
         {userOverrides.length > 0 && (
           <div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-              Overrides for user: <span style={{ color: '#60a5fa', fontWeight: 600 }}>{userIdInput}</span>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Overrides for user: <span style={{ color: 'var(--link)', fontWeight: 600 }}>{userIdInput}</span>
             </div>
             {flags.map(flag => {
               const override = userOverrides.find(o => o.flag === flag.name);
@@ -213,20 +214,21 @@ const FeatureFlagsSection: React.FC = () => {
               return (
                 <div key={flag.name} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 0', borderBottom: '1px solid #1e293b',
+                  padding: '10px 0', borderBottom: '1px solid var(--border)',
                 }}>
                   <div>
-                    <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 500 }}>{flag.name}</span>
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-strong)', fontWeight: 500 }}>{flag.name}</span>
                     {hasOverride && (
-                      <span style={{ marginLeft: 8, fontSize: 10, color: '#fbbf24', fontWeight: 700 }}>OVERRIDDEN</span>
+                      <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--warn)', fontWeight: 700 }}>OVERRIDDEN</span>
                     )}
-                    <div style={{ fontSize: 11, color: '#475569' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
                       Global: {flag.enabled ? 'on' : 'off'} → User: {effectiveValue ? 'on' : 'off'}
                     </div>
                   </div>
                   <div
                     role="switch"
                     aria-checked={effectiveValue}
+                    aria-label={`Override ${flag.name} for this user`}
                     tabIndex={0}
                     onClick={() => !busy && setUserOverride(flag.name, !effectiveValue)}
                     onKeyDown={e => !busy && (e.key === 'Enter' || e.key === ' ') && setUserOverride(flag.name, !effectiveValue)}
@@ -250,16 +252,7 @@ const FeatureFlagsSection: React.FC = () => {
           </div>
         )}
 
-        {overrideMsg && (
-          <div style={{
-            marginTop: 12, padding: '10px 14px', borderRadius: 8,
-            background: overrideMsg.includes('failed') ? '#450a0a' : '#052e16',
-            color: overrideMsg.includes('failed') ? '#f87171' : '#4ade80',
-            fontSize: 12, fontWeight: 600,
-          }}>
-            {overrideMsg}
-          </div>
-        )}
+        <ActionBanner message={overrideMsg} ok={overrideMsgOk} />
       </SectionCard>
     </div>
   );

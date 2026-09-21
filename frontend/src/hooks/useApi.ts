@@ -6,9 +6,11 @@
 
 import axios, { type AxiosInstance } from 'axios';
 import { useStore } from '../store';
+import { getApiBase } from '../lib/utils';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+// `?? '/api'` here resolved an empty VITE_API_URL to '' rather than '/api',
+// which makes axios resolve every path against the page origin. See getApiBase.
+const BASE_URL = getApiBase();
 
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -172,7 +174,15 @@ api.interceptors.request.use(async (config) => {
 
   if (CSRF_PROTECTED_METHODS.has(method) && !isExempt) {
     const csrfToken = await _getCsrfToken();
-    if (csrfToken) config.headers[CSRF_HEADER] = csrfToken;
+    if (csrfToken) {
+      // Bound after the await, not written through the parameter.
+      // `require-atomic-updates` is right to flag the shorter form: between
+      // requesting the token and writing it, another interceptor can have
+      // replaced `config.headers`, and the header would land on an object
+      // this request no longer sends.
+      const headers = config.headers;
+      headers[CSRF_HEADER] = csrfToken;
+    }
   }
 
   return config;
@@ -187,16 +197,59 @@ api.interceptors.request.use(async (config) => {
 
 let _refreshPromise: Promise<string | null> | null = null;
 
+// Bare axios calls in this function have no baseURL/timeout/interceptors of
+// their own (see _fetchCsrfToken above for why: avoids the interceptor calling
+// back into itself). Without an explicit timeout they use the browser's own
+// default, which is effectively unbounded — a slow/hung network then hangs
+// EVERY page load indefinitely instead of failing fast.
+const _REFRESH_TIMEOUT_MS = 10_000;
+
+/** True only for a DEFINITIVE auth rejection (refresh token invalid/expired/
+ *  absent) — as opposed to a timeout/network/5xx, which says nothing about
+ *  whether the session is actually valid. Exported for unit testing. */
+export function _isDefiniteAuthRejection(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  return status === 401 || status === 403;
+}
+
+async function _refreshRequest(): Promise<string | null> {
+  // Send with credentials so the browser includes the httpOnly
+  // hopefx_refresh_token cookie scoped to /api/auth/refresh.
+  const res = await axios.post(
+    `${BASE_URL}/auth/refresh`,
+    {},
+    { withCredentials: true, timeout: _REFRESH_TIMEOUT_MS },
+  );
+  const { access_token } = res.data as { access_token: string };
+  return access_token || null;
+}
+
 async function _silentRefresh(): Promise<string | null> {
   // Deduplicate: if a refresh is already in-flight, wait for it.
   if (_refreshPromise) return _refreshPromise;
 
   _refreshPromise = (async () => {
     try {
-      // Send with credentials so the browser includes the httpOnly
-      // hopefx_refresh_token cookie scoped to /api/auth/refresh.
-      const res = await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
-      const { access_token } = res.data as { access_token: string };
+      let access_token: string | null;
+      try {
+        access_token = await _refreshRequest();
+      } catch (err) {
+        if (_isDefiniteAuthRejection(err)) {
+          // The refresh token itself was rejected — genuinely no session.
+          return null;
+        }
+        // Transient failure (timeout / network blip / 5xx) says nothing about
+        // whether the session is valid. Retry once after a short pause rather
+        // than immediately treating a slow network the same as "not logged
+        // in" — this was previously indistinguishable and would force-log-out
+        // a user whose session was fine but whose network hiccuped.
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+          access_token = await _refreshRequest();
+        } catch {
+          return null; // still failing after a retry — give up gracefully
+        }
+      }
       if (!access_token) return null;
 
       // Use persisted user from store; if missing, fetch from /me.
@@ -205,6 +258,7 @@ async function _silentRefresh(): Promise<string | null> {
         try {
           const meRes = await axios.get(`${BASE_URL}/auth/me`, {
             headers: { Authorization: `Bearer ${access_token}` },
+            timeout: _REFRESH_TIMEOUT_MS,
           });
           user = meRes.data as import('../store').User;
         } catch {
@@ -325,8 +379,10 @@ export const authApi = {
   restoreSession: (): Promise<string | null> => _silentRefresh(),
   register: (payload: { email: string; username: string; password: string }) =>
     api.post('/auth/register', payload),
-  activateFreeTier: (userId: string, refCode?: string) =>
-    api.post('/auth/activate-free-tier', { user_id: userId, ref_code: refCode }),
+  /** Grants the new-user trial. The account comes from the bearer token — call
+   *  this only after setAuth(), and never pass a user id. */
+  activateFreeTier: (refCode?: string) =>
+    api.post('/auth/activate-free-tier', { ref_code: refCode }),
   /** Request a password reset email. Always returns 200 (prevents enumeration). */
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),
@@ -337,8 +393,21 @@ export const authApi = {
 
 // ── Trading ───────────────────────────────────────────────────────────────────
 
+export interface SymbolSpec {
+  symbol: string;
+  description: string;
+  category: string;
+  pip_size: number;
+  lot_size: number;
+  min_lot: number;
+  max_lot: number;
+  margin_rate: number;
+}
+
 export const tradingApi = {
   positions:      ()              => api.get('/trading/positions'),
+  /** Instrument catalogue — the server's pip and contract sizes (F5-01). */
+  symbols:        ()              => api.get<SymbolSpec[]>('/trading/symbols'),
   signals:        ()              => api.get('/trading/signals'),
   account:        ()              => api.get('/trading/account'),
   prices:         ()              => api.get<Record<string, { bid: number; ask: number; last: number; timestamp: number }>>('/trading/prices'),
@@ -384,6 +453,83 @@ export const mlApi = {
   features: ()               => api.get('/ml/features'),
   // Inference health + safety gates (staleness, drift, fallback rate, calibration).
   health:   ()               => api.get('/ml/health'),
+  /** Live engine state: model version, feature count, OOS accuracy, last trained. */
+  engineHealth: ()           => api.get('/ml/engine-health'),
+  /** Built-in feature importances for a deployed MODEL (not a symbol).
+   *  The response's `method` says how they were derived — "uniform" means the
+   *  server measured nothing and returned 1/n per feature. See audit F232. */
+  featureImportance: (modelName: string, topN = 30) =>
+    api.get(`/ml/feature-importance/${encodeURIComponent(modelName)}`, { params: { top_n: topN } }),
+  /** Feature-drift report; explains itself in `message` when it lacks samples. */
+  driftReport: ()            => api.get('/ml/drift-report'),
+};
+
+// ── AI Core ───────────────────────────────────────────────────────────────────
+//
+// The read surface behind /ai-core (api/ai_core.py). Every call is a GET: the
+// consequential actions live in /api/safe-platform behind the Part 1B matrix
+// and 2FA, and a second, weaker door to them is not something the page needs.
+//
+// `budget` and `calls` return a WIDER body for a superadmin (per-operator
+// spend, every operator's calls) and a self-scoped one for an admin. The page
+// reads `scope` rather than the caller's role, so what it renders is what the
+// server actually returned.
+
+/**
+ * The support desk. Two surfaces, two roles — the customer's own thread and
+ * the operator queue — because the server gates them separately and a client
+ * that blurs them invites a button the server refuses.
+ */
+export const supportApi = {
+  // ── operator ──────────────────────────────────────────────────────────────
+  /** Tickets waiting on a person, oldest first. */
+  queue:   (unassignedOnly = false) =>
+    api.get('/support/queue', { params: { unassigned_only: unassignedOnly } }),
+  /** One queued ticket with its thread. */
+  thread:  (id: string) => api.get(`/support/queue/${id}`),
+  /** Take a ticket. 409 when another operator holds it — the detail names them. */
+  claim:   (id: string) => api.post(`/support/queue/${id}/claim`),
+  /** Put it back. Only the holder may. */
+  release: (id: string) => api.post(`/support/queue/${id}/release`),
+  /** Reply to the customer, on the record. */
+  reply:   (id: string, body: string) => api.post(`/support/queue/${id}/reply`, { body }),
+  /** Close it. A customer reply reopens it automatically. */
+  resolve: (id: string) => api.post(`/support/queue/${id}/resolve`),
+
+  // ── customer's own tickets ────────────────────────────────────────────────
+  myTickets: () => api.get('/support/tickets'),
+  myThread:  (id: string) => api.get(`/support/tickets/${id}`),
+  open:      (subject: string, body: string) => api.post('/support/tickets', { subject, body }),
+  say:       (id: string, body: string) => api.post(`/support/tickets/${id}/messages`, { body }),
+};
+
+export const aiCoreApi = {
+  /** One request for the header — chain, reachability, spend and call counts. */
+  summary:      ()               => api.get('/ai-core/summary'),
+  /** What this caller may do, as the server would decide it. */
+  capabilities: ()               => api.get('/ai-core/capabilities'),
+  /** The resolved chain per role, and which legs hold credentials. */
+  chain:        ()               => api.get('/ai-core/chain'),
+  /** Spend against the ceilings; scope depends on role. */
+  budget:       ()               => api.get('/ai-core/budget'),
+  /** Recent model calls. Prompts are SHA-256 digests, never text. */
+  calls:        (limit = 50)     => api.get('/ai-core/calls', { params: { limit } }),
+  /** Response-cache stats, or an explicit "not installed". */
+  cache:        ()               => api.get('/ai-core/cache'),
+  /** The latest eval report and what the promotion gate would do with it. */
+  evals:        ()               => api.get('/ai-core/evals'),
+  /** Which models each vendor currently serves. `provider` narrows it to one. */
+  models:       (provider?: string) =>
+    api.get('/ai-core/models', provider ? { params: { provider } } : undefined),
+
+  // ── concurrent generation ───────────────────────────────────────────────────
+  // Submit returns immediately with a job id; the screen polls `jobs` for every
+  // panel at once. That is what lets several generations run side by side
+  // instead of each one blocking the page.
+  generate:       (payload: { prompt: string; role?: string; label?: string }) =>
+    api.post('/safe-platform/generate', payload),
+  generateJobs:   ()               => api.get('/safe-platform/generate/jobs'),
+  cancelGenerate: (jobId: string)  => api.post(`/safe-platform/generate/${jobId}/cancel`, {}),
 };
 
 // ── Accounts / Teams ──────────────────────────────────────────────────────────
@@ -565,6 +711,11 @@ export const superadminApi = {
   paymentHistory:    (params?: Record<string, string>) => api.get('/superadmin/financial/payments', { params }),
   refundPayment:     (id: string, reason: string) => api.post(`/superadmin/financial/payments/${id}/refund`, { reason }),
   affiliateStats:    ()                        => api.get('/superadmin/financial/affiliates'),
+
+  // Refund policy — where a creator's money comes from when a settled sale is
+  // refunded. See monetization/refund_policy.py for what each option means.
+  refundPolicy:      ()                        => api.get('/superadmin/financial/refund-policy'),
+  setRefundPolicy:   (policy: string)          => api.put('/superadmin/financial/refund-policy', { policy }),
 
   // Chargebacks
   chargebacks:       (params?: Record<string, string | number>) => api.get('/superadmin/financial/chargebacks', { params }),
@@ -984,8 +1135,11 @@ export const backtestExtApi = {
   walkForwardLatest: ()                        => api.get('/backtesting/walk-forward/latest'),
   walkForwardGet:   (id: string)               => api.get(`/backtesting/walk-forward/${id}`),
   walkForwardRun:   (params: object)           => api.post('/backtesting/walk-forward/run', params),
-  replayRun:        (params: object)           => api.post('/backtesting/replay/run', params, { timeout: 300_000 }),
-  replayStress:     (params: object)           => api.post('/backtesting/replay/stress', params, { timeout: 300_000 }),
+  // These start a background job and return { run_id, status: 'running' }
+  // immediately — no long-held request. Poll replayResult(run_id) for completion.
+  replayRun:        (params: object)           => api.post('/backtesting/replay/run', params),
+  replayStress:     (params: object)           => api.post('/backtesting/replay/stress', params),
+  replayResult:     (runId: string)            => api.get(`/backtesting/results/${runId}`),
   replayRegimes:    ()                         => api.get('/backtesting/replay/regimes'),
 };
 
@@ -1331,10 +1485,15 @@ export const copyTradingApi = {
 
 export const kycApi = {
   status:           ()                                        => api.get('/kyc/status'),
-  submit:           (formData: FormData)                      =>
-                      api.post('/kyc/submit', formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                      }),
+  /**
+   * Submit the KYC application.
+   *
+   * Takes no body (audit #58). The page used to send `document_types[]` built
+   * from React state — a client-supplied claim about which documents exist, on a
+   * compliance submission. The server ignores it and derives the list from what
+   * it actually stored, which is the only trustworthy source.
+   */
+  submit:           ()                                        => api.post('/kyc/submit'),
   documents:        ()                                        => api.get('/kyc/documents'),
   uploadDocument:   (formData: FormData)                      =>
                       api.post('/kyc/documents', formData, {
@@ -1495,6 +1654,8 @@ export const pnlApi = {
   drawdownCurve:    ()                                        => api.get('/pnl/drawdown-curve'),
   tradeLog:         (params?: Record<string, unknown>)        => api.get('/pnl/trade-log', { params }),
   openPositions:    ()                                        => api.get('/pnl/open-positions'),
+  /** Closed-trade history. Unlike tradeLog this accepts a `symbol` filter. */
+  history:          (params?: Record<string, unknown>)        => api.get('/pnl/history', { params }),
   export:           (format: 'csv' | 'json' = 'csv')         =>
                       api.get(`/pnl/export?format=${format}`, { responseType: 'blob' }),
 };

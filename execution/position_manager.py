@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Mapping
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -242,6 +243,10 @@ class PositionManager:
         self._positions: dict[str, Position] = {}
         self._history: deque[PositionCloseResult] = deque(maxlen=history_maxlen)
         self._redis_store: Any = None
+        # Unresolved order intents from the last boot audit. Previously the
+        # audit's result was computed and dropped, so the only trace of a
+        # possibly-live unmanaged position was a log line.
+        self._last_order_intent_audit: list[dict] = []
 
         if redis_client is not None:
             try:
@@ -590,8 +595,13 @@ class PositionManager:
         history = list(self._history)
         return list(reversed(history))[:limit]
 
-    async def restore_from_redis(self) -> int:
+    async def restore_from_redis(self, broker: Any = None) -> int:
         """Reload open positions from Redis on startup.
+
+        Pass *broker* to reconcile the restored state against the broker's live
+        positions — the only authority on what is actually open. Without it the
+        persisted state is trusted as-is, which is the pre-S7-03 behaviour and
+        is kept only for callers that have no broker available.
 
         This should be called once during application startup after the Redis
         connection is available.
@@ -603,17 +613,274 @@ class PositionManager:
             return 0
         try:
             state = await self._redis_store.load_state_on_boot()
-            positions = state.get("positions", [])
-            async with self._lock:
-                for p_dict in positions:
-                    pos = Position.from_dict(p_dict)
-                    self._positions[pos.symbol] = pos
-                    _prom_positions_open_set(pos.symbol, 1)
-            logger.info("PositionManager: restored %d position(s) from Redis", len(positions))
-            return len(positions)
+            records = state.get("positions", [])
         except (RuntimeError, OSError) as exc:
             logger.warning("PositionManager: failed to restore from Redis: %s", exc)
             return 0
+
+        # Parse the whole batch FIRST, per record, then swap in under the lock.
+        # The loop used to mutate self._positions inside the try while catching
+        # only (RuntimeError, OSError), so a KeyError/ValueError from
+        # from_dict() on record 3 of 5 propagated after records 1-2 were
+        # already inserted — leaving partial state with the success log line
+        # never reached. See docs/HARDENING_BACKLOG.md S7-04.
+        parsed: dict[str, Position] = {}
+        for p_dict in records:
+            try:
+                pos = Position.from_dict(p_dict)
+            except Exception as exc:
+                logger.error("PositionManager: skipping unparseable persisted position %r: %s", p_dict, exc)
+                continue
+            parsed[pos.symbol] = pos
+
+        # Reconcile against the broker, which is the only authority on what is
+        # actually open. Redis was previously treated as authoritative, so a
+        # position closed while the process was down was resurrected (the
+        # system believed it was exposed when flat), one opened while down
+        # stayed unmanaged, and a partial close left a stale quantity.
+        # See docs/HARDENING_BACKLOG.md S7-03.
+        if broker is not None:
+            parsed = await self._reconcile_with_broker(parsed, broker)
+
+        async with self._lock:
+            for symbol, pos in parsed.items():
+                self._positions[symbol] = pos
+                _prom_positions_open_set(symbol, 1)
+
+        logger.info(
+            "PositionManager: restored %d position(s) (%d persisted, broker-reconciled=%s)",
+            len(parsed),
+            len(records),
+            broker is not None,
+        )
+
+        # Any order intent still journalled is one TradeExecutor submitted but
+        # never finished recording — i.e. we may have died between the broker
+        # ack and add_position. Surface it, or the write-ahead record is state
+        # nothing ever reads. See docs/HARDENING_BACKLOG.md S7-02.
+        self._last_order_intent_audit = await self.audit_order_intents(parsed)
+
+        return len(parsed)
+
+    async def audit_order_intents(self, restored: dict[str, Position] | None = None) -> list[dict]:
+        """Report order intents that were never completed (S7-02).
+
+        Returns the orphaned intent records so a caller can act on them. An
+        intent whose symbol *is* now open was most likely completed and simply
+        not cleared; one whose symbol is **not** open is the dangerous case —
+        either the order never reached the broker, or it filled and we have no
+        local record of it.
+        """
+        if self._redis_store is None:
+            return []
+        try:
+            orders = await self._redis_store.load_orders()
+        except Exception as exc:
+            logger.warning("PositionManager: could not load order intents: %s", exc)
+            return []
+
+        intents = [o for o in orders if str(o.get("status", "")).lower() == "intent"]
+        if not intents:
+            self._last_order_intent_audit = []
+            return []
+
+        open_symbols = set(restored if restored is not None else self._positions)
+        orphans: list[dict] = []
+
+        for intent in intents:
+            symbol = intent.get("symbol")
+            order_id = intent.get("client_order_id") or intent.get("id")
+
+            if symbol in open_symbols:
+                # _reconcile_with_broker has already dropped every persisted
+                # position the broker does not hold, so a symbol still open here
+                # was confirmed by the broker itself. The order completed; only
+                # the journal write did not. Resolved — clear it, or this line
+                # repeats at CRITICAL on every boot forever and buries the
+                # intents that actually matter.
+                await self._resolve_intent(order_id, symbol)
+                continue
+
+            # The dangerous case: either the order never reached the broker, or
+            # it filled and there is no local record. Never auto-cleared.
+            aged = await self._age_intent(intent)
+            orphans.append(aged)
+            logger.critical(
+                "UNRECONCILED ORDER INTENT | client_order_id=%s symbol=%s side=%s qty=%s "
+                "position_now_open=False first_seen=%s boots_survived=%s — this order was "
+                "submitted but never fully recorded. If it filled while the process was "
+                "down, the position may be live and unmanaged. Verify against the broker.",
+                order_id,
+                symbol,
+                intent.get("side"),
+                intent.get("quantity"),
+                aged.get("first_seen_at"),
+                aged.get("boots_survived"),
+            )
+
+        if orphans:
+            logger.critical(
+                "PositionManager: %d unreconciled order intent(s) found at boot (oldest survived %d boot(s))",
+                len(orphans),
+                max(o.get("boots_survived", 1) for o in orphans),
+            )
+
+        self._last_order_intent_audit = orphans
+        return orphans
+
+    async def _resolve_intent(self, order_id: str | None, symbol: str | None) -> None:
+        """Clear a journal record the broker has already confirmed.
+
+        This touches the journal only. It never closes, cancels or places
+        anything at the broker.
+        """
+        if not order_id:
+            return
+        try:
+            await self._redis_store.remove_order(order_id)
+        except Exception as exc:
+            # Failing to clear costs another boot's alert, not correctness.
+            logger.warning(
+                "PositionManager: could not clear resolved order intent %s (%s): %s",
+                order_id,
+                symbol,
+                exc,
+            )
+            return
+        logger.info(
+            "PositionManager: order intent %s for %s resolved — the broker holds the "
+            "position, so the order completed and only the journal write was lost",
+            order_id,
+            symbol,
+        )
+
+    async def _age_intent(self, intent: dict) -> dict:
+        """Stamp an unresolved intent with how long it has been unresolved.
+
+        Without this every boot prints the same undifferentiated CRITICAL line,
+        so a new intent — the one that may mean money is moving unwatched right
+        now — is invisible beside a backlog from weeks ago.
+        """
+        aged = dict(intent)
+        aged["first_seen_at"] = intent.get("first_seen_at") or datetime.now(timezone.utc).isoformat()
+        aged["boots_survived"] = int(intent.get("boots_survived", 0) or 0) + 1
+
+        order_id = aged.get("client_order_id") or aged.get("id")
+        if order_id:
+            try:
+                await self._redis_store.save_order(aged)
+            except Exception as exc:
+                logger.debug("PositionManager: could not stamp order intent %s: %s", order_id, exc)
+        return aged
+
+    def last_order_intent_audit(self) -> list[dict]:
+        """Unresolved order intents from the most recent audit.
+
+        The audit result used to be computed inside restore_from_redis and
+        dropped, so no caller could act on it — the only trace was a log line.
+        """
+        return list(self._last_order_intent_audit)
+
+    async def _reconcile_with_broker(self, parsed: dict[str, Position], broker: Any) -> dict[str, Position]:
+        """Diff persisted positions against the broker's live positions.
+
+        Broker-only positions are adopted, Redis-only positions are dropped,
+        and quantity mismatches take the broker's number — each with an alert,
+        because every one of them means the system's view was wrong.
+        """
+        try:
+            live = await broker.get_positions()
+        except Exception as exc:
+            # Cannot reconcile — keep the persisted view rather than losing it,
+            # but say so loudly: the restored state is unverified.
+            logger.error("PositionManager: broker reconciliation failed (%s) — restored state is UNVERIFIED", exc)
+            return parsed
+
+        live_by_symbol: dict[str, Any] = {}
+        for p in live or []:
+            symbol = _broker_field(p, "symbol")
+            if symbol:
+                live_by_symbol[str(symbol)] = p
+
+        reconciled: dict[str, Position] = {}
+
+        for symbol, pos in parsed.items():
+            broker_pos = live_by_symbol.get(symbol)
+            if broker_pos is None:
+                logger.warning(
+                    "PositionManager: %s was persisted but the broker holds no such position — "
+                    "dropping (closed while this process was down)",
+                    symbol,
+                )
+                continue
+            broker_qty = _broker_field(broker_pos, "quantity")
+            if (
+                isinstance(broker_qty, (int, float))
+                and not isinstance(broker_qty, bool)
+                and abs(float(broker_qty) - float(pos.quantity)) > 1e-9
+            ):
+                logger.warning(
+                    "PositionManager: %s quantity mismatch — persisted=%s broker=%s; taking the broker's",
+                    symbol,
+                    pos.quantity,
+                    broker_qty,
+                )
+                pos.quantity = float(broker_qty)
+            reconciled[symbol] = pos
+
+        for symbol, broker_pos in live_by_symbol.items():
+            if symbol in reconciled:
+                continue
+            adopted = self._position_from_broker(broker_pos, symbol)
+            if adopted is None:
+                continue
+            logger.warning(
+                "PositionManager: adopting %s held by the broker but absent from persisted state — "
+                "it was opened while this process was down and has been unmanaged since",
+                symbol,
+            )
+            reconciled[symbol] = adopted
+
+        return reconciled
+
+    @staticmethod
+    def _position_from_broker(broker_pos: Any, symbol: str) -> Position | None:
+        """Build a Position from a broker position object, or None if unusable."""
+        try:
+            side = str(_broker_field(broker_pos, "side") or "long").lower()
+            side = "short" if "short" in side or "sell" in side else "long"
+            return Position(
+                position_id=str(_broker_field(broker_pos, "id") or f"broker-{symbol}"),
+                symbol=symbol,
+                side=side,
+                quantity=float(_broker_field(broker_pos, "quantity") or 0.0),
+                entry_price=float(_broker_field(broker_pos, "entry_price") or 0.0),
+                strategy_id="broker_reconciliation",
+            )
+        except Exception as exc:
+            logger.error("PositionManager: could not adopt broker position %s: %s", symbol, exc)
+            return None
+
+
+def _broker_field(record: Any, name: str) -> Any:
+    """Read *name* from a broker position record, mapping or object.
+
+    G-01. This loop used `getattr(p, name, None)` only. Brokers in this codebase
+    do not agree on the shape: `OANDABroker.get_open_positions()` returns
+    `list[dict]`, and a dict has no `.symbol` attribute — so `live_by_symbol`
+    came back empty, **every persisted position was dropped as closed**, and no
+    broker-only position was ever adopted. An empty broker view is the most
+    dangerous possible misreading here, because it looks exactly like "the
+    account is flat".
+
+    `OANDABroker` now returns proper `Position` objects, which fixes the case
+    that prompted this. The mapping path stays because it costs one function and
+    the next broker adapter to return dicts should degrade to a wrong number, not
+    to a silent flat account. An enum `side` is rendered via `.value` so string
+    comparison downstream behaves the same for both shapes.
+    """
+    value = record.get(name) if isinstance(record, Mapping) else getattr(record, name, None)
+    return getattr(value, "value", value)
 
 
 # ── Null context manager for no-op span ───────────────────────────────────────

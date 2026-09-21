@@ -5,17 +5,33 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 
 export interface EmptyStateLink {
   label: string;
   href: string;
-  icon?: string;
+  icon?: React.ReactNode;
 }
 
 interface EmptyStateProps {
-  icon?: string;
+  /**
+   * Lucide component. Was a string emoji, which renders differently on every
+   * OS and cannot inherit `currentColor` — see audit F170/F175. A string is
+   * still accepted so the 20+ existing call sites keep working, but it is
+   * deprecated: pass a component.
+   */
+  icon?: LucideIcon | string;
   title: string;
   description?: string;
+  /**
+   * Verbatim explanation from the API. Several endpoints in this platform
+   * return one and the UI discarded it — /correlation showed a blank card for
+   * ~20s while the server had sent the remedy in plain English (F189), and
+   * /news presents 0.0 as a measurement when the sentiment engine is not
+   * running (F194). When the server explains itself, show its words.
+   */
+  serverNote?: string | null;
   action?: React.ReactNode;
   /** Quick-links to related pages shown below the CTA */
   links?: EmptyStateLink[];
@@ -25,9 +41,10 @@ interface EmptyStateProps {
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
-  icon = '📭',
+  icon = Inbox,
   title,
   description,
+  serverNote,
   action,
   links,
   style,
@@ -36,7 +53,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   <div
     style={{
       alignItems: 'center',
-      color: '#64748b',
+      color: 'var(--text-muted)',
       display: 'flex',
       flexDirection: 'column',
       gap: 10,
@@ -48,17 +65,30 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     <div style={{
       width: 64, height: 64, borderRadius: 16,
       background: 'rgba(30,41,59,0.8)',
-      border: '1px solid #1e293b',
+      border: '1px solid var(--border)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 28, lineHeight: 1,
+      fontSize: 'var(--fs-hero)', lineHeight: 1,
       marginBottom: 4,
+      color: 'var(--text-faint)',
     }}>
-      {icon}
+      {typeof icon === 'string'
+        ? icon                                  /* legacy emoji call sites */
+        : React.createElement(icon, { size: 26, strokeWidth: 1.5, 'aria-hidden': true })}
     </div>
-    <p style={{ color: '#94a3b8', fontSize: 15, fontWeight: 600, margin: 0 }}>{title}</p>
+    <p style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-value)', fontWeight: 600, margin: 0 }}>{title}</p>
     {description && (
-      <p style={{ fontSize: 13, margin: 0, maxWidth: 360, lineHeight: 1.6, color: '#64748b' }}>
+      <p style={{ fontSize: 'var(--fs-body)', margin: 0, maxWidth: 360, lineHeight: 1.6, color: 'var(--text-muted)' }}>
         {description}
+      </p>
+    )}
+    {serverNote && (
+      <p style={{
+        fontSize: 12.5, margin: 0, maxWidth: 520, lineHeight: 1.6,
+        color: 'var(--text-dim)', textAlign: 'left',
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 8, padding: '8px 12px',
+      }}>
+        {serverNote}
       </p>
     )}
     {action && <div style={{ marginTop: 8 }}>{action}</div>}
@@ -69,15 +99,24 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       }}>
         {links.map((l) => (
           <Link
-            key={l.href}
+            // Destination AND label — see CrossLinkBar. Two ways out of an empty
+            // screen may share a destination; a repeated key duplicates a pill on
+            // re-render, so the one screen whose whole job is to offer a way out
+            // offers the same one twice.
+            key={`${l.href}|${l.label}`}
             to={l.href}
+            // 44px minimum target (rubric: touch-target-size, CRITICAL).
+            // These links were ~26px tall and are the primary way out of an
+            // empty screen, so they are exactly the ones that must be tappable.
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: 12, color: '#475569',
-              padding: '5px 12px', borderRadius: 6,
-              border: '1px solid #1e293b',
+              minHeight: 44, fontSize: 12, color: 'var(--text-faint)',
+              padding: '0 14px', borderRadius: 8,
+              border: '1px solid var(--border)',
               background: 'rgba(30,41,59,0.5)',
-              textDecoration: 'none',
+              textDecoration: 'none', cursor: 'pointer',
               transition: 'color 0.15s, border-color 0.15s',
             }}
             onMouseEnter={(e) => {

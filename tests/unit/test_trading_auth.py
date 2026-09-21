@@ -508,7 +508,7 @@ class TestBrokerRejectionHandling:
         async def _fake_place(*args, **kwargs):
             return rejected_order
 
-        monkeypatch.setattr(trading_module, "_broker_call", _fake_place)
+        monkeypatch.setattr(trading_module, "_user_broker_call", _fake_place)
 
         resp = client.post(
             "/api/trading/order",
@@ -524,7 +524,7 @@ class TestBrokerRejectionHandling:
         async def _fake_place(*args, **kwargs):
             return {"order_id": "ord-str-rej", "status": "rejected", "reason": "Risk limit"}
 
-        monkeypatch.setattr(trading_module, "_broker_call", _fake_place)
+        monkeypatch.setattr(trading_module, "_user_broker_call", _fake_place)
 
         resp = client.post(
             "/api/trading/order",
@@ -549,7 +549,7 @@ class TestBrokerRejectionHandling:
         async def _fake_place(*args, **kwargs):
             return error_order
 
-        monkeypatch.setattr(trading_module, "_broker_call", _fake_place)
+        monkeypatch.setattr(trading_module, "_user_broker_call", _fake_place)
 
         resp = client.post(
             "/api/trading/order",
@@ -576,7 +576,7 @@ class TestBrokerRejectionHandling:
         async def _fake_place(*args, **kwargs):
             return filled_order
 
-        monkeypatch.setattr(trading_module, "_broker_call", _fake_place)
+        monkeypatch.setattr(trading_module, "_user_broker_call", _fake_place)
 
         resp = client.post(
             "/api/trading/order",

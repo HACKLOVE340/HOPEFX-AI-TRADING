@@ -87,6 +87,25 @@ def _make_executor(halted=False, drawdown=0.0, equity=100_000.0):
     return TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
 
 
+def _signal(**overrides):
+    """Build an execution signal that carries a risk-approval token.
+
+    TradeExecutor no longer manufactures a token when one is absent (audit
+    finding S1-05) — an order with no proof it passed RiskManager.size_order()
+    is rejected as unauthorized. Tests exercising the *execution* path must
+    therefore supply one, exactly as the decision engine now does. Tests that
+    want to assert the rejection should omit it deliberately.
+    """
+    sig = {
+        "symbol": "XAUUSD",
+        "action": "buy",
+        "size": 1.0,
+        "risk_approval_token": "rat-test-fixture",
+    }
+    sig.update(overrides)
+    return sig
+
+
 # ── ExecutionResult dataclass ──────────────────────────────────────────────────
 
 
@@ -166,6 +185,15 @@ class TestExecuteSignalValidation:
         assert "Invalid action" in result.message
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("size", [0, -1, float("nan"), float("inf"), "not-a-number"])
+    async def test_invalid_size_is_rejected_before_risk_gate(self, size):
+        ex = _make_executor()
+        result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": size})
+        assert result.success is False
+        assert result.status == OrderStatus.ERROR
+        assert "Invalid size" in result.message
+
+    @pytest.mark.asyncio
     async def test_latency_recorded_on_success(self):
         ex = _make_executor()
         with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
@@ -183,7 +211,7 @@ class TestExecuteSignalBuy:
         ex = _make_executor()
         with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
             MockGate.return_value.check = MagicMock(return_value=None)
-            result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": 1.0})
+            result = await ex.execute_signal(_signal(action="buy"))
         assert result.success is True
         assert result.status == OrderStatus.FILLED
 
@@ -192,7 +220,7 @@ class TestExecuteSignalBuy:
         ex = _make_executor()
         with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
             MockGate.return_value.check = MagicMock(return_value=None)
-            result = await ex.execute_signal({"symbol": "XAUUSD", "action": "sell", "size": 1.0})
+            result = await ex.execute_signal(_signal(action="sell"))
         assert result.success is True
 
     @pytest.mark.asyncio
@@ -203,8 +231,44 @@ class TestExecuteSignalBuy:
         ex = TradeExecutor(broker=broker, risk_manager=rm, position_tracker=pt)
         with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
             MockGate.return_value.check = MagicMock(return_value=None)
+            result = await ex.execute_signal(_signal(action="buy"))
+        assert result.success is False
+        # Must fail because the *broker* rejected it, not because the order was
+        # unauthorized — otherwise this passes for the wrong reason.
+        assert "UNAUTHORIZED" not in (result.message or "")
+
+    @pytest.mark.asyncio
+    async def test_order_without_risk_approval_token_is_rejected(self):
+        """An order that never passed sizing must not reach the broker (S1-05)."""
+        broker = _mock_broker()
+        ex = TradeExecutor(
+            broker=broker,
+            risk_manager=_mock_risk_manager(),
+            position_tracker=_mock_position_tracker(),
+        )
+        with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
+            MockGate.return_value.check = MagicMock(return_value=None)
             result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": 1.0})
         assert result.success is False
+        assert "UNAUTHORIZED" in (result.message or "")
+        broker.place_market_order.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_authorization_control_exception_fails_closed(self):
+        """An unavailable authorization invariant must never permit a broker call."""
+        ex = _make_executor()
+        with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
+            MockGate.return_value.check = MagicMock(return_value=None)
+            with patch(
+                "invariants.enforcement.enforce_order_authorization",
+                side_effect=RuntimeError("authorization service unavailable"),
+            ):
+                result = await ex.execute_signal(_signal(action="buy"))
+
+        assert result.success is False
+        assert result.status == OrderStatus.REJECTED
+        assert "authorization" in (result.message or "").lower()
+        ex.broker.place_market_order.assert_not_awaited()
 
 
 # ── execute_signal — close path ────────────────────────────────────────────────
@@ -555,3 +619,111 @@ class TestPreTradeGateIntegration:
             result = await ex.execute_signal({"symbol": "XAUUSD", "action": "buy", "size": 1.0})
         assert result.success is False
         assert "RISK_CAP" in result.message
+
+
+# ── Order-intent journal (S7-02) ───────────────────────────────────────────────
+
+
+class TestOrderIntentJournal:
+    """The write-ahead journal is the control that actually guards the crash
+    window between a broker ack and `add_position()`.
+
+    `database/models.py` declares `UNIQUE(client_order_id)` on `trades` and
+    `orders`, and its comment — plus `api/trading.py` — described that
+    constraint as what stops a duplicate fill on the engine→broker hop. It does
+    not: neither production writer to the `trades` table
+    (`brokers/__init__.py::_persist_trade_record`,
+    `brokers/paper_trading.py`) sets the column, nothing calls
+    `TradeRepository.get_by_client_order_id`, and a UNIQUE column that is always
+    NULL admits unlimited rows. The constraint is latent, not live — the
+    `../hopefx-dead-controls/SKILL.md` "guard that can never open" shape.
+
+    What does run is `_journal_intent`, and it had no test at all. These pin it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_intent_is_journalled_before_the_broker_is_called(self):
+        """Order matters, and only order: journalling after the ack is useless.
+
+        The whole point of the write-ahead record is that a crash *between* the
+        broker filling and `add_position()` leaves something to reconcile
+        against. A journal written after the broker call protects nothing.
+        """
+        seen: list[str] = []
+
+        store = MagicMock()
+
+        async def _save(record):
+            seen.append(f"journal:{record['client_order_id']}")
+
+        async def _remove(coid):
+            seen.append(f"clear:{coid}")
+
+        store.save_order = AsyncMock(side_effect=_save)
+        store.remove_order = AsyncMock(side_effect=_remove)
+
+        broker = _mock_broker()
+        original_place = broker.place_market_order
+
+        async def _place(**kwargs):
+            seen.append(f"broker:{kwargs.get('client_order_id')}")
+            return await original_place(**kwargs)
+
+        broker.place_market_order = AsyncMock(side_effect=_place)
+
+        ex = TradeExecutor(
+            broker=broker,
+            risk_manager=_mock_risk_manager(),
+            position_tracker=_mock_position_tracker(has_position=False),
+            state_store=store,
+        )
+
+        with patch("risk.pre_trade_gate.PreTradeGate") as MockGate:
+            MockGate.return_value.check = MagicMock(return_value=None)
+            result = await ex.execute_signal(_signal())
+        assert result.success is True, result.message
+
+        stages = [s.split(":", 1)[0] for s in seen]
+        assert stages[:2] == ["journal", "broker"], seen
+
+        # Same id throughout, or the journalled record cannot be matched to the
+        # fill it is supposed to reconcile.
+        ids = {s.split(":", 1)[1] for s in seen}
+        assert len(ids) == 1, seen
+        coid = ids.pop()
+        assert coid.startswith("hopefx-")
+
+        # 64 bits of entropy. `execution/oms.py` truncates to 8 hex characters
+        # (32 bits) for its own `client_order_id`; at that width a birthday
+        # collision is ~1% by 9,000 ids, which for an idempotency key means a
+        # real order being mistaken for a replay.
+        assert len(coid) == len("hopefx-") + 16
+
+    @pytest.mark.asyncio
+    async def test_a_journal_failure_does_not_block_the_trade(self):
+        """Best-effort by design — but the failure must be loud, not swallowed.
+
+        Refusing to trade because Redis is down would turn a recovery-visibility
+        gap into an outage. The cost is recorded at ERROR instead: the DEBUG
+        variant of this handler is the fourth dead-control sub-shape.
+        """
+        store = MagicMock()
+        store.save_order = AsyncMock(side_effect=RuntimeError("redis down"))
+        store.remove_order = AsyncMock()
+
+        ex = TradeExecutor(
+            broker=_mock_broker(),
+            risk_manager=_mock_risk_manager(),
+            position_tracker=_mock_position_tracker(has_position=False),
+            state_store=store,
+        )
+
+        with (
+            patch("execution.trade_executor.logger") as log,
+            patch("risk.pre_trade_gate.PreTradeGate") as MockGate,
+        ):
+            MockGate.return_value.check = MagicMock(return_value=None)
+            result = await ex.execute_signal(_signal())
+
+        assert result.success is True, result.message
+        assert log.error.called, "a lost write-ahead record must be logged at ERROR"

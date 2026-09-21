@@ -130,6 +130,15 @@ class TestWatchlistFlow:
 
     def test_add_symbol_persists_in_get(self, watchlist_client):
         sub = "user-wl-add-001"
+        # Remove first so this test can run more than once against the same
+        # database. The watchlist is persisted, and the user id and symbol here
+        # are both fixed, so the very assertion this test makes (201 Created)
+        # held only on a database that had never seen it — every subsequent run
+        # got 409 "USDJPY already in watchlist". It passed exactly once per
+        # environment, which is why it looked green in CI (fresh DB each time)
+        # and failed locally.
+        watchlist_client.delete("/api/watchlist/USDJPY", headers=_auth(sub=sub))
+
         # Add a symbol
         r = watchlist_client.post("/api/watchlist/USDJPY", headers=_auth(sub=sub))
         assert r.status_code == 201, r.text

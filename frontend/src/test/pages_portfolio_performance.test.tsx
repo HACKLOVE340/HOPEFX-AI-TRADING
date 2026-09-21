@@ -304,9 +304,19 @@ describe('Portfolio page', () => {
   });
 
   it('renders account summary section', async () => {
+    // `account` is null in the shared beforeEach, so `AccountSummary` renders
+    // four skeletons and no tiles — this used to pass on the page *subtitle*
+    // ("Balances, equity curve, allocation…") and never looked at the summary
+    // at all. Give it an account and assert the tile the name promises.
+    act(() => {
+      useStore.getState().setAccount({
+        balance: 10_000, equity: 10_000, margin_used: 0, margin_free: 10_000,
+        margin_level: 0, daily_pnl: 0, daily_pnl_pct: 0, total_pnl: 0,
+        win_rate: 0, sharpe_ratio: 0, max_drawdown: 0, open_trades: 0,
+      });
+    });
     await renderPortfolio();
-    // Balance label appears in stat tiles
-    expect(screen.getByText(/balance/i)).toBeInTheDocument();
+    expect(screen.getByText('Balance')).toBeInTheDocument();
   });
 
   it('renders equity curve section', async () => {
@@ -418,18 +428,18 @@ describe('Performance page', () => {
 
   it('renders tab navigation', async () => {
     await renderPerformance();
-    expect(screen.getByRole('button', { name: /overview/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /overview/i })).toBeInTheDocument();
   });
 
   it('renders trades tab button', async () => {
     await renderPerformance();
-    expect(screen.getByRole('button', { name: /trades/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /trades/i })).toBeInTheDocument();
   });
 
   it('renders weekly tab button', async () => {
     await renderPerformance();
     // Multiple "weekly" buttons may exist (tab + other controls)
-    expect(screen.getAllByRole('button', { name: /weekly/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('tab', { name: /weekly/i }).length).toBeGreaterThan(0);
   });
 
   it('renders refresh button', async () => {
@@ -472,7 +482,7 @@ describe('Performance page', () => {
 
   it('switches to trades tab', async () => {
     await renderPerformance();
-    const tradesBtn = screen.getByRole('button', { name: /trades/i });
+    const tradesBtn = screen.getByRole('tab', { name: /trades/i });
     fireEvent.click(tradesBtn);
     await waitFor(() => {
       expect(screen.getByText(/trade history/i)).toBeInTheDocument();
@@ -482,8 +492,8 @@ describe('Performance page', () => {
   it('switches to weekly tab', async () => {
     await renderPerformance();
     // Use the first weekly button (the tab button in the nav strip)
-    const weeklyBtns = screen.getAllByRole('button', { name: /weekly/i });
-    fireEvent.click(weeklyBtns[0]);
+    const weeklyBtns = screen.getAllByRole('tab', { name: /weekly/i });
+    fireEvent.click(weeklyBtns[0]!);
     await waitFor(() => {
       // Page renders "Weekly Performance Report" as h3 heading
       expect(document.body.textContent).toMatch(/weekly performance report/i);
@@ -492,7 +502,7 @@ describe('Performance page', () => {
 
   it('renders trade filter input on trades tab', async () => {
     await renderPerformance();
-    fireEvent.click(screen.getByRole('button', { name: /trades/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /trades/i }));
     await waitFor(() => {
       // Performance page uses "Symbol…" placeholder on the trade filter input
       expect(screen.getByPlaceholderText(/symbol/i)).toBeInTheDocument();
@@ -501,7 +511,7 @@ describe('Performance page', () => {
 
   it('shows no trades found when empty', async () => {
     await renderPerformance();
-    fireEvent.click(screen.getByRole('button', { name: /trades/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /trades/i }));
     await waitFor(() => {
       expect(screen.getByText(/no trades found/i)).toBeInTheDocument();
     }, { timeout: 3000 });

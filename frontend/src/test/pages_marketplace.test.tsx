@@ -525,6 +525,12 @@ describe('Marketplace — detail modal', () => {
       '/monetization/marketplace/purchase',
       expect.objectContaining({ strategy_id: 's1' })
     ));
+    // The buyer comes from the session. Sending one was an IDOR: any signed-in
+    // user could record a purchase against somebody else's account.
+    const [, body] = mockApiPost.mock.calls.find(
+      ([url]) => url === '/monetization/marketplace/purchase'
+    )!;
+    expect(body).not.toHaveProperty('buyer_id');
   });
 
   it('subscribe button shows Subscribed after success', async () => {

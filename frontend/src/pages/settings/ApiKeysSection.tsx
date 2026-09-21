@@ -6,12 +6,18 @@ import { useToast } from '../../components/Toast';
 import type { ApiKey } from './types';
 import { Card, SectionHeader, Field, Input, Button, StatusBadge } from './ui';
 import { extractApiError } from '../../lib/utils';
-
-const SCOPE_OPTIONS = ['read', 'trade', 'admin'];
+import { ErrorBanner } from '../../components/ErrorBanner';
+import { useStore, selectUser } from '../../store';
+import { KeyRound } from 'lucide-react';
 
 const ApiKeysSection: React.FC = () => {
   const confirm = useConfirm();
   const toast   = useToast();
+  const user    = useStore(selectUser);
+  // 'admin' is offered only to staff — and validated server-side regardless, so
+  // hiding the chip is convenience rather than the boundary.
+  const isOperator = user?.role === 'admin' || user?.role === 'superadmin';
+  const SCOPE_OPTIONS = isOperator ? ['read', 'trade', 'admin'] : ['read', 'trade'];
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -20,13 +26,25 @@ const ApiKeysSection: React.FC = () => {
   const [revealedKey, setRevealedKey] = useState<{ key_id: string; api_key: string } | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [createError, setCreateError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
+  const load = React.useCallback(() => {
+    setLoading(true);
+    setLoadError('');
     api.get<{ api_keys: ApiKey[] }>('/settings/api-keys')
-      .then((r) => setKeys(r.data.api_keys ?? []))
-      .catch((err: unknown) => console.warn('[Settings/ApiKeys] load:', err))
+      // Defence in depth: the server no longer returns revoked keys, but a
+      // revoked key must never be listed as active even against an older build.
+      .then((r) => setKeys((r.data.api_keys ?? []).filter((k) => !k.revoked)))
+      .catch((err: unknown) => {
+        console.warn('[Settings/ApiKeys] load:', err);
+        // "No keys yet" and "we couldn't check" are different answers, and only
+        // one of them means it is safe to assume nothing is live.
+        setLoadError(extractApiError(err, 'Could not load your API keys.'));
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const handleCreate = async () => {
     if (!newKeyName.trim()) { setCreateError('Key name is required.'); return; }
@@ -86,7 +104,7 @@ const ApiKeysSection: React.FC = () => {
 
   return (
     <div>
-      <SectionHeader icon="🔑" title="API Keys" description="Generate keys to access HOPEFX programmatically. Keys are shown once — store them securely." />
+      <SectionHeader icon={<KeyRound size={18} aria-hidden />} title="API Keys" description="Generate keys to access HOPEFX programmatically. Keys are shown once — store them securely." />
 
       {/* Revealed key banner */}
       {revealedKey && (
@@ -94,12 +112,12 @@ const ApiKeysSection: React.FC = () => {
           padding: '16px 20px', background: '#052e16', border: '1px solid #166534',
           borderRadius: 12, marginBottom: 20,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', marginBottom: 8 }}>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: '#22c55e', marginBottom: 8 }}>
             ✅ API key created — copy it now. It will not be shown again.
           </div>
           <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#f1f5f9',
-            background: '#0f172a', padding: '10px 14px', borderRadius: 8,
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--fs-body)', color: 'var(--text-strong)',
+            background: 'var(--surface)', padding: '10px 14px', borderRadius: 8,
             wordBreak: 'break-all', letterSpacing: '0.02em',
           }}>
             {revealedKey.api_key}
@@ -116,7 +134,7 @@ const ApiKeysSection: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={() => setRevealedKey(null)}
-              style={{ color: '#64748b' }}
+              style={{ color: 'var(--text-muted)' }}
             >
               Dismiss
             </Button>
@@ -126,7 +144,7 @@ const ApiKeysSection: React.FC = () => {
 
       {/* Create new key */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Create new key
         </h3>
         <Field label="Key name" description="A label to identify this key (e.g. 'My trading bot').">
@@ -144,11 +162,11 @@ const ApiKeysSection: React.FC = () => {
                 key={scope}
                 onClick={() => toggleScope(scope)}
                 style={{
-                  padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                  padding: '6px 14px', borderRadius: 20, fontSize: 'var(--fs-body)', fontWeight: 600,
                   cursor: 'pointer', transition: 'all 0.15s',
-                  background: newKeyScopes.includes(scope) ? '#1e3a5f' : '#0f172a',
+                  background: newKeyScopes.includes(scope) ? '#1e3a5f' : 'var(--surface)',
                   border: `1px solid ${newKeyScopes.includes(scope) ? '#3b82f6' : '#334155'}`,
-                  color: newKeyScopes.includes(scope) ? '#60a5fa' : '#64748b',
+                  color: newKeyScopes.includes(scope) ? 'var(--link)' : 'var(--text-muted)',
                 }}
               >
                 {scope}
@@ -156,7 +174,7 @@ const ApiKeysSection: React.FC = () => {
             ))}
           </div>
         </Field>
-        {createError && <div style={{ fontSize: 13, color: '#f87171', marginBottom: 10 }}>❌ {createError}</div>}
+        {createError && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)', marginBottom: 10 }}>❌ {createError}</div>}
         <Button
           onClick={handleCreate}
           loading={creating}
@@ -168,28 +186,30 @@ const ApiKeysSection: React.FC = () => {
 
       {/* Existing keys */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 16 }}>
           Active keys
         </h3>
         {loading ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>Loading keys…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>Loading keys…</div>
+        ) : loadError ? (
+          <ErrorBanner message={`${loadError} This is not the same as having none — do not assume no keys are live.`} />
         ) : keys.length === 0 ? (
-          <div style={{ color: '#64748b', fontSize: 13 }}>No API keys yet.</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>No API keys yet.</div>
         ) : (
           keys.map((key) => (
             <div key={key.key_id} style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-              padding: '14px 0', borderBottom: '1px solid #1e293b',
+              padding: '14px 0', borderBottom: '1px solid var(--border)',
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{key.name}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{key.name}</span>
                   <StatusBadge status="info" label={key.scopes.join(', ')} />
                 </div>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#64748b', marginBottom: 2 }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
                   {key.key_prefix}
                 </div>
-                <div style={{ fontSize: 11, color: '#475569' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
                   Created {new Date(key.created_at).toLocaleDateString()}
                   {key.last_used && ` · Last used ${new Date(key.last_used).toLocaleDateString()}`}
                 </div>

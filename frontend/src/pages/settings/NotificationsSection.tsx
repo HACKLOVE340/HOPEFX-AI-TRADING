@@ -4,6 +4,8 @@ import { api } from '../../hooks/useApi';
 import type { NotificationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
+import { Bell } from 'lucide-react';
 
 const DEFAULT: NotificationSettings = {
   discord_enabled: false, discord_webhook_url: '',
@@ -49,20 +51,31 @@ const NotificationsSection: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveErr, setSaveErr] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [testStatus, setTestStatus] = useState<Record<string, TestState>>({
     discord: 'idle', slack: 'idle', telegram: 'idle',
   });
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<NotificationSettings>('/settings/notifications')
       .then((r) => {
         const merged = { ...DEFAULT, ...r.data };
         setSettings(merged);
         cacheLocalPrefs(merged);
       })
-      .catch((err: unknown) => console.warn('[Settings/Notifications] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/Notifications] load:', err);
+        // DEFAULT has every alert off and every webhook URL blank. Saving after a
+        // failed GET posts the whole object, which turns the user's alerts off
+        // and drops their Discord/Slack/Telegram endpoints.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<NotificationSettings>) =>
     setSettings((prev) => ({ ...prev, ...patch })), []);
@@ -105,28 +118,38 @@ const NotificationsSection: React.FC = () => {
       >
         Send test
       </Button>
-      {testStatus[channel] === 'ok' && <span style={{ fontSize: 13, color: '#22c55e' }}>✅ Delivered</span>}
-      {testStatus[channel] === 'fail' && <span style={{ fontSize: 13, color: '#f87171' }}>❌ Failed — check credentials</span>}
+      {testStatus[channel] === 'ok' && <span style={{ fontSize: 'var(--fs-body)', color: '#22c55e' }}>✅ Delivered</span>}
+      {testStatus[channel] === 'fail' && <span style={{ fontSize: 'var(--fs-body)', color: 'var(--loss)' }}>❌ Failed — check credentials</span>}
     </div>
   );
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading notification settings…
+    </div>
+  );
+
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon={<Bell size={18} aria-hidden />} title="Notifications" description="Configure where HOPEFX sends trade alerts, signals, and system events." />
+      <ErrorBanner message="Couldn't load your notification settings. Nothing has been changed — saving now would turn your alerts off and clear your webhook endpoints." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 
   return (
     <div>
-      <SectionHeader icon="🔔" title="Notifications" description="Configure where HOPEFX sends trade alerts, signals, and system events." />
+      <SectionHeader icon={<Bell size={18} aria-hidden />} title="Notifications" description="Configure where HOPEFX sends trade alerts, signals, and system events." />
 
       {/* Discord */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: settings.discord_enabled ? 16 : 0 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>Discord</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Receive alerts in a Discord channel via webhook.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Discord</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Receive alerts in a Discord channel via webhook.</div>
           </div>
           <Toggle id="discord-toggle" label="" checked={settings.discord_enabled} onChange={(v) => update({ discord_enabled: v })} />
         </div>
@@ -150,8 +173,8 @@ const NotificationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: settings.slack_enabled ? 16 : 0 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>Slack</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Post alerts to a Slack channel via incoming webhook.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Slack</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Post alerts to a Slack channel via incoming webhook.</div>
           </div>
           <Toggle id="slack-toggle" label="" checked={settings.slack_enabled} onChange={(v) => update({ slack_enabled: v })} />
         </div>
@@ -175,8 +198,8 @@ const NotificationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: settings.telegram_enabled ? 16 : 0 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>Telegram</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Send messages via a Telegram bot.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Telegram</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Send messages via a Telegram bot.</div>
           </div>
           <Toggle id="telegram-toggle" label="" checked={settings.telegram_enabled} onChange={(v) => update({ telegram_enabled: v })} />
         </div>
@@ -207,8 +230,8 @@ const NotificationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: settings.email_enabled ? 16 : 0 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>Email</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Receive alerts and daily summaries by email.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Email</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Receive alerts and daily summaries by email.</div>
           </div>
           <Toggle id="email-toggle" label="" checked={settings.email_enabled} onChange={(v) => update({ email_enabled: v })} />
         </div>
@@ -226,7 +249,7 @@ const NotificationsSection: React.FC = () => {
 
       {/* Alert triggers */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 8 }}>Alert Triggers</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 8 }}>Alert Triggers</h3>
         <Toggle id="notify-trade"   label="Trade executed"        checked={settings.notify_on_trade}         onChange={(v) => update({ notify_on_trade: v })} />
         <Toggle id="notify-signal"  label="New signal generated"  checked={settings.notify_on_signal}        onChange={(v) => update({ notify_on_signal: v })} />
         <Toggle id="notify-error"   label="System errors"         checked={settings.notify_on_error}         onChange={(v) => update({ notify_on_error: v })} />

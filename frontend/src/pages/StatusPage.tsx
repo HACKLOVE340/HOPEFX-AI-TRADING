@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CheckCircle2, Circle, ShieldAlert, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { Activity } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +28,32 @@ interface HistoryDay {
   uptime_pct: number;
 }
 
+/** GET /status/live-trading/gate — may the engine trade live right now. */
+interface LiveGate {
+  allowed: boolean;
+  reason?: string;
+  checked_at?: string;
+  checks?: Record<string, { passed: boolean; message?: string }>;
+}
+
+/** GET /status/paper-trading/gate — progress through the validation phases. */
+interface PaperGate {
+  elapsed_days?: number;
+  fill_count?: number;
+  phase2_ready?: boolean;
+  phase2_reason?: string;
+  phase3_ready?: boolean;
+  phase3_reason?: string;
+}
+
+/** GET /status/sharpe-progress — trades collected toward a stable Sharpe. */
+interface SharpeProgress {
+  trade_count?: number;
+  n_needed?: number;
+  pct_complete?: number;
+  sharpe?: number;
+}
+
 interface Incident {
   date: string;
   uptime_pct: number;
@@ -38,7 +68,7 @@ const STATUS_COLOR: Record<string, string> = {
   healthy:   '#22c55e',
   degraded:  '#f59e0b',
   unhealthy: '#ef4444',
-  unknown:   '#64748b',
+  unknown:   'var(--text-muted)',
 };
 
 const STATUS_BG: Record<string, string> = {
@@ -79,7 +109,7 @@ const Dot: React.FC<{ status: string }> = ({ status }) => (
     display: 'inline-block',
     width: 9, height: 9,
     borderRadius: '50%',
-    background: STATUS_COLOR[status] ?? '#64748b',
+    background: STATUS_COLOR[status] ?? 'var(--text-muted)',
     flexShrink: 0,
   }} />
 );
@@ -112,6 +142,14 @@ const StatusPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  // `/status/live-trading/gate`, `/status/paper-trading/gate` and
+  // `/status/sharpe-progress` are served by the backend and had no caller
+  // anywhere in the SPA (audit F185/F230). They answer the question a
+  // subscriber actually has on a status page: is the system allowed to trade
+  // live right now, and if not, how far off is it.
+  const [liveGate, setLiveGate]   = useState<LiveGate | null>(null);
+  const [paperGate, setPaperGate] = useState<PaperGate | null>(null);
+  const [sharpe, setSharpe]       = useState<SharpeProgress | null>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -122,12 +160,21 @@ const StatusPage: React.FC = () => {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [statusRes, histRes, incidentRes] = await Promise.allSettled([
-        api.get<StatusData>('/status/json'),
-        api.get<{ history?: HistoryDay[] }>('/status/history'),
-        api.get<{ incidents: Incident[] }>('/status/incidents'),
-      ]);
+      const [statusRes, histRes, incidentRes, liveRes, paperRes, sharpeRes] =
+        await Promise.allSettled([
+          api.get<StatusData>('/status/json'),
+          api.get<{ history?: HistoryDay[] }>('/status/history'),
+          api.get<{ incidents: Incident[] }>('/status/incidents'),
+          api.get<LiveGate>('/status/live-trading/gate'),
+          api.get<PaperGate>('/status/paper-trading/gate'),
+          api.get<SharpeProgress>('/status/sharpe-progress'),
+        ]);
       if (!mountedRef.current) return;
+      // Each is independent: a readiness endpoint being down must not blank
+      // the whole status page.
+      setLiveGate(liveRes.status === 'fulfilled' ? liveRes.value.data : null);
+      setPaperGate(paperRes.status === 'fulfilled' ? paperRes.value.data : null);
+      setSharpe(sharpeRes.status === 'fulfilled' ? sharpeRes.value.data : null);
       if (statusRes.status === 'fulfilled') {
         setData(statusRes.value.data);
       } else {
@@ -146,7 +193,7 @@ const StatusPage: React.FC = () => {
       );
     } catch (err) {
       if (!mountedRef.current) return;
-      setError('Status API unavailable.');
+      setError(extractApiError(err, 'Status API unavailable.'));
     }
     if (mountedRef.current) { setLoading(false); setLastRefresh(new Date()); }
   }, []);
@@ -157,13 +204,34 @@ const StatusPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [load]);
 
+  /*
+   * One shell, outliving the branches.
+   *
+   * This page had no h1 in ANY of its three states — not while loading, not on
+   * error, not on success. It is the page a user opens when they suspect the
+   * platform is broken, and it did not say what it was or offer a way onward.
+   * The identity is declared once here and spread into every branch, so the
+   * heading is a property of the page rather than of its request having
+   * succeeded.
+   */
+  const shell = {
+    title: 'System Status',
+    icon: Activity,
+    width: 'standard' as const,
+    subtitle: 'Live component health, incidents and 30-day uptime',
+  };
+
   if (loading) {
-    return <div className="page-content"><p style={{ color: '#64748b' }}>Checking system status…</p></div>;
+    return (
+      <PageShell {...shell}>
+        <p style={{ color: 'var(--text-muted)' }}>Checking system status…</p>
+      </PageShell>
+    );
   }
 
   if (error || !data) {
     return (
-      <div className="page-content">
+      <PageShell {...shell}>
         <div style={{ ...styles.banner, background: '#450a0a', border: '1px solid #dc2626' }}>
           <span style={{ fontSize: 32 }}>❌</span>
           <div>
@@ -172,7 +240,7 @@ const StatusPage: React.FC = () => {
           </div>
           <button onClick={load} style={styles.refreshBtn} title="Retry">↻</button>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -186,7 +254,7 @@ const StatusPage: React.FC = () => {
     : 100;
 
   return (
-    <div className="page-content">
+    <PageShell {...shell}>
       {/* Banner */}
       <div style={{
         ...styles.banner,
@@ -201,18 +269,130 @@ const StatusPage: React.FC = () => {
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => navigate('/')}
-            style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            📊 Dashboard
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs font-bold
+                       text-[var(--link)] cursor-pointer transition-colors duration-150
+                       hover:bg-[rgba(59,130,246,0.25)] focus-visible:outline-none
+                       focus-visible:ring-2 focus-visible:ring-sky-500"
+            style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)' }}
+          >
+            <LayoutDashboard size={14} strokeWidth={1.75} aria-hidden /> Dashboard
           </button>
-          <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
+          <button
+            onClick={load}
+            title="Refresh now"
+            aria-label="Refresh status now"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg
+                       text-slate-400 cursor-pointer transition-colors duration-150
+                       hover:bg-[var(--border)] focus-visible:outline-none focus-visible:ring-2
+                       focus-visible:ring-sky-500"
+          >
+            <RefreshCw size={15} strokeWidth={2} aria-hidden />
+          </button>
         </div>
       </div>
+
+      {/* ── Trading readiness — surfaces /status/live-trading/gate,
+             /status/paper-trading/gate and /status/sharpe-progress, none of
+             which had a caller anywhere in the SPA (F185/F230). ── */}
+      {(liveGate || paperGate || sharpe) && (
+        <section aria-labelledby="readiness-h" style={{ marginBottom: 16 }}>
+          <h2 id="readiness-h" style={{
+            fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.08em', color: 'var(--text-faint)', margin: '0 0 8px 2px',
+          }}>
+            Trading readiness
+          </h2>
+
+          {liveGate && (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+              background: liveGate.allowed ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)',
+              border: `1px solid ${liveGate.allowed ? 'rgba(34,197,94,0.3)' : 'rgba(251,191,36,0.3)'}`,
+              borderRadius: 10, padding: '12px 16px', marginBottom: 10,
+            }}>
+              {liveGate.allowed
+                ? <CheckCircle2 size={18} strokeWidth={2} aria-hidden style={{ color: '#22c55e', flexShrink: 0, marginTop: 1 }} />
+                : <ShieldAlert size={18} strokeWidth={2} aria-hidden style={{ color: 'var(--warn)', flexShrink: 0, marginTop: 1 }} />}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: liveGate.allowed ? '#22c55e' : 'var(--warn)' }}>
+                  {liveGate.allowed
+                    ? 'Live trading is permitted'
+                    : 'Live trading is blocked'}
+                </div>
+                {liveGate.reason && (
+                  <p style={{ margin: '4px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--text-dim)' }}>
+                    {liveGate.reason}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+            {sharpe && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
+                  Statistical confidence
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'ui-monospace, monospace', marginTop: 4 }}>
+                  {sharpe.trade_count ?? 0} / {sharpe.n_needed ?? '—'} trades
+                </div>
+                {/* Progress toward a Sharpe the platform will trust. */}
+                <div
+                  role="progressbar"
+                  aria-valuenow={Math.round(sharpe.pct_complete ?? 0)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Progress toward a statistically stable Sharpe ratio"
+                  style={{ height: 6, borderRadius: 3, background: 'var(--border)', marginTop: 8, overflow: 'hidden' }}
+                >
+                  <div style={{
+                    width: `${Math.min(100, Math.max(0, sharpe.pct_complete ?? 0))}%`,
+                    height: '100%', background: 'var(--accent)', transition: 'width 0.3s',
+                  }} />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                  {(sharpe.pct_complete ?? 0).toFixed(1)}% of the sample needed for a stable Sharpe
+                </div>
+              </div>
+            )}
+
+            {paperGate && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-faint)' }}>
+                  Validation phases
+                </div>
+                <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {[
+                    { n: 'Phase 2 — anomaly weighting', ok: paperGate.phase2_ready, why: paperGate.phase2_reason },
+                    { n: 'Phase 3 — online learning',   ok: paperGate.phase3_ready, why: paperGate.phase3_reason },
+                  ].map((ph) => (
+                    <li key={ph.n} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      {ph.ok
+                        ? <CheckCircle2 size={13} strokeWidth={2.5} aria-hidden style={{ color: '#22c55e', flexShrink: 0, marginTop: 2 }} />
+                        : <Circle size={13} strokeWidth={2} aria-hidden style={{ color: 'var(--text-faint)', flexShrink: 0, marginTop: 2 }} />}
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: ph.ok ? '#22c55e' : 'var(--text-dim)' }}>{ph.n}</span>
+                        {ph.why && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{ph.why}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+                  {paperGate.fill_count ?? 0} fills over {paperGate.elapsed_days ?? 0} days
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* WebSocket live status */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+        background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10,
         padding: '10px 16px', marginBottom: 16,
       }}>
         <span style={{
@@ -220,12 +400,12 @@ const StatusPage: React.FC = () => {
           background: wsStatus === 'connected' ? '#22c55e' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444',
           boxShadow: wsStatus === 'connected' ? '0 0 6px #22c55e' : 'none',
         }} />
-        <span style={{ fontSize: 13, color: '#94a3b8' }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)' }}>
           WebSocket feed: <strong style={{ color: wsStatus === 'connected' ? '#22c55e' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444' }}>
             {wsStatus.charAt(0).toUpperCase() + wsStatus.slice(1)}
           </strong>
         </span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
           Live market data stream
         </span>
       </div>
@@ -238,20 +418,20 @@ const StatusPage: React.FC = () => {
             key={name}
             style={{
               ...styles.componentRow,
-              borderBottom: i < arr.length - 1 ? '1px solid #1e293b' : 'none',
+              borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
             }}
           >
             <div style={styles.componentName}>{name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
             <div style={styles.componentStatus}>
               <Dot status={info.status} />
-              <span style={{ color: STATUS_COLOR[info.status], fontWeight: 600, textTransform: 'capitalize', fontSize: 13 }}>
+              <span style={{ color: STATUS_COLOR[info.status], fontWeight: 600, textTransform: 'capitalize', fontSize: 'var(--fs-body)'}}>
                 {info.status}
               </span>
             </div>
             <div style={styles.componentMsg}>
               {info.message}
               {info.response_time_ms != null && (
-                <span style={{ color: '#475569', marginLeft: 6 }}>{info.response_time_ms}ms</span>
+                <span style={{ color: 'var(--text-faint)', marginLeft: 6 }}>{info.response_time_ms}ms</span>
               )}
             </div>
           </div>
@@ -282,16 +462,16 @@ const StatusPage: React.FC = () => {
       <div style={styles.sectionTitle}>Recent incidents</div>
       <div style={styles.incidentCard}>
         {incidents.length === 0 ? (
-          <p style={{ color: '#64748b', fontSize: 14 }}>No incidents in the last 90 days.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No incidents in the last 90 days.</p>
         ) : (
           incidents.slice(0, 10).map(inc => (
             <div key={inc.date} style={styles.incidentRow}>
-              <span style={{ color: inc.severity === 'major' ? '#ef4444' : '#fbbf24' }}>
+              <span style={{ color: inc.severity === 'major' ? '#ef4444' : 'var(--warn)' }}>
                 {inc.severity === 'major' ? '❌' : '⚠️'}
               </span>
-              <span style={{ color: '#e2e8f0', fontWeight: 500 }}>{inc.date}</span>
-              <span style={{ color: '#94a3b8', fontSize: 13, flex: 1 }}>{inc.title}</span>
-              <span style={{ fontSize: 11, color: inc.resolved ? '#4ade80' : '#fbbf24' }}>
+              <span style={{ color: 'var(--text)', fontWeight: 500 }}>{inc.date}</span>
+              <span style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)', flex: 1 }}>{inc.title}</span>
+              <span style={{ fontSize: 11, color: inc.resolved ? 'var(--gain)' : 'var(--warn)' }}>
                 {inc.resolved ? 'Resolved' : 'Ongoing'}
               </span>
             </div>
@@ -304,7 +484,7 @@ const StatusPage: React.FC = () => {
         Auto-refreshes every 60s &nbsp;·&nbsp;
         <a href="/api/status/json" style={{ color: '#3b82f6' }}>JSON API</a>
       </div>
-    </div>
+    </PageShell>
   );
 };
 
@@ -316,12 +496,12 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 auto',
     padding: '32px 16px',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#f1f5f9',
-    background: '#0f172a',
+    color: 'var(--text-strong)',
+    background: 'var(--surface)',
     minHeight: '100vh',
   },
   banner: {
-    border: '1px solid #334155',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     padding: '20px 24px',
     marginBottom: 32,
@@ -329,13 +509,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 16,
   },
-  bannerTitle: { fontSize: 18, fontWeight: 700, color: '#f8fafc' },
-  bannerSub: { fontSize: 13, color: '#94a3b8', marginTop: 4 },
+  bannerTitle: { fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' },
+  bannerSub: { fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginTop: 4 },
   refreshBtn: {
     marginLeft: 'auto',
     background: 'transparent',
-    border: '1px solid #334155',
-    color: '#94a3b8',
+    border: '1px solid var(--border-strong)',
+    color: 'var(--text-dim)',
     borderRadius: 6,
     padding: '6px 12px',
     fontSize: 18,
@@ -345,14 +525,14 @@ const styles: Record<string, React.CSSProperties> = {
   sectionTitle: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#64748b',
+    color: 'var(--text-muted)',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 10,
   },
   componentsCard: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 28,
@@ -364,28 +544,28 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '13px 20px',
     gap: 12,
   },
-  componentName: { fontSize: 14, fontWeight: 500, color: '#e2e8f0' },
+  componentName: { fontSize: 14, fontWeight: 500, color: 'var(--text)' },
   componentStatus: { display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' },
-  componentMsg: { fontSize: 12, color: '#64748b', textAlign: 'right' },
+  componentMsg: { fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' },
   uptimeCard: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     padding: '20px 24px',
     marginBottom: 28,
   },
-  uptimeValue: { fontSize: 36, fontWeight: 800, color: '#4ade80' },
-  uptimeLabel: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  uptimeValue: { fontSize: 36, fontWeight: 800, color: 'var(--gain)' },
+  uptimeLabel: { fontSize: 12, color: 'var(--text-muted)', marginTop: 2 },
   historyLabels: {
     display: 'flex',
     justifyContent: 'space-between',
     fontSize: 11,
-    color: '#475569',
+    color: 'var(--text-faint)',
     marginTop: 6,
   },
   incidentCard: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--raised)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 12,
     padding: '16px 20px',
     marginBottom: 28,
@@ -395,13 +575,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 12,
     padding: '8px 0',
-    borderBottom: '1px solid #1e293b',
+    borderBottom: '1px solid var(--border)',
     fontSize: 14,
   },
   footer: {
     textAlign: 'center',
     fontSize: 12,
-    color: '#475569',
+    color: 'var(--text-faint)',
     paddingTop: 8,
   },
 };

@@ -1,0 +1,140 @@
+# HOPEFX runtime proof — live FastAPI server
+# captured: 2026-08-19T05:29:46Z
+# revision: 3b3f7482334be29f519ba71d0113e1492e46a602
+# environment: local, APP_ENV=development, BROKER_TYPE=paper, OANDA key absent
+# server: python run.py --mode api  (uvicorn, 127.0.0.1:8000)
+
+## Startup health (GET /health/detailed)
+{
+    "status": "healthy",
+    "timestamp": "2026-08-19T05:29:46.880151+00:00",
+    "uptime_seconds": 292.1,
+    "version": "unknown",
+    "components": {
+        "redis": {
+            "status": "ok",
+            "latency_ms": 1.91,
+            "detail": "PONG"
+        },
+        "database": {
+            "status": "ok",
+            "latency_ms": 2.14,
+            "detail": "SELECT 1 OK"
+        },
+        "data_feed": {
+            "status": "ok",
+            "latency_ms": 0.05,
+            "detail": "Last tick 0.0s ago"
+        },
+        "broker": {
+            "status": "ok",
+            "latency_ms": 0.28,
+            "detail": "balance=100000.0"
+        },
+        "event_bus": {
+            "status": "ok",
+            "latency_ms": 0.27,
+            "detail": "heartbeat published"
+        },
+        "kill_switch": {
+            "status": "ok",
+            "latency_ms": 0.01,
+            "detail": "inactive"
+        },
+        "disk": {
+            "status": "ok",
+            "latency_ms": 0.05,
+            "detail": "22.0 GB free / 252.0 GB total (6.0% used)"
+        }
+    }
+}
+
+## S-47 PROOF — GET /api/admin/settings/performance components block
+## (this endpoint had never returned a 'components' key)
+{
+  "components": [
+    {
+      "name": "redis",
+      "status": "ok",
+      "latency_ms": 1.91,
+      "critical": true
+    },
+    {
+      "name": "database",
+      "status": "ok",
+      "latency_ms": 2.14,
+      "critical": true
+    },
+    {
+      "name": "data_feed",
+      "status": "ok",
+      "latency_ms": 0.05,
+      "critical": true
+    },
+    {
+      "name": "broker",
+      "status": "ok",
+      "latency_ms": 0.28,
+      "critical": false
+    },
+    {
+      "name": "event_bus",
+      "status": "ok",
+      "latency_ms": 0.27,
+      "critical": false
+    },
+    {
+      "name": "kill_switch",
+      "status": "ok",
+      "latency_ms": 0.01,
+      "critical": false
+    },
+    {
+      "name": "disk",
+      "status": "ok",
+      "latency_ms": 0.05,
+      "critical": false
+    }
+  ]
+}
+
+## Kill switch status (GET /api/kill-switch/status)
+{
+    "active": false,
+    "reason": "",
+    "activated_at": null,
+    "flag_file": "/home/user/HOPEFX-AI-TRADING/kill_switch.flag",
+    "flag_file_exists": false,
+    "state_file": "/home/user/HOPEFX-AI-TRADING/kill_switch.state.json",
+    "state_file_exists": false,
+    "deactivation_token_configured": true,
+    "latch_broadcast_ok": null
+}
+
+## Superadmin circuit breakers (GET /api/superadmin/risk/circuit-breakers)
+## NOTE: this is the hardcoded bootstrap list, not live state — see S-48
+{
+    "circuit_breakers": [
+        {
+            "name": "daily_drawdown",
+            "state": "closed",
+            "failure_count": 0,
+            "last_failure": null,
+            "last_success": null,
+            "threshold": 3
+        },
+        {
+            "name": "total_drawdown",
+            "state": "closed",
+            "failure_count": 0,
+            "last_failure": null,
+            "last_success": null,
+            "threshold": 1
+        },
+        {
+            "name": "order_rate",
+
+## 2FA correctly blocks nuclear endpoints without a TOTP code
+{"detail":"Superadmin nuclear operations require 2FA verification. Log in again with a valid TOTP code."}
+
+## Route surface registered at runtime: 992 paths

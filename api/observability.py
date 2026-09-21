@@ -16,11 +16,23 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+
+from api.auth import require_role
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/observability", tags=["Observability"])
+# Every route here returns operational internals — trace IDs, service topology,
+# latency distributions, and firing alerts. The frontend already routes
+# /observability through adminOnly(); the router had no dependency of its own,
+# so the restriction lived only in the SPA and any unauthenticated caller could
+# read the same data straight off the API. Enforced server-side at the router
+# level so it applies to every current and future endpoint in this module.
+router = APIRouter(
+    prefix="/api/observability",
+    tags=["Observability"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 def _get_telemetry():

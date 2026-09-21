@@ -161,21 +161,51 @@ class AsyncPoolMetrics:
 # ── Pool configuration ────────────────────────────────────────────────────────
 
 
+#: Sync PostgreSQL drivers that must be swapped for asyncpg before the URL
+#: reaches ``create_async_engine``. Handing it a sync driver raises
+#: ``InvalidRequestError: The asyncio extension requires an async driver to be
+#: used``, which the caller in app.py logs as "Async DB pool init failed
+#: (non-fatal)" — with the real cause hidden behind an exception summary.
+_SYNC_PG_SCHEMES = (
+    "postgresql+psycopg2://",
+    "postgresql+psycopg://",
+    "postgresql+pg8000://",
+    "postgresql+psycopg2cffi://",
+    # Legacy Heroku-style scheme. SQLAlchemy 2.x dropped it entirely:
+    # `NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:postgres`.
+    "postgres://",
+)
+
+
 def _resolve_async_db_url() -> str:
     """Return an async-compatible database URL.
 
     Priority:
     1. ASYNC_DATABASE_URL env var (explicit async DSN)
-    2. DATABASE_URL — auto-converted: sqlite:// → sqlite+aiosqlite://
+    2. DATABASE_URL — driver rewritten to an async one
     3. Default PostgreSQL asyncpg DSN
+
+    The rewrite used to cover exactly two shapes: ``sqlite://`` and bare
+    ``postgresql://``. Every other spelling of a PostgreSQL DSN — the
+    ``+psycopg2`` form a sync SQLAlchemy setup writes, the ``+psycopg`` form
+    psycopg 3 uses, or the legacy ``postgres://`` scheme still emitted by
+    several hosts — fell through unchanged and blew up inside
+    ``create_async_engine``.
     """
     url = os.environ.get("ASYNC_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+
     if url.startswith("sqlite:///") and "+aiosqlite" not in url:
         url = url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
     elif url.startswith("sqlite://") and "+aiosqlite" not in url:
         url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
     elif url.startswith("postgresql://") and "asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    else:
+        for scheme in _SYNC_PG_SCHEMES:
+            if url.startswith(scheme):
+                url = "postgresql+asyncpg://" + url[len(scheme) :]
+                break
+
     return url or "postgresql+asyncpg://hopefx:hopefx@localhost:5432/hopefx"
 
 
@@ -394,33 +424,50 @@ class AsyncConnectionPool:
         def on_close(dbapi_conn, connection_record):
             self.metrics.disconnect_count += 1
 
-        # overflow and timeout events only exist on QueuePool, not NullPool or StaticPool.
-        from sqlalchemy.pool import NullPool as _NullPool, StaticPool as _StaticPool
-
-        _pool_cls = type(sync_engine.pool)
-        if not self.config.use_null_pool and _pool_cls not in (_NullPool, _StaticPool):
-
-            @event.listens_for(sync_engine.pool, "overflow")
-            def on_overflow(dbapi_conn, connection_record):
-                self.metrics.overflow_count += 1
-
-            @event.listens_for(sync_engine.pool, "timeout")
-            def on_timeout():
-                self.metrics.timeout_count += 1
+        # There is no "overflow" or "timeout" pool event, on QueuePool or on any
+        # other pool. SQLAlchemy 2.x PoolEvents are exactly: connect,
+        # first_connect, checkout, checkin, reset, invalidate, soft_invalidate,
+        # close, detach, close_detached.
+        #
+        # This block used to register listeners for both, guarded by a comment
+        # asserting they "only exist on QueuePool, not NullPool or StaticPool".
+        # The guard excluded NullPool and StaticPool -- the two pools where the
+        # code would not have run anyway -- and then registered on QueuePool and
+        # AsyncAdaptedQueuePool, where `event.listens_for` raises
+        # `InvalidRequestError: No such event 'overflow'`.
+        #
+        # So async pool initialisation failed on every deployment using the
+        # default pool, which is all of them. The caller logs that at WARNING and
+        # continues, so the only visible symptom was the `db_pool` component
+        # reporting critical-down forever -- and /api/health/ready is 503 while
+        # any critical component is down. In Kubernetes the pod never becomes
+        # ready. It surfaced here as the docker smoke test polling readiness 24
+        # times and getting `failed_critical: ["db_pool"]` every time.
+        #
+        # `metrics.overflow_count` and `metrics.timeout_count` therefore have no
+        # event source and stay at 0. They are left in place because callers read
+        # them, but nothing feeds them; sourcing them would mean sampling
+        # `sync_engine.pool.status()`, which is a different change. Registering a
+        # listener that cannot exist is not a way to populate a counter.
 
     @staticmethod
     def _redact_url(url: str) -> str:
-        """Redact password from a database URL for safe logging."""
-        try:
-            from urllib.parse import urlparse, urlunparse
+        """Redact credentials from a database URL for safe logging.
 
-            parsed = urlparse(url)
-            if parsed.password:
-                netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
-                return urlunparse(parsed._replace(netloc=netloc))
-        except Exception:  # nosec B110  # noqa: S110
-            pass
-        return url
+        This was the codebase's *only* redaction, private to this class, while
+        nine other call sites logged connection URLs in the clear — including
+        the Redis password a log scan later found in production. Kept as a thin
+        delegate so existing callers and tests keep working, but the logic now
+        lives in ``utils.redaction`` where anything can reach it.
+
+        The previous body was correct on every URL shape in use here — the
+        problem was location, not logic. The shared version adds one behaviour
+        it lacked: text that does not parse as a URL but carries an ``@`` is
+        withheld rather than returned verbatim.
+        """
+        from utils.redaction import redact_url
+
+        return redact_url(url)
 
 
 # ── Session factory helper ────────────────────────────────────────────────────

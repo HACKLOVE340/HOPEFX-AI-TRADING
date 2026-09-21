@@ -69,6 +69,35 @@ def _has_abstract_decorator(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -
     return False
 
 
+def _docstring_line_spans(tree: ast.AST) -> list[tuple[int, int]]:
+    """Inclusive 1-indexed line ranges covered by module/class/function docstrings.
+
+    The placeholder check already meant to skip docstrings — see the comment
+    above it — but tested ``stripped.startswith('\"\"\"')``, which only ever sees
+    a docstring's *opening* line. A placeholder named on the first line of a
+    docstring was exempt; the same word three lines further down was reported as
+    a hardcoded credential. Prose is prose wherever it sits in the string.
+
+    Only docstrings are exempted, not string literals generally: a placeholder
+    in an ordinary assigned string may well be a real hardcoded value.
+    """
+    spans: list[tuple[int, int]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        body = getattr(node, "body", None)
+        if not body:
+            continue
+        first = body[0]
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+            spans.append((first.lineno, first.end_lineno or first.lineno))
+    return spans
+
+
+def _within(lineno: int, spans: list[tuple[int, int]]) -> bool:
+    return any(start <= lineno <= end for start, end in spans)
+
+
 def _body_is_only_pass(body: list[ast.stmt]) -> bool:
     """Return True when the function body is only `pass` (possibly with a docstring)."""
     non_doc = [
@@ -91,6 +120,17 @@ def check_file(path: Path) -> list[str]:
 
     lines = source.splitlines()
 
+    # Parsed up front so the line-level checks below can tell docstring prose
+    # from code. A file that does not parse still gets its line-level checks —
+    # the syntax error is reported after them, as it always was.
+    tree: ast.Module | None = None
+    syntax_error: str | None = None
+    try:
+        tree = ast.parse(source, filename=str(path))
+    except SyntaxError as exc:
+        syntax_error = f"{path}: syntax error: {exc}"
+    docstring_spans = _docstring_line_spans(tree) if tree is not None else []
+
     # ── Line-level checks ─────────────────────────────────────────────────────
     for lineno, line in enumerate(lines, 1):
         # Allow per-line suppression via healer: ignore or noqa:healer tag
@@ -110,11 +150,23 @@ def check_file(path: Path) -> list[str]:
             # Skip if this is a comment or docstring explaining the placeholder
             if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
                 continue
+            # …including the body of one, not just the line that opens it.
+            if _within(lineno, docstring_spans):
+                continue
             # Skip if the line is checking FOR placeholder values (detection code)
             if "in self._PLACEHOLDER_VALUES" in line or "startswith" in line or "PLACEHOLDER_VALUES" in line:
                 continue
             # Skip pragma allowlist lines
             if "pragma: allowlist" in line or "nosec" in line:
+                continue
+            # The ignore marker may be a few lines below — e.g. ruff-format
+            # wraps a long tuple literal onto its own lines with the trailing
+            # comment on the closing paren — so this line itself is never
+            # the one carrying the marker in that case. Look forward only
+            # (never backward), so an ignore comment on a different, prior
+            # finding can't falsely suppress this one.
+            forward_window = "\n".join(lines[lineno - 1 : min(len(lines), lineno + 8)])
+            if "# healer: ignore" in forward_window or "# noqa: healer" in forward_window:
                 continue
             issues.append(f"{path}:{lineno}: hardcoded placeholder value: {stripped!r}")
 
@@ -131,10 +183,8 @@ def check_file(path: Path) -> list[str]:
             )
 
     # ── AST-level checks ──────────────────────────────────────────────────────
-    try:
-        tree = ast.parse(source, filename=str(path))
-    except SyntaxError as exc:
-        issues.append(f"{path}: syntax error: {exc}")
+    if tree is None:
+        issues.append(syntax_error or f"{path}: syntax error")
         return issues
 
     # Null-object / graceful-degradation class names whose methods are
@@ -201,8 +251,17 @@ def check_file(path: Path) -> list[str]:
         if enclosing_class in _NULL_CLASS_NAMES:
             continue
 
-        # Bare pass body in non-test, non-abstract function
+        # Bare pass body in non-test, non-abstract function. Honor an
+        # explicit "# healer: ignore" escape for intentional null-object /
+        # no-op stubs, same as the other checks in this file — scanning the
+        # whole signature span (node.lineno through the line before the body
+        # starts), since a multi-line signature's closing
+        # "` -> None:  # healer: ignore`" line is never node.lineno itself.
         if not is_test and _body_is_only_pass(node.body):
+            sig_end = node.body[0].lineno if node.body else node.lineno
+            header = "\n".join(lines[max(0, node.lineno - 1) : max(node.lineno, sig_end - 1)])
+            if "# healer: ignore" in header or "# noqa: healer" in header:
+                continue
             issues.append(
                 f"{path}:{node.lineno}: bare `pass` body in {node.name}() — "
                 "implement the function or raise NotImplementedError with a clear message."

@@ -10,10 +10,10 @@ import type { SignalAnalyticsReport } from '../../types';
 
 const Panel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div style={{
-    background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12,
+    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
     padding: 14, flex: 1, minWidth: 240,
   }}>
-    <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 10 }}>{title}</div>
+    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 10 }}>{title}</div>
     {children}
   </div>
 );
@@ -21,19 +21,26 @@ const Panel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, 
 // Horizontal labelled bar.
 const Bar: React.FC<{ label: string; value: number; max: number; color: string }> = ({ label, value, max, color }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-    <span style={{ fontSize: 11, color: '#94a3b8', width: 78, flexShrink: 0, textTransform: 'capitalize' }}>{label}</span>
-    <div style={{ flex: 1, height: 8, background: '#1e293b', borderRadius: 4, overflow: 'hidden' }}>
+    <span style={{ fontSize: 11, color: 'var(--text-dim)', width: 78, flexShrink: 0, textTransform: 'capitalize' }}>{label}</span>
+    <div style={{ flex: 1, height: 8, background: 'var(--raised)', borderRadius: 4, overflow: 'hidden' }}>
       <div style={{ width: max > 0 ? `${(value / max) * 100}%` : '0%', height: '100%', background: color }} />
     </div>
-    <span style={{ fontSize: 11, fontWeight: 700, color: '#cbd5e1', width: 32, textAlign: 'right' }}>{value}</span>
+    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', width: 32, textAlign: 'right' }}>{value}</span>
   </div>
 );
 
 const STRENGTH_ORDER = ['very_strong', 'strong', 'moderate', 'weak', 'very_weak'] as const;
-const STRENGTH_COLOR: Record<string, string> = {
-  very_strong: '#22c55e', strong: '#4ade80', moderate: '#fbbf24', weak: '#fb923c', very_weak: '#f87171',
+// Keyed by the actual unions rather than `string`, so indexing with a member of
+// STRENGTH_ORDER / the direction tuple is definite. Under
+// noUncheckedIndexedAccess (audit #38) a `Record<string, T>` lookup is
+// `T | undefined` even when the key is provably one of the declared ones.
+type StrengthTier = (typeof STRENGTH_ORDER)[number];
+type Direction    = 'buy' | 'sell' | 'hold';
+
+const STRENGTH_COLOR: Record<StrengthTier, string> = {
+  very_strong: '#22c55e', strong: 'var(--gain)', moderate: 'var(--warn)', weak: '#fb923c', very_weak: 'var(--loss)',
 };
-const DIR_COLOR: Record<string, string> = { buy: '#22c55e', sell: '#f87171', hold: '#94a3b8' };
+const DIR_COLOR: Record<Direction, string> = { buy: '#22c55e', sell: 'var(--loss)', hold: 'var(--text-dim)' };
 
 export const SignalDistribution: React.FC<{ analytics: SignalAnalyticsReport }> = ({ analytics }) => {
   const strengthMax = Math.max(1, ...Object.values(analytics.signals_by_strength ?? {}));
@@ -75,7 +82,7 @@ export const SignalDistribution: React.FC<{ analytics: SignalAnalyticsReport }> 
         ))}
         {topSymbols.length > 0 && (
           <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', margin: '12px 0 8px' }}>Top symbols</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', margin: '12px 0 8px' }}>Top symbols</div>
             {topSymbols.map(([sym, count]) => (
               <Bar key={sym} label={sym} value={count} max={symMax} color="#3b82f6" />
             ))}
@@ -99,7 +106,7 @@ export const SignalDistribution: React.FC<{ analytics: SignalAnalyticsReport }> 
             />
           ))}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 9, color: '#334155' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 9, color: 'var(--text-faint)' }}>
           <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
         </div>
       </Panel>

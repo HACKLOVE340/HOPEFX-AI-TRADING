@@ -16,9 +16,11 @@
  *   GET /trading/trades
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { PageHeader, CrossLinkBar } from '../components';
+import { Link, useNavigate } from 'react-router-dom';
+import { CrossLinkBar } from '../components';
+import { Banknote, BarChart3, BookOpen, Briefcase, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
@@ -28,7 +30,10 @@ import {
   selectPositions,
   selectEquityCurve,
   selectPerformanceSummary,
+  selectFeedLive,
 } from '../store';
+import { LiveFeedNotice } from '../components/ui/LiveFeedNotice';
+import { DataAge } from '../components/ui/DataAge';
 import {
   useEquityCurve,
   usePerformanceSummary,
@@ -40,8 +45,7 @@ import { PositionsTable } from '../components/panels/PositionsTable';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { tradingApi } from '../hooks/useApi';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError } from '../lib/utils';
-import type { PerformanceSummary } from '../types';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, positionSide } from '../lib/utils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -53,40 +57,82 @@ const fmtRatio = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '—');
 // ── Stat tile ─────────────────────────────────────────────────────────────────
 
 interface StatTileProps {
+  /** Page that explains this figure. Omit for a non-interactive tile. */
+  to?: string;
+  /** What the destination answers, used in the accessible name. */
+  toHint?: string;
   label:     string;
   value:     string;
   positive?: boolean | null;
   sub?:      string;
 }
 
-const StatTile: React.FC<StatTileProps> = ({ label, value, positive, sub }) => (
-  <div className="flex flex-col gap-1 px-4 py-3 rounded-lg bg-[#0d1421] border border-[#1e2d3d]">
-    <span className="text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-    <span
-      className={cn(
-        'text-[18px] font-bold tabular-nums',
-        positive === true  ? 'text-[#00e676]' :
-        positive === false ? 'text-[#ff1744]' :
-                             'text-slate-100',
-      )}
+/**
+ * A portfolio figure. Given `to` the whole tile drills into the page that
+ * explains it; without `to` it stays inert rather than becoming an empty tab
+ * stop for keyboard users. See audit F187.
+ */
+const StatTile: React.FC<StatTileProps> = ({ label, value, positive, sub, to, toHint }) => {
+  const body = (
+    <>
+      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-500">
+        {label}
+        {to && (
+          <ChevronRight
+            size={11} strokeWidth={2.5} aria-hidden
+            className="ml-auto text-slate-700 transition-colors duration-150
+                       group-hover:text-slate-300 group-focus-visible:text-slate-300"
+          />
+        )}
+      </span>
+      <span
+        className={cn(
+          'text-[18px] font-bold tabular-nums',
+          positive === true  ? 'text-[var(--bull)]' :
+          positive === false ? 'text-[var(--bear)]' :
+                               'text-slate-100',
+        )}
+      >
+        {value}
+      </span>
+      {sub && <span className="text-[10px] text-slate-600">{sub}</span>}
+    </>
+  );
+
+  const base = 'flex flex-col gap-1 px-4 py-3 rounded-lg bg-[var(--surface)] border border-[var(--border)]';
+  if (!to) return <div className={base}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className={cn(base, `group min-h-[44px] no-underline cursor-pointer transition-colors
+        duration-150 hover:border-[var(--border-strong)] hover:bg-[var(--raised)] focus-visible:outline-none
+        focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2
+        focus-visible:ring-offset-[var(--bg)]`)}
     >
-      {value}
-    </span>
-    {sub && <span className="text-[10px] text-slate-600">{sub}</span>}
-  </div>
-);
+      {body}
+    </Link>
+  );
+};
 
 // ── Account summary ───────────────────────────────────────────────────────────
 
 const AccountSummary: React.FC = () => {
   useAccount();
   const account = useStore(selectAccount);
+  // Every tile below is a socket-fed number. When the feed stalls they freeze
+  // at their last value and read exactly like current ones — unrealized P&L
+  // included, which is the figure a trader watches to decide whether to close
+  // (F1-02). The age says how long ago these were true.
+  const lastDataAt = useStore((s) => s.lastDataAt);
 
   if (!account) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-20 rounded-lg bg-[#0d1421] border border-[#1e2d3d] animate-pulse" />
+          <div key={i} className="h-20 rounded-lg bg-[var(--surface)] border border-[var(--border)] animate-pulse" />
         ))}
       </div>
     );
@@ -101,6 +147,10 @@ const AccountSummary: React.FC = () => {
   const dailyPct   = balance > 0 ? (dailyPnl / balance) * 100 : 0;
 
   return (
+    <div className="flex flex-col gap-2">
+    <div className="flex items-center justify-end">
+      <DataAge at={lastDataAt} label="figures as of" />
+    </div>
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       <StatTile label="Balance"      value={`$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
       <StatTile label="Equity"       value={`$${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
@@ -117,6 +167,7 @@ const AccountSummary: React.FC = () => {
         positive={dailyPct >= 0 ? true : false}
         sub={`${dailyPnl >= 0 ? '+' : ''}$${dailyPnl.toFixed(2)}`}
       />
+    </div>
     </div>
   );
 };
@@ -139,25 +190,27 @@ const PerformanceMetrics: React.FC = () => {
   const worstTrade    = perf?.worst_trade        ?? 0;
   const cvar          = perf?.cvar_95            ?? 0;
 
-  const metrics: { label: string; value: string; positive?: boolean | null }[] = [
-    { label: 'Total Return',   value: fmtPct(totalReturn),            positive: totalReturn >= 0 },
-    { label: 'Sharpe Ratio',   value: fmtRatio(sharpe),               positive: sharpe >= 1 ? true : sharpe < 0 ? false : null },
-    { label: 'Sortino Ratio',  value: fmtRatio(sortino),              positive: sortino >= 1 ? true : sortino < 0 ? false : null },
-    { label: 'Max Drawdown',   value: fmtPct(-Math.abs(maxDD)),       positive: false },
-    { label: 'Win Rate',       value: fmtPct(winRate),                positive: winRate >= 50 },
-    { label: 'Profit Factor',  value: fmtRatio(profitFactor),         positive: profitFactor >= 1 },
-    { label: 'Total Trades',   value: String(totalTrades) },
-    { label: 'Avg Trade P&L',  value: fmtPnl(avgPnl),                 positive: avgPnl >= 0 },
-    { label: 'Best Trade',     value: fmtPnl(bestTrade),              positive: true },
-    { label: 'Worst Trade',    value: fmtPnl(worstTrade),             positive: false },
-    { label: 'CVaR 95%',       value: fmtPnl(cvar),                   positive: false },
+  const metrics: {
+    label: string; value: string; positive?: boolean | null; to?: string; toHint?: string;
+  }[] = [
+    { label: 'Total Return',   value: fmtPct(totalReturn),            positive: totalReturn >= 0,  to: '/performance', toHint: 'performance detail' },
+    { label: 'Sharpe Ratio',   value: fmtRatio(sharpe),               positive: sharpe >= 1 ? true : sharpe < 0 ? false : null, to: '/performance', toHint: 'risk-adjusted performance' },
+    { label: 'Sortino Ratio',  value: fmtRatio(sortino),              positive: sortino >= 1 ? true : sortino < 0 ? false : null, to: '/performance', toHint: 'risk-adjusted performance' },
+    { label: 'Max Drawdown',   value: fmtPct(-Math.abs(maxDD)),       positive: false,             to: '/performance', toHint: 'the drawdown curve' },
+    { label: 'Win Rate',       value: fmtPct(winRate),                positive: winRate >= 50,     to: '/journal',     toHint: 'the trades behind it' },
+    { label: 'Profit Factor',  value: fmtRatio(profitFactor),         positive: profitFactor >= 1, to: '/journal',     toHint: 'the trades behind it' },
+    { label: 'Total Trades',   value: String(totalTrades),                                         to: '/journal',     toHint: 'the trade journal' },
+    { label: 'Avg Trade P&L',  value: fmtPnl(avgPnl),                 positive: avgPnl >= 0,       to: '/pnl',         toHint: 'the P&L breakdown' },
+    { label: 'Best Trade',     value: fmtPnl(bestTrade),              positive: true,              to: '/journal',     toHint: 'the trade journal' },
+    { label: 'Worst Trade',    value: fmtPnl(worstTrade),             positive: false,             to: '/journal',     toHint: 'the trade journal' },
+    { label: 'CVaR 95%',       value: fmtPnl(cvar),                   positive: false,             to: '/risk-calculator', toHint: 'the Risk Calculator' },
   ];
 
   return (
     <Panel title="Performance">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {metrics.map(({ label, value, positive }) => (
-          <StatTile key={label} label={label} value={value} positive={positive} />
+        {metrics.map(({ label, value, positive, to, toHint }) => (
+          <StatTile key={label} label={label} value={value} positive={positive} to={to} toHint={toHint} />
         ))}
       </div>
     </Panel>
@@ -181,6 +234,7 @@ interface TradeRecord {
 type TradeFilter = 'all' | 'long' | 'short' | 'win' | 'loss';
 
 const TradeHistory: React.FC = () => {
+  const navigate = useNavigate();
   const { data: trades, isLoading, isError, error: tradesError } = useQuery<TradeRecord[]>({
     queryKey: ['trades', 'history'],
     queryFn:  async () => {
@@ -203,8 +257,8 @@ const TradeHistory: React.FC = () => {
     const toMs   = dateTo   ? new Date(dateTo + 'T23:59:59').getTime() : Infinity;
     return trades.filter((t) => {
       const matchDir = filter === 'all' ? true
-        : filter === 'long'  ? (t.side === 'long' || t.side === 'buy')
-        : filter === 'short' ? (t.side === 'short' || t.side === 'sell')
+        : filter === 'long'  ? positionSide(t) === 'long'
+        : filter === 'short' ? positionSide(t) === 'short'
         : filter === 'win'   ? t.pnl >= 0
         : t.pnl < 0;
       const matchSearch = !search || t.symbol.toLowerCase().includes(search.toLowerCase());
@@ -226,30 +280,32 @@ const TradeHistory: React.FC = () => {
   ];
 
   const dateInputStyle: React.CSSProperties = {
-    background: '#111827', border: '1px solid #1e2d3d', borderRadius: 4,
-    padding: '2px 6px', fontSize: 10, color: '#94a3b8', outline: 'none',
+    background: 'var(--raised)', border: '1px solid var(--border)', borderRadius: 4,
+    padding: '2px 6px', fontSize: 10, color: 'var(--text-dim)', outline: 'none',
     colorScheme: 'dark' as React.CSSProperties['colorScheme'],
   };
 
   const headerRight = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
       {/* Date range */}
-      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle} title="From date" />
-      <span style={{ fontSize: 10, color: '#334155' }}>→</span>
-      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle} title="To date" />
+      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle}
+             title="From date" aria-label="From date" />
+      <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>→</span>
+      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle}
+             title="To date" aria-label="To date" />
       {(dateFrom || dateTo) && (
         <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{
-          background: 'transparent', border: 'none', color: '#475569', fontSize: 10, cursor: 'pointer', padding: '0 2px',
+          background: 'transparent', border: 'none', color: 'var(--text-faint)', fontSize: 10, cursor: 'pointer', padding: '0 2px',
         }} title="Clear date filter">✕</button>
       )}
-      <div style={{ width: 1, height: 14, background: '#1e2d3d' }} />
+      <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
       {/* Search */}
-      <input
+      <input aria-label="Symbol"
         type="text"
         placeholder="Symbol…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="bg-[#111827] border border-[#1e2d3d] rounded px-2 py-1 text-[11px] text-slate-300 outline-none w-20"
+        className="bg-[var(--raised)] border border-[var(--border)] rounded px-2 py-1 text-[11px] text-slate-300 outline-none w-20"
       />
       {/* Filter pills */}
       {FILTERS.map(({ id, label, color }) => (
@@ -259,8 +315,8 @@ const TradeHistory: React.FC = () => {
           style={{
             padding: '2px 8px', borderRadius: 4,
             background: filter === id ? `${color}18` : 'transparent',
-            border: `1px solid ${filter === id ? `${color}50` : '#1e2d3d'}`,
-            color: filter === id ? color : '#475569',
+            border: `1px solid ${filter === id ? `${color}50` : 'var(--border)'}`,
+            color: filter === id ? color : 'var(--text-faint)',
             fontSize: 9, fontWeight: 700, letterSpacing: 0.8, cursor: 'pointer',
           }}
         >
@@ -268,7 +324,7 @@ const TradeHistory: React.FC = () => {
         </button>
       ))}
       {filtered.length > 0 && (
-        <span style={{ fontSize: 10, color: totalPnl >= 0 ? '#00e676' : '#ff1744', fontFamily: 'monospace', fontWeight: 700 }}>
+        <span style={{ fontSize: 10, color: totalPnl >= 0 ? 'var(--bull)' : 'var(--bear)', fontFamily: 'monospace', fontWeight: 700 }}>
           {Number.isFinite(totalPnl) ? `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}` : '—'} ({wins}/{filtered.length})
         </span>
       )}
@@ -288,14 +344,14 @@ const TradeHistory: React.FC = () => {
       {!isLoading && !isError && filtered.length === 0 && (
         <EmptyState
           compact
-          icon="📋"
+          icon={Inbox}
           title={!trades || trades.length === 0 ? 'No closed trades yet' : `No ${filter} trades`}
           description={!trades || trades.length === 0
-            ? 'Closed positions will appear here once you start trading.'
-            : 'Try changing the filter to see other trade types.'}
+            ? 'Closed positions appear here once a trade completes. Open the ticket to place one.'
+            : 'Change the filter above to see other trade types.'}
           links={[
-            { label: 'Trade Now', href: '/trade', icon: '⚡' },
-            { label: 'Journal', href: '/journal', icon: '📓' },
+            { label: 'Open the ticket', href: '/trade' },
+            { label: 'Trade journal', href: '/journal' },
           ]}
         />
       )}
@@ -303,8 +359,11 @@ const TradeHistory: React.FC = () => {
       {filtered.length > 0 && (
         <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
           <table className="w-full text-[12px] min-w-[560px]">
+            <caption className="sr-only">
+              Closed trade history — symbol, side, size, entry and exit price, P&amp;L, and open and close times
+            </caption>
             <thead>
-              <tr className="border-b border-[#1e2d3d]">
+              <tr className="border-b border-[var(--border)]">
                 {['Symbol', 'Side', 'Size', 'Entry', 'Exit', 'P&L', 'Opened', 'Closed'].map((h) => (
                   <th
                     key={h}
@@ -317,12 +376,29 @@ const TradeHistory: React.FC = () => {
             </thead>
             <tbody>
               {filtered.map((t) => {
-                const isLong = t.side === 'long' || t.side === 'buy';
+                // F5-02: one owner for this rule. The hand-rolled variant
+                // drops `direction` and any casing the API sends.
+                const isLong = positionSide(t) === 'long';
                 const pnlPos = t.pnl >= 0;
                 return (
+                  // The row opens the ticket for that instrument, carrying
+                  // symbol and side through router state (F225). Keyboard
+                  // operable, not mouse-only.
                   <tr
                     key={t.id}
-                    className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/40 transition-colors"
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`${t.symbol} ${isLong ? 'long' : 'short'}, P&L ${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} — open the ticket`}
+                    onClick={() => navigate('/trade', { state: { signal: { symbol: t.symbol, direction: isLong ? 'BUY' : 'SELL' } } })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate('/trade', { state: { signal: { symbol: t.symbol, direction: isLong ? 'BUY' : 'SELL' } } });
+                      }
+                    }}
+                    className="border-b border-[var(--surface)] cursor-pointer transition-colors duration-150
+                               hover:bg-[var(--border)]/40 focus-visible:outline-none focus-visible:ring-2
+                               focus-visible:ring-inset focus-visible:ring-sky-500"
                   >
                     <td className="px-3 py-2.5 font-semibold text-slate-200 whitespace-nowrap">
                       {t.symbol}
@@ -332,8 +408,8 @@ const TradeHistory: React.FC = () => {
                         className={cn(
                           'inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
                           isLong
-                            ? 'bg-[#00e676]/10 text-[#00e676]'
-                            : 'bg-[#ff1744]/10 text-[#ff1744]',
+                            ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+                            : 'bg-[var(--bear)]/10 text-[var(--bear)]',
                         )}
                       >
                         {isLong ? '▲ Long' : '▼ Short'}
@@ -347,8 +423,8 @@ const TradeHistory: React.FC = () => {
                         className={cn(
                           'inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold tabular-nums',
                           pnlPos
-                            ? 'bg-[#00e676]/10 text-[#00e676]'
-                            : 'bg-[#ff1744]/10 text-[#ff1744]',
+                            ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+                            : 'bg-[var(--bear)]/10 text-[var(--bear)]',
                         )}
                       >
                         {fmtPnl(t.pnl)}
@@ -378,6 +454,11 @@ const PIE_COLORS = ['#3b82f6','#00e676','#f59e0b','#a78bfa','#f87171','#38bdf8',
 const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: number }[] }> = ({ slices }) => {
   const R = 60; const CX = 80; const CY = 80;
   let cumAngle = -Math.PI / 2;
+  // A slice covering the whole circle has identical start and end points, and an
+  // SVG arc from a point to itself renders nothing — so a single-position
+  // portfolio drew an empty ring. Two half-arcs describe a full circle instead.
+  const isSingleFullSlice = slices.length === 1 && (slices[0]?.pct ?? 0) >= 99.99;
+
   const paths = slices.map((s, i) => {
     const angle = (s.pct / 100) * 2 * Math.PI;
     const x1 = CX + R * Math.cos(cumAngle);
@@ -386,7 +467,10 @@ const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: num
     const x2 = CX + R * Math.cos(cumAngle);
     const y2 = CY + R * Math.sin(cumAngle);
     const large = angle > Math.PI ? 1 : 0;
-    return { d: `M${CX},${CY} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z`, color: PIE_COLORS[i % PIE_COLORS.length]!, label: s.label, pct: s.pct };
+    const d = isSingleFullSlice
+      ? `M${CX},${CY - R} A${R},${R} 0 1,1 ${CX - 0.01},${CY - R} Z`
+      : `M${CX},${CY} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z`;
+    return { d, color: PIE_COLORS[i % PIE_COLORS.length] ?? '#64748b', label: s.label, pct: s.pct };
   });
 
   return (
@@ -402,15 +486,6 @@ const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: num
           {slices.length} pos
         </text>
       </svg>
-      <div className="flex flex-col gap-1.5">
-        {paths.map((p, i) => (
-          <div key={i} className="flex items-center gap-2 text-[11px]">
-            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: p.color }} />
-            <span className="text-slate-300 font-medium w-16">{p.label}</span>
-            <span className="text-slate-500 tabular-nums">{p.pct.toFixed(1)}%</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };
@@ -423,13 +498,14 @@ const DrawdownChart: React.FC<{ equityPoints: { t: number; v: number }[] }> = ({
   );
   const W = 600; const H = 80;
   // Compute running max and drawdown %
-  let peak = equityPoints[0]!.v;
+  // `equityPoints.length < 2` returned above, but that does not narrow [0].
+  let peak = equityPoints[0]?.v ?? 0;
   const dd = equityPoints.map((p) => {
     if (p.v > peak) peak = p.v;
     return { t: p.t, dd: peak > 0 ? ((p.v - peak) / peak) * 100 : 0 };
   });
   const minDd = Math.min(...dd.map((d) => d.dd));
-  const minT  = dd[0]!.t; const maxT = dd[dd.length - 1]!.t; const rangeT = maxT - minT || 1;
+  const minT  = dd[0]?.t ?? 0; const maxT = dd[dd.length - 1]?.t ?? minT; const rangeT = maxT - minT || 1;
   const coords = dd.map((d) => ({
     x: ((d.t - minT) / rangeT) * W,
     y: minDd < 0 ? (d.dd / minDd) * H : 0,
@@ -442,7 +518,7 @@ const DrawdownChart: React.FC<{ equityPoints: { t: number; v: number }[] }> = ({
     <div>
       <div className="flex justify-between text-[10px] text-slate-500 mb-1">
         <span>Drawdown</span>
-        <span className="text-[#ff1744] font-semibold">Max: -{maxDdPct}%</span>
+        <span className="text-[var(--bear)] font-semibold">Max: -{maxDdPct}%</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80 }} preserveAspectRatio="none">
         <defs>
@@ -467,8 +543,17 @@ const SymbolPnLSparklines: React.FC = () => {
   const bySymbol: Record<string, { pnl: number; side: string }[]> = {};
   for (const p of positions) {
     if (!bySymbol[p.symbol]) bySymbol[p.symbol] = [];
-    bySymbol[p.symbol]!.push({ pnl: p.unrealized_pnl, side: p.side });
+    (bySymbol[p.symbol] ??= []).push({ pnl: p.unrealized_pnl, side: positionSide(p) ?? 'unknown' });
   }
+
+  // Largest absolute per-symbol P&L, used to scale the mini bars against each
+  // other rather than against a fixed dollar figure.
+  const maxAbsPnl = Math.max(
+    ...Object.values(bySymbol).map((entries) =>
+      Math.abs(entries.reduce((sum, e) => sum + e.pnl, 0)),
+    ),
+    0,
+  );
 
   return (
     <Panel title="Open Positions — P&L by Symbol">
@@ -477,27 +562,31 @@ const SymbolPnLSparklines: React.FC = () => {
           const totalPnl = entries.reduce((s, e) => s + e.pnl, 0);
           const isPos    = totalPnl >= 0;
           return (
-            <div key={sym} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d]">
+            <div key={sym} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[var(--surface)] border border-[var(--border)]">
               <div className="flex justify-between items-center">
                 <span className="text-[11px] font-bold text-slate-200">{sym}</span>
-                <span className={cn('text-[11px] font-semibold tabular-nums', isPos ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+                <span className={cn('text-[11px] font-semibold tabular-nums', isPos ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>
                   {fmtPnl(totalPnl)}
                 </span>
               </div>
               <div className="flex gap-1 flex-wrap">
                 {entries.map((e, i) => (
-                  <span key={i} className={cn('text-[9px] px-1 py-0.5 rounded', e.side === 'long' ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]')}>
+                  <span key={i} className={cn('text-[9px] px-1 py-0.5 rounded', e.side === 'long' ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]')}>
                     {e.side === 'long' ? '▲' : '▼'} {Number.isFinite(e.pnl) ? `$${e.pnl.toFixed(2)}` : '—'}
                   </span>
                 ))}
               </div>
-              {/* Mini P&L bar */}
-              <div className="h-1 rounded bg-[#1e2d3d] overflow-hidden mt-1">
+              {/* Mini P&L bar. Scaled against the largest absolute P&L on the
+                  page, so the bars compare positions to each other. The
+                  denominator used to be a hardcoded $100, which pegged every
+                  position over $100 at full width — on a real account that is
+                  all of them, and the bar carried no information. */}
+              <div className="h-1 rounded bg-[var(--border)] overflow-hidden mt-1">
                 <div
                   className="h-1 rounded transition-all"
                   style={{
-                    width: `${Math.min(Math.abs(totalPnl) / 100 * 100, 100)}%`,
-                    background: isPos ? '#00e676' : '#ff1744',
+                    width: `${maxAbsPnl > 0 ? Math.min((Math.abs(totalPnl) / maxAbsPnl) * 100, 100) : 0}%`,
+                    background: isPos ? 'var(--bull)' : 'var(--bear)',
                     marginLeft: isPos ? 0 : 'auto',
                   }}
                 />
@@ -519,10 +608,11 @@ const AllocationBreakdown: React.FC = () => {
 
   const bySymbol: Record<string, { long: number; short: number }> = {};
   for (const p of positions) {
-    if (!bySymbol[p.symbol]) bySymbol[p.symbol] = { long: 0, short: 0 };
+    const row = (bySymbol[p.symbol] ??= { long: 0, short: 0 });
     const notional = p.size * p.current_price;
-    if (p.side === 'long') bySymbol[p.symbol]!.long  += notional;
-    else                   bySymbol[p.symbol]!.short += notional;
+    // F5-02: a 'buy' position was counted as short exposure here.
+    if (positionSide(p) === 'long') row.long  += notional;
+    else                   row.short += notional;
   }
 
   const totalNotional = Object.values(bySymbol).reduce((acc, v) => acc + v.long + v.short, 0);
@@ -541,7 +631,7 @@ const AllocationBreakdown: React.FC = () => {
             <div key={label} className="flex items-center gap-3">
               <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
               <span className="text-[12px] font-semibold text-slate-200 w-20 flex-shrink-0">{label}</span>
-              <div className="flex-1 h-1.5 rounded bg-[#0d1421] overflow-hidden">
+              <div className="flex-1 h-1.5 rounded bg-[var(--surface)] overflow-hidden">
                 <div className="h-1.5 rounded transition-all" style={{ width: `${pct}%`, background: PIE_COLORS[i % PIE_COLORS.length] }} />
               </div>
               <span className="text-[11px] text-slate-400 tabular-nums w-12 text-right">{pct.toFixed(1)}%</span>
@@ -562,6 +652,7 @@ const Portfolio: React.FC = () => {
   const equityQuery = useEquityCurve();
   usePositions();
   const equityHistory = useStore(selectEquityCurve);
+  const feedLive = useStore(selectFeedLive);
   const toast = useToast();
 
   const equityPoints = useMemo(() =>
@@ -594,38 +685,48 @@ const Portfolio: React.FC = () => {
   };
 
   return (
-    <div className="page-content gap-3 sm:gap-4 fade-in">
-
-      <PageHeader
-        title="Portfolio"
-        icon="💼"
-        subtitle="Balances, equity curve, allocation, and trade history"
-        breadcrumbs={[
+    <PageShell
+      title="Portfolio"
+      icon={Briefcase}
+      subtitle="Balances, equity curve, allocation, and trade history"
+      breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Portfolio' },
         ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Link to="/performance" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
-              📊 <span className="hidden xs:inline ml-1">Analytics</span>
-            </Link>
-            <Link to="/trade" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
-              ⚡ <span className="hidden xs:inline ml-1">Trade</span>
-            </Link>
-            <Link to="/journal" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
-              📓 <span className="hidden xs:inline ml-1">Journal</span>
-            </Link>
-            <button onClick={handleExport} className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors min-h-[36px]">
-              ↓ <span className="hidden xs:inline ml-1">Export CSV</span>
-            </button>
-          </div>
+      actions={
+          // Cross-links move to the related-pages footer; the header keeps
+          // only the control that acts on this page.
+          <button
+            onClick={handleExport}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-[11px]
+                       font-semibold bg-[#1e3a5f] text-[var(--link)] ring-1 ring-inset ring-[#1d4ed8]
+                       cursor-pointer transition-colors duration-150 hover:bg-[#1d4ed8]/30
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+          >
+            <Download size={13} strokeWidth={1.75} aria-hidden />
+            Export CSV
+          </button>
         }
-      />
+      width="standard" related={[
+          { to: '/trade',           label: 'Trading ticket',  hint: 'Open or close a position',           icon: Zap },
+          { to: '/performance',     label: 'Performance',     hint: 'Sharpe, drawdown, equity curve',      icon: Trophy },
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',           icon: LineChart },
+          { to: '/journal',         label: 'Trade journal',   hint: 'Notes and mistakes per trade',        icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next position',              icon: Shield },
+          { to: '/watchlist',       label: 'Watchlist',       hint: 'Instruments you are following',       icon: Radar },
+        ]}
+    >
+
+
+
+      {/* Balances, P&L and allocation below are all last-received values. Say
+          so when they have stopped being refreshed (F1-02). */}
+      <LiveFeedNotice live={feedLive} what="balances and P&amp;L" />
 
       <AccountSummary />
 
       {equityQuery.isError && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] text-[12px]">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[var(--bear)]/10 border border-[var(--bear)]/30 text-[var(--bear)] text-[12px]">
           <span>⚠</span>
           <span>
             Equity curve unavailable — {extractApiError(equityQuery.error, 'check your connection')}
@@ -648,14 +749,15 @@ const Portfolio: React.FC = () => {
       <TradeHistory />
 
       <CrossLinkBar title="Related" links={[
-        { label: 'AI Charts',       href: '/ai-chart',        icon: '📈', color: '#06b6d4' },
-        { label: 'Performance',     href: '/performance',     icon: '📊', color: '#4ade80' },
-        { label: 'P&L Dashboard',   href: '/pnl',             icon: '💰', color: '#f59e0b' },
-        { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡', color: '#f87171' },
-        { label: 'Trade Journal',   href: '/journal',         icon: '📓', color: '#a78bfa' },
-        { label: 'Watchlist',       href: '/watchlist',       icon: '👁', color: '#60a5fa' },
+        { label: 'AI Charts',       href: '/ai-chart',        icon: TrendingUp, color: '#06b6d4' },
+        { label: 'Performance',     href: '/performance',     icon: BarChart3, color: '#4ade80' },
+        { label: 'P&L Dashboard',   href: '/pnl',             icon: Banknote, color: '#f59e0b' },
+        { label: 'Risk Calculator', href: '/risk-calculator', icon: Shield, color: '#f87171' },
+        { label: 'Trade Journal',   href: '/journal',         icon: NotebookPen, color: '#a78bfa' },
+        { label: 'Watchlist',       href: '/watchlist',       icon: Eye, color: '#60a5fa' },
       ]} />
-    </div>
+
+    </PageShell>
   );
 };
 

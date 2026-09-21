@@ -38,9 +38,13 @@ http {
     gzip_vary on;
     gzip_proxied any;
     gzip_comp_level 6;
-    gzip_types text/plain text/css text/xml application/json
+    # text/javascript is what nginx's own mime.types maps .js to (since 1.21.1).
+    # Listing only application/javascript left every SPA chunk uncompressed —
+    # ~2.8 MB of JS shipping raw on a cold load.
+    gzip_types text/plain text/css text/xml text/javascript application/json
                application/javascript application/xml+rss
-               application/atom+xml image/svg+xml;
+               application/atom+xml image/svg+xml application/wasm;
+    gzip_min_length 1024;
 
     # ── Rate limiting ─────────────────────────────────────────────────────────
     # Auth endpoints: 10 req/min per IP
@@ -100,6 +104,26 @@ http {
         add_header Content-Security-Policy
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.qrserver.com; connect-src 'self' wss://${HOPEFX_DOMAIN} https://api.qrserver.com; font-src 'self'; worker-src 'self' blob:;"
             always;
+
+        # ── Hidden files (.git, .env, .DS_Store, …) ───────────────────────────
+        # Defence in depth. Today every unmatched path is proxied to FastAPI,
+        # which serves the built SPA from its own static mount and has no route
+        # that would hand back a dotfile — so nothing here is reachable. That
+        # stops being true the moment anyone adds a `root`/`alias` block to
+        # serve assets straight off disk, at which point /.git/config and
+        # /.env become live URLs and the repo (including its history) is
+        # readable. Denying the pattern up front costs nothing and removes the
+        # failure mode rather than relying on that block never being added.
+        # The (?!well-known) exclusion is load-bearing, not decoration: a blanket
+        # /. deny also swallows /.well-known/acme-challenge/, which is how
+        # certbot proves domain ownership — so the "hardening" would silently
+        # break TLS renewal and take the site down ~60 days later.
+        location ~ /\.(?!well-known) {
+            deny all;
+            access_log off;
+            log_not_found off;
+            return 404;
+        }
 
         # ── Auth rate limiting ────────────────────────────────────────────────
         location ~ ^/api/auth/(login|register|refresh) {

@@ -26,7 +26,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from api.auth import TokenPayload
-from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from ._shared import _audit_payload, _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -88,7 +89,7 @@ async def get_gdpr_requests(
             for row in rows:
                 rid = f"gdpr_{row.id}"
                 if rid not in existing_ids:
-                    meta = json.loads(row.metadata or "{}") if row.metadata else {}
+                    meta = _audit_payload(row)
                     reqs.append(
                         {
                             "request_id": rid,
@@ -224,7 +225,7 @@ async def erase_user_data(
             db.close()
     except Exception as exc:
         logger.error("GDPR erase error: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "gdpr_user_erase", {"user_id": user_id, "reason": reason})
     return {"ok": True, "erased": erased, "user_id": user_id}
 
@@ -249,7 +250,7 @@ async def get_consent_log(
                 q = q.filter(AuditLogEntry.user_id == user_id)
             rows = q.order_by(AuditLogEntry.created_at.desc()).limit(limit).all()
             for r in rows:
-                meta = json.loads(r.metadata or "{}") if r.metadata else {}
+                meta = _audit_payload(r)
                 entries.append(
                     {
                         "entry_id": str(r.id),
@@ -311,6 +312,6 @@ async def update_retention_policies(
             policies.update({k: v for k, v in body.items() if isinstance(v, int)})
             rc.set(_RETENTION_KEY, json.dumps(policies), ex=86400 * 365)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "gdpr_retention_update", body)
     return {"ok": True}

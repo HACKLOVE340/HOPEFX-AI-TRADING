@@ -306,22 +306,59 @@ async def kyc_status_alias(user: TokenPayload = Depends(get_current_user)):
         }
 
 
+#: Any one of these satisfies the government-ID requirement. Mirrors
+#: IDENTITY_DOC_IDS in frontend/src/pages/KYCPage.tsx — the page has always
+#: promised "at least a government-issued ID and proof of address"; until now
+#: that promise was enforced nowhere.
+_IDENTITY_DOC_TYPES = frozenset({"passport", "national_id", "drivers_license", "identity"})
+_PROOF_OF_ADDRESS_TYPE = "proof_of_address"
+
+
+def _missing_kyc_requirements(documents: list) -> list[str]:
+    """Return the stated requirements not satisfied by the *stored* documents."""
+    stored = {str(d.get("type") or d.get("doc_type") or "").strip().lower() for d in documents if isinstance(d, dict)}
+    missing: list[str] = []
+    if not (stored & _IDENTITY_DOC_TYPES):
+        missing.append("a government-issued ID")
+    if _PROOF_OF_ADDRESS_TYPE not in stored:
+        missing.append("proof of address")
+    return missing
+
+
 @kyc_alias_router.post("/submit", summary="Submit KYC application (alias)")
 async def kyc_submit_alias(user: TokenPayload = Depends(get_current_user)):
-    """Submit KYC application — multipart form handled by frontend."""
+    """
+    Submit the caller's KYC application for review.
+
+    Takes no request body. The document list is read from what this service
+    actually stored for the user — never from the caller (audit #58). The
+    frontend used to send `document_types[]` built from React state, which let a
+    caller assert documents that were never uploaded; this endpoint ignored it,
+    but it also never checked that any documents existed at all, so a submission
+    with nothing attached was accepted and queued a guaranteed rejection.
+    """
     from datetime import datetime, timezone
 
-    try:
-        from api.db_store import db_get, db_set
+    from api.db_store import db_get, db_set
 
-        record = db_get(f"kyc:{user.sub}") or {}
-        record["status"] = "pending"
-        record["submitted_at"] = datetime.now(timezone.utc).isoformat()
-        db_set(f"kyc:{user.sub}", record, changed_by=user.sub)
-        return {"success": True, "status": "pending", "message": "KYC application submitted for review"}
-    except Exception as exc:
-        logger.warning("kyc_submit_alias failed: %s", exc)
-        return {"success": True, "status": "pending", "message": "KYC application submitted for review"}
+    record = db_get(f"kyc:{user.sub}") or {}
+    documents = record.get("documents") or []
+
+    missing = _missing_kyc_requirements(documents)
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=("Cannot submit for review — still required: " + " and ".join(missing) + "."),
+        )
+
+    record["status"] = "pending"
+    record["submitted_at"] = datetime.now(timezone.utc).isoformat()
+    # A failure to persist must not report success: the previous version
+    # swallowed every exception and returned {"success": True}, so a user whose
+    # submission was never recorded would wait 1-2 days for a review that had not
+    # been queued.
+    db_set(f"kyc:{user.sub}", record, changed_by=user.sub)
+    return {"success": True, "status": "pending", "message": "KYC application submitted for review"}
 
 
 @kyc_alias_router.get("/documents", summary="List KYC documents (alias)")

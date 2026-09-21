@@ -12,7 +12,7 @@ import re as _re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, require_role
@@ -25,6 +25,26 @@ UTC = timezone.utc
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 
 _require_superadmin = require_role("superadmin")
+
+
+def require_superadmin_2fa(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> TokenPayload:
+    """FastAPI dependency: require superadmin role **and** a 2FA-verified token.
+
+    Superadmin operations that affect live trading (kill switch activation,
+    engine pause, risk limit changes) must only be reachable from tokens that
+    were issued after a successful TOTP verification.  A stolen or forged
+    access token without the ``two_factor_verified`` claim is rejected here
+    before it reaches any nuclear control endpoint.
+    """
+    if not getattr(user, "two_factor_verified", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=("Superadmin nuclear operations require 2FA verification. Log in again with a valid TOTP code."),
+        )
+    return user
+
 
 # Report IDs must be UUID-format with an optional .json/.html/.csv extension.
 _REPORT_ID_RE = _re.compile(
@@ -43,6 +63,34 @@ def _utcnow() -> datetime:
 
 def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt else None
+
+
+def _audit_payload(row) -> dict:
+    """Decode an ``AuditLogEntry``'s JSON payload.
+
+    Five superadmin readers — AML alerts, sanctions hits, GDPR requests, the
+    consent log and risk breaches — each did::
+
+        meta = json.loads(r.metadata or "{}") if r.metadata else {}
+
+    ``AuditLogEntry`` has no ``metadata`` column. On a declarative model
+    ``r.metadata`` is SQLAlchemy's ``MetaData`` object, which is truthy, so the
+    guard never fired and ``json.loads`` was handed a ``MetaData``:
+    ``TypeError: the JSON object must be str, bytes or bytearray``. Each site
+    caught it and returned whatever it had already accumulated — so five
+    compliance views silently showed no database-backed rows at all.
+
+    The payload column is ``data_json``, which is what both writers use
+    (``_log_superadmin_action`` here and ``ComplianceManager``).
+    """
+    raw = getattr(row, "data_json", None)
+    if not raw:
+        return {}
+    try:
+        blob = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return blob if isinstance(blob, dict) else {}
 
 
 def _validate_report_id(report_id: str) -> str:
@@ -419,6 +467,16 @@ class PlatformConfigBody(BaseModel):
     llm_fallback_model: str | None = None
     llm_embedding_model: str | None = None
     llm_embedding_dimensions: int | None = None
+    # Ordered per-role chain (plan Task 14). Shape: {role: [{provider, model}]}.
+    # The two flat fields above stay supported for `reasoning`; this one is the
+    # more specific of the two and wins where both are set.
+    llm_chain: dict[str, list[dict[str, str]]] | None = None
+    # Local inference: optional, OFF by default, and never a primary leg.
+    # `llm_local_only` is the privacy mode for a deployment that must not
+    # egress prompts -- it overrides a configured hosted chain.
+    llm_local_enabled: bool | None = None
+    llm_local_model: str | None = None
+    llm_local_only: bool | None = None
     # Drawdown controls
     drawdown_hard_stop_pct: float | None = None
     drawdown_soft_warn_pct: float | None = None

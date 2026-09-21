@@ -22,6 +22,7 @@ POST /superadmin/security-infra/antivirus/scan           — trigger scan
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -29,12 +30,14 @@ import ssl
 import socket
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -71,7 +74,7 @@ def _check_cert_expiry(hostname: str, port: int = 443) -> dict[str, Any]:
             "expires_at": None,
             "days_remaining": -1,
             "status": "unknown",
-            "error": str(exc),
+            "error": safe_error(exc),
         }
 
 
@@ -317,7 +320,7 @@ async def add_waf_rule(
             rules.append(rule)
             rc.set(_WAF_RULES_KEY, json.dumps(rules), ex=86400 * 30)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "waf_rule_add", {"rule_id": rule_id})
     return {"ok": True, "rule": rule}
 
@@ -364,7 +367,7 @@ async def revoke_api_key(
                     k["revoke_reason"] = reason
             rc.set(_API_KEYS_KEY, json.dumps(keys), ex=86400 * 90)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id, "reason": reason})
     return {"ok": True}
 
@@ -383,10 +386,20 @@ async def get_hsm_status(
             key_count = len(list(rc.scan_iter("hsm:key:*")))
     except Exception:  # nosec B110  # noqa: S110
         pass
+    # hsm_type / key_count / initialized are the names the Sec. Infra panel
+    # reads. It read `hsm.hsm_type.toUpperCase()` against a response whose field
+    # is called `type`, so the whole section crashed with
+    # "undefined is not an object (evaluating 'i.hsm_type.toUpperCase')".
+    # Both spellings are returned: the aliases keep the page working, `type` and
+    # `keys_managed` keep any existing consumer working.
     return {
         "type": hsm_type,
+        "hsm_type": hsm_type,
         "status": "active" if hsm_type != "software" else "software_only",
+        "initialized": hsm_type != "software",
         "keys_managed": key_count,
+        "key_count": key_count,
+        "keys": [],
         "fips_compliant": hsm_type in ("pkcs11", "aws_cloudhsm", "azure_hsm"),
         "provider": os.getenv("HSM_PROVIDER", "software"),
         "checked_at": _utcnow().isoformat(),
@@ -397,12 +410,38 @@ async def get_hsm_status(
 async def get_antivirus_status(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
+    # clamav_available and yara_rules_loaded are read by the Antivirus panel and
+    # were never sent, so it rendered "CLAMAV N/A" and the literal text
+    # "YARA RULES: undefined". Both are knowable — security/antivirus.py already
+    # tracks whether each engine loaded — so they are reported rather than
+    # dropped from the UI.
+    clamav_available = False
+    yara_rules_loaded = 0
+    engines_detail = ""
+    try:
+        from security.antivirus import CLAMD_AVAILABLE, YARA_AVAILABLE, get_scanner
+
+        scanner = get_scanner()
+        clamav_available = bool(CLAMD_AVAILABLE and getattr(scanner, "_clamd", None) is not None)
+        rules = getattr(scanner, "_yara_rules", None)
+        yara_rules_loaded = 0 if rules is None else getattr(rules, "num_rules", 1)
+        if not YARA_AVAILABLE:
+            engines_detail = "yara-python not installed"
+        elif not clamav_available:
+            engines_detail = "ClamAV daemon not reachable"
+    except Exception as exc:
+        logger.debug("antivirus status: scanner unavailable: %s", exc)
+        engines_detail = "antivirus module unavailable"
+
     status: dict[str, Any] = {
         "status": "unknown",
         "engine": "clamav",
         "last_scan": None,
         "threats_found": 0,
         "files_scanned": 0,
+        "clamav_available": clamav_available,
+        "yara_rules_loaded": yara_rules_loaded,
+        "engines_detail": engines_detail,
         "checked_at": _utcnow().isoformat(),
     }
     try:
@@ -509,8 +548,13 @@ async def trigger_antivirus_scan(
         import time
 
         t0 = time.perf_counter()
-        proc = subprocess.run(
-            ["clamscan", "--recursive", "--no-summary", "/workspaces/HOPEFX-AI-TRADING/uploads"],
+        # Scan target is deployment-specific; the previous hardcoded
+        # /workspaces/... path only existed on a dev container, so this endpoint
+        # always reported 0 files scanned in production.
+        scan_dir = os.getenv("HOPEFX_UPLOAD_DIR", str(Path.cwd() / "uploads"))
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            ["clamscan", "--recursive", "--no-summary", scan_dir],
             capture_output=True,
             text=True,
             timeout=30,
@@ -531,7 +575,7 @@ async def trigger_antivirus_scan(
         result["error"] = "ClamAV not installed"
     except Exception as exc:
         result["status"] = "error"
-        result["error"] = str(exc)
+        result["error"] = safe_error(exc)
 
     try:
         from cache.redis_client import get_sync_redis_client

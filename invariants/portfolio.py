@@ -46,17 +46,28 @@ def verify_portfolio_state_transition(from_state: str, to_state: str) -> list[Vi
     return []
 
 
-def verify_portfolio_value(positions_value: float, cash_balance: float, realized_pnl: float,
-                           unrealized_pnl: float, portfolio_value: float, tol: float = 0.01) -> list[Violation]:
+def verify_portfolio_value(
+    positions_value: float,
+    cash_balance: float,
+    realized_pnl: float,
+    unrealized_pnl: float,
+    portfolio_value: float,
+    tol: float = 0.01,
+) -> list[Violation]:
     """positions + cash + realized + unrealized must equal portfolio value."""
     vals = [positions_value, cash_balance, realized_pnl, unrealized_pnl, portfolio_value]
     if not all(_is_finite_number(x) for x in vals):
         return [_v("No Hidden Capital", CONSTITUTIONAL, "portfolio-value component is non-finite")]
     lhs = positions_value + cash_balance + realized_pnl + unrealized_pnl
     if abs(lhs - portfolio_value) > tol:
-        return [_v("No Hidden Capital", CONSTITUTIONAL,
-                   f"portfolio value mismatch: parts {round(lhs, 4)} != {portfolio_value}",
-                   diff=round(lhs - portfolio_value, 6))]
+        return [
+            _v(
+                "No Hidden Capital",
+                CONSTITUTIONAL,
+                f"portfolio value mismatch: parts {round(lhs, 4)} != {portfolio_value}",
+                diff=round(lhs - portfolio_value, 6),
+            )
+        ]
     return []
 
 
@@ -79,8 +90,13 @@ def verify_diversification(num_positions: int, minimum: int) -> list[Violation]:
 def verify_correlation_budget(max_pairwise_corr: float, limit: float) -> list[Violation]:
     """A 'diversified' book whose holdings are highly correlated is concentrated."""
     if _is_finite_number(max_pairwise_corr) and max_pairwise_corr > limit:
-        return [_v("No Hidden Exposure", WARNING,
-                   f"max pairwise correlation {max_pairwise_corr} exceeds budget {limit} (hidden concentration)")]
+        return [
+            _v(
+                "No Hidden Exposure",
+                WARNING,
+                f"max pairwise correlation {max_pairwise_corr} exceeds budget {limit} (hidden concentration)",
+            )
+        ]
     return []
 
 
@@ -93,8 +109,9 @@ def verify_hedging(hedge_coverage: float, required_coverage: float) -> list[Viol
     return []
 
 
-def verify_currency_reconciled(exposure_by_ccy: Mapping[str, float], net_total: float,
-                               tol: float = 0.01) -> list[Violation]:
+def verify_currency_reconciled(
+    exposure_by_ccy: Mapping[str, float], net_total: float, tol: float = 0.01
+) -> list[Violation]:
     """Per-currency exposure must sum to the reported net (no hidden FX exposure)."""
     vals = list(exposure_by_ccy.values())
     if not all(_is_finite_number(x) for x in [*vals, net_total]):
@@ -104,14 +121,20 @@ def verify_currency_reconciled(exposure_by_ccy: Mapping[str, float], net_total: 
     return []
 
 
-def verify_synthetic_exposure_tracked(notional_synthetic: float, tracked_synthetic: float,
-                                      tol: float = 0.01) -> list[Violation]:
+def verify_synthetic_exposure_tracked(
+    notional_synthetic: float, tracked_synthetic: float, tol: float = 0.01
+) -> list[Violation]:
     """Synthetic/derivative notional exposure must be tracked, not hidden."""
     if not (_is_finite_number(notional_synthetic) and _is_finite_number(tracked_synthetic)):
         return [_v("No Hidden Exposure", CONSTITUTIONAL, "synthetic exposure non-finite")]
     if abs(notional_synthetic - tracked_synthetic) > tol:
-        return [_v("No Hidden Exposure", CRITICAL,
-                   f"untracked synthetic exposure: notional {notional_synthetic} != tracked {tracked_synthetic}")]
+        return [
+            _v(
+                "No Hidden Exposure",
+                CRITICAL,
+                f"untracked synthetic exposure: notional {notional_synthetic} != tracked {tracked_synthetic}",
+            )
+        ]
     return []
 
 

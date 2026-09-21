@@ -213,7 +213,7 @@ describe('Price tick API contract → store', () => {
   });
 
   it('price history accumulates real ticks', () => {
-    const ticks = [2340, 2341, 2342, 2341.5, 2343].map((mid, i) => ({
+    const ticks = [2340, 2341, 2342, 2341.5, 2343]?.map((mid, i) => ({
       ...REAL_TICK_RESPONSE,
       mid,
       bid: mid - 0.3,
@@ -223,7 +223,7 @@ describe('Price tick API contract → store', () => {
     ticks.forEach(t => useStore.getState().setPrice(t));
     const history = useStore.getState().priceHistory['XAU/USD'];
     expect(history).toHaveLength(5);
-    expect(history?.[4].mid).toBe(2343);
+    expect(history?.[4]?.mid).toBe(2343);
   });
 
   it('price history cap at 200 entries with real tick shape', () => {
@@ -246,33 +246,33 @@ describe('Position API contract → store', () => {
   it('real position shape is accepted by upsertPosition', () => {
     useStore.getState().upsertPosition(REAL_POSITION_RESPONSE);
     const pos = useStore.getState().positions[0];
-    expect(pos.id).toBe('pos_01HXYZ');
-    expect(pos.symbol).toBe('XAU/USD');
-    expect(pos.side).toBe('long');
-    expect(pos.size).toBe(0.10);
-    expect(pos.entry_price).toBe(2335.00);
-    expect(pos.unrealized_pnl).toBe(68.00);
+    expect(pos?.id).toBe('pos_01HXYZ');
+    expect(pos?.symbol).toBe('XAU/USD');
+    expect(pos?.side).toBe('long');
+    expect(pos?.size).toBe(0.10);
+    expect(pos?.entry_price).toBe(2335.00);
+    expect(pos?.unrealized_pnl).toBe(68.00);
   });
 
   it('position with stop_loss and take_profit is stored', () => {
     useStore.getState().upsertPosition(REAL_POSITION_RESPONSE);
     const pos = useStore.getState().positions[0];
-    expect(pos.stop_loss).toBe(2315.00);
-    expect(pos.take_profit).toBe(2375.00);
+    expect(pos?.stop_loss).toBe(2315.00);
+    expect(pos?.take_profit).toBe(2375.00);
   });
 
   it('short position is stored correctly', () => {
     const short: Position = { ...REAL_POSITION_RESPONSE, id: 'pos_short', side: 'short', unrealized_pnl: -45.00 };
     useStore.getState().upsertPosition(short);
-    expect(useStore.getState().positions[0].side).toBe('short');
-    expect(useStore.getState().positions[0].unrealized_pnl).toBe(-45.00);
+    expect(useStore.getState().positions[0]?.side).toBe('short');
+    expect(useStore.getState().positions[0]?.unrealized_pnl).toBe(-45.00);
   });
 
   it('setPositions with real array replaces all', () => {
     const pos2: Position = { ...REAL_POSITION_RESPONSE, id: 'pos_02', symbol: 'EUR/USD' };
     useStore.getState().setPositions([REAL_POSITION_RESPONSE, pos2]);
     expect(useStore.getState().positions).toHaveLength(2);
-    expect(useStore.getState().positions[1].symbol).toBe('EUR/USD');
+    expect(useStore.getState().positions[1]?.symbol).toBe('EUR/USD');
   });
 
   it('upsertPosition updates existing position by id', () => {
@@ -280,7 +280,7 @@ describe('Position API contract → store', () => {
     const updated: Position = { ...REAL_POSITION_RESPONSE, current_price: 2350.00, unrealized_pnl: 150.00 };
     useStore.getState().upsertPosition(updated);
     expect(useStore.getState().positions).toHaveLength(1);
-    expect(useStore.getState().positions[0].unrealized_pnl).toBe(150.00);
+    expect(useStore.getState().positions[0]?.unrealized_pnl).toBe(150.00);
   });
 
   it('removePosition removes by id', () => {
@@ -296,40 +296,40 @@ describe('Signal API contract → store', () => {
   it('real signal shape is accepted by addSignal', () => {
     useStore.getState().addSignal(REAL_SIGNAL_RESPONSE);
     const sig = useStore.getState().signals[0];
-    expect(sig.id).toBe('sig_01HXYZ');
-    expect(sig.symbol).toBe('XAU/USD');
-    expect(sig.direction).toBe('long');
-    expect(sig.confidence).toBe(0.84);
-    expect(sig.model).toBe('XGBoost_v3');
-    expect(sig.status).toBe('active');
+    expect(sig?.id).toBe('sig_01HXYZ');
+    expect(sig?.symbol).toBe('XAU/USD');
+    expect(sig?.direction).toBe('long');
+    expect(sig?.confidence).toBe(0.84);
+    expect(sig?.model).toBe('XGBoost_v3');
+    expect(sig?.status).toBe('active');
   });
 
   it('signal with regime field is stored', () => {
     useStore.getState().addSignal(REAL_SIGNAL_RESPONSE);
-    expect(useStore.getState().signals[0].regime).toBe('BULLISH');
+    expect(useStore.getState().signals[0]?.regime).toBe('BULLISH');
   });
 
   it('signal with features object is stored', () => {
     useStore.getState().addSignal(REAL_SIGNAL_RESPONSE);
-    expect(useStore.getState().signals[0].features).toEqual({ rsi: 42.1, macd_hist: 0.32, atr: 12.5 });
+    expect(useStore.getState().signals[0]?.features).toEqual({ rsi: 42.1, macd_hist: 0.32, atr: 12.5 });
   });
 
   it('short signal is stored correctly', () => {
     const short: Signal = { ...REAL_SIGNAL_RESPONSE, id: 'sig_short', direction: 'short', confidence: 0.79 };
     useStore.getState().addSignal(short);
-    expect(useStore.getState().signals[0].direction).toBe('short');
+    expect(useStore.getState().signals[0]?.direction).toBe('short');
   });
 
   it('neutral signal is stored correctly', () => {
     const neutral: Signal = { ...REAL_SIGNAL_RESPONSE, id: 'sig_neutral', direction: 'neutral', confidence: 0.51 };
     useStore.getState().addSignal(neutral);
-    expect(useStore.getState().signals[0].direction).toBe('neutral');
+    expect(useStore.getState().signals[0]?.direction).toBe('neutral');
   });
 
   it('triggered signal status is stored', () => {
     const triggered: Signal = { ...REAL_SIGNAL_RESPONSE, status: 'triggered' };
     useStore.getState().addSignal(triggered);
-    expect(useStore.getState().signals[0].status).toBe('triggered');
+    expect(useStore.getState().signals[0]?.status).toBe('triggered');
   });
 
   it('addSignal prepends — newest signal is first', () => {
@@ -337,7 +337,7 @@ describe('Signal API contract → store', () => {
     const sig2: Signal = { ...REAL_SIGNAL_RESPONSE, id: 'sig_new', generated_at: '2025-01-15T09:28:00Z' };
     useStore.getState().addSignal(sig1);
     useStore.getState().addSignal(sig2);
-    expect(useStore.getState().signals[0].id).toBe('sig_new');
+    expect(useStore.getState().signals[0]?.id).toBe('sig_new');
   });
 
   it('signal list caps at 50 entries', () => {
@@ -395,7 +395,7 @@ describe('Orchestrator health API contract → store', () => {
     expect(h?.status).toBe('healthy');
     expect(h?.uptime_seconds).toBe(86400);
     expect(h?.quality_score).toBe(0.92);
-    expect(h?.components.redis.status).toBe('ok');
+    expect(h?.components.redis?.status).toBe('ok');
   });
 
   it('degraded orchestrator health is stored', () => {
@@ -406,7 +406,7 @@ describe('Orchestrator health API contract → store', () => {
     };
     useStore.getState().setOrchestratorHealth(degraded);
     expect(useStore.getState().orchestratorHealth?.status).toBe('degraded');
-    expect(useStore.getState().orchestratorHealth?.components.redis.status).toBe('error');
+    expect(useStore.getState().orchestratorHealth?.components.redis?.status).toBe('error');
   });
 
   it('unhealthy orchestrator health is stored', () => {
@@ -521,7 +521,7 @@ describe('Full trading session state flow', () => {
 
     // 3. Signal arrives
     useStore.getState().addSignal(REAL_SIGNAL_RESPONSE);
-    expect(useStore.getState().signals[0].direction).toBe('long');
+    expect(useStore.getState().signals[0]?.direction).toBe('long');
 
     // 4. Position opened
     useStore.getState().upsertPosition(REAL_POSITION_RESPONSE);
@@ -553,7 +553,8 @@ describe('Full trading session state flow', () => {
     const mids = [2341.80, 1.0845, 1.2634, 149.82, 67500.00];
 
     symbols.forEach((symbol, i) => {
-      useStore.getState().setPrice({ ...REAL_TICK_RESPONSE, symbol, mid: mids[i], bid: mids[i] - 0.1, ask: mids[i] + 0.1 });
+      const mid = mids[i] ?? 0;
+      useStore.getState().setPrice({ ...REAL_TICK_RESPONSE, symbol, mid, bid: mid - 0.1, ask: mid + 0.1 });
     });
 
     symbols.forEach((symbol, i) => {
@@ -571,6 +572,6 @@ describe('Full trading session state flow', () => {
     // Add one more — oldest is dropped
     useStore.getState().addSignal({ ...REAL_SIGNAL_RESPONSE, id: 'sig_new_top', confidence: 0.99 });
     expect(useStore.getState().signals).toHaveLength(50);
-    expect(useStore.getState().signals[0].id).toBe('sig_new_top');
+    expect(useStore.getState().signals[0]?.id).toBe('sig_new_top');
   });
 });

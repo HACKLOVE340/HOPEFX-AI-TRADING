@@ -5,6 +5,82 @@
 
 import { describe, it, expect } from 'vitest';
 
+// Real implementations under test (the helpers below this are inline copies).
+import { fmtMarginLevel, marginLevelIsSafe, canonicalSymbol, sameSymbol, isSafeRedirectPath, positionSide } from '../lib/utils';
+
+// ─── Open-redirect guard ──────────────────────────────────────────────────────
+// The login page redirects to a user-controlled ?next= param. These are the
+// payloads the guard must reject (open redirect / XSS) vs the internal paths
+// it must allow.
+describe('isSafeRedirectPath', () => {
+  it('allows root-relative internal paths', () => {
+    for (const p of ['/dashboard', '/superadmin', '/trade?symbol=XAUUSD', '/a/b/c']) {
+      expect(isSafeRedirectPath(p)).toBe(true);
+    }
+  });
+
+  it('rejects protocol-relative and absolute external URLs', () => {
+    for (const p of ['//evil.com', 'https://evil.com', 'http://evil.com', 'evil.com']) {
+      expect(isSafeRedirectPath(p)).toBe(false);
+    }
+  });
+
+  it('rejects the backslash bypass variants (CVE-2025-68470)', () => {
+    for (const p of ['/\\evil.com', '\\\\evil.com', '/\\/evil.com', '\\evil.com']) {
+      expect(isSafeRedirectPath(p)).toBe(false);
+    }
+  });
+
+  it('rejects scheme-in-path and empty/nullish', () => {
+    expect(isSafeRedirectPath('/javascript:alert(1)')).toBe(false);
+    expect(isSafeRedirectPath('/data:text/html,x')).toBe(false);
+    expect(isSafeRedirectPath('')).toBe(false);
+    expect(isSafeRedirectPath(null)).toBe(false);
+    expect(isSafeRedirectPath(undefined)).toBe(false);
+  });
+});
+
+// ─── Symbol normalisation ─────────────────────────────────────────────────────
+// Regression cover for the bug where a user's open position ("XAUUSD" canonical)
+// vanished from a symbol-scoped panel filtering on the UI form ("XAU/USD"),
+// because the filter used === instead of a format-tolerant compare.
+describe('canonicalSymbol / sameSymbol', () => {
+  it('strips separators and upper-cases', () => {
+    expect(canonicalSymbol('XAU/USD')).toBe('XAUUSD');
+    expect(canonicalSymbol('xau_usd')).toBe('XAUUSD');
+    expect(canonicalSymbol('XAU-USD')).toBe('XAUUSD');
+    expect(canonicalSymbol('XAUUSD')).toBe('XAUUSD');
+  });
+
+  it('treats every formatting of the same instrument as equal', () => {
+    // The exact mismatch that hid open trades: slash form vs canonical.
+    expect(sameSymbol('XAU/USD', 'XAUUSD')).toBe(true);
+    expect(sameSymbol('XAU_USD', 'XAUUSD')).toBe(true);
+    expect(sameSymbol('xau/usd', 'XAUUSD')).toBe(true);
+    expect(sameSymbol('EUR/USD', 'EURUSD')).toBe(true);
+  });
+
+  it('does not conflate different instruments', () => {
+    expect(sameSymbol('XAU/USD', 'XAG/USD')).toBe(false);
+    expect(sameSymbol('EURUSD', 'GBPUSD')).toBe(false);
+  });
+
+  it('handles null / undefined / empty safely', () => {
+    expect(sameSymbol(null, 'XAUUSD')).toBe(false);
+    expect(sameSymbol(undefined, undefined)).toBe(true); // both empty
+    expect(canonicalSymbol(null)).toBe('');
+  });
+
+  it('models the fixed position filter: canonical positions match a UI-form filter', () => {
+    const positions = [
+      { symbol: 'XAUUSD' }, { symbol: 'EURUSD' }, { symbol: 'XAUUSD' },
+    ];
+    const uiSymbol = 'XAU/USD';
+    const shown = positions.filter((p) => sameSymbol(p.symbol, uiSymbol));
+    expect(shown).toHaveLength(2); // was 0 before the fix
+  });
+});
+
 // ─── Inline helpers (same logic as Dashboard) ─────────────────────────────────
 
 const fmt = (n: number, d = 2) =>
@@ -281,7 +357,7 @@ describe('equity history', () => {
   });
   it('first point is oldest date', () => {
     const pts = generateEquityHistory();
-    expect(new Date(pts[0].time) < new Date(pts[pts.length - 1].time)).toBe(true);
+    expect(new Date(pts[0]?.time ?? 0) < new Date(pts[pts.length - 1]?.time ?? 0)).toBe(true);
   });
   it('all values are positive', () => {
     const pts = generateEquityHistory();
@@ -289,7 +365,7 @@ describe('equity history', () => {
   });
   it('time format is YYYY-MM-DD', () => {
     const pts = generateEquityHistory();
-    expect(pts[0].time).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(pts[0]?.time).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
   it('values are finite numbers', () => {
     const pts = generateEquityHistory();
@@ -298,8 +374,8 @@ describe('equity history', () => {
   it('starting value is near startBalance', () => {
     const pts = generateEquityHistory(100_000);
     // First value should be within 5% of start
-    expect(pts[0].value).toBeGreaterThan(90_000);
-    expect(pts[0].value).toBeLessThan(110_000);
+    expect(pts[0]?.value).toBeGreaterThan(90_000);
+    expect(pts[0]?.value).toBeLessThan(110_000);
   });
 });
 
@@ -367,5 +443,102 @@ describe('GBM price simulation', () => {
   });
   it('dt=0 produces no change', () => {
     expect(gbmStep(2340, 0.01, 0)).toBeCloseTo(2340, 5);
+  });
+});
+
+// ── fmtMarginLevel ────────────────────────────────────────────────────────────
+//
+// Regression: the Trade page displayed "1234568%" for a $10,000 account with
+// $0.81 of margin in use. Arithmetically correct, completely unreadable. And a
+// flat account rendered as a margin-call warning, because api/trading.py
+// returned 0.0 while api/ws_live.py returned the 9999.0 sentinel for the very
+// same state — so the colour depended on which transport answered.
+
+describe('fmtMarginLevel', () => {
+  it('renders an actionable margin level precisely', () => {
+    expect(fmtMarginLevel(150)).toBe('150%');
+    expect(fmtMarginLevel(99.6)).toBe('100%');
+  });
+
+  it('bounds the unreadable end instead of printing it', () => {
+    expect(fmtMarginLevel(1234567.9)).toBe('>999%');   // $0.81 used vs $10,000
+    expect(fmtMarginLevel(1000)).toBe('>999%');
+    expect(fmtMarginLevel(999)).toBe('999%');
+  });
+
+  it('reports the no-margin sentinel as no value, not as a huge ratio', () => {
+    // Changed deliberately. This asserted '>999%' for the 9999.0 sentinel,
+    // which met the goal above it — a flat account must not look like a margin
+    // call — but did so by printing a ratio for a quantity that is undefined
+    // when no margin is used. The deployed dashboard showed `MARGIN >999%`
+    // directly over `Used: $0`, which reads as a computed figure.
+    //
+    // '—' meets the same goal (marginLevelIsSafe still returns true, so the
+    // colour stays neutral) and matches how the 0.0 form of the identical state
+    // already rendered. Genuine tiny exposure is untouched: the 1234567.9 case
+    // above is $0.81 actually at risk and still reports '>999%'.
+    expect(fmtMarginLevel(9999)).toBe('—');
+    expect(fmtMarginLevel(9999, 0)).toBe('—');
+    expect(marginLevelIsSafe(9999)).toBe(true);
+  });
+
+  it('shows no value when there is nothing to report', () => {
+    expect(fmtMarginLevel(0)).toBe('—');
+    expect(fmtMarginLevel(null)).toBe('—');
+    expect(fmtMarginLevel(undefined)).toBe('—');
+    expect(fmtMarginLevel(NaN)).toBe('—');
+    expect(fmtMarginLevel(Infinity)).toBe('—');
+  });
+
+  it('treats a flat account as safe, not as a margin call', () => {
+    // Both backend sentinels, and the negligible-margin case, must be safe.
+    expect(marginLevelIsSafe(9999)).toBe(true);
+    expect(marginLevelIsSafe(1234567.9)).toBe(true);
+    expect(marginLevelIsSafe(0)).toBe(true);
+    expect(marginLevelIsSafe(null)).toBe(true);
+    // A genuinely low margin level is not safe.
+    expect(marginLevelIsSafe(80)).toBe(false);
+    expect(marginLevelIsSafe(150)).toBe(false);
+  });
+});
+
+// ─── positionSide ─────────────────────────────────────────────────────────────
+// The API returns `side` on some endpoints and `direction` on others, and either
+// may be absent. Four call sites each wrote their own comparison; one of them
+// (`pos.direction.toLowerCase()`) crashed PnLDashboard outright (audit #37/#40).
+describe('positionSide', () => {
+  it('reads either field', () => {
+    expect(positionSide({ side: 'long' })).toBe('long');
+    expect(positionSide({ direction: 'long' })).toBe('long');
+    expect(positionSide({ side: 'short' })).toBe('short');
+    expect(positionSide({ direction: 'short' })).toBe('short');
+  });
+
+  it('accepts the broker spellings', () => {
+    expect(positionSide({ side: 'BUY' })).toBe('long');
+    expect(positionSide({ direction: 'Sell' })).toBe('short');
+    expect(positionSide({ side: ' LONG ' })).toBe('long');
+    expect(positionSide({ side: 'b' })).toBe('long');
+    expect(positionSide({ side: 's' })).toBe('short');
+  });
+
+  it('prefers side when both are present', () => {
+    expect(positionSide({ side: 'long', direction: 'short' })).toBe('long');
+  });
+
+  it('returns null rather than guessing', () => {
+    // Defaulting to short would state the opposite of the truth half the time,
+    // and every previous call site did exactly that via a falsy else-branch.
+    expect(positionSide({})).toBeNull();
+    expect(positionSide(null)).toBeNull();
+    expect(positionSide(undefined)).toBeNull();
+    expect(positionSide({ side: '' })).toBeNull();
+    expect(positionSide({ side: '   ' })).toBeNull();
+    expect(positionSide({ direction: 'sideways' })).toBeNull();
+  });
+
+  it('does not throw on an absent field — the original crash', () => {
+    expect(() => positionSide({ direction: undefined })).not.toThrow();
+    expect(() => positionSide({ side: null })).not.toThrow();
   });
 });

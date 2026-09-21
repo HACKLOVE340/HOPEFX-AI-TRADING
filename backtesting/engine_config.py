@@ -536,6 +536,11 @@ class BacktestEngine:
     - Walk-forward analysis ready
     """
 
+    #: Which look-ahead defence was in force for the most recent run.
+    #: "not_run" until `run()` sets it — an unmeasured value is absent, never
+    #: best-case, so a report that has not run must not read as protected.
+    lookahead_protection: str = "not_run"
+
     def __init__(self, config: BacktestConfig):
         self.config = config
         self.data_loader = HistoricalDataLoader()
@@ -545,6 +550,12 @@ class BacktestEngine:
 
         # Event log
         self.events: list[dict] = []
+
+        # Errors raised by strategies during the simulation loop. These used to
+        # be logged and dropped, so a run in which every bar raised produced a
+        # flat equity curve and a 0.00% return — reported as a result rather
+        # than a failure. Callers can read this back after run().
+        self.strategy_errors: list[str] = []
 
     def add_strategy(self, strategy: Any):
         """Add strategy to backtest"""
@@ -558,6 +569,16 @@ class BacktestEngine:
             progress_callback: Called with (current_step, total_steps, current_time)
         """
         logger.info("Starting backtest: %s to %s", self.config.start_date, self.config.end_date)
+
+        # A backtest with no strategy attached is a misconfiguration, not a
+        # 0.00% return. api/advanced_trading.py built the config, never called
+        # add_strategy(), and reported the empty result as the performance of a
+        # named strategy — both arms of every A/B test were this.
+        if not self.strategies:
+            raise ValueError(
+                "No strategies added to the backtest. Call add_strategy() before run() — "
+                "an empty run is a configuration error, not a flat result."
+            )
 
         # Load data for all symbols
         all_data: dict[str, pd.DataFrame] = {}
@@ -580,21 +601,46 @@ class BacktestEngine:
             except Exception as _ve:
                 logger.warning("Backtest pre-run validation warning for %s: %s", sym, _ve)
 
-        # Initialise the BacktestBarGuard to catch any strategy that tries to
-        # peek at future bars during the simulation loop.
+        # Look-ahead protection.
+        #
+        # This block used to construct a BacktestBarGuard, log "BacktestBarGuard
+        # active", and never reference it again — a control that existed, read
+        # correctly, and never ran (F176). Worse, the loop below then handed the
+        # strategy `all_data`: every symbol's COMPLETE frame, future bars
+        # included. Measured before this change, a strategy over 120 bars read a
+        # not-yet-happened bar on 119 of them and nothing objected.
+        #
+        # The real protection is now structural: the strategy is handed a view
+        # sliced to `timestamp`, so there is no future to read. The guard is
+        # kept as the second line — it refuses a reach past the cursor if a
+        # strategy gets hold of the raw frame some other way.
+        #
+        # `lookahead_protection` records which line was actually in force, and
+        # the failure path logs at WARNING rather than DEBUG: a backtest that
+        # ran unpoliced must not look identical to one that did not.
+        self.lookahead_protection = "point_in_time"
         _bar_guard = None
         try:
             from risk.lookahead_guard import BacktestBarGuard
 
-            # Build a flat list of (timestamp, symbol) pairs for the guard
             _all_ts = sorted({ts for df in all_data.values() for ts in df.get("timestamp", df.index)})
             _bar_guard = BacktestBarGuard(_all_ts)
-            logger.debug("BacktestBarGuard active: %d timestamps", len(_all_ts))
+            self.lookahead_protection = "point_in_time+guard"
+            logger.info("Look-ahead protection: point-in-time slicing + BacktestBarGuard (%d bars)", len(_all_ts))
         except Exception as _bg_exc:
-            logger.debug("BacktestBarGuard unavailable: %s", _bg_exc)
+            logger.warning(
+                "BacktestBarGuard could not be built (%s) — this run is protected by point-in-time slicing only",
+                _bg_exc,
+            )
 
         # Combine timestamps
         all_timestamps = sorted({ts for df in all_data.values() for ts in df["timestamp"]})
+
+        # Per-symbol timestamp arrays, so each bar's cut point is a binary
+        # search rather than a full-frame boolean mask. The mask form was
+        # O(bars x rows) per symbol; searchsorted plus an `.iloc` view makes the
+        # point-in-time slice cheap enough that there is no reason to skip it.
+        _sym_stamps = {sym: df["timestamp"].to_numpy() for sym, df in all_data.items()}
 
         total_steps = len(all_timestamps)
 
@@ -602,20 +648,27 @@ class BacktestEngine:
         for i, timestamp in enumerate(all_timestamps):
             self.broker.update_time(timestamp)
 
-            # Build current price snapshot and bar data for variable slippage
+            # Build the point-in-time view: every symbol's history up to and
+            # including this bar, and nothing after it. This is what the
+            # strategy sees, so a strategy CANNOT read a future bar rather than
+            # being trusted not to.
+            visible: dict[str, pd.DataFrame] = {}
             current_prices: dict[str, float] = {}
             current_bars: dict[str, dict] = {}
             for symbol, df in all_data.items():
-                mask = df["timestamp"] <= timestamp
-                if mask.any():
-                    row = df[mask].iloc[-1]
-                    current_prices[symbol] = float(row["close"])
-                    current_bars[symbol] = {
-                        "high": float(row.get("high", row["close"])),
-                        "low": float(row.get("low", row["close"])),
-                        "open": float(row.get("open", row["close"])),
-                        "close": float(row["close"]),
-                    }
+                cut = int(np.searchsorted(_sym_stamps[symbol], timestamp, side="right"))
+                if cut <= 0:
+                    continue
+                view = df.iloc[:cut]
+                visible[symbol] = view
+                row = view.iloc[-1]
+                current_prices[symbol] = float(row["close"])
+                current_bars[symbol] = {
+                    "high": float(row.get("high", row["close"])),
+                    "low": float(row.get("low", row["close"])),
+                    "open": float(row.get("open", row["close"])),
+                    "close": float(row["close"]),
+                }
 
             # Update broker prices
             self.broker.update_prices(current_prices)
@@ -623,13 +676,19 @@ class BacktestEngine:
             # Generate signals from strategies
             for strategy in self.strategies:
                 try:
-                    signals = strategy.generate_signals(timestamp=timestamp, prices=current_prices, data=all_data)
+                    # `visible`, not `all_data`. Passing the full frame here is
+                    # what let a strategy read tomorrow's close.
+                    signals = strategy.generate_signals(timestamp=timestamp, prices=current_prices, data=visible)
 
                     for signal in signals:
                         self._process_signal(signal, timestamp, current_prices, current_bars)
 
                 except Exception as e:
                     logger.error("Strategy error at %s: %s", timestamp, e)
+                    # Kept, not just logged. A run where this fired on every bar
+                    # used to be indistinguishable from a strategy that chose
+                    # not to trade.
+                    self.strategy_errors.append(f"{timestamp}: {type(e).__name__}: {e}")
 
             # Progress callback
             if progress_callback and i % 100 == 0:
@@ -739,7 +798,19 @@ class BacktestEngine:
                     return
 
         # ── Position sizing ───────────────────────────────────────────────────
-        quantity = self._kelly_position_size(signal, current_price)
+        # An exit closes what is actually open. Kelly sizing computes an *entry*
+        # quantity from current equity, so using it to close would part-close a
+        # position by an unrelated amount and leave a residual the strategy
+        # never asked to hold.
+        if signal.get("exit"):
+            open_position = self.broker.positions.get(symbol)
+            if not open_position:
+                return
+            quantity = float(open_position["quantity"])
+            if quantity <= 0:
+                return
+        else:
+            quantity = self._kelly_position_size(signal, current_price)
 
         # ── Bar high/low for variable slippage ────────────────────────────────
         bar_high = bar_low = 0.0
@@ -907,6 +978,40 @@ class BacktestEngine:
     # Main results calculation
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _downside_deviation(returns, target: float = 0.0) -> float:
+        """Root-mean-square shortfall below *target*, over ALL periods.
+
+        Retained under its original name because this is where F120 was fixed
+        and callers reference it, but the definition now lives in
+        ``analytics.ratios`` so the five other modules that compute a Sortino
+        share it rather than each keeping their own. See that module for why
+        ``returns[returns < 0].std()`` is not a biased Sortino but a different
+        statistic.
+        """
+        from analytics.ratios import downside_deviation
+
+        return downside_deviation(returns, target=target)
+
+    def _annualised_return(self, total_return: float, n_bars: int) -> float:
+        """Annualise a total return over *n_bars* bars.
+
+        The exponent is 252 / (trading days elapsed). ``n_bars`` is a BAR count
+        and the engine runs on hourly bars, so dividing by ``bars_per_day`` is
+        what turns one into the other. Omitting it — as this line did — reported
+        a year that doubled capital as +2.93% and made Calmar meaningless
+        (F119). The same function divides by ``bars_per_day`` correctly for the
+        Sharpe annualisation and the average hold time; this was the one place
+        it was left out.
+        """
+        days = n_bars / max(float(self.config.bars_per_day), 1e-9)
+        return (1 + total_return) ** (252.0 / max(days, 1e-9)) - 1
+
+    @staticmethod
+    def _calmar(annual_return: float, max_drawdown: float) -> float:
+        """Annualised return over maximum drawdown; 0.0 when there is no drawdown."""
+        return float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
+
     def _calculate_results(self) -> BacktestResult:
         """Calculate performance metrics including all Area 1 additions."""
         trades = self.broker.trades
@@ -985,14 +1090,13 @@ class BacktestEngine:
         # ── Sortino (bar-level — acceptable for downside deviation) ───
         sortino = 0.0
         if len(bar_returns) > 0:
-            downside = bar_returns[bar_returns < 0]
-            downside_std = float(np.std(downside)) if len(downside) > 0 else 0.0
-            if downside_std > 0:
-                sortino = float(np.mean(bar_returns) / downside_std * ann_factor)
+            downside_dev = self._downside_deviation(bar_returns)
+            if downside_dev > 0:
+                sortino = float(np.mean(bar_returns) / downside_dev * ann_factor)
 
         # ── Calmar ────────────────────────────────────────────────────
-        annual_return = (1 + total_return) ** (252.0 / max(len(equity_values), 1)) - 1
-        calmar = float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
+        annual_return = self._annualised_return(total_return, len(equity_values))
+        calmar = self._calmar(annual_return, max_drawdown)
 
         # ── Omega ─────────────────────────────────────────────────────
         threshold = 0.0

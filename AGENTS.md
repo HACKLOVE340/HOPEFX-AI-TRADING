@@ -12,6 +12,62 @@ multi-broker execution. The frontend is a React/TypeScript SPA served by Vite.
 
 **Current status:** Paper trading active. Live OANDA run is the next milestone.
 
+### Joining work already in progress? Start with these three
+
+```bash
+python scripts/backlog_report.py     # what is left to build or fix, measured now
+python scripts/gate_evidence.py      # which safety gates are proven able to fail
+```
+
+| I need to know | Where it is answered |
+|---|---|
+| What should I work on? | `python scripts/backlog_report.py`, then `docs/ai/MASTER_OUTSTANDING.md` §B |
+| What is blocked on the owner? | `docs/ai/MASTER_OUTSTANDING.md` §A — four decisions, each costed both ways |
+| What rules bind every change? | `docs/ai/specs/GROUP4_CONSTITUTION.md` — **T0**, twelve Articles, INV-01…21 |
+| How is the specification organised? | `docs/ai/BACKLOG_GROUPS.md` — four groups, one-group rule |
+| How do I recover the database? | `docs/runbooks/database-restore.md` |
+| Which skills apply, and when? | `CLAUDE.md` — all 55, with trigger conditions |
+
+**A document's numbers are a snapshot; a script's numbers are today's.** Where
+they disagree the script is right — fix the document, do not work around it.
+
+### The four rules that govern this repository
+
+They are stated in full in `docs/ai/specs/GROUP2_platform_engineering_operations_governance.md`
+§0, and they decide most arguments:
+
+1. **A control that cannot fail is not a control.** Every gate ships with evidence
+   it can return a negative result, produced by injecting the defect it exists to
+   catch. Eight controls here have been found unable to fail; every one was found
+   by breaking it, none by reading it.
+2. **An unmeasured value is absent, never zero.** Report `unmeasured` and why —
+   never render a missing measurement as `0`, which looks like success.
+3. **Fail closed on anything that spends, trades or exposes.** If a control cannot
+   determine that an action is safe, it refuses.
+4. **Evidence that resolves is not evidence that runs.** A registry entry that
+   points at real code says nothing about whether anything calls it.
+
+### And a fifth, from the owner: documentation ships with every push
+
+**Never push code without updating the documents it makes stale.** The failure
+this guards against is not a missing file — it is a document that still looks
+current while carrying a figure that stopped being true, which a reader then
+acts on without checking.
+
+`python scripts/doc_metrics.py --check` runs in pre-commit and blocks when a
+living document states a figure that no longer matches its measuring script. It
+covers arithmetic; the rest is yours:
+
+| You changed | Update |
+|---|---|
+| What a gate, registry or ledger measures | Every document stating its figure — `doc_metrics.py --check` blocks on the verifiable ones |
+| A file a contributor must be able to find | `CLAUDE.md` routing table and `ARCHITECTURE.md` entry points |
+| A ranked gap you closed | Strike it through **with its evidence** in the Group 2/3 gap list, and update `docs/ai/MASTER_OUTSTANDING.md` |
+| A safety control | `docs/GATE_EVIDENCE.toml` — see *Add a gate, guard, or any other safety control* below |
+
+The commit message carries the reasoning; the documents carry the state. A
+successor gets both or neither.
+
 ---
 
 ## Repository Layout
@@ -19,7 +75,7 @@ multi-broker execution. The frontend is a React/TypeScript SPA served by Vite.
 ```
 app.py                  FastAPI application factory (entry point)
 hopefx_engine.py        Standalone trading engine entry point
-run.py                  CLI runner (--mode api | engine | backtest)
+run.py                  CLI runner (--mode paper | live | api | backtest)
 quickstart.py           One-command paper trading start
 
 api/                    FastAPI routers (REST + WebSocket + GraphQL)
@@ -44,20 +100,43 @@ docs/                   Documentation (archive/ holds superseded docs)
 |--------|-----|--------------------|
 | Backtesting | `backtesting/` | `backtest/` (re-exports shim) |
 | Strategies | `strategies/` | `strategy/` (live ML engine only) |
-| Data pipeline | `data_layer/` | `data/` (CSV files + old utilities) |
+| Data pipeline | `data_layer/` for market-data *access* | *(nothing — `data/` is live; see CLAUDE.md)* |
 | WebSocket | `api/ws_live.py` | `websocket/manager.py` (standalone server) |
 
 ---
 
 ## Development Environment
 
-The devcontainer (`.devcontainer/devcontainer.json`) provides Python 3.10,
-Node 20, and Redis. Three automations run on startup:
+The devcontainer (`.devcontainer/devcontainer.json`) provides Python 3.12,
+Node 20, and Redis.
+
+**GitHub Codespaces — nothing to type.** `postStartCommand` runs
+`.devcontainer/start-services.sh` on every start and resume: Redis, `.env` and
+seed users, a frontend build if `static/assets` is missing, then the API. It
+waits for the startup gate to open and prints the seed passwords. Port **8000**
+auto-opens and is the whole application — the backend serves the built SPA, so
+5173 matters only when you want Vite's hot reload while editing the frontend.
+Ports stay **private** by default; the seeded superadmin account is why, and
+changing that should be a decision made in the Ports panel, not a default.
+
+**Gitpod** reads `.gitpod/automations.yaml` instead, and there the services are
+started through its own CLI:
 
 ```bash
 gitpod automations service start redis     # Redis on :6379
 gitpod automations service start backend   # FastAPI on :8000
 gitpod automations service start frontend  # Vite dev server on :5173
+```
+
+Those three lines used to sit here unqualified, under a heading about the
+devcontainer. They are Gitpod-only: Codespaces reads neither the `gitpod` CLI
+nor `automations.yaml`, so following them there produced `command not found`
+after a Codespace had already built the entire environment and served nothing.
+
+Either way, run it by hand any time — the script is idempotent:
+
+```bash
+bash .devcontainer/start-services.sh
 ```
 
 Bootstrap (run once, idempotent):
@@ -91,7 +170,10 @@ This generates `.env` with random secrets and seeds three dev users:
 - **Formatter:** `black` (line length 100 for Python, 120 for ruff)
 - **Linter:** `ruff` — run `ruff check .` before committing
 - **Type checker:** `mypy` — strict on `risk/analytics`, `api/`, `ml/inference_engine`
-- **Python version:** 3.10 (matches production Docker image — prevents pickle mismatches)
+- **Python version:** 3.12 — it is what `Dockerfile` runs (`python:3.12-slim`) and
+  what the retrain workflows use, so committed `.pkl` artifacts are pickled on the
+  same interpreter that loads them in production. CI tests 3.11 and 3.12. If you
+  change the Dockerfile's Python, change the retrain workflows in the same commit.
 - Use `from __future__ import annotations` in all new modules
 - Async-first in `api/` — use `async def` for all route handlers
 - Domain-specific numeric literals (RSI levels, ATR multipliers, confidence scores)
@@ -155,8 +237,25 @@ python ml/train_advanced.py --years 50 --oos-years 4 --stacking
 ```
 
 Model staleness and drift are enforced at inference time. `STALE_MODEL_BLOCK=true`
-blocks inference when the model exceeds `MODEL_MAX_AGE_DAYS`. `DRIFT_BLOCK=true`
-blocks signals when feature drift is detected.
+blocks inference when the model exceeds `MODEL_MAX_AGE_DAYS`, and it is the code
+default.
+
+**A model's age is when it was TRAINED, not when its file was written.** Until
+2026-09-14 `_check_model_staleness()` read the artifact's filesystem mtime, so
+`git checkout`, `docker build`, `cp -r` or a restored backup reset it — deploying
+a stale model was how the staleness gate got cleared. Age now comes from a
+timestamp bound to the artifact's **sha256** in `ml/saved_models/registry.json`
+(`trained_at`, falling back to `registered_at`; earliest wins where several
+versions share a digest), so it is a property of the bytes. Provenance that is
+absent, malformed, not matching the bytes or future-dated reports **stale** —
+fail-closed, because "I cannot tell you how old this model is" is not
+"this model is current". When you register a retrained artifact, record its
+`sha256` and a `trained_at`, or the gate will correctly refuse it.
+Turning this on revealed that the committed model is **167 days old** against a
+30-day limit: see MASTER_OUTSTANDING §A0, which is an owner decision. `DRIFT_BLOCK=true` blocks signals when feature drift is detected, and it is
+**not** the code default — it defaults `false` and every deployment surface overrides
+it. Whether that changes is an owner decision recorded in ADR 0019, which also measures
+what the guard is comparing: `python scripts/drift_guard_report.py`.
 
 ---
 
@@ -166,8 +265,8 @@ blocks signals when feature drift is detected.
 |----------|---------|-------|
 | `APP_ENV` | `production` | Set `development` in devcontainer |
 | `BROKER_TYPE` | `paper` | `paper` / `oanda` / `ibkr` / `mt5` |
-| `STALE_MODEL_BLOCK` | `true` | Block inference on stale model |
-| `DRIFT_BLOCK` | `true` | Block signals on feature drift |
+| `STALE_MODEL_BLOCK` | `true` | Block inference on stale model. Age is read from sha256-bound provenance in `registry.json`, not the file's mtime — see above |
+| `DRIFT_BLOCK` | **`false`** | Block signals on feature drift. This row said `true` until 2026-09-13; the CODE default is `false` (`ml/inference_engine.py:120`), and the `true` came from `.env.example`. Every deployment surface sets `true`, so a container or CI run that sets neither trades a drifted model while this table says otherwise — see ADR 0019 |
 | `WS_AUTH_REQUIRED` | `true` | Require JWT on WebSocket |
 | `REDIS_FORCE_TLS` | `false` | Auto-upgrade to `rediss://` |
 | `ML_HOURLY_ENABLED` | `false` | Enable hourly online learning |
@@ -178,8 +277,12 @@ Full list: `.env.example`
 
 ## Security Rules
 
-- **Never commit secrets.** `.env`, `WORDMAP.json`, and `prop_firm_mode.json`
-  are gitignored. `detect-secrets` pre-commit hook enforces this.
+- **Never commit secrets.** `.env` and `WORDMAP.json` are gitignored
+  (`WORDMAP.json.example` is the tracked template). `prop_firm_mode.json` is
+  **not** gitignored — `.gitignore` commits it deliberately with placeholder
+  credentials so CI has a config to load, and it ships `enabled: true` with the
+  FTMO ruleset. Keep real credentials in environment variables, never in that
+  tracked file. `detect-secrets` pre-commit hook enforces this.
 - **Never log credentials.** The LLM agent (`brain/llm_agent.py`) runs in a
   subprocess sandbox — do not bypass this.
 - **Redis TLS:** `REDIS_FORCE_TLS=true` in production. Dev uses plain Redis.
@@ -191,7 +294,7 @@ Full list: `.env.example`
 
 ## CI / CD
 
-15 GitHub Actions workflows run on push/PR to `main`:
+19 GitHub Actions workflows run on push/PR to `main` (this said 15 until 2026-09-13):
 
 | Workflow | What it checks |
 |----------|---------------|
@@ -208,17 +311,27 @@ CI skips `e2e` and `slow` markers automatically (`-m "not slow and not e2e"`).
 
 | Gate | Script | What it enforces |
 |------|--------|-----------------|
-| Gate A | `gate_a_auth_coverage.py` | Every mutating route has auth |
-| Gate B | `gate_b_env_consistency.py` | `.env.example` matches code expectations |
-| Gate C | `gate_c_docker_compose.py` | Compose files are structurally valid |
-| Gate D | `gate_d_model_accuracy.py` | ML model meets minimum accuracy threshold |
-| Gate E | `gate_e_dead_files.py` | No dead/unreferenced files in guarded packages |
-| Gate F | `gate_f_doc_consistency.py` | Class/function names in docs exist in code |
-| Gate G | `gate_g_import_discipline.py` | No imports from legacy directories |
-| Gate H | `gate_h_wordmap_schema.py` | `WORDMAP.json.example` schema is valid |
-| Gate I | `gate_i_migration_chain.py` | Alembic chain is linear with one root and one head |
-| Gate J | `gate_j_circular_imports.py` | No module-level circular imports in guarded packages |
-| Gate K | `gate_k_requirements_consistency.py` | Lock file covers all direct deps; no CI version downgrades |
+| Gate A | `scripts/ci/gate_a_auth_coverage.py` | Every mutating route has auth |
+| Gate B | `scripts/ci/gate_b_env_consistency.py` | `.env.example` matches code expectations |
+| Gate C | `scripts/ci/gate_c_docker_compose.py` | Compose files are structurally valid |
+| Gate D | `scripts/ci/gate_d_model_accuracy.py` | ML model meets minimum accuracy threshold |
+| Gate E | `scripts/ci/gate_e_dead_files.py` | No dead/unreferenced files in guarded packages |
+| Gate F | `scripts/ci/gate_f_doc_consistency.py` | Class/function names in docs exist in code |
+| Gate G | `scripts/ci/gate_g_import_discipline.py` | No imports from legacy directories |
+| Gate H | `scripts/ci/gate_h_wordmap_schema.py` | `WORDMAP.json.example` schema is valid |
+| Gate I | `scripts/ci/gate_i_migration_chain.py` | Alembic chain is linear with one root and one head |
+| Gate J | `scripts/ci/gate_j_circular_imports.py` | No module-level circular imports in guarded packages |
+| Gate K | `scripts/ci/gate_k_requirements_consistency.py` | Lock file covers all direct deps; no CI version downgrades |
+| Gate L | `scripts/ci/gate_l_safety_invariants.py` | Safety-critical env defaults stay safe (`BROKER_TYPE`, `FEATURE_LIVE_TRADING`, `DRIFT_BLOCK`, `STALE_MODEL_BLOCK`, `WS_AUTH_REQUIRED`, `REDIS_FORCE_TLS`) |
+| Gate M | `scripts/ci/gate_m_ml_edge.py` | ML still beats the rule baseline on the leakage-safe OOS split |
+
+| Broken imports | `scripts/ci/gate_broken_imports.py` | No `from x import Y` where `Y` is undefined in `x` |
+
+`scripts/ci/gate_broken_imports.py` carries a `KNOWN_BROKEN` baseline of imports that are
+still broken on purpose or awaiting implementation (see S-41/S-42 in
+`docs/HARDENING_BACKLOG.md`). Every entry needs a reason and a backlog
+reference. Fixing an import means **deleting its entry in the same change** — a
+stale entry fails the gate, so the list cannot quietly become an excuse list.
 
 ---
 
@@ -236,6 +349,30 @@ Check service health:
 ```bash
 curl -s http://localhost:8000/api/health | python -m json.tool
 ```
+
+---
+
+### Add a gate, guard, or any other safety control
+
+**Rule 1 applies and it is enforced, not advisory.** `scripts/gate_evidence.py`
+runs in pre-commit, discovers gates rather than reading a list, and blocks a new
+one that arrives without evidence.
+
+1. Write the control.
+2. **Inject the defect it exists to catch** — against a copied tree, never the
+   working files. Watch it refuse. If it does not, you have a control-shaped
+   object, not a control.
+3. Make that injection a test, and assert the injection actually applied. An
+   injection that silently fails to apply leaves the gate passing, which is
+   indistinguishable from a gate that cannot fail. That mistake has been made
+   here twice.
+4. Add a row to `docs/GATE_EVIDENCE.toml` naming the test and the defect
+   injected. `python scripts/gate_evidence.py --generate` adds the row skeleton.
+5. Run `python scripts/gate_evidence.py --check`.
+
+Worked examples: `tests/unit/test_gate_l_safety_injections.py` (seven trading
+incidents), `tests/unit/test_check_secrets_injections.py` (a real bypass found
+and closed), `tests/unit/test_database_restore.py` (six fail-closed refusals).
 
 ---
 
@@ -430,9 +567,71 @@ want to override. See `ARCHITECTURE.md` — WORDMAP.json section for details.
 
 ---
 
+## Agent Skills
+
+**55 skills are installed** in `.claude/skills/`. CLAUDE.md carries the full
+list grouped by when to reach for each; `.claude/skills/README.md` carries the
+provenance, licences, and local patches. This section previously said "two
+skills are installed", naming only the two below — that was wrong in the way
+that matters: a skill nobody can see is a skill nobody loads, and the other 53
+include every Python-craft, observability, threat-modelling, and incident skill
+in the set.
+
+**The owner's standing instruction (2026-09-06) is to use the relevant skills on
+every task, always** — not when it seems worth it. Start with `flow-by-flow`.
+
+These two are version-locked together at `2.0.1` and must both stay present —
+the orchestrator cannot complete its UI/UX approval gate without its sibling:
+
+| Skill | Use for |
+|-------|---------|
+| `flow-by-flow` | Any development task: features, bugs, refactors, audits, micro changes. Start here. |
+| `flow-prototype` | Throwaway, read-only interactive model of a UI flow, required before any major UI/UX change reaches production code. |
+
+Four of the 55 are **custom to this repository** — `hopefx-money-precision`,
+`hopefx-invariants`, `hopefx-dead-controls`, `hopefx-fix-bridge`. Each encodes a
+defect class already made here, and every mechanically checkable claim in them is
+verified against the codebase by `scripts/verify_skill_claims.py`, which runs in
+CI. Re-run it after any refactor that moves a cited line:
+
+```bash
+python scripts/verify_skill_claims.py
+```
+
+`flow-by-flow` reads `references/orchestration.md` on every task, then loads only
+the route that applies (`foundation`, `audit`, `build`, `delivery`, `review`,
+`verification`). Its conflict hierarchy defers to this file: user instruction >
+repository constitution (`AGENTS.md`) > security and data rules > flow contracts >
+backend and design references > individual flow notes > builder judgment.
+
+Two skill rules bind especially hard in this repository, which moves money:
+
+- Never weaken a risk gate, kill switch, or staleness/drift check to make a flow
+  pass. That is a stop condition, not a judgment call.
+- Live broker activation, real-money order placement, production deployment, and
+  destructive actions on real trade data are stop conditions requiring explicit
+  authority for that exact action and target.
+
+---
+
 ## Architecture Reference
 
 See `ARCHITECTURE.md` for the canonical module map, ML model facts, component
 status, and key environment variable flags.
 
 See `docs/architecture.md` for the full system architecture diagram.
+
+### The governance layer above both
+
+| Document | Tier | What it settles |
+|---|---|---|
+| `docs/ai/specs/GROUP4_CONSTITUTION.md` | **T0** | Twelve Articles and INV-01…21. Above the specifications, and above code on the Articles: where code violates one, the code is the defect |
+| `docs/ai/specs/GROUP4_VOLUME_INDEX.md` | T1 | All 304 titles from both Group 4 sources, routed to the group that owns each |
+| `docs/ai/specs/GROUP1_advanced_intelligence_architecture.txt` | T1 | Intelligence: cognition, memory, perception, evolution |
+| `docs/ai/specs/GROUP2_platform_engineering_operations_governance.md` | T1 | Platform: 35 chapters, nine Parts, and the four rules |
+| `docs/ai/specs/GROUP3_documentation_knowledge_architecture_governance.md` | T1 | Knowledge: 18 chapters — how documents are governed |
+| `docs/REGISTRY.toml` | T2 | Which document is authoritative on which subject, and who owns it |
+
+Relationship rule across all of them: where an item touches another group, the
+owning group is **referenced, never copied**. That is the whole defence against
+duplicate specifications that disagree.

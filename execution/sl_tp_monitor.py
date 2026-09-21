@@ -40,6 +40,8 @@ import os
 from datetime import timezone
 from typing import Any
 
+from execution.broker_call import call_broker
+
 logger = logging.getLogger(__name__)
 
 UTC = timezone.utc
@@ -80,20 +82,24 @@ except ImportError:
 
 
 def _send_alert(subject: str, body: str) -> None:
-    """Fire-and-forget Telegram/notification alert (non-blocking)."""
+    """Fire-and-forget notification alert (non-blocking).
+
+    Delegates the loop handling to ``notifications.send_alert_nowait`` so this
+    path shares the one dispatch policy: never crash the caller, never fail
+    silently. This used to schedule ``notifications.send_alert``, which was a
+    bare ``logger.log`` — so "CLOSE FAILURE — MANUAL INTERVENTION REQUIRED"
+    never left the process (F247).
+    """
     try:
-        from notifications import send_alert as _notify_send_alert
+        from notifications import send_alert_nowait
 
-        async def _do() -> None:
-            await _notify_send_alert("critical", f"🔴 SL/TP MONITOR — {subject}: {body}")
-
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(_do())
-        except RuntimeError:
-            asyncio.run(_do())
-    except Exception as exc:  # nosec B110
-        logger.debug("SL/TP monitor alert suppressed: %s", exc)
+        send_alert_nowait(
+            "critical",
+            f"🔴 SL/TP MONITOR — {subject}: {body}",
+            {"event": "sl_tp_monitor", "subject": subject},
+        )
+    except Exception as exc:  # nosec B110 — the monitor must keep running
+        logger.error("SL/TP monitor alert failed: %s", exc)
 
 
 class SLTPMonitor:
@@ -197,7 +203,15 @@ class SLTPMonitor:
         # get_all_positions() returns dict[str, Position]; iterate values.
         pos_iter = positions.values() if isinstance(positions, dict) else positions
         for pos in pos_iter:
-            if pos.position_id in self._closing:
+            try:
+                pos_id = self._position_id(pos)
+            except AttributeError as exc:
+                # Skip this position rather than abandoning the whole sweep:
+                # one unrecognisable object must not stop every other stop loss
+                # from being checked.
+                logger.error("SLTPMonitor: cannot identify position, skipping: %s", exc)
+                continue
+            if pos_id in self._closing:
                 continue
             mid = self._get_mid(pos.symbol)
             if mid is None or mid <= 0:
@@ -210,11 +224,40 @@ class SLTPMonitor:
                 # would re-pass the `in self._closing` check above and spawn a
                 # duplicate close (double market order). The add() inside
                 # _close_position is now redundant but kept as defense-in-depth.
-                self._closing.add(pos.position_id)
+                self._closing.add(pos_id)
                 asyncio.create_task(
                     self._close_position(pos, reason, mid),
-                    name=f"sltp_close_{pos.position_id}",
+                    name=f"sltp_close_{pos_id}",
                 )
+
+    @staticmethod
+    def _position_id(pos: Any) -> str:
+        """Return *pos*'s identifier, whichever of the two shapes it is.
+
+        Two Position classes are live and both provide ``get_all_positions()``,
+        so both reach this monitor:
+
+            execution/position_tracker.py   Position.id
+            execution/position_manager.py   Position.position_id
+
+        This read ``pos.id`` directly. On the position_manager shape — the one
+        this class's own docstring names — that raises AttributeError on the
+        first position examined. ``_loop`` catches every exception and keeps
+        polling, so the task stayed alive, ``start()`` had already logged
+        "SLTPMonitor started", and no stop loss was ever checked.
+
+        Raises rather than inventing an id: a generated one would be absent from
+        ``_closing`` on every poll, so the duplicate-close guard would pass every
+        time and the same position would be closed repeatedly.
+        """
+        for attr in ("position_id", "id"):
+            value = getattr(pos, attr, None)
+            if value is not None:
+                return str(value)
+        raise AttributeError(
+            f"{type(pos).__name__} exposes neither 'position_id' nor 'id'; "
+            "SLTPMonitor cannot track it for duplicate closes."
+        )
 
     @staticmethod
     def _tick_age_seconds(ts: Any) -> float | None:
@@ -293,7 +336,7 @@ class SLTPMonitor:
         Emits Prometheus counter, logs, and sends Telegram alert on success.
         Captures to Sentry and increments error counter if all retries fail.
         """
-        pos_id = pos.position_id
+        pos_id = self._position_id(pos)
         symbol = pos.symbol
         self._closing.add(pos_id)
         logger.warning(
@@ -318,17 +361,23 @@ class SLTPMonitor:
             success = False
             for attempt in range(1, _MAX_RETRIES + 1):
                 try:
-                    loop = asyncio.get_running_loop()
-                    order = await loop.run_in_executor(
-                        None,
-                        lambda: self._broker.place_order(
-                            symbol=symbol,
-                            side=close_side,
-                            order_type=OrderType.MARKET,
-                            quantity=qty,
-                            price=None,
-                            stop_price=None,
-                        ),
+                    # `BaseBroker.place_order` is `async def` (as are the OANDA
+                    # and MT5 implementations); only the paper broker is sync.
+                    # Running it in an executor therefore just *built* a
+                    # coroutine on a worker thread — awaiting the executor future
+                    # yielded that coroutine object, not an Order. It is
+                    # non-None, so the code below declared the close a success
+                    # and alerted "STOP_LOSS HIT: Closed ..." while no order had
+                    # ever been sent and the position was still open at the
+                    # broker. See docs/HARDENING_BACKLOG.md S12-04.
+                    order = await call_broker(
+                        self._broker.place_order,
+                        symbol=symbol,
+                        side=close_side,
+                        order_type=OrderType.MARKET,
+                        quantity=qty,
+                        price=None,
+                        stop_price=None,
                     )
                     if order is not None:
                         # Book the ACTUAL executed fill price, not the trigger
@@ -362,7 +411,7 @@ class SLTPMonitor:
                             pos_id,
                             reason,
                             attempt,
-                            getattr(order, "id", "?"),
+                            getattr(order, "order_id", None) or getattr(order, "id", "?"),
                             float(actual_fill),
                         )
                         # Close in the position manager ONLY if it still holds the
@@ -376,12 +425,12 @@ class SLTPMonitor:
                                     "SLTPMonitor: pos %s already absent from PM — broker close sent",
                                     pos_id,
                                 )
-                            elif getattr(current, "position_id", pos_id) != pos_id:
+                            elif getattr(current, "id", pos_id) != pos_id:
                                 logger.warning(
                                     "SLTPMonitor: PM position for %s changed (%s != %s) — "
                                     "skipping PM close to avoid closing the wrong position",
                                     symbol,
-                                    getattr(current, "position_id", "?"),
+                                    getattr(current, "id", "?"),
                                     pos_id,
                                 )
                             else:

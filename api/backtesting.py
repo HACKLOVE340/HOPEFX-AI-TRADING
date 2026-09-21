@@ -20,6 +20,8 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
+
 import io
 import logging
 import pathlib
@@ -70,16 +72,58 @@ def _load_results_from_db() -> None:
     _results_loaded = True
 
 
-def _persist_result(run_id: str, result: dict) -> None:
+def _owner_of(store: dict, run_id: str, result: dict, user_id: str | None) -> str | None:
+    """Resolve the owner to stamp on *result*.
+
+    An explicit *user_id* wins; otherwise keep whatever the payload already
+    carries, and failing that whatever the previous revision of this run
+    carried. Status updates are written as fresh, sparse dicts
+    (``{"run_id": ..., "status": "error"}``), so without that last step a run
+    would lose its owner the moment it failed or completed.
+    """
+    return user_id or result.get("user_id") or (store.get(run_id) or {}).get("user_id")
+
+
+def _persist_result(run_id: str, result: dict, user_id: str | None = None) -> None:
     """Write a result to both the in-process cache and the DB."""
+    owner = _owner_of(_results, run_id, result, user_id)
+    if owner is not None:
+        result["user_id"] = owner
     _results[run_id] = result
     db_set(f"{_DB_PREFIX}{run_id}", result, changed_by="backtesting_api")
 
 
-def _persist_wf_result(run_id: str, result: dict) -> None:
+def _persist_wf_result(run_id: str, result: dict, user_id: str | None = None) -> None:
     """Write a walk-forward result to both cache and DB."""
+    owner = _owner_of(_wf_results, run_id, result, user_id)
+    if owner is not None:
+        result["user_id"] = owner
     _wf_results[run_id] = result
     db_set(f"{_WF_DB_PREFIX}{run_id}", result, changed_by="backtesting_api")
+
+
+def _visible_run(record: dict, user_id: str) -> bool:
+    """Whether *user_id* may see this run.
+
+    A record with no ``user_id`` predates the field or was written by an
+    internal path; it stays visible rather than becoming unreachable. This is
+    an authorisation check, not a data migration.
+    """
+    owner = record.get("user_id")
+    return owner is None or owner == user_id
+
+
+def _owned_run(store: dict, run_id: str, user_id: str, kind: str = "Result") -> dict:
+    """Return the caller's run or raise 404.
+
+    404 rather than 403 for another user's run, so the response does not
+    disclose which run ids exist — the same choice `api/alerts._get_owned_alert`
+    makes.
+    """
+    record = store.get(run_id)
+    if record is None or not _visible_run(record, user_id):
+        raise HTTPException(status_code=404, detail=f"{kind} not found")
+    return record
 
 
 # Walk-forward write-through cache
@@ -134,6 +178,9 @@ class BacktestResult(BaseModel):
     status: str
     error: str | None = None
     created_at: str
+    # Who ran it. Optional so results stored before this field still load;
+    # those stay visible to everyone rather than becoming unreachable.
+    user_id: str | None = None
 
 
 # ── Strategy registry ─────────────────────────────────────────────────────────
@@ -456,7 +503,7 @@ async def run_backtest(
             "created_at": created_at,
         }
 
-    _persist_result(run_id, result)
+    _persist_result(run_id, result, user_id=_user.sub)
     return BacktestResult(**result)
 
 
@@ -465,9 +512,10 @@ async def list_walk_forward_results(
     _user: TokenPayload = Depends(get_current_user),
     limit: int = 20,
 ):
-    """Return all walk-forward results, newest first. Used by the WalkForward list view."""
+    """Return the caller's walk-forward results, newest first."""
     _load_wf_results_from_db()
-    items = sorted(_wf_results.values(), key=lambda r: r.get("created_at", ""), reverse=True)
+    mine = [r for r in _wf_results.values() if _visible_run(r, _user.sub)]
+    items = sorted(mine, key=lambda r: r.get("created_at", ""), reverse=True)
     return {"results": items[:limit], "total": len(items)}
 
 
@@ -479,9 +527,10 @@ async def get_latest_walk_forward(_user: TokenPayload = Depends(get_current_user
     Trigger a run via POST /api/backtest/walk-forward/run first.
     """
     _load_wf_results_from_db()
-    if _wf_results:
+    mine = [r for r in _wf_results.values() if _visible_run(r, _user.sub)]
+    if mine:
         latest = sorted(
-            _wf_results.values(),
+            mine,
             key=lambda r: r.get("created_at", ""),
             reverse=True,
         )[0]
@@ -494,11 +543,9 @@ async def get_latest_walk_forward(_user: TokenPayload = Depends(get_current_user
 
 @router.get("/walk-forward/{run_id}")
 async def get_walk_forward(run_id: str, _user: TokenPayload = Depends(get_current_user)):
-    """Return walk-forward results for a specific run_id."""
+    """Return one of the caller's walk-forward results."""
     _load_wf_results_from_db()
-    if run_id in _wf_results:
-        return _wf_results[run_id]
-    raise HTTPException(status_code=404, detail="Walk-forward result not found")
+    return _owned_run(_wf_results, run_id, _user.sub, kind="Walk-forward result")
 
 
 class WalkForwardRequest(BaseModel):
@@ -507,7 +554,164 @@ class WalkForwardRequest(BaseModel):
     initial_capital: float = Field(10000.0, gt=0)
     n_splits: int = Field(5, ge=2, le=20, description="Number of train/test folds")
     train_ratio: float = Field(0.7, gt=0.0, lt=1.0, description="Fraction of each fold used for training")
+    purge_days: int = Field(
+        5,
+        ge=0,
+        le=90,
+        description=(
+            "Embargo between a fold's training and test periods. The bar immediately "
+            "after the training cut still carries the state that produced the last "
+            "training signal, so scoring on it leaks. Matches the purge in "
+            "backtesting/walk_forward.py::WalkForwardEngine."
+        ),
+    )
     strategy_params: dict[str, Any] | None = None
+
+
+def _run_backtest_window(
+    strategy_name: str,
+    symbol: str,
+    start: datetime,
+    end: datetime,
+    initial_capital: float,
+) -> dict:
+    """Backtest a strategy over an EXPLICIT window.
+
+    `_run_real_backtest` takes a count of days and always ends at
+    `datetime.now(UTC)`. That is fine for a single "last N days" run and was
+    catastrophic for walk-forward, which needs each fold measured over its own
+    period — see `_walk_forward_execute` below (F123).
+    """
+    req = BacktestRequest(
+        strategy=strategy_name,
+        symbol=symbol,
+        start_date=start.strftime("%Y-%m-%dT%H:%M:%S"),
+        end_date=end.strftime("%Y-%m-%dT%H:%M:%S"),
+        initial_capital=initial_capital,
+    )
+    return _run_backtest_sync(req)
+
+
+def _walk_forward_execute(req: WalkForwardRequest, run_id: str, user_id: str) -> None:
+    """Run the folds and persist the result.
+
+    Module level rather than a closure so it can be driven directly by a test.
+    The defect below could not be caught while the only way in was an HTTP
+    request that started a background task.
+
+    **What this used to do.** It computed each fold's train and test windows,
+    then called `_run_real_backtest(strategy, symbol, days, capital)` with only
+    the *length* of each. That helper always ends at `datetime.now(UTC)`, so
+    every fold measured the same recent period — train the last
+    `fold_days * train_ratio` days, test the last `fold_days * (1 - train_ratio)`
+    days — with the test window contained entirely inside the training window,
+    and the computed fold dates reaching the response as labels for a
+    computation that never happened. Five folds, one window, total leakage, and
+    an `avg_test_sharpe` that was the recent period's Sharpe averaged with
+    itself.
+
+    **What it does now.** Each fold is measured over its own window, the folds
+    advance through time, and an embargo separates training from testing —
+    `WalkForwardEngine` purges for the same reason: the bar immediately after
+    the training cut still carries the state that produced the last training
+    signal.
+
+    `backtesting/walk_forward.py::WalkForwardEngine` is not called from here,
+    deliberately. It is a parameter-grid optimiser — `run(data,
+    strategy_factory, parameter_grid)` — and this endpoint validates one
+    parameterisation against out-of-sample data. Reaching for it would mean
+    inventing a grid the caller did not ask for. Its purge semantics are what
+    was worth borrowing, and they are.
+    """
+    created_at = datetime.now(UTC).isoformat()
+    pending: dict[str, Any] = {
+        "run_id": run_id,
+        "strategy": req.strategy,
+        "symbol": req.symbol,
+        "n_splits": req.n_splits,
+        "train_ratio": req.train_ratio,
+        "purge_days": req.purge_days,
+        "status": "running",
+        "created_at": created_at,
+        "folds": [],
+    }
+
+    try:
+        _load_strategy(req.strategy, req.strategy_params)
+    except ValueError as exc:
+        _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)}, user_id=user_id)
+        return
+
+    from datetime import timedelta
+
+    total_days = 365 * 3
+    end_dt = datetime.now(UTC)
+    start_dt = end_dt - timedelta(days=total_days)
+    fold_days = total_days // req.n_splits
+    folds: list[dict] = []
+
+    for i in range(req.n_splits):
+        fold_start = start_dt + timedelta(days=i * fold_days)
+        fold_end = fold_start + timedelta(days=fold_days)
+        train_end = fold_start + timedelta(days=int(fold_days * req.train_ratio))
+        # The embargo sits between them and belongs to neither.
+        test_start = train_end + timedelta(days=req.purge_days)
+
+        if test_start >= fold_end:
+            folds.append(
+                {
+                    "fold": i + 1,
+                    "error": (
+                        f"purge_days={req.purge_days} leaves no test period in a "
+                        f"{fold_days}-day fold at train_ratio={req.train_ratio}"
+                    ),
+                }
+            )
+            continue
+
+        try:
+            train_result = _run_backtest_window(req.strategy, req.symbol, fold_start, train_end, req.initial_capital)
+            test_result = _run_backtest_window(req.strategy, req.symbol, test_start, fold_end, req.initial_capital)
+            folds.append(
+                {
+                    "fold": i + 1,
+                    "train_start": fold_start.date().isoformat(),
+                    "train_end": train_end.date().isoformat(),
+                    "test_start": test_start.date().isoformat(),
+                    "test_end": fold_end.date().isoformat(),
+                    "purge_days": req.purge_days,
+                    "train_sharpe": train_result.get("sharpe_ratio", 0.0),
+                    "test_sharpe": test_result.get("sharpe_ratio", 0.0),
+                    "train_return_pct": train_result.get("total_return_pct", 0.0),
+                    "test_return_pct": test_result.get("total_return_pct", 0.0),
+                    "train_max_dd": train_result.get("max_drawdown_pct", 0.0),
+                    "test_max_dd": test_result.get("max_drawdown_pct", 0.0),
+                }
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.warning("Walk-forward fold %d failed: %s", i + 1, exc)
+            folds.append({"fold": i + 1, "error": str(exc)})
+
+    valid = [f for f in folds if "error" not in f]
+    avg_test_sharpe = sum(f["test_sharpe"] for f in valid) / len(valid) if valid else 0.0
+    avg_test_return = sum(f["test_return_pct"] for f in valid) / len(valid) if valid else 0.0
+
+    _persist_wf_result(
+        run_id,
+        {
+            **pending,
+            "status": "completed",
+            "folds": folds,
+            "summary": {
+                "avg_test_sharpe": round(avg_test_sharpe, 3),
+                "avg_test_return_pct": round(avg_test_return, 2),
+                "folds_completed": len(valid),
+                "folds_failed": req.n_splits - len(valid),
+            },
+            "completed_at": datetime.now(UTC).isoformat(),
+        },
+        user_id=user_id,
+    )
 
 
 @router.post("/walk-forward/run", status_code=status.HTTP_202_ACCEPTED)
@@ -518,95 +722,25 @@ async def run_walk_forward(
 ):
     """Trigger a walk-forward backtest. Returns run_id immediately; poll GET /walk-forward/{run_id}."""
     run_id = str(uuid.uuid4())
-    created_at = datetime.now(UTC).isoformat()
 
-    # Seed a pending record so the frontend can poll immediately
-    pending: dict[str, Any] = {
-        "run_id": run_id,
-        "strategy": req.strategy,
-        "symbol": req.symbol,
-        "n_splits": req.n_splits,
-        "train_ratio": req.train_ratio,
-        "status": "running",
-        "created_at": created_at,
-        "folds": [],
-    }
-    _persist_wf_result(run_id, pending)
+    # Seed a pending record so the frontend can poll immediately.
+    _persist_wf_result(
+        run_id,
+        {
+            "run_id": run_id,
+            "strategy": req.strategy,
+            "symbol": req.symbol,
+            "n_splits": req.n_splits,
+            "train_ratio": req.train_ratio,
+            "purge_days": req.purge_days,
+            "status": "running",
+            "created_at": datetime.now(UTC).isoformat(),
+            "folds": [],
+        },
+        user_id=_user.sub,
+    )
 
-    def _execute() -> None:
-        try:
-            _load_strategy(req.strategy, req.strategy_params)
-        except ValueError as exc:
-            _persist_wf_result(run_id, {**pending, "status": "error", "error": str(exc)})
-            return
-
-        # Build a synthetic date range spanning 3 years for the walk-forward splits
-        from datetime import timedelta
-
-        total_days = 365 * 3
-        end_dt = datetime.now(UTC)
-        start_dt = end_dt - timedelta(days=total_days)
-        fold_days = total_days // req.n_splits
-        folds: list[dict] = []
-
-        for i in range(req.n_splits):
-            fold_start = start_dt + timedelta(days=i * fold_days)
-            fold_end = fold_start + timedelta(days=fold_days)
-            train_end = fold_start + timedelta(days=int(fold_days * req.train_ratio))
-
-            try:
-                train_result = _run_real_backtest(
-                    req.strategy,
-                    req.symbol,
-                    int((train_end - fold_start).days),
-                    req.initial_capital,
-                )
-                test_result = _run_real_backtest(
-                    req.strategy,
-                    req.symbol,
-                    int((fold_end - train_end).days),
-                    req.initial_capital,
-                )
-                folds.append(
-                    {
-                        "fold": i + 1,
-                        "train_start": fold_start.date().isoformat(),
-                        "train_end": train_end.date().isoformat(),
-                        "test_start": train_end.date().isoformat(),
-                        "test_end": fold_end.date().isoformat(),
-                        "train_sharpe": train_result.get("sharpe_ratio", 0.0),
-                        "test_sharpe": test_result.get("sharpe_ratio", 0.0),
-                        "train_return_pct": train_result.get("total_return_pct", 0.0),
-                        "test_return_pct": test_result.get("total_return_pct", 0.0),
-                        "train_max_dd": train_result.get("max_drawdown_pct", 0.0),
-                        "test_max_dd": test_result.get("max_drawdown_pct", 0.0),
-                    }
-                )
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning("Walk-forward fold %d failed: %s", i + 1, exc)
-                folds.append({"fold": i + 1, "error": str(exc)})
-
-        valid = [f for f in folds if "error" not in f]
-        avg_test_sharpe = sum(f["test_sharpe"] for f in valid) / len(valid) if valid else 0.0
-        avg_test_return = sum(f["test_return_pct"] for f in valid) / len(valid) if valid else 0.0
-
-        _persist_wf_result(
-            run_id,
-            {
-                **pending,
-                "status": "completed",
-                "folds": folds,
-                "summary": {
-                    "avg_test_sharpe": round(avg_test_sharpe, 3),
-                    "avg_test_return_pct": round(avg_test_return, 2),
-                    "folds_completed": len(valid),
-                    "folds_failed": req.n_splits - len(valid),
-                },
-                "completed_at": datetime.now(UTC).isoformat(),
-            },
-        )
-
-    background_tasks.add_task(_execute)
+    background_tasks.add_task(_walk_forward_execute, req, run_id, _user.sub)
     return {"run_id": run_id, "status": "running"}
 
 
@@ -615,9 +749,14 @@ async def list_results(
     _user: TokenPayload = Depends(get_current_user),
     limit: int = 20,
 ):
-    """Return the most recent backtest results, newest first."""
+    """Return the caller's most recent backtest results, newest first.
+
+    This returned every user's runs: a result carries the strategy, symbol,
+    date range, return, Sharpe, drawdown and win rate — one user's research.
+    """
     _load_results_from_db()
-    items = sorted(_results.values(), key=lambda r: r["created_at"], reverse=True)
+    mine = [r for r in _results.values() if _visible_run(r, _user.sub)]
+    items = sorted(mine, key=lambda r: r["created_at"], reverse=True)
     return [BacktestResult(**r) for r in items[:limit]]
 
 
@@ -635,7 +774,7 @@ async def get_result(
     run_id: str,
     _user: TokenPayload = Depends(get_current_user),
 ):
-    """Get a specific backtest result by run_id."""
+    """Get one of the caller's backtest results by run_id."""
     _load_results_from_db()
     if run_id not in _results:
         # Try a direct DB lookup in case the cache was cold
@@ -644,7 +783,7 @@ async def get_result(
             _results[run_id] = value
         else:
             raise HTTPException(status_code=404, detail="Result not found")
-    return BacktestResult(**_results[run_id])
+    return BacktestResult(**_owned_run(_results, run_id, _user.sub))
 
 
 @router.get(
@@ -670,7 +809,7 @@ async def download_pdf_report(
         else:
             raise HTTPException(status_code=404, detail="Backtest result not found")
 
-    result = _results[run_id]
+    result = _owned_run(_results, run_id, _user.sub, kind="Backtest result")
     pdf_bytes = _build_pdf(result)
 
     filename = f"backtest_{result['strategy']}_{result['symbol']}_{run_id[:8]}.pdf"
@@ -820,7 +959,7 @@ async def get_latest_multi_symbol_report(
         )
 
     try:
-        report = json.loads(report_path.read_text(encoding="utf-8"))
+        report = json.loads(await asyncio.to_thread(report_path.read_text, encoding="utf-8"))
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.error("Could not read report: %s", exc)
         raise HTTPException(status_code=500, detail="Could not read report — check server logs") from None
@@ -867,7 +1006,7 @@ async def get_reconciled_investigation(
     cache_path = Path("data/backtest_investigation.json")
     if cache_path.exists():
         try:
-            return json.loads(cache_path.read_text(encoding="utf-8"))
+            return json.loads(await asyncio.to_thread(cache_path.read_text, encoding="utf-8"))
         except Exception as _exc:  # pylint: disable=broad-exception-caught
             logger.debug("Suppressed exception: %s", _exc)
 
@@ -879,7 +1018,7 @@ async def get_reconciled_investigation(
         from backtesting.reconciled_backtest_investigation import run_investigation
 
         results = run_investigation(smoke=False)
-        cache_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+        await asyncio.to_thread(cache_path.write_text, json.dumps(results, indent=2), encoding="utf-8")
         return results
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.error("Investigation failed: %s", exc)
@@ -960,7 +1099,7 @@ async def run_replay_backtest(
     Data flows: Dukascopy bi5 → MarketReplayEngine → DQE → BacktestEngine.
     Causal ordering is enforced — no look-ahead bias.
 
-    Returns immediately with run_id. Poll /api/backtest/results/{run_id}.
+    Returns immediately with run_id. Poll /api/backtesting/results/{run_id}.
     """
     run_id = str(uuid.uuid4())[:12]
 
@@ -1004,17 +1143,22 @@ async def run_replay_backtest(
                     else {},
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
+                user_id=_user.sub,
             )
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception("Replay backtest %s failed", run_id)
-            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
+            _persist_result(
+                run_id,
+                {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"},
+                user_id=_user.sub,
+            )
 
-    _persist_result(run_id, {"run_id": run_id, "status": "running"})
+    _persist_result(run_id, {"run_id": run_id, "status": "running"}, user_id=_user.sub)
     background_tasks.add_task(_run)
     return {
         "run_id": run_id,
         "status": "running",
-        "message": f"Poll /api/backtest/results/{run_id} for completion",
+        "message": f"Poll /api/backtesting/results/{run_id} for completion",
     }
 
 
@@ -1030,7 +1174,7 @@ async def run_regime_stress_test(
     Regimes: covid_crash_2020, gold_flash_crash_2021, fed_rate_shock_2022,
              ukraine_war_spike_2022, svb_banking_crisis_2023, normal_baseline_2019
 
-    Returns immediately with run_id. Poll /api/backtest/results/{run_id}.
+    Returns immediately with run_id. Poll /api/backtesting/results/{run_id}.
     """
     run_id = str(uuid.uuid4())[:12]
 
@@ -1091,17 +1235,22 @@ async def run_regime_stress_test(
                     ],
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
+                user_id=_user.sub,
             )
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception("Regime stress %s failed", run_id)
-            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
+            _persist_result(
+                run_id,
+                {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"},
+                user_id=_user.sub,
+            )
 
-    _persist_result(run_id, {"run_id": run_id, "status": "running"})
+    _persist_result(run_id, {"run_id": run_id, "status": "running"}, user_id=_user.sub)
     background_tasks.add_task(_run)
     return {
         "run_id": run_id,
         "status": "running",
-        "message": f"Poll /api/backtest/results/{run_id} for completion",
+        "message": f"Poll /api/backtesting/results/{run_id} for completion",
     }
 
 

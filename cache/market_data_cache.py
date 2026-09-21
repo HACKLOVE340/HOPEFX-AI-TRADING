@@ -255,6 +255,12 @@ class MarketDataCache:
         max_retries: int = 1,
         retry_delay: float = 0.5,
         enable_fallback: bool = True,
+        ssl: bool = False,
+        ssl_ca_certs: str | None = None,
+        ssl_certfile: str | None = None,
+        ssl_keyfile: str | None = None,
+        ssl_cert_reqs: str = "required",
+        ssl_context: Any = None,
     ):
         # Resolve connection parameters: explicit args > REDIS_URL env > defaults.
         # This ensures the cache honours the same REDIS_URL used by the rest of
@@ -279,6 +285,18 @@ class MarketDataCache:
         self.retry_delay = retry_delay
         self.enable_fallback = enable_fallback
 
+        # ── TLS ─────────────────────────────────────────────────────────────────
+        # redis-py 8.x sync client accepts ``ssl=True`` plus the individual
+        # ``ssl_*`` kwargs, NOT an ``ssl.SSLContext`` object. We therefore take the
+        # individual params; ``ssl_context`` is accepted for caller back-compat but
+        # only used to imply ``ssl=True`` (its cert/verify settings must be supplied
+        # via the ssl_* params, matching cache/redis_client.py).
+        self.ssl = bool(ssl) or ssl_context is not None
+        self.ssl_ca_certs = ssl_ca_certs
+        self.ssl_certfile = ssl_certfile
+        self.ssl_keyfile = ssl_keyfile
+        self.ssl_cert_reqs = ssl_cert_reqs
+
         # Thread safety
         self._stats_lock = threading.Lock()
 
@@ -302,6 +320,34 @@ class MarketDataCache:
 
         logger.info("MarketDataCache initialized (Redis: %s:%s)", self.host, self.port)
 
+    def _client_kwargs(self) -> dict:
+        """redis.Redis(**kwargs) for this cache, including TLS when enabled.
+
+        redis-py 8.x accepts ``ssl=True`` plus individual ``ssl_*`` params (it does
+        NOT accept an ``ssl.SSLContext`` object), so TLS is wired with those.
+        """
+        kwargs: dict = dict(
+            host=self.host,
+            port=self.port,
+            db=self.db,
+            password=self.password,
+            socket_timeout=self.socket_timeout,
+            socket_connect_timeout=self.socket_connect_timeout,
+            decode_responses=self.decode_responses,
+            retry_on_error=[],
+            retry=None,
+        )
+        if self.ssl:
+            kwargs["ssl"] = True
+            kwargs["ssl_cert_reqs"] = self.ssl_cert_reqs
+            if self.ssl_ca_certs:
+                kwargs["ssl_ca_certs"] = self.ssl_ca_certs
+            if self.ssl_certfile:
+                kwargs["ssl_certfile"] = self.ssl_certfile
+            if self.ssl_keyfile:
+                kwargs["ssl_keyfile"] = self.ssl_keyfile
+        return kwargs
+
     def _connect_with_retry(self) -> Redis | None:
         """Attempt Redis connection with retries; return client or None on failure."""
         if not REDIS_AVAILABLE:
@@ -311,17 +357,7 @@ class MarketDataCache:
 
         for attempt in range(self.max_retries):
             try:
-                client = redis.Redis(
-                    host=self.host,
-                    port=self.port,
-                    db=self.db,
-                    password=self.password,
-                    socket_timeout=self.socket_timeout,
-                    socket_connect_timeout=self.socket_connect_timeout,
-                    decode_responses=self.decode_responses,
-                    retry_on_error=[],
-                    retry=None,
-                )
+                client = redis.Redis(**self._client_kwargs())
                 client.ping()
                 self._connection_failed = False
                 self._using_fallback = False
@@ -415,17 +451,7 @@ class MarketDataCache:
         # Reconnect attempt
         for attempt in range(self.max_retries):
             try:
-                client = redis.Redis(
-                    host=self.host,
-                    port=self.port,
-                    db=self.db,
-                    password=self.password,
-                    socket_timeout=self.socket_timeout,
-                    socket_connect_timeout=self.socket_connect_timeout,
-                    decode_responses=self.decode_responses,
-                    retry_on_error=[],
-                    retry=None,
-                )
+                client = redis.Redis(**self._client_kwargs())
                 client.ping()
                 self._redis_client = client
                 self._connection_failed = False

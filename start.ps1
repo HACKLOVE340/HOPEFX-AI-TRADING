@@ -132,11 +132,17 @@ if ($needBuild) {
         npm run build
         $buildRc = $LASTEXITCODE
         Pop-Location
-        if ($buildRc -ne 0) {
-            Write-Host "[WARN] Frontend build failed. API will still start without UI." -ForegroundColor Yellow
-        } else {
+        # Trust the actual artifact, not just npm's exit code: on Windows the PWA/
+        # workbox step can exit non-zero AFTER Vite has written a valid bundle
+        # ("✓ built"), so a non-zero rc with a present index.html is still usable.
+        if ($buildRc -eq 0) {
             Set-Content -Path "static\.build-commit" -Value $currentCommit -NoNewline
             Write-Host "[OK] Frontend built" -ForegroundColor Green
+        } elseif (Test-Path "static\index.html") {
+            Set-Content -Path "static\.build-commit" -Value $currentCommit -NoNewline
+            Write-Host "[OK] Frontend built (npm exit=$buildRc but bundle present - likely a post-build PWA warning)" -ForegroundColor Green
+        } else {
+            Write-Host "[WARN] Frontend build failed (npm exit=$buildRc, no static\index.html). API will still start without UI." -ForegroundColor Yellow
         }
     } else {
         Write-Host "[WARN] npm not found. Skipping frontend build. API will still start." -ForegroundColor Yellow

@@ -28,7 +28,7 @@ import contextlib
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -43,6 +43,40 @@ logger = logging.getLogger(__name__)
 # Startup retry config
 _STARTUP_MAX_RETRIES = int(os.getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
 _STARTUP_RETRY_DELAY = float(os.getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
+
+# Macro observations older than this are context from a different market.
+# FRED series are daily, so a week of slack covers a normal publication gap.
+#
+# This threshold already existed in analysis/chart_analysis.py, which computed
+# the true age itself and refused stale macro — which is why the chart bot was
+# the only consumer that got this right. It belongs here, where every consumer
+# of the bridge benefits from it.
+MACRO_MAX_AGE_DAYS = int(os.getenv("MACRO_MAX_AGE_DAYS", "7"))
+
+
+def _parse_date(raw: object) -> date | None:
+    """Parse an observation date, or None if it is absent/unparseable.
+
+    Shared by newest_observation() and get_ml_features() so a series cannot be
+    considered fresh by one and stale by the other.
+    """
+    if not raw:
+        return None
+    if isinstance(raw, date):
+        return raw
+    try:
+        return date.fromisoformat(str(raw)[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def _age_days(raw: object) -> int | None:
+    """Age in days of an observation date, or None if it cannot be established."""
+    parsed = _parse_date(raw)
+    if parsed is None:
+        return None
+    return (datetime.now(tz=UTC).date() - parsed).days
+
 
 # Local cache file for last-known-good FRED data.
 # Must point to a .json FILE, not a directory.
@@ -83,8 +117,19 @@ class MacroStoreBridge:
         self._last_refresh: datetime | None = None
         self._series_loaded: int = 0
         self._wgc_series_loaded: int = 0
+        # Where the numbers currently in MacroStore came from. "loaded: true"
+        # does not distinguish live FRED from the bundled CSVs that end in
+        # March, and the remedy for each is completely different.
+        self._source: str = "none"
         # Suppress repeated "WGC returned no series" warnings
         self._wgc_offline_warned: bool = False
+        # One warning per process when macro series are omitted from ML
+        # features — get_ml_features() is called on every prediction.
+        self._features_omitted_warned: bool = False
+        # Strong references to in-flight force_refresh tasks. The event loop
+        # holds only weak ones, so a task nobody references can be collected
+        # mid-await. Entries are discarded by a done-callback.
+        self._refresh_tasks: set[asyncio.Task] = set()
 
         # Prometheus
         self._prom_series_count = None
@@ -181,11 +226,32 @@ class MacroStoreBridge:
             if loaded > 0:
                 self._loaded = True
                 self._series_loaded = loaded
+                # When we read the files — deliberately not a freshness claim.
+                # health() reports data_age_days separately for that.
                 self._last_refresh = datetime.now(UTC)
-                logger.info(
-                    "MacroStoreBridge: CSV fallback loaded %d series from data/macro/",
-                    loaded,
-                )
+                self._source = "csv_fallback"
+
+                age = self.data_age_days()
+                if age is None or age > MACRO_MAX_AGE_DAYS:
+                    # The deployed condition. Logging this at INFO with no age
+                    # is how 142-day-old macro data stayed invisible: every
+                    # downstream consumer saw "loaded" and a fresh
+                    # last_refresh, and nothing anywhere stated the real age.
+                    logger.warning(
+                        "MacroStoreBridge: CSV fallback loaded %d series from data/macro/, but the "
+                        "newest observation is %s (%s days old, limit %d) — macro features are STALE. "
+                        "Set FRED_API_KEY to fetch live series, or refresh the bundled CSVs.",
+                        loaded,
+                        self.newest_observation() or "unknown",
+                        "unknown" if age is None else age,
+                        MACRO_MAX_AGE_DAYS,
+                    )
+                else:
+                    logger.info(
+                        "MacroStoreBridge: CSV fallback loaded %d series from data/macro/ (%d days old)",
+                        loaded,
+                        age,
+                    )
             else:
                 logger.warning(
                     "MacroStoreBridge: CSV fallback found no series in data/macro/ — "
@@ -235,7 +301,12 @@ class MacroStoreBridge:
             except Exception as fred_exc:
                 logger.warning("MacroStoreBridge: FRED fetch failed (%s) — trying local cache", fred_exc)
 
-            if fetch_ok and all_series:
+            # `fetch_ok and all_series` is true even when every series is empty:
+            # without FRED_API_KEY each fetch_series returns an empty Series
+            # rather than raising, so the dict is populated with nothing in it.
+            any_data = any(not s.empty for s in all_series.values())
+
+            if fetch_ok and any_data:
                 # Persist a "last known good" snapshot for future fallbacks
                 try:
                     cache_data = {
@@ -243,10 +314,16 @@ class MacroStoreBridge:
                         for name, series in all_series.items()
                         if not series.empty
                     }
-                    os.makedirs(os.path.dirname(_FRED_CACHE_PATH) or ".", exist_ok=True)
-                    with open(_FRED_CACHE_PATH, "w", encoding="utf-8") as _cf:
-                        json.dump(cache_data, _cf)
-                    logger.debug("MacroStoreBridge: FRED cache written to %s", _FRED_CACHE_PATH)
+                    # Never write an empty cache. The filter above drops empty
+                    # series, so an all-empty fetch produced `{}` and wrote it
+                    # over the real snapshot — the fallback destroying itself.
+                    # data/macro/fred_cache.json is 3 bytes of "{}" for exactly
+                    # this reason.
+                    if cache_data:
+                        os.makedirs(os.path.dirname(_FRED_CACHE_PATH) or ".", exist_ok=True)
+                        with open(_FRED_CACHE_PATH, "w", encoding="utf-8") as _cf:
+                            json.dump(cache_data, _cf)
+                        logger.debug("MacroStoreBridge: FRED cache written to %s", _FRED_CACHE_PATH)
                 except Exception as cache_write_exc:
                     logger.debug("MacroStoreBridge: could not write FRED cache: %s", cache_write_exc)
             else:
@@ -258,6 +335,7 @@ class MacroStoreBridge:
                         name: pd.Series({pd.Timestamp(k): v for k, v in vals.items()}, dtype=float)
                         for name, vals in cache_data.items()
                     }
+                    self._source = "cache"
                     logger.info("MacroStoreBridge: loaded %d FRED series from local cache", len(all_series))
                 except FileNotFoundError:
                     logger.warning(
@@ -286,9 +364,23 @@ class MacroStoreBridge:
                     float(series.iloc[-1]) if not series.empty else 0.0,
                 )
 
+            if loaded == 0:
+                # Zero series injected is not a successful load. `start()`
+                # breaks its retry loop on `self._loaded`, so setting it here
+                # unconditionally meant an all-empty FRED response (the
+                # no-API-key case) skipped the CSV fallback entirely and left
+                # MacroStore with nothing.
+                logger.warning(
+                    "MacroStoreBridge: FRED returned no usable series (%d requested) — "
+                    "not marking as loaded. Check FRED_API_KEY.",
+                    len(FRED_SERIES),
+                )
+                return
+
             self._loaded = True
             self._series_loaded = loaded
             self._last_refresh = datetime.now(UTC)
+            self._source = "fred"
 
             if self._prom_series_count:
                 self._prom_series_count.set(loaded)
@@ -346,11 +438,48 @@ class MacroStoreBridge:
 
             snap = macro_store.snapshot()
             features: dict[str, float] = {}
+            omitted: list[str] = []
+
             for name, info in snap.items():
-                if info and info.get("value") is not None:
-                    features[f"macro_{name}"] = float(info["value"])
-                else:
-                    features[f"macro_{name}"] = 0.0
+                key = f"macro_{name}"
+
+                # A series with no value used to become 0.0. That is not
+                # "unknown" — a VIX of 0.0 is the calmest reading possible, and
+                # _classify_macro reads it as LOW_VOL. Omit the key so a
+                # consumer can see the series is absent instead of trusting a
+                # fabricated reading.
+                if not info or info.get("value") is None:
+                    omitted.append(name)
+                    continue
+
+                # Same for a value that is real but too old to describe today.
+                age = _age_days(info.get("date"))
+                if age is None or age > MACRO_MAX_AGE_DAYS:
+                    omitted.append(name)
+                    continue
+
+                features[key] = float(info["value"])
+
+            # Omission is not silent: state the age and the fact of staleness so
+            # a consumer that got fewer keys than it expected knows why. These
+            # are floats because the return type is dict[str, float] and these
+            # values reach JSON API responses — NaN is not valid JSON, which is
+            # why absent series are omitted rather than emitted as NaN.
+            age_days = self.data_age_days()
+            features["macro_data_age_days"] = float(age_days) if age_days is not None else -1.0
+            features["macro_stale"] = 1.0 if self.is_stale() else 0.0
+
+            if omitted and not self._features_omitted_warned:
+                logger.warning(
+                    "MacroStoreBridge: %d macro series omitted from ML features (missing or older "
+                    "than %d days): %s. They were previously emitted as 0.0, which is a real "
+                    "reading rather than a missing one.",
+                    len(omitted),
+                    MACRO_MAX_AGE_DAYS,
+                    sorted(omitted)[:10],
+                )
+                self._features_omitted_warned = True
+
             return features
         except Exception as exc:
             logger.debug("MacroStoreBridge.get_ml_features error: %s", exc)
@@ -392,22 +521,87 @@ class MacroStoreBridge:
         """
         Schedule an immediate FRED refresh outside the daily cycle.
 
-        Creates a fire-and-forget asyncio task.  Safe to call from sync
-        code — does nothing if no event loop is running.
+        Two problems this used to have, neither of which has fired yet because
+        nothing calls it — which is the reason to close them now rather than
+        after the first caller arrives.
+
+        * ``asyncio.ensure_future(...)`` with the result discarded. The event
+          loop holds only a **weak** reference to a task, so a task nobody else
+          references can be garbage-collected mid-await: the refresh silently
+          never completes. The task is kept in ``_refresh_tasks`` and discarded
+          by a done-callback, which is the documented way to keep one alive
+          without leaking it.
+
+        * ``asyncio.run()`` in the no-loop branch, which blocks the calling
+          thread for the whole FRED fetch including its retries. A sync caller
+          asking to "schedule" a refresh does not expect to wait on the
+          network. With no loop there is nothing to schedule onto, so this now
+          declines and says so instead of quietly blocking.
         """
         try:
             loop = asyncio.get_running_loop()
-            asyncio.ensure_future(
-                self._load_fred_into_store(),
-                loop=loop,
-            )
         except RuntimeError:
-            logger.debug("MacroStoreBridge.force_refresh: no running event loop — using asyncio.run()")
-            asyncio.run(self._load_fred_into_store())
+            logger.warning(
+                "MacroStoreBridge.force_refresh: no running event loop — nothing scheduled. "
+                "Call this from async code, or await _load_fred_into_store() directly."
+            )
+            return
+
+        task = loop.create_task(self._load_fred_into_store(), name="macro_bridge_force_refresh")
+        self._refresh_tasks.add(task)
+        task.add_done_callback(self._refresh_tasks.discard)
 
     @property
     def is_loaded(self) -> bool:
         return self._loaded
+
+    def newest_observation(self) -> date | None:
+        """Date of the most recent observation across all loaded series.
+
+        ``None`` when nothing is loaded or every series is undated — which is
+        "unknown", never "today".
+        """
+        try:
+            from ml.macro_store import macro_store
+
+            snap = macro_store.snapshot()
+        except ImportError:
+            return None
+
+        newest: date | None = None
+        for info in snap.values():
+            if not info:
+                continue
+            parsed = _parse_date(info.get("date"))
+            if parsed is None:
+                continue
+            newest = parsed if newest is None else max(newest, parsed)
+        return newest
+
+    def data_age_days(self) -> int | None:
+        """Age in days of the freshest macro observation, or ``None`` if unknown.
+
+        This is the number that was missing. ``_last_refresh`` records when the
+        bridge last *read* a source, which the CSV fallback sets to
+        ``datetime.now()`` — so a health endpoint reported a refresh seconds ago
+        while serving observations 142 days old. Freshness has to be measured on
+        the data, not on the read.
+        """
+        newest = self.newest_observation()
+        if newest is None:
+            return None
+        return (datetime.now(tz=UTC).date() - newest).days
+
+    def is_stale(self) -> bool:
+        """True when the macro data is too old to describe today's market.
+
+        Fails closed: an age that cannot be established counts as stale, because
+        the alternative is asserting freshness with no evidence.
+        """
+        age = self.data_age_days()
+        if age is None:
+            return True
+        return age > MACRO_MAX_AGE_DAYS
 
     def health(self) -> dict:
         try:
@@ -416,11 +610,22 @@ class MacroStoreBridge:
             snap = macro_store.snapshot()
         except ImportError:
             snap = {}
+
+        newest = self.newest_observation()
+        age = self.data_age_days()
         return {
             "loaded": self._loaded,
             "series_loaded": self._series_loaded,
             "wgc_series_loaded": self._wgc_series_loaded,
+            # When the bridge last read a source. NOT a freshness signal — the
+            # CSV fallback sets this to now while loading months-old files.
             "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
+            # How old the data actually is. This is the freshness signal.
+            "newest_observation": newest.isoformat() if newest else None,
+            "data_age_days": age,
+            "stale": self.is_stale(),
+            "max_age_days": MACRO_MAX_AGE_DAYS,
+            "source": self._source,
             "series_count": len(snap),
             "wgc_health": self._wgc.health(),
             "series": {name: info.get("date") if info else None for name, info in snap.items()},

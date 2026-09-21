@@ -17,6 +17,10 @@ DELETE /api/chat/history — clear conversation history for the session (auth re
 
 Both routes require a valid JWT bearer token. Without auth, any bot that
 discovers the URL can run up OpenAI charges indefinitely.
+
+POST /api/chat additionally carries a per-user daily quota (core/ai_quota.py).
+Auth alone bounds *who* calls the provider, not how much they spend: one
+registered account looping this route still drains the LLM budget.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from core.ai_quota import ai_quota
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +100,7 @@ def _get_agent(session_id: str | None = None):
 )
 async def ai_chat(
     body: ChatRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ):
     """
     Send a free-form message to the HOPEFX AI assistant.
@@ -176,8 +181,11 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
     api_key_set = backend is not None
     if backend == "anthropic":
         model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
-    else:
+    elif backend == "openai":
         model = os.getenv("OPENAI_MODEL", "gpt-4o")
+    else:
+        # No backend configured — don't advertise a model that can't answer.
+        model = None
 
     llm_available = False
     llm_error: str | None = None

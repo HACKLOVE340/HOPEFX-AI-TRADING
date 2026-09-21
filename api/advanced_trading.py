@@ -175,47 +175,87 @@ class ABTestRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
-def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
+async def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
     """
     Run a real backtest for a named strategy using the backtesting engine.
 
     Returns a result dict compatible with the A/B test response schema.
     Raises ValueError when the strategy is not registered or data is unavailable.
+
+    Three defects lived in the previous version of this function, and together
+    they meant the endpoint could never succeed and could never have been
+    meaningful if it had:
+
+    1. ``strategy_name`` was accepted and never used. No ``add_strategy()`` call
+       was made, so both arms of every A/B test ran the same empty backtest, and
+       the winner was decided by the ``>=`` tie-break — always ``strategy_a``.
+    2. ``asyncio.run(engine.run())`` was called from inside the running event
+       loop of an ``async def`` endpoint. That raises
+       ``RuntimeError: asyncio.run() cannot be called from a running event
+       loop`` on every request, which the blanket ``except Exception`` turned
+       into a 422 reading "check strategy names and data availability" — a
+       message that sent every reader looking in the wrong place.
+    3. Even with a strategy attached, ``BacktestEngine`` calls
+       ``generate_signals(timestamp, prices, data)`` and nothing in
+       ``strategies/`` implements it; the resulting ``AttributeError`` was
+       swallowed per-bar into a flat curve. ``BacktestStrategyAdapter`` bridges
+       the two contracts.
     """
+    from datetime import timedelta
+
+    from backtesting.engine_config import BacktestConfig, BacktestEngine
+    from backtesting.strategy_adapter import BacktestStrategyAdapter
+    from strategies.registry import UnknownStrategyError, build as build_strategy
+    from utils.symbol import canonical as _canonical
+
+    engine_symbol = _canonical(symbol)
+
     try:
-        from datetime import timedelta
+        strategy = build_strategy(strategy_name, engine_symbol)
+    except UnknownStrategyError as exc:
+        # Propagated verbatim: it already names what was asked for and what is
+        # available, which is the whole content of a useful 422 here.
+        raise ValueError(str(exc)) from None
 
-        from backtesting.engine_config import BacktestConfig, BacktestEngine
+    end_dt = datetime.now(UTC)
+    start_dt = end_dt - timedelta(days=duration_days)
+    config = BacktestConfig(
+        start_date=start_dt,
+        end_date=end_dt,
+        symbols=[engine_symbol],
+        initial_capital=initial_capital,
+    )
+    engine = BacktestEngine(config=config)
+    adapter = BacktestStrategyAdapter(strategy, engine_symbol)
+    engine.add_strategy(adapter)
 
-        end_dt = datetime.now(UTC)
-        start_dt = end_dt - timedelta(days=duration_days)
-        config = BacktestConfig(
-            start_date=start_dt,
-            end_date=end_dt,
-            symbols=[symbol],
-            initial_capital=initial_capital,
-        )
-        engine = BacktestEngine(config=config)
-        import asyncio
-
-        result = asyncio.run(engine.run())
-        return {
-            "strategy": strategy_name,
-            "final_equity": round(float(initial_capital * (1 + result.total_return)), 2),
-            "total_return": round(float(result.total_return * 100), 2),
-            "sharpe_ratio": round(float(result.sharpe_ratio), 3),
-            "max_drawdown": round(float(result.max_drawdown * 100), 2),
-            "total_trades": int(result.total_trades),
-            "win_rate": round(float(result.win_rate * 100), 2),
-            "equity_curve": result.equity_curve,
-        }
-    except ImportError:
-        raise ValueError(
-            "BacktestEngine is not available. Ensure the backtest module is installed and configured."
-        ) from None
+    try:
+        result = await engine.run()
     except Exception as exc:
         logger.error("Backtest failed for strategy '%s': %s", strategy_name, exc)
-        raise ValueError(f"Backtest failed for strategy '{strategy_name}' — check server logs") from None
+        raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}") from None
+
+    # A run in which the strategy raised on every bar is not a flat result.
+    errors = list(engine.strategy_errors) + list(adapter.errors)
+    if errors and result.total_trades == 0:
+        raise ValueError(
+            f"Strategy '{strategy_name}' raised on every bar and placed no trades. First error: {errors[0]}"
+        )
+
+    return {
+        "strategy": strategy_name,
+        "final_equity": round(float(initial_capital * (1 + result.total_return)), 2),
+        "total_return": round(float(result.total_return * 100), 2),
+        "sharpe_ratio": round(float(result.sharpe_ratio), 3),
+        "max_drawdown": round(float(result.max_drawdown * 100), 2),
+        "total_trades": int(result.total_trades),
+        "win_rate": round(float(result.win_rate * 100), 2),
+        "equity_curve": result.equity_curve,
+        # Reported rather than hidden: a strategy that traded but also raised on
+        # some bars produced a real result from partial coverage, and the reader
+        # is entitled to know that before acting on the Sharpe.
+        "strategy_errors": len(errors),
+    }
 
 
 @router.post("/api/advanced/ab-tests/run", status_code=201)
@@ -231,13 +271,15 @@ async def start_ab_test(
     historical data is unavailable for the requested period.
     """
     try:
-        result_a = _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
-        result_b = _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
+        result_a = await _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
+        result_b = await _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
     except ValueError as exc:
         logger.warning("ab_test start failed: %s", exc)
-        raise HTTPException(
-            status_code=422, detail="A/B test failed — check strategy names and data availability"
-        ) from None
+        # The detail used to be the fixed sentence "A/B test failed — check
+        # strategy names and data availability". The actual cause was almost
+        # never either of those, so the message sent every reader to the wrong
+        # place. `exc` already names the strategy and the reason.
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
     # Winner by Sharpe ratio (risk-adjusted)
     winner = req.strategy_a if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"] else req.strategy_b
@@ -341,15 +383,26 @@ class SaveIndicatorRequest(BaseModel):
     color: str = "#60a5fa"
 
 
-def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
+async def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     """
     Load real OHLCV data for the indicator preview.
 
     Priority:
-    1. CSV files in data/ directory
-    2. Paper broker get_market_data()
+    1. Live price engine (app_state.price_engine)
+    2. CSV files in data/ directory
+    3. Paper broker get_market_data() — development only
 
     Raises ValueError when no real data is available.
+
+    The price engine tier is new. Before it, this function tried
+    ``data/XAU_USD_H1.csv`` (which is not in the repository — the committed
+    XAUUSD CSVs are ``_2Y``/``_5Y``/``_40Y``/``_50Y``, none matching the ``_H1``
+    pattern) and then the paper broker, which raises under APP_ENV=production by
+    design. That RuntimeError was caught and logged at DEBUG, so at production
+    log levels the only visible outcome was the ValueError below — "Connect a
+    broker or add a CSV file" — on a deployment that had a working broker and a
+    working OHLCV source all along. The engine is the same one already serving
+    /api/trading/ohlcv.
     """
     import pathlib
 
@@ -358,6 +411,43 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     from utils.symbol import canonical as _canonical, to_oanda as _to_oanda
 
     sym_key = _to_oanda(symbol)  # OANDA form (XAU_USD) matches CSV filenames
+
+    # 1. Live price engine
+    try:
+        import asyncio as _asyncio
+
+        from core.app_state import app_state
+
+        engine = getattr(app_state, "price_engine", None)
+        if engine is not None:
+            bars = await _asyncio.wait_for(
+                engine.get_ohlcv(_canonical(symbol), "1h", periods + 50),
+                timeout=25.0,
+            )
+            if bars and len(bars) >= 20:
+                closes = [b.close for b in bars]
+                # A flat close series is the engine's synthetic last-resort tier
+                # (static broker price, volume=0), not a market. Indicators built
+                # on it are all zero or undefined, which reads as a broken
+                # formula rather than as missing data.
+                if max(closes) - min(closes) > 0.0:
+                    return {
+                        "close": closes,
+                        "open": [b.open for b in bars],
+                        "high": [b.high for b in bars],
+                        "low": [b.low for b in bars],
+                        "volume": [getattr(b, "volume", 0.0) for b in bars],
+                    }
+                logger.warning(
+                    "Indicator preview: price engine returned %d flat bars for %s — "
+                    "no real OHLCV source is reachable for this symbol",
+                    len(bars),
+                    symbol,
+                )
+    except TimeoutError:
+        logger.warning("Indicator preview: price engine timed out for %s", symbol)
+    except Exception as exc:
+        logger.warning("Indicator preview: price engine load failed for %s: %s", symbol, exc)
 
     data_dir = pathlib.Path(__file__).parent.parent / "data"
     candidates = [
@@ -379,28 +469,38 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
             except Exception as exc:
                 logger.debug("Indicator CSV load failed (%s): %s", csv_path, exc)
 
-    # Paper broker fallback
-    try:
-        from core.app_state import app_state
+    # 3. Paper broker fallback — development only.
+    # PaperTradingBroker.get_market_data() raises under APP_ENV=production so
+    # synthetic bars never reach the UI as market data. Skipping the call rather
+    # than catching its RuntimeError keeps the reason visible: this used to be
+    # swallowed at DEBUG level, which is why a production deployment reported
+    # only "no data available" and never why.
+    import os as _os
 
-        broker = getattr(app_state, "broker", None)
-        if broker and hasattr(broker, "get_market_data"):
-            raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
-            if raw and len(raw) >= 20:
-                df = pd.DataFrame(raw)
-                return {
-                    "close": df["close"].tolist(),
-                    "open": df["open"].tolist(),
-                    "high": df["high"].tolist(),
-                    "low": df["low"].tolist(),
-                    "volume": df.get("volume", pd.Series([0.0] * len(df))).tolist(),
-                }
-    except Exception as exc:
-        logger.debug("Indicator broker load failed: %s", exc)
+    if _os.getenv("APP_ENV", "development").lower() != "production":
+        try:
+            from core.app_state import app_state
+
+            broker = getattr(app_state, "broker", None)
+            if broker and hasattr(broker, "get_market_data"):
+                raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
+                if raw and len(raw) >= 20:
+                    df = pd.DataFrame(raw)
+                    return {
+                        "close": df["close"].tolist(),
+                        "open": df["open"].tolist(),
+                        "high": df["high"].tolist(),
+                        "low": df["low"].tolist(),
+                        "volume": df.get("volume", pd.Series([0.0] * len(df))).tolist(),
+                    }
+        except Exception as exc:
+            logger.warning("Indicator preview: broker load failed for %s: %s", symbol, exc)
 
     raise ValueError(
         f"No OHLCV data available for {symbol}. "
-        "Connect a broker or add a CSV file to data/ to use the indicator builder."
+        "Tried the live price engine, then data/ CSV files. "
+        "Check that the price engine is running (GET /api/trading/status) and that "
+        "a data source is configured for this symbol in config/multi_source_feed.yaml."
     )
 
 
@@ -592,7 +692,7 @@ def _interp_node(node: _ast.expr, name_map: dict) -> list | float:  # type: igno
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
+async def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     """Evaluate *formula* against real OHLCV data for *symbol*.
 
     Uses AST-based parsing — no eval() or exec().  Allowed syntax:
@@ -604,7 +704,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     """
     tree = _parse_formula(formula)
 
-    ohlcv = _load_ohlcv_for_indicator(symbol, periods)
+    ohlcv = await _load_ohlcv_for_indicator(symbol, periods)
     name_map: dict = {
         "close": ohlcv["close"],
         "open": ohlcv["open"],
@@ -637,7 +737,7 @@ async def preview_indicator(
     Returns HTTP 400 when the formula is invalid or data is unavailable.
     """
     try:
-        data = _eval_indicator(req.formula, req.symbol, req.periods)
+        data = await _eval_indicator(req.formula, req.symbol, req.periods)
         return {
             "formula": req.formula,
             "symbol": req.symbol,
@@ -730,7 +830,7 @@ async def apply_indicator(
     periods = int(payload.get("periods", 200))
 
     try:
-        result = _eval_indicator(formula, symbol, periods)
+        result = await _eval_indicator(formula, symbol, periods)
         return {
             "indicator_id": ind_id,
             "name": ind.get("name", "custom"),

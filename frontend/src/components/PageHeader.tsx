@@ -8,12 +8,14 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
 
 export interface PageTab {
   key: string;
   label: string;
-  icon?: string;
+  /** Lucide component preferred; a string is legacy emoji (F170). */
+  icon?: LucideIcon | string;
   badge?: string | number;
   href?: string;
 }
@@ -27,7 +29,8 @@ interface PageHeaderProps {
   tabs?: PageTab[];
   activeTab?: string;
   onTabChange?: (key: string) => void;
-  icon?: string;
+  /** Lucide component preferred; a string is legacy emoji (F170). */
+  icon?: LucideIcon | string;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -58,8 +61,10 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       {/* Left: icon + title + subtitle */}
       <div className="flex items-start gap-3 min-w-0">
         {icon && (
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-lg flex-shrink-0 mt-0.5">
-            {icon}
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-lg text-blue-400 flex-shrink-0 mt-0.5">
+            {typeof icon === 'string'
+              ? icon                            /* legacy emoji call sites */
+              : React.createElement(icon, { size: 18, strokeWidth: 1.75, 'aria-hidden': true })}
           </div>
         )}
         <div className="min-w-0">
@@ -88,6 +93,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
     {/* Tabs — horizontal scroll on mobile */}
     {tabs && tabs.length > 0 && (
       <div
+        role="tablist"
         className="flex gap-0 overflow-x-auto border-t border-terminal-border mt-1"
         style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
@@ -96,7 +102,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 
           const content = (
             <>
-              {tab.icon && <span className="text-xs">{tab.icon}</span>}
+              {tab.icon && (
+                typeof tab.icon === 'string'
+                  ? <span className="text-xs">{tab.icon}</span>
+                  : React.createElement(tab.icon, { size: 13, strokeWidth: 1.75, 'aria-hidden': true })
+              )}
               <span>{tab.label}</span>
               {tab.badge !== undefined && (
                 <span
@@ -116,7 +126,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
             borderBottom: isActive ? '2px solid #3b82f6' : '2px solid transparent',
           };
 
-          const sharedClass = `flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap cursor-pointer transition-colors outline-none bg-transparent border-0 ${
+          const sharedClass = `flex min-h-[44px] items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap cursor-pointer transition-colors duration-150 bg-transparent border-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-inset ${
             isActive ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'
           }`;
 
@@ -125,6 +135,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
               <Link
                 key={tab.key}
                 to={tab.href}
+                role="tab"
+                aria-selected={isActive}
                 className={`${sharedClass} no-underline`}
                 style={sharedStyle}
               >
@@ -136,6 +148,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           return (
             <button
               key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
               onClick={() => onTabChange?.(tab.key)}
               className={sharedClass}
               style={sharedStyle}

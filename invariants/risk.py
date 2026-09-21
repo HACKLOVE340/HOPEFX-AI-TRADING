@@ -56,8 +56,9 @@ def verify_leverage(effective_leverage: float, max_leverage: float) -> list[Viol
     if not _is_finite_number(effective_leverage):
         return [_v("No Hidden Exposure", CONSTITUTIONAL, "effective leverage is non-finite")]
     if effective_leverage > max_leverage:
-        return [_v("No Hidden Exposure", CRITICAL,
-                   f"effective leverage {effective_leverage}x exceeds max {max_leverage}x")]
+        return [
+            _v("No Hidden Exposure", CRITICAL, f"effective leverage {effective_leverage}x exceeds max {max_leverage}x")
+        ]
     return []
 
 
@@ -78,7 +79,9 @@ def verify_liquidation_distance(distance_pct: float, threshold_pct: float) -> li
     return []
 
 
-def verify_order_liquidity(order_size: float, available_liquidity: float, max_fraction: float = 0.25) -> list[Violation]:
+def verify_order_liquidity(
+    order_size: float, available_liquidity: float, max_fraction: float = 0.25
+) -> list[Violation]:
     """An order must not consume more than a safe fraction of available liquidity
     (liquidity-mirage / market-impact guard)."""
     if not (_is_finite_number(order_size) and _is_finite_number(available_liquidity)):
@@ -86,8 +89,7 @@ def verify_order_liquidity(order_size: float, available_liquidity: float, max_fr
     if available_liquidity <= 0:
         return [_v(_RULE, CRITICAL, "no available liquidity")]
     if order_size > available_liquidity * max_fraction:
-        return [_v(_RULE, CRITICAL,
-                   f"order {order_size} > {max_fraction:.0%} of liquidity {available_liquidity}")]
+        return [_v(_RULE, CRITICAL, f"order {order_size} > {max_fraction:.0%} of liquidity {available_liquidity}")]
     return []
 
 
@@ -110,21 +112,32 @@ def verify_concentration(largest_position_pct: float, limit_pct: float) -> list[
     if not _is_finite_number(largest_position_pct):
         return [_v("No Hidden Exposure", CONSTITUTIONAL, "concentration is non-finite")]
     if largest_position_pct > limit_pct:
-        return [_v("No Hidden Exposure", WARNING,
-                   f"largest position {largest_position_pct}% exceeds concentration limit {limit_pct}%")]
+        return [
+            _v(
+                "No Hidden Exposure",
+                WARNING,
+                f"largest position {largest_position_pct}% exceeds concentration limit {limit_pct}%",
+            )
+        ]
     return []
 
 
 def verify_dependency_concentration(dependency_pct: float, max_pct: float, name: str) -> list[Violation]:
     """No single exchange/broker/market may be relied on beyond a max share."""
     if _is_finite_number(dependency_pct) and dependency_pct > max_pct:
-        return [_v("No Critical Single Point Of Failure", WARNING,
-                   f"{name} dependency {dependency_pct}% exceeds {max_pct}%")]
+        return [
+            _v(
+                "No Critical Single Point Of Failure",
+                WARNING,
+                f"{name} dependency {dependency_pct}% exceeds {max_pct}%",
+            )
+        ]
     return []
 
 
-def catastrophic_loss_triggers(drawdown_pct: float, daily_loss: float, risk_violation: bool,
-                               dd_kill: float, loss_kill: float) -> list[Violation]:
+def catastrophic_loss_triggers(
+    drawdown_pct: float, daily_loss: float, risk_violation: bool, dd_kill: float, loss_kill: float
+) -> list[Violation]:
     """If any catastrophic threshold is breached, trading must halt (kill switch).
     Returns a CONSTITUTIONAL violation that the caller must act on by halting."""
     out: list[Violation] = []

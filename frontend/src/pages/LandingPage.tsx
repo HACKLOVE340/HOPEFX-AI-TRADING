@@ -492,7 +492,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
             Log in
           </a>
           <a
-            href="/register"
+            href={registerHref()}
             className="inline-flex items-center gap-1.5 text-sm font-semibold bg-neon-blue text-terminal-bg px-4 py-2 rounded-lg hover:bg-neon-blue/90 transition-all duration-150 shadow-neon-blue"
           >
             Start free trial <ArrowRight size={14} />
@@ -538,7 +538,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
                   Log in
                 </a>
                 <a
-                  href="/register"
+                  href={registerHref()}
                   className="flex items-center justify-center text-sm font-semibold bg-neon-blue text-terminal-bg min-h-[44px] rounded-lg hover:bg-neon-blue/90 transition-colors"
                 >
                   Start free trial
@@ -611,7 +611,7 @@ function Hero() {
           className="flex flex-col xs:flex-row flex-wrap items-center justify-center gap-3 mb-16 w-full"
         >
           <a
-            href="/register"
+            href={registerHref()}
             className="inline-flex items-center justify-center gap-2 bg-neon-blue text-terminal-bg font-bold text-base px-7 py-3.5 rounded-xl hover:bg-neon-blue/90 transition-all duration-150 shadow-neon-blue hover:shadow-lg hover:-translate-y-0.5 w-full xs:w-auto min-h-[48px]"
           >
             Start free trial <ArrowRight size={16} />
@@ -1012,7 +1012,7 @@ function CTABand() {
           </p>
           <div className="flex flex-col xs:flex-row flex-wrap items-center justify-center gap-3 w-full">
             <a
-              href="/register"
+              href={registerHref()}
               className="inline-flex items-center justify-center gap-2 bg-neon-green text-terminal-bg font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-green/90 transition-all duration-150 shadow-neon-green hover:-translate-y-0.5 w-full xs:w-auto min-h-[52px]"
             >
               Create free account <ArrowRight size={16} />
@@ -1316,9 +1316,51 @@ function PlatformStatsBar() {
 
 // ── Main LandingPage ──────────────────────────────────────────────────────────
 
+// ── Referral capture ──────────────────────────────────────────────────────────
+
+/** sessionStorage key holding an affiliate code seen on this landing visit. */
+const REF_STORAGE_KEY = 'hopefx_ref';
+
+/**
+ * Preserve an affiliate code across the hop from the landing page to /register.
+ *
+ * This page never read query parameters, and all four "Get started" CTAs were
+ * hardcoded `href="/register"` with no query string. So an affiliate sharing
+ * `hopefx.io/?ref=ABC123` produced a signup carrying no code, `create_referral`
+ * was never called, and the whole commission system — four tiers, a leaderboard,
+ * monthly payouts — recorded nothing from any legitimate path.
+ *
+ * sessionStorage rather than localStorage: a referral belongs to this browsing
+ * session, not to the browser forever.
+ */
+function readRefCode(): string {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get('ref');
+    if (fromUrl) return fromUrl;
+    return sessionStorage.getItem(REF_STORAGE_KEY) ?? '';
+  } catch {
+    return '';   // private mode / storage disabled
+  }
+}
+
+/** `/register`, carrying the referral code when we have one. */
+function registerHref(): string {
+  const ref = readRefCode();
+  return ref ? `/register?ref=${encodeURIComponent(ref)}` : '/register';
+}
+
 const LandingPage: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const ticks = useLiveTicker();
+
+  // Persist ?ref= on arrival so it survives the click through to /register, even
+  // for links already shared in the wild that point at `/?ref=CODE`.
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get('ref');
+      if (ref) sessionStorage.setItem(REF_STORAGE_KEY, ref);
+    } catch { /* private mode — the CTA href still carries it */ }
+  }, []);
 
   // SEO — set document title and meta tags for the landing page
   useEffect(() => {

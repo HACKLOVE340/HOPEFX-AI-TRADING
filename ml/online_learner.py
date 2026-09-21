@@ -11,6 +11,8 @@ Continuously adapts to market regime changes without catastrophic forgetting
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import pathlib
@@ -756,6 +758,7 @@ class SklearnOnlineLearner:
         _safe_path = _assert_safe_model_path(_pl.Path(self.persist_path))
         _safe_path.parent.mkdir(parents=True, exist_ok=True)
         _jl.dump(self, _safe_path, compress=3)
+        _write_model_signature(_safe_path)
 
     @classmethod
     def load(cls, path: str) -> SklearnOnlineLearner:
@@ -775,6 +778,7 @@ class SklearnOnlineLearner:
                 "pickle/joblib loading is disabled by default. Set "
                 "HOPEFX_ALLOW_TRUSTED_MODEL_LOAD=1 only in fully trusted deployments."
             )
+        _verify_model_signature(_safe_path)
         return _jl.load(_safe_path)  # nosec B301
 
 
@@ -782,7 +786,7 @@ class SklearnOnlineLearner:
 
 # Canonical root for all persisted model files.  Any load/save outside this
 # directory is rejected to prevent path-traversal / arbitrary-pickle attacks.
-_MODEL_ROOT = pathlib.Path(__file__).resolve().parent / "saved_models"
+_MODEL_ROOT = (pathlib.Path(__file__).resolve().parent / "saved_models").resolve()
 
 
 def _assert_safe_model_path(path: pathlib.Path) -> pathlib.Path:
@@ -798,11 +802,12 @@ def _assert_safe_model_path(path: pathlib.Path) -> pathlib.Path:
     # object does not propagate into the resolved result (CodeQL #24631).
     _resolved_str: str = _os.path.realpath(str(path))
     resolved = _pl.Path(_resolved_str)
+    model_root_resolved = _pl.Path(_os.path.realpath(str(_MODEL_ROOT)))
     try:
-        resolved.relative_to(_MODEL_ROOT)
+        resolved.relative_to(model_root_resolved)
     except ValueError as exc:
         raise ValueError(
-            f"Model path '{resolved}' is outside the permitted directory '{_MODEL_ROOT}'. Refusing to load/save."
+            f"Model path '{resolved}' is outside the permitted directory '{model_root_resolved}'. Refusing to load/save."
         ) from exc
     return resolved
 
@@ -810,6 +815,46 @@ def _assert_safe_model_path(path: pathlib.Path) -> pathlib.Path:
 def _trusted_pickle_load_enabled() -> bool:
     """Return True only when trusted pickle/joblib model loading is explicitly enabled."""
     return os.getenv("HOPEFX_ALLOW_TRUSTED_MODEL_LOAD", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _model_hmac_key() -> bytes:
+    """Return HMAC key bytes for model integrity checks."""
+    key = os.getenv("HOPEFX_MODEL_HMAC_KEY", "").encode("utf-8")
+    if not key:
+        raise RuntimeError(
+            "HOPEFX_MODEL_HMAC_KEY is required for persisted model integrity verification."
+        )
+    return key
+
+
+def _model_sig_path(path: pathlib.Path) -> pathlib.Path:
+    sig = path.with_suffix(path.suffix + ".sig")
+    return _assert_safe_model_path(sig)
+
+
+def _compute_model_hmac(path: pathlib.Path) -> str:
+    _safe_path = _assert_safe_model_path(path)
+    mac = hmac.new(_model_hmac_key(), digestmod=hashlib.sha256)
+    with _safe_path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            mac.update(chunk)
+    return mac.hexdigest()
+
+
+def _write_model_signature(path: pathlib.Path) -> None:
+    sig_path = _model_sig_path(path)
+    sig_path.write_text(_compute_model_hmac(path), encoding="utf-8")
+
+
+def _verify_model_signature(path: pathlib.Path) -> None:
+    _safe_path = _assert_safe_model_path(path)
+    sig_path = _model_sig_path(_safe_path)
+    if not sig_path.exists():
+        raise RuntimeError(f"Missing model signature file: {sig_path}")
+    expected = sig_path.read_text(encoding="utf-8").strip()
+    actual = _compute_model_hmac(_safe_path)
+    if not hmac.compare_digest(expected, actual):
+        raise RuntimeError(f"Model integrity check failed for {_safe_path}")
 
 
 # ── Module-level singleton registry ──────────────────────────────────────────
@@ -854,17 +899,9 @@ def get_online_learner(
         import os as _os
         import pathlib as _pl
 
-        _m = _SYMBOL_RE.match(symbol)
-        if _m is None:
-            raise ValueError(
-                f"Symbol '{symbol}' contains characters not permitted in a model "
-                "filename. Use only letters, digits, underscores, and hyphens."
-            )
+        _safe_sym = _validate_symbol(symbol)
 
         if persist_path is None:
-            # Reconstruct path from the regex match group only — CodeQL treats
-            # m.group(0) as untainted (CodeQL #24618).
-            _safe_sym: str = _m.group(0)
             _p_str: str = _os.path.join(str(_MODEL_ROOT), f"online_learner_{_safe_sym}.pkl")
             p = _pl.Path(_p_str)
         else:

@@ -67,6 +67,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+from core.ai_contracts import _canonical_hash
+
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
@@ -140,6 +142,9 @@ class DecisionResult:
     latency_ms: float = 0.0
     gate_reason: str = ""
     error: str = ""
+    abstained: bool = False
+    abstention_reason: str = ""
+    evidence_hash: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -163,6 +168,9 @@ class DecisionResult:
             "latency_ms": self.latency_ms,
             "gate_reason": self.gate_reason,
             "error": self.error,
+            "abstained": self.abstained,
+            "abstention_reason": self.abstention_reason,
+            "evidence_hash": self.evidence_hash,
         }
 
 
@@ -249,6 +257,7 @@ class HOPEFXDecisionEngine:
             result = await self._pipeline(ctx)
 
         result.latency_ms = (time.monotonic() - t0) * 1000
+        result.evidence_hash = _canonical_hash({k: v for k, v in result.to_dict().items() if k != "evidence_hash"})
         self._cycles += 1
         if result.outcome == DecisionOutcome.EXECUTED:
             self._executed += 1
@@ -319,11 +328,16 @@ class HOPEFXDecisionEngine:
             return None
 
         if not brain_result.get("consensus_reached"):
-            logger.debug("Phase1 no consensus for %s: %s", ctx.symbol, brain_result.get("reason", ""))
+            reason = str(brain_result.get("reason", "no consensus"))
+            logger.debug("Phase1 no consensus for %s: %s", ctx.symbol, reason)
+            result.abstained = True
+            result.abstention_reason = f"no_consensus: {reason}"
             return None
 
         signal = brain_result.get("consensus_signal")
         if signal is None:
+            result.abstained = True
+            result.abstention_reason = "consensus_without_signal"
             return None
 
         direction: str = signal.signal_type.value if hasattr(signal.signal_type, "value") else str(signal.signal_type)
@@ -365,6 +379,8 @@ class HOPEFXDecisionEngine:
                     ctx.symbol,
                     exc,
                 )
+                result.abstained = True
+                result.abstention_reason = f"ml_safety_block: {exc}"
                 return None
             except Exception as exc:
                 logger.warning("Phase2 ML predict failed (using base confidence) for %s: %s", ctx.symbol, exc)
@@ -454,7 +470,19 @@ class HOPEFXDecisionEngine:
                 result.gate_reason = "account_info_unavailable: no broker connected"
                 return None
 
-            account_info: dict[str, Any] = await broker.get_account_info()
+            account_info: Any = await broker.get_account_info()
+            if account_info is None:
+                # Brokers return None when disconnected or when the account
+                # query fails. Same rule as "no broker": never size against an
+                # account we could not read.
+                logger.warning(
+                    "Phase3: broker returned no account info — blocking trade "
+                    "(refusing to size against a fabricated account)."
+                )
+                result.outcome = DecisionOutcome.RISK_BLOCKED
+                result.gate_reason = "account_info_unavailable: broker returned None"
+                return None
+
             raw_positions = await broker.get_positions()
             positions: list[dict] = [
                 {
@@ -472,21 +500,54 @@ class HOPEFXDecisionEngine:
                 result.gate_reason = str(getattr(assessment, "messages", "risk limit"))
                 return None
 
-            equity: float = float(account_info.get("equity", 100_000.0))
+            # No default. `AccountInfo.get` is getattr-based, so a default here
+            # is returned for a *missing field* as readily as a missing key —
+            # which is how a broker whose account object lacks `equity` would
+            # silently be sized against a fabricated six-figure balance. Block
+            # instead; this is the same rule as the no-broker branch above.
+            # Read defensively across dict / AccountInfo / plain object so a
+            # broker returning a non-conforming type is reported as an account
+            # problem rather than surfacing as an opaque "risk error" from the
+            # broad handler below — that misattribution is what made S1-01 look
+            # like a risk limit for the whole of the live-OANDA path.
+            _raw_equity = (
+                account_info.get("equity") if hasattr(account_info, "get") else getattr(account_info, "equity", None)
+            )
+            equity: float = float(_raw_equity or 0.0)
+            if equity <= 0:
+                logger.warning(
+                    "Phase3: account equity unavailable or non-positive (%r) — blocking trade "
+                    "(refusing to size against a fabricated account).",
+                    equity,
+                )
+                result.outcome = DecisionOutcome.RISK_BLOCKED
+                result.gate_reason = f"account_info_unavailable: equity={equity}"
+                return None
+
             entry: float = result.entry_price or float(ctx.data.get("close", 0.0))
             sl_price, tp_price = self._resolve_sl_tp(ctx.data, direction, entry)
             result.stop_loss = sl_price
             result.take_profit = tp_price
 
+            # `probability` and `direction` were previously omitted, so sizing
+            # ran on the hardcoded defaults (probability=0.55, direction="long")
+            # for every trade — Kelly could not see the model's actual edge, and
+            # short trades were sized and labelled as longs.
+            # See docs/HARDENING_BACKLOG.md S1-06 and S1-09.
             sizing = self._risk.calculate_position_size(
                 symbol=ctx.symbol,
                 signal_strength=result.signal_strength,
+                probability=result.ml_probability,
+                direction="long" if self._is_long(direction) else "short",
                 entry_price=entry,
                 stop_loss_price=sl_price,
                 take_profit_price=tp_price,
                 account_equity=equity,
                 volatility=self._estimate_volatility(ctx.data, entry),
                 existing_positions=positions,
+                # Age of the market data behind this decision, so the pre-trade
+                # staleness invariant has something to measure (S5-01).
+                tick_ts=self._tick_timestamp(ctx),
             )
 
             if not sizing.approved or sizing.recommended_size <= 0:
@@ -500,6 +561,21 @@ class HOPEFXDecisionEngine:
                 return None
 
             result.approved_size = float(sizing.recommended_size)
+            # Carry the risk-approval token issued by size_order() through to
+            # execution. It is the proof this order passed the risk gate; when
+            # it was dropped here, TradeExecutor manufactured a constant in its
+            # place and the No Unauthorized Trade invariant became
+            # unfalsifiable. See docs/HARDENING_BACKLOG.md S1-05.
+            self._risk_approval_token = str(getattr(sizing, "risk_approval_token", "") or "")
+            if not self._risk_approval_token:
+                logger.warning(
+                    "Phase3: sizing returned no risk_approval_token for %s — "
+                    "blocking, since execution cannot verify this order passed risk.",
+                    ctx.symbol,
+                )
+                result.outcome = DecisionOutcome.SIZING_REJECTED
+                result.gate_reason = "missing_risk_approval_token"
+                return None
             return result.approved_size
 
         except Exception as exc:
@@ -519,7 +595,7 @@ class HOPEFXDecisionEngine:
     ) -> bool:
         """Submit order via TradeExecutor. Returns True on success."""
         direction = signal_info["direction"]
-        action = "buy" if "BUY" in direction.upper() or direction.upper() in ("LONG", "ENTRY_LONG") else "sell"
+        action = "buy" if self._is_long(direction) else "sell"
 
         exec_signal = {
             "symbol": ctx.symbol,
@@ -530,6 +606,9 @@ class HOPEFXDecisionEngine:
             "take_profit": result.take_profit,
             "confidence": result.ml_probability,
             "decision_id": ctx.decision_id,
+            # Proof this order passed the risk gate — stamped by size_order()
+            # and verified by TradeExecutor / the OMS (S1-05).
+            "risk_approval_token": getattr(self, "_risk_approval_token", ""),
         }
 
         try:
@@ -599,6 +678,38 @@ class HOPEFXDecisionEngine:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _tick_timestamp(ctx: DecisionContext) -> float | None:
+        """POSIX timestamp of the market data behind this decision.
+
+        Prefers an explicit tick timestamp carried on the incoming data; falls
+        back to the decision's own timestamp, which at least bounds staleness
+        at the age of this cycle. Returns None when neither is usable, in which
+        case the staleness check is skipped exactly as before.
+        """
+        raw = ctx.data.get("tick_ts") or ctx.data.get("timestamp") or ctx.data.get("ts")
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            return float(raw)
+        if isinstance(raw, datetime):
+            ts = raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)
+            return ts.timestamp()
+        try:
+            return ctx.timestamp.timestamp()
+        except Exception:
+            return None
+
+    @staticmethod
+    def _is_long(direction: str) -> bool:
+        """Single definition of "is this a long?".
+
+        This predicate previously existed in three copies (execution action,
+        SL/TP orientation, and — omitted entirely — sizing direction). Copies
+        of a predicate drift; keeping one is the same discipline the rest of
+        Round 3 applies to duplicated types and instances.
+        """
+        d = (direction or "").upper()
+        return "BUY" in d or d in ("LONG", "ENTRY_LONG")
+
     def _build_ohlcv_df(self, data: dict[str, Any]) -> Any:
         """Build a rolling OHLCV DataFrame from the broker data dict."""
         try:
@@ -637,7 +748,7 @@ class HOPEFXDecisionEngine:
         except Exception:
             atr = entry * 0.01
 
-        is_long = "BUY" in direction.upper() or direction.upper() in ("LONG", "ENTRY_LONG")
+        is_long = self._is_long(direction)
         if is_long:
             return float(entry - 2.0 * atr), float(entry + 3.0 * atr)
         return float(entry + 2.0 * atr), float(entry - 3.0 * atr)

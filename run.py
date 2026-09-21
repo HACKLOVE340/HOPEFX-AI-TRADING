@@ -186,15 +186,27 @@ def _setup_env(args: argparse.Namespace) -> None:
     - live mode   → warns if OANDA_PRACTICE is still true
     - broker flag → sets INGEST_EXCHANGE and DEFAULT_BROKER
     """
-    # Force paper flag when mode is paper
-    if args.mode == "paper":
-        os.environ["OANDA_PRACTICE"] = "true"
-        logger.info("Mode=paper — OANDA_PRACTICE forced to true.")
+    # Imported here, not at module scope: _setup_env runs before any other
+    # module is imported, which is the whole point of the function.
+    from core.run_mode import resolve_run_mode
 
-    elif args.mode == "live":
-        practice = os.environ.get("OANDA_PRACTICE", "true").lower()
-        if practice == "true":
-            logger.warning("Mode=live but OANDA_PRACTICE=true — set OANDA_PRACTICE=false in .env to trade real money.")
+    # ── One resolution, published under every name the codebase reads ────────
+    # This block used to set OANDA_PRACTICE, BROKER, DEFAULT_BROKER,
+    # INGEST_EXCHANGE and TRADING_MODE by hand, and main() then decided the
+    # engine independently — so the plan printed above and the system started
+    # below could disagree, and did on the DEFAULT invocation. See
+    # core/run_mode.py.
+    resolved = resolve_run_mode(mode=args.mode, broker=args.broker, env=dict(os.environ))
+    if not resolved.ok:
+        for conflict in resolved.conflicts:
+            logger.error("Contradictory configuration: %s", conflict)
+        logger.error("Refusing to start. Resolve the contradiction rather than picking a side.")
+        sys.exit(2)
+    for key, value in resolved.env_overrides.items():
+        os.environ[key] = value
+    for reason in resolved.reasons:
+        logger.info("run mode: %s", reason)
+    args.resolved = resolved
 
     # Map broker flag to exchange identifier used by MarketIngest
     broker_exchange_map = {
@@ -206,16 +218,19 @@ def _setup_env(args: argparse.Namespace) -> None:
         "paper": "oanda",  # paper broker still uses OANDA for price data
     }
     os.environ["INGEST_EXCHANGE"] = broker_exchange_map.get(args.broker, "oanda")
-    os.environ["DEFAULT_BROKER"] = args.broker
-    os.environ["BROKER"] = args.broker
+    # BROKER, BROKER_TYPE, DEFAULT_BROKER, OANDA_PRACTICE, OANDA_ENVIRONMENT and
+    # TRADING_MODE are published by the resolution above. BROKER_TYPE is the one
+    # that was missing: brokers/factory.py reads `BROKER_TYPE or BROKER`, so
+    # setting only BROKER let an ambient .env value override the --broker flag.
     # TRADING_MODE is the paper/live trading concept consumed by the engine,
     # connect_to_life and the heartbeat — NOT the run mode. Only the explicit
     # paper/live run modes set it. For api/backtest we preserve whatever the
     # user configured in .env (defaulting to the safe "paper") so launching the
     # API server never silently clobbers a deliberate TRADING_MODE=live.
-    if args.mode in ("paper", "live"):
-        os.environ["TRADING_MODE"] = args.mode
-    else:
+    if args.mode not in ("paper", "live"):
+        # api/backtest preserve a deliberate TRADING_MODE from .env — the
+        # resolution reports it but publishes no override for these modes, so
+        # the safe default applies only when nothing is configured.
         os.environ.setdefault("TRADING_MODE", "paper")
 
     # Symbol override
@@ -299,7 +314,7 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     logger.info("")
 
     # Pipeline that will start
-    pipeline = _get_pipeline(args.mode)
+    pipeline = _get_pipeline(args.mode, engine=getattr(getattr(args, "resolved", None), "engine", None))
     logger.info("  Pipeline:")
     for step in pipeline:
         logger.info("    → %s", step)
@@ -314,10 +329,17 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
         sys.exit(0)
 
 
-def _get_pipeline(mode: str) -> list[str]:
-    """Return the list of sub-systems that will start for a given mode."""
+def _get_pipeline(mode: str, engine: str | None = None) -> list[str]:
+    """Return the list of sub-systems that will start for a given mode.
+
+    Takes the RESOLVED engine rather than re-deriving it. This function used to
+    ask ``mode == "paper" or PAPER_TRADING`` while `_run_trading` asked
+    ``PAPER_TRADING or args.broker == "paper"`` — two conditions for one
+    decision, which disagreed on the default invocation and printed a plan for a
+    system that was never started. See core/run_mode.py.
+    """
     _paper_env = os.environ.get("PAPER_TRADING", "false").lower() == "true"
-    if mode == "paper" or _paper_env:
+    if engine == "PaperRunner" or (engine is None and (mode == "paper" or _paper_env)):
         return [
             "OandaPricePoll (REST tick source, offline fallback to price table)",
             "TickSignalEngine (EMA crossover — fast/slow)",
@@ -369,8 +391,17 @@ async def _run_trading(args: argparse.Namespace) -> None:
     )
 
     # ── Paper trading path ────────────────────────────────────────────────────
-    _paper_mode = os.environ.get("PAPER_TRADING", "false").lower() == "true"
-    if _paper_mode or args.broker == "paper":
+    # The RESOLVED engine, not a second derivation. This used to read
+    # `PAPER_TRADING or args.broker == "paper"` while the plan printed above
+    # read `mode == "paper" or PAPER_TRADING`, so the two disagreed whenever the
+    # broker was not "paper" — including on plain `python run.py`, whose
+    # defaults are --mode paper --broker oanda. See core/run_mode.py.
+    _resolved = getattr(args, "resolved", None)
+    if _resolved is not None:
+        _is_paper = _resolved.engine == "PaperRunner"
+    else:  # a caller that did not go through _setup_env
+        _is_paper = os.environ.get("PAPER_TRADING", "false").lower() == "true" or args.mode == "paper"
+    if _is_paper:
         # Ensure the env var is set so FIXRouter picks up paper mode
         os.environ["PAPER_TRADING"] = "true"
         logger.info("run.py: PAPER_TRADING=true — starting PaperRunner")

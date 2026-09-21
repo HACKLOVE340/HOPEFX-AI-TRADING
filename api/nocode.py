@@ -11,15 +11,43 @@ Connected to: nocode/builder.py, nocode/state_machine.py, nocode/ml_nodes.py
 
 from __future__ import annotations
 
+import os
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from api.auth import TokenPayload, get_current_user
+from monetization.subscription import require_plan
 from pydantic import BaseModel, Field
+from api.error_details import safe_error
+
+from strategies.strategy_execution_boundary import ExecutionScope
 
 logger = logging.getLogger(__name__)
 
+
+def _activation_scope() -> ExecutionScope:
+    """The scope this deployment actually activates at.
+
+    Derived from BROKER_TYPE rather than defaulted. The gate this feeds
+    (`StrategyExecutionBoundary`) previously took `ExecutionScope.RESEARCH` as
+    its default and short-circuited every check on it, so activation happened
+    under a scope no caller had chosen. Choosing here means the claim matches
+    what the registry then does -- it sets StrategyState.ACTIVE either way.
+    """
+    return ExecutionScope.PAPER if os.getenv("BROKER_TYPE", "paper").strip().lower() == "paper" else ExecutionScope.LIVE
+
+
 router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"])
+
+# The Strategy Builder is advertised as a professional-tier feature in the
+# frontend nav (navConfig: plan: 'professional'), but these routes only ever
+# checked *authentication*, so any logged-in free-tier user could deploy a live
+# strategy. The gate has to live here — the client-side one is a courtesy.
+#
+# Written out at each route rather than bound to a module-level alias:
+# scripts/ci/gate_a_auth_coverage.py reads the dependency statically and
+# recognises `require_plan`, but cannot follow an alias, so an alias reads to
+# the gate as an unauthenticated mutating endpoint.
 
 
 # ── Request Models ───────────────────────────────────────────────────────────
@@ -47,15 +75,15 @@ class ValidateRequest(BaseModel):
 @router.get("/templates")
 async def list_templates(
     category: str | None = Query(None, description="Filter by category"),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     List available no-code strategy templates.
     Templates include pre-built strategies that users can deploy with parameter overrides.
 
-    Requires authentication — templates are proprietary strategy IP and must
-    not be exposed to unauthenticated callers (deploy/validate already require
-    auth; this endpoint was previously open).
+    Requires a professional plan — templates are proprietary strategy IP and the
+    Strategy Builder is a professional-tier feature. Authentication alone is not
+    enough: it left every free-tier account able to read and deploy them.
     """
     try:
         from nocode.builder import NoCodeStrategyBuilder
@@ -114,11 +142,17 @@ async def list_templates(
 
 
 @router.post("/deploy")
-async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(get_current_user)):
+async def deploy_template(
+    request: DeployRequest,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
     """
     Deploy a no-code strategy template as a live strategy.
     Compiles the template with provided parameters and registers it
     in the Dynamic Strategy Registry for activation.
+
+    Requires a professional plan — this activates a strategy against live
+    trading, so it is both a paid feature and a privileged action.
     """
     try:
         from nocode.builder import NoCodeStrategyBuilder
@@ -142,11 +176,14 @@ async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(g
             source_code=compiled["source_code"],
             symbol=request.symbol,
             timeframe=request.timeframe,
-            author_id="nocode_builder",
+            # Attribute the strategy to the account that deployed it. This was
+            # the constant "nocode_builder", so a live strategy could not be
+            # traced back to whoever activated it.
+            author_id=user.sub,
         )
 
         # Auto-activate the deployed strategy
-        await registry.activate_strategy(version_id)
+        await registry.activate_strategy(scope=_activation_scope(), version_id=version_id)
 
         return {
             "status": "deployed",
@@ -155,118 +192,53 @@ async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(g
             "message": f"Template '{request.template_id}' deployed and activated.",
         }
     except ValueError as e:
+        # Deliberate: the compiler raises ValueError to say *why* a template is
+        # invalid, and that message is the response's whole purpose. It is our
+        # own copy, not an arbitrary library's, so it passes through unchanged.
         raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Template deployment failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Deployment failed: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Deployment failed: {safe_error(e, 'nocode deploy')}") from e
 
 
 @router.post("/validate")
-async def validate_strategy(request: ValidateRequest, user: TokenPayload = Depends(get_current_user)):
+async def validate_strategy(
+    request: ValidateRequest,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
     """
     Validate a no-code strategy definition (nodes + edges).
     Checks for: valid node types, proper connections, no cycles in execution flow,
     and required parameters.
     """
     try:
-        from nocode.state_machine import StateMachineEngine
+        from nocode.graph_validation import validate_graph
 
-        engine = StateMachineEngine()
-        result = engine.validate_graph(nodes=request.nodes, edges=request.edges)
-        return result
+        return validate_graph(request.nodes, request.edges)
     except Exception as e:
-        logger.error(f"Validation failed: {e}")
+        # Genuine validation findings come back inside `result` above. Reaching
+        # here means the engine itself failed, so this is an internal error
+        # wearing a validation response's shape — not something to quote back.
         return {
             "valid": False,
-            "errors": [str(e)],
+            "errors": [safe_error(e, "nocode graph validation")],
             "warnings": [],
         }
 
 
 @router.get("/node-types")
-async def get_node_types():
+async def get_node_types(user: TokenPayload = Depends(get_current_user)):
     """
     Get all available node types for the visual strategy builder.
     Includes: indicators, conditions, actions, ML nodes, risk nodes.
+
+    Requires authentication. The node taxonomy describes the same proprietary
+    strategy surface that /templates was deliberately locked down to protect;
+    this endpoint previously had no auth dependency at all. It stays at
+    authentication rather than the professional gate so the builder UI can
+    render its palette for an upgrade preview.
     """
-    node_types = {
-        "indicators": [
-            {"id": "rsi", "name": "RSI", "params": ["period"], "outputs": ["value"]},
-            {
-                "id": "macd",
-                "name": "MACD",
-                "params": ["fast", "slow", "signal"],
-                "outputs": ["macd", "signal", "histogram"],
-            },
-            {"id": "atr", "name": "ATR", "params": ["period"], "outputs": ["value"]},
-            {
-                "id": "bollinger",
-                "name": "Bollinger Bands",
-                "params": ["period", "std_dev"],
-                "outputs": ["upper", "middle", "lower"],
-            },
-            {"id": "ema", "name": "EMA", "params": ["period"], "outputs": ["value"]},
-            {"id": "sma", "name": "SMA", "params": ["period"], "outputs": ["value"]},
-            {"id": "stochastic", "name": "Stochastic", "params": ["k_period", "d_period"], "outputs": ["k", "d"]},
-            {"id": "adx", "name": "ADX", "params": ["period"], "outputs": ["value", "plus_di", "minus_di"]},
-        ],
-        "conditions": [
-            {"id": "crossover", "name": "Crossover", "inputs": ["line_a", "line_b"], "outputs": ["signal"]},
-            {
-                "id": "threshold",
-                "name": "Threshold",
-                "inputs": ["value"],
-                "params": ["level", "direction"],
-                "outputs": ["signal"],
-            },
-            {
-                "id": "time_filter",
-                "name": "Time Filter",
-                "params": ["start_hour", "end_hour", "days"],
-                "outputs": ["allowed"],
-            },
-            {"id": "spread_filter", "name": "Spread Filter", "params": ["max_spread_pips"], "outputs": ["allowed"]},
-        ],
-        "actions": [
-            {"id": "buy", "name": "Buy", "inputs": ["signal"], "params": ["lot_size"]},
-            {"id": "sell", "name": "Sell", "inputs": ["signal"], "params": ["lot_size"]},
-            {"id": "close_all", "name": "Close All", "inputs": ["signal"]},
-            {"id": "trailing_stop", "name": "Trailing Stop", "inputs": ["position"], "params": ["distance_pips"]},
-        ],
-        "ml_nodes": [
-            {
-                "id": "ml_predict",
-                "name": "ML Prediction",
-                "params": ["model_name", "confidence_threshold"],
-                "outputs": ["prediction", "confidence"],
-            },
-            {
-                "id": "sentiment_score",
-                "name": "Sentiment Score",
-                "params": ["source"],
-                "outputs": ["score", "direction"],
-            },
-            {
-                "id": "anomaly_detect",
-                "name": "Anomaly Detection",
-                "params": ["sensitivity"],
-                "outputs": ["is_anomaly", "score"],
-            },
-        ],
-        "risk": [
-            {
-                "id": "position_size",
-                "name": "Position Sizer",
-                "params": ["risk_percent", "method"],
-                "outputs": ["lot_size"],
-            },
-            {"id": "max_drawdown", "name": "Max Drawdown Guard", "params": ["max_dd_percent"], "outputs": ["allowed"]},
-            {
-                "id": "correlation_filter",
-                "name": "Correlation Filter",
-                "params": ["max_correlation"],
-                "outputs": ["allowed"],
-            },
-        ],
-    }
-    return {"node_types": node_types}
+    # The taxonomy lives in nocode/graph_validation.py so the palette this
+    # endpoint renders and the rules /validate enforces cannot drift apart.
+    from nocode.graph_validation import NODE_TYPES
+
+    return {"node_types": NODE_TYPES}

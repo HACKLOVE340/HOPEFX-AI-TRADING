@@ -13,12 +13,12 @@
 
 import React, { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useStore } from '../../store';
+import { useStore, selectFeedLive } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError } from '../../lib/utils';
+import { fmtPrice, fmtPnl, fmtDateTime, cn, sameSymbol, positionSide, describeCloseAll, describeSubmitFailure } from '../../lib/utils';
 import type { Position } from '../../types';
 
 // ── Inline confirmation dialog ────────────────────────────────────────────────
@@ -33,7 +33,7 @@ function ConfirmDialog({
   onCancel: () => void;
 }) {
   return (
-    <div className="mx-4 mt-3 px-3 py-2.5 rounded bg-[#1e2d3d] border border-[#ff1744]/30 flex items-center justify-between gap-3">
+    <div className="mx-4 mt-3 px-3 py-2.5 rounded bg-[var(--border)] border border-[var(--bear)]/30 flex items-center justify-between gap-3">
       <span className="text-[12px] text-slate-300">{message}</span>
       <div className="flex gap-2 shrink-0">
         <button
@@ -44,7 +44,7 @@ function ConfirmDialog({
         </button>
         <button
           onClick={onConfirm}
-          className="px-2.5 py-1 rounded text-[11px] font-semibold bg-[#ff1744]/20 border border-[#ff1744]/40 text-[#ff1744] hover:bg-[#ff1744]/30 transition-colors"
+          className="px-2.5 py-1 rounded text-[11px] font-semibold bg-[var(--bear)]/20 border border-[var(--bear)]/40 text-[var(--bear)] hover:bg-[var(--bear)]/30 transition-colors"
         >
           Confirm
         </button>
@@ -62,8 +62,8 @@ function PnlBadge({ value }: { value: number }) {
       className={cn(
         'inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold tabular-nums',
         positive
-          ? 'bg-[#00e676]/10 text-[#00e676]'
-          : 'bg-[#ff1744]/10 text-[#ff1744]',
+          ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+          : 'bg-[var(--bear)]/10 text-[var(--bear)]',
       )}
     >
       {fmtPnl(value)}
@@ -73,15 +73,24 @@ function PnlBadge({ value }: { value: number }) {
 
 // ── Side badge ────────────────────────────────────────────────────────────────
 
-function SideBadge({ side }: { side: string }) {
-  const isLong = side === 'long' || side === 'buy';
+function SideBadge({ side }: { side: 'long' | 'short' | null }) {
+  if (side === null) {
+    // Not reported by the API. Defaulting to Short would state the opposite of
+    // the truth half the time (audit #37).
+    return (
+      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-500/10 text-slate-400">
+        —
+      </span>
+    );
+  }
+  const isLong = side === 'long';
   return (
     <span
       className={cn(
         'inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
         isLong
-          ? 'bg-[#00e676]/10 text-[#00e676]'
-          : 'bg-[#ff1744]/10 text-[#ff1744]',
+          ? 'bg-[var(--bull)]/10 text-[var(--bull)]'
+          : 'bg-[var(--bear)]/10 text-[var(--bear)]',
       )}
     >
       {isLong ? '▲ Long' : '▼ Short'}
@@ -110,7 +119,7 @@ function CloseBtn({
         'px-2 py-1 rounded text-[11px] font-semibold border transition-colors',
         'disabled:opacity-40 disabled:cursor-not-allowed',
         danger
-          ? 'border-[#ff1744]/40 text-[#ff1744] hover:bg-[#ff1744]/10'
+          ? 'border-[var(--bear)]/40 text-[var(--bear)] hover:bg-[var(--bear)]/10'
           : 'border-[#334155] text-slate-400 hover:text-slate-200 hover:border-[#475569]',
       )}
     >
@@ -121,7 +130,38 @@ function CloseBtn({
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyPositions({ brokerReady }: { brokerReady?: boolean }) {
+/**
+ * Empty state for the positions table.
+ *
+ * Three outcomes, deliberately distinct (audit S9-03):
+ *
+ *   - `positionsKnown === false` — the feed is stale or the socket is down, so
+ *     an empty list means "we don't know", NOT "you are flat". This panel is
+ *     what a trader checks before deciding whether to intervene, and rendering
+ *     an unknown state as a confident zero is the one false negative here that
+ *     can cost money.
+ *   - `brokerReady === false` — broker still starting up.
+ *   - otherwise — genuinely flat.
+ */
+function EmptyPositions({
+  brokerReady,
+  positionsKnown = true,
+}: {
+  brokerReady?: boolean;
+  positionsKnown?: boolean;
+}) {
+  if (!positionsKnown) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
+        <span className="text-2xl opacity-40">⚠️</span>
+        <span className="text-[12px] text-[#ffb800]">Can&apos;t confirm positions</span>
+        <span className="text-[11px] text-slate-500">
+          The live feed is not up to date, so this list may be incomplete. Check your
+          broker directly before acting.
+        </span>
+      </div>
+    );
+  }
   if (brokerReady === false) {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
@@ -155,6 +195,11 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
   const removePos    = useStore((s) => s.removePosition);
   const setPositions = useStore((s) => s.setPositions);
   const account      = useStore((s) => s.account);
+  // An empty positions list only means "flat" when the feed is actually
+  // delivering. Stale or disconnected, it means "unknown" — see S9-03.
+  // The expression used to live here inline; it is now `selectFeedLive`, shared
+  // with the other surfaces that ask the same question (F1-02).
+  const positionsKnown = useStore(selectFeedLive);
   const qc           = useQueryClient();
 
   // Broker is considered ready once we have account data with a balance.
@@ -167,8 +212,10 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
   const [error, setError]               = useState<string | null>(null);
   const [confirmCloseAll, setConfirmCloseAll] = useState(false);
 
+  // sameSymbol, not ===: the panel's `symbol` is UI form ("XAU/USD") while a
+  // position's symbol is canonical ("XAUUSD"). A raw === hid every open trade.
   const filtered = symbol
-    ? positions.filter((p) => p.symbol === symbol)
+    ? positions.filter((p) => sameSymbol(p.symbol, symbol))
     : positions;
 
   const totalPnl = filtered.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0);
@@ -186,7 +233,12 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       onClosed?.(id);
       invalidate();
     } catch (e: unknown) {
-      setError(extractApiError(e, 'Close failed'));
+      // F2-01: "Close failed" after a 30s timeout is a claim we cannot make —
+      // the close may have gone through. Refetch rather than leave the row
+      // showing an exposure that may no longer exist.
+      const outcome = describeSubmitFailure(e, 'close');
+      setError(outcome.message);
+      if (!outcome.outcomeKnown) invalidate();
     } finally {
       setClosingId(null);
     }
@@ -201,7 +253,11 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       setPositions([]);
       invalidate();
     } catch (e: unknown) {
-      setError(extractApiError(e, 'Close all failed'));
+      // Worse here than for a single close: a close-all that timed out may have
+      // closed some, all, or none of them. Ask the server rather than guess.
+      const outcome = describeSubmitFailure(e, 'close-all');
+      setError(outcome.message);
+      if (!outcome.outcomeKnown) invalidate();
     } finally {
       setClosingAll(false);
     }
@@ -211,7 +267,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
     <div className="flex items-center gap-3">
       <span className={cn(
         'text-[11px] font-semibold tabular-nums',
-        totalPnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]',
+        totalPnl >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]',
       )}>
         Total P&L: {fmtPnl(totalPnl)}
       </span>
@@ -232,25 +288,25 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
     >
       {confirmCloseAll && (
         <ConfirmDialog
-          message={`Close all ${filtered.length} open position(s)? This cannot be undone.`}
+          message={describeCloseAll(filtered)}
           onConfirm={handleCloseAllConfirmed}
           onCancel={() => setConfirmCloseAll(false)}
         />
       )}
 
       {error && (
-        <div className="mx-4 mt-3 px-3 py-2 rounded bg-[#ff1744]/10 border border-[#ff1744]/20 text-[#ff1744] text-[11px]">
+        <div className="mx-4 mt-3 px-3 py-2 rounded bg-[var(--bear)]/10 border border-[var(--bear)]/20 text-[var(--bear)] text-[11px]">
           {error}
         </div>
       )}
 
       {filtered.length === 0 ? (
-        <EmptyPositions brokerReady={brokerReady} />
+        <EmptyPositions brokerReady={brokerReady} positionsKnown={positionsKnown} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
-              <tr className="border-b border-[#1e2d3d]">
+              <tr className="border-b border-[var(--border)]">
                 {['Symbol', 'Side', 'Size', 'Entry', 'Current', 'SL', 'TP', 'P&L', 'Opened', ''].map((h) => (
                   <th
                     key={h}
@@ -289,19 +345,27 @@ function PositionRow({
   closing: boolean;
   onClose: () => void;
 }) {
+  // F5-02: `pos.side === 'long' ? 1 : -1` decided the sign of this number, and
+  // the API reports direction as `side` or `direction`, in either case, with
+  // 'buy'/'sell' as well as 'long'/'short'. A profitable long arriving as
+  // side:'buy' rendered as a −10% loss — beside a badge that read LONG, because
+  // that one line below already called `positionSide`. An unreported side fell
+  // to −1, i.e. defaulted to short, which is exactly what the helper's docstring
+  // forbids. Null now means unknown and shows no signed percentage at all.
+  const side = positionSide(pos);
   const pnlPct =
-    pos.entry_price > 0
+    pos.entry_price > 0 && side !== null
       ? ((pos.current_price - pos.entry_price) / pos.entry_price) * 100 *
-        (pos.side === 'long' ? 1 : -1)
-      : 0;
+        (side === 'long' ? 1 : -1)
+      : null;
 
   return (
-    <tr className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/40 transition-colors">
+    <tr className="border-b border-[var(--surface)] hover:bg-[var(--border)]/40 transition-colors">
       <td className="px-3 py-2.5 font-semibold text-slate-200 whitespace-nowrap">
         {pos.symbol}
       </td>
       <td className="px-3 py-2.5">
-        <SideBadge side={pos.side} />
+        <SideBadge side={positionSide(pos)} />
       </td>
       <td className="px-3 py-2.5 tabular-nums text-slate-300">
         {pos.size}
@@ -321,12 +385,20 @@ function PositionRow({
       <td className="px-3 py-2.5">
         <div className="flex flex-col gap-0.5">
           <PnlBadge value={pos.unrealized_pnl} />
-          <span className={cn(
-            'text-[10px] tabular-nums',
-            pnlPct >= 0 ? 'text-[#00e676]/70' : 'text-[#ff1744]/70',
-          )}>
-            {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
-          </span>
+          {pnlPct === null ? (
+            // Direction not reported: the percentage cannot be signed, and a
+            // guessed sign is worse than no number (F5-02).
+            <span className="text-[10px] tabular-nums text-slate-500" title="Direction not reported">
+              —
+            </span>
+          ) : (
+            <span className={cn(
+              'text-[10px] tabular-nums',
+              pnlPct >= 0 ? 'text-[var(--bull)]/70' : 'text-[var(--bear)]/70',
+            )}>
+              {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+            </span>
+          )}
         </div>
       </td>
       <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">

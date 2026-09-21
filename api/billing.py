@@ -35,10 +35,72 @@ from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
 
+# ── F4-01b (final): the narrow wallet gate ───────────────────────────────────
+#
+# This router was deliberately left ungated in the first pass, and the reason
+# still holds for most of it: **billing is how a user upgrades.** Gating
+# /plans, /subscription, /stripe/*, /payments/* or /payment-methods behind a paid
+# plan would lock a free user out of the page that sells them the plan.
+#
+# Two groups are not that, and are gated:
+#
+#   /elite/*                 elite    — dedicated account manager contact,
+#                                       support tickets and custom-dev requests.
+#                                       Each says "(Elite)" in its own summary
+#                                       and was reachable by any authenticated
+#                                       free-tier account.
+#   /balance, /transactions  starter  — the `wallet` feature the UI advertises
+#                                       at starter and gated in React only.
+#
+# Everything else stays open on purpose. The omissions here are decisions.
+from monetization.subscription import require_plan
+from monetization.activation import UnknownPlanError, activate_paid_plan, resolve_plan_price_usd
+
 logger = logging.getLogger(__name__)
 
 # All routes are mounted under /api/billing — no /api/ prefix in path strings.
 router = APIRouter(prefix="/api/billing", tags=["Billing"])
+
+
+# ── Payment configuration gate ────────────────────────────────────────────────
+
+
+def payments_configured() -> bool:
+    """Whether a payment provider is actually usable.
+
+    Read-only account views do not need one. ``/balance`` reads the broker's
+    account, and ``/transactions`` documents that it "returns an empty list when
+    no payment provider is configured" — both are built to work on a deployment
+    that has not set up payments yet.
+    """
+    return bool(
+        os.getenv("STRIPE_SECRET_KEY") or os.getenv("FLUTTERWAVE_SECRET_KEY") or os.getenv("CRYPTO_WEBHOOK_SECRET")
+    )
+
+
+def require_payments_configured() -> None:
+    """Guard for endpoints that move money. Returns 503, not 404.
+
+    The distinction matters. This router used to be hidden entirely behind
+    ``FEATURE_BILLING_SUBSCRIPTION``, so with billing off every one of its 31
+    endpoints 404'd — including ``/balance`` and ``/transactions``, which the
+    Wallet page calls unconditionally. A 404 tells the client the feature does
+    not exist; the truth is that it exists and is not configured yet, which is a
+    503. The platform's own diagnostics flagged the same thing from the other
+    side: "route_families CRITICAL — 1 endpoint family are not registered. Every
+    page under a missing prefix will 404."
+    """
+    if not payments_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Payments are not configured on this deployment. Set STRIPE_SECRET_KEY "
+                "(and STRIPE_WEBHOOK_SECRET in production) or FLUTTERWAVE_SECRET_KEY to "
+                "enable payment processing. Account balance and transaction history do "
+                "not require this."
+            ),
+        )
+
 
 # ── Lazy imports (graceful if packages missing) ───────────────────────────────
 
@@ -308,7 +370,7 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
-@router.get("/stripe/config")
+@router.get("/stripe/config", dependencies=[Depends(require_payments_configured)])
 async def stripe_config():
     """
     Return safe Stripe configuration for the frontend (no secret keys).
@@ -320,7 +382,10 @@ async def stripe_config():
 
 
 class CreatePaymentIntentRequest(BaseModel):
-    amount_usd: float
+    # Defensive bounds on the charge amount. This route does not grant a plan —
+    # the Stripe checkout.session webhook does that — so the amount is not a
+    # pricing hole, but it was previously unbounded in both directions.
+    amount_usd: float = Field(..., gt=0, le=float(os.getenv("MAX_CHECKOUT_AMOUNT_USD", "1_000_000")))
     currency: str = "USD"
     description: str = "HopeFX subscription"
     metadata: dict | None = None
@@ -328,7 +393,7 @@ class CreatePaymentIntentRequest(BaseModel):
     idempotency_key: str | None = None
 
 
-@router.post("/stripe/payment-intent")
+@router.post("/stripe/payment-intent", dependencies=[Depends(require_payments_configured)])
 async def create_payment_intent(
     body: CreatePaymentIntentRequest,
     request: Request,
@@ -400,7 +465,10 @@ async def generate_referral_link(user: TokenPayload = Depends(get_current_user))
         affiliate = mgr.create_affiliate(user_id=user.sub)
 
     base_url = os.getenv("APP_BASE_URL", "https://hopefx.io")
-    ref_url = f"{base_url}/signup?ref={affiliate.code}"
+    # /signup is not a route — the SPA registers /register. A link to /signup hits
+    # the catch-all, redirects to /login, and the ref code is lost, so the referral
+    # is never attributed.
+    ref_url = f"{base_url}/register?ref={affiliate.code}"
 
     return {
         "url": ref_url,
@@ -416,7 +484,15 @@ async def generate_referral_link(user: TokenPayload = Depends(get_current_user))
 
 
 class FreeTierBody(BaseModel):
-    user_id: str
+    """Body for POST /auth/activate-free-tier.
+
+    `user_id` is deliberately absent: it was client-supplied on an
+    UNAUTHENTICATED route that both creates subscriptions and attributes
+    affiliate referrals, so a caller could farm commissions against any user id
+    they could enumerate. The account is now taken from the bearer token, which
+    is what every other route in this file already does.
+    """
+
     ref_code: str | None = None  # optional referral code from signup URL
 
 
@@ -424,7 +500,10 @@ _TRIAL_DAYS: int = int(os.getenv("NEW_USER_TRIAL_DAYS", "14"))
 
 
 @router.post("/auth/activate-free-tier", status_code=status.HTTP_201_CREATED)
-async def activate_free_tier(body: FreeTierBody):
+async def activate_free_tier(
+    body: FreeTierBody,
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Called immediately after successful registration.
 
@@ -441,7 +520,7 @@ async def activate_free_tier(body: FreeTierBody):
 
     mgr = _get_subscription_manager()
 
-    existing = mgr.get_user_subscription(body.user_id)
+    existing = mgr.get_user_subscription(user.sub)
     if existing:
         tier_val = existing.tier.value if hasattr(existing.tier, "value") else str(existing.tier)
         return {
@@ -454,11 +533,20 @@ async def activate_free_tier(body: FreeTierBody):
     # Create a STARTER trial — gives access to journal, performance, alerts, wallet
     # without requiring a credit card.  Reverts to FREE after _TRIAL_DAYS.
     sub = mgr.create_subscription(
-        body.user_id,
+        user.sub,
         SubscriptionTier.STARTER,
         duration_days=_TRIAL_DAYS,
     )
-    # Mark as TRIAL so the billing page shows the correct status badge
+    # Mark as TRIAL so the billing page shows the correct status badge.
+    #
+    # This bare assignment IS the write: the manager keeps subscriptions in a
+    # module-level dict holding this same object, and there is no
+    # save_subscription/update_subscription to call.
+    #
+    # It is therefore not durable. User.plan (database/user_models.py) is the only
+    # persisted record of a plan and it has no concept of a trial, so after a
+    # restart a trial reads as whatever `plan` says, with no expiry. Making trials
+    # genuinely expire needs a real subscriptions table.
     sub.status = SubscriptionStatus.TRIAL
 
     if body.ref_code:
@@ -466,7 +554,7 @@ async def activate_free_tier(body: FreeTierBody):
             aff_mgr = _get_affiliate_manager()
             aff_mgr.create_referral(
                 affiliate_code=body.ref_code,
-                referred_user_id=body.user_id,
+                referred_user_id=user.sub,
             )
         except Exception as exc:
             logger.debug("Referral tracking skipped: %s", exc)
@@ -487,19 +575,27 @@ async def activate_free_tier(body: FreeTierBody):
 
 
 class FlutterwaveInitBody(BaseModel):
-    # Defensive upper bound on the client-supplied charge amount. Rejects
-    # absurd / overflow inputs before they reach the payment provider; the
-    # generous default does not constrain real subscription charges.
-    amount: float = Field(..., gt=0, le=float(os.getenv("MAX_CHECKOUT_AMOUNT_USD", "1_000_000")))
+    """Body for POST /payments/flutterwave/init.
+
+    `amount` is deliberately absent: the client set its own price and `plan` was
+    accepted, echoed back, and never used to validate it. The charge is now
+    derived from `plan` against the catalogue.
+    """
+
     currency: str = Field("USD", max_length=3)
     plan: str = Field("professional", description="Subscription plan name")
 
 
 class FlutterwaveVerifyBody(BaseModel):
     tx_ref: str
+    # Which plan the transaction was for — needed to grant it on verify. Validated
+    # against the catalogue before anything is granted. Once flutterwave_init
+    # persists a payment row this should be read back from the stored tx_ref
+    # instead of being supplied by the client.
+    plan: str = Field("professional", description="Plan purchased")
 
 
-@router.post("/payments/flutterwave/init")
+@router.post("/payments/flutterwave/init", dependencies=[Depends(require_payments_configured)])
 async def flutterwave_init(
     body: FlutterwaveInitBody,
     user: TokenPayload = Depends(get_current_user),
@@ -514,17 +610,23 @@ async def flutterwave_init(
     that retrying the same checkout does not create a second payment session.
     The client should pass the returned tx_ref to /verify after payment.
     """
+    # Server-derived price — never a client-supplied amount.
+    try:
+        amount = resolve_plan_price_usd(body.plan)
+    except UnknownPlanError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
     # Deterministic tx_ref — same user+plan+amount+currency always maps to the
     # same reference, so a network retry cannot create a duplicate charge.
     idempotent_tx_ref = (
-        "FLW-" + hashlib.sha256(f"{user.sub}:{body.plan}:{body.amount}:{body.currency}".encode()).hexdigest()[:24]
+        "FLW-" + hashlib.sha256(f"{user.sub}:{body.plan}:{amount}:{body.currency}".encode()).hexdigest()[:24]
     )
 
     try:
         flw = _get_flutterwave()
         result = flw.initialize_payment(
             user_id=user.sub,
-            amount=Decimal(str(body.amount)),
+            amount=Decimal(str(amount)),
             currency=body.currency,
             tx_ref=idempotent_tx_ref,
         )
@@ -541,7 +643,7 @@ async def flutterwave_init(
         raise HTTPException(status_code=500, detail="Payment init failed — check server logs") from exc
 
 
-@router.post("/payments/flutterwave/verify")
+@router.post("/payments/flutterwave/verify", dependencies=[Depends(require_payments_configured)])
 async def flutterwave_verify(
     body: FlutterwaveVerifyBody,
     user: TokenPayload = Depends(get_current_user),
@@ -586,7 +688,26 @@ async def flutterwave_verify(
                     )
             except Exception as _persist_exc:
                 logger.warning("flutterwave_verify: failed to persist idempotency record: %s", _persist_exc)
-            return {"verified": True, "tx_ref": body.tx_ref, "status": "verified"}
+
+            # Deliver what was paid for. This function's docstring has always
+            # claimed it activates the subscription; until now it verified,
+            # cached an idempotency record, and returned. The customer paid and
+            # stayed on Free.
+            #
+            # activate_paid_plan never raises: the idempotency record above means
+            # a 5xx here would be retried, short-circuited, and the grant lost.
+            activated = activate_paid_plan(
+                user.sub,
+                body.plan,
+                source="flutterwave",
+                reference=body.tx_ref,
+            )
+            return {
+                "verified": True,
+                "tx_ref": body.tx_ref,
+                "status": "verified",
+                "subscription_activated": activated,
+            }
         return {
             "verified": False,
             "tx_ref": body.tx_ref,
@@ -597,7 +718,7 @@ async def flutterwave_verify(
         raise HTTPException(status_code=500, detail="Verification failed — check server logs") from exc
 
 
-@router.get("/payments/flutterwave/status")
+@router.get("/payments/flutterwave/status", dependencies=[Depends(require_payments_configured)])
 async def flutterwave_status():
     """Return whether Flutterwave is configured."""
     key = os.getenv("FLUTTERWAVE_SECRET_KEY", "")
@@ -613,7 +734,7 @@ async def flutterwave_status():
 
 
 @router.get("/balance")
-async def get_balance(user: TokenPayload = Depends(get_current_user)):
+async def get_balance(user: TokenPayload = Depends(require_plan("starter"))):
     """
     Return the authenticated user's wallet balance.
 
@@ -863,18 +984,22 @@ async def process_refund(
     except Exception as exc:
         logger.warning("process_refund: Stripe direct refund failed: %s", exc)
 
-    # Fallback — log for manual processing
-    logger.info(
-        "process_refund: payment %s not found in processor; queued for manual review (reason=%s)",
+    # Do not report success for work that was never queued. There is no review
+    # queue behind this branch — returning ok:true left an operator believing a
+    # refund was in flight when nothing existed anywhere.
+    logger.error(
+        "process_refund: payment %s not found in processor and Stripe not configured — NO refund issued (reason=%s)",
         payment_id,
         reason,
     )
-    return {
-        "ok": True,
-        "payment_id": payment_id,
-        "status": "refund_queued",
-        "note": "Payment not found in processor — queued for manual review in Stripe Dashboard",
-    }
+    raise HTTPException(
+        status_code=422,
+        detail=(
+            f"Payment {payment_id} was not found in the payment processor and Stripe is not "
+            "configured. No refund has been issued — this must be handled manually in the "
+            "processor dashboard."
+        ),
+    )
 
 
 async def get_affiliate_stats(user=None) -> dict:
@@ -1037,7 +1162,7 @@ async def detach_payment_method(
 async def get_transactions(
     limit: int = 50,
     offset: int = 0,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("starter")),
 ):
     """
     Return the authenticated user's transaction history.
@@ -1171,7 +1296,7 @@ _DEFAULT_ACCOUNT_MANAGER = {
 
 
 @router.get("/elite/account-manager", summary="Get dedicated account manager contact (Elite)")
-async def get_account_manager(user: TokenPayload = Depends(get_current_user)):
+async def get_account_manager(user: TokenPayload = Depends(require_plan("elite"))):
     """
     Return the dedicated account manager details for the authenticated Elite user.
 
@@ -1194,7 +1319,7 @@ class SupportTicketRequest(BaseModel):
 @router.post("/elite/support/ticket", summary="Submit a dedicated support ticket (Elite)")
 async def create_support_ticket(
     body: SupportTicketRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Create a dedicated support ticket for an Elite subscriber.
@@ -1244,7 +1369,7 @@ async def create_support_ticket(
 async def list_support_tickets(
     limit: int = 50,
     offset: int = 0,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Return all support tickets submitted by the authenticated Elite user.
@@ -1276,7 +1401,7 @@ async def list_support_tickets(
 )
 async def get_ticket_timeline(
     ticket_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Return the event timeline for a specific Elite support ticket.
@@ -1347,7 +1472,7 @@ class CustomDevRequest(BaseModel):
 @router.post("/elite/custom-dev/request", summary="Submit a custom development request (Elite)")
 async def submit_custom_dev_request(
     body: CustomDevRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Submit a bespoke development request (strategy, indicator, integration, etc.)
@@ -1395,7 +1520,7 @@ async def submit_custom_dev_request(
 async def list_custom_dev_requests(
     limit: int = 50,
     offset: int = 0,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("elite")),
 ):
     """
     Return all custom development requests submitted by the authenticated Elite user.
@@ -1452,7 +1577,12 @@ async def resume_subscription(user: TokenPayload = Depends(get_current_user)):
 @router.post("/subscription/change", summary="Change subscription plan")
 async def change_subscription_plan(body: dict, user: TokenPayload = Depends(get_current_user)):
     plan = body.get("plan", "")
-    valid_plans = {"free", "starter", "professional", "enterprise", "elite"}
+    # Derived, not transcribed. The other hand-written copy of this set — in
+    # api/superadmin/users.py — had drifted and was missing "elite", so the same
+    # plan was valid here and rejected there.
+    from monetization.pricing import SubscriptionTier
+
+    valid_plans = {t.value for t in SubscriptionTier}
     if plan not in valid_plans:
         raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {', '.join(sorted(valid_plans))}")
     try:
@@ -1524,7 +1654,11 @@ async def get_invoice(invoice_id: str, user: TokenPayload = Depends(get_current_
 # frontend cryptoCheckoutApi can use a single /billing prefix.
 
 
-@router.get("/crypto/rates", summary="Live crypto exchange rates for checkout")
+@router.get(
+    "/crypto/rates",
+    summary="Live crypto exchange rates for checkout",
+    dependencies=[Depends(require_payments_configured)],
+)
 async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
     """Return live BTC/ETH/USDT rates in USD for the crypto checkout flow."""
     try:
@@ -1557,7 +1691,9 @@ async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
         }
 
 
-@router.post("/crypto/order", summary="Create a crypto payment order")
+@router.post(
+    "/crypto/order", summary="Create a crypto payment order", dependencies=[Depends(require_payments_configured)]
+)
 async def create_crypto_order(
     payload: dict,
     user: TokenPayload = Depends(get_current_user),
@@ -1573,13 +1709,33 @@ async def create_crypto_order(
         raise HTTPException(status_code=400, detail="Unsupported currency") from None
 
     order_id = str(_uuid.uuid4())
-    # Delegate to payments router for address generation
+    # Delegate to payments router for address generation.
+    #
+    # This used to end with::
+    #
+    #     except Exception:
+    #         address = f"hopefx_{currency.lower()}_{user.sub[:8]}"
+    #
+    # so a failure to derive an address produced the string
+    # "hopefx_btc_a1b2c3d4", returned with HTTP 200 and rendered in the UI as a
+    # deposit address beside a QR code. It was not a hypothetical branch:
+    # BitcoinClient was calling a hdwallet API that has not existed since v3,
+    # which requirements.txt has pinned throughout, so *every* BTC deposit
+    # request took it (F267).
+    #
+    # There is no fallback value for a deposit address. Anything returned here
+    # is somewhere a user sends money that cannot be retrieved, so the only
+    # honest failure is to not return one.
     try:
         from api.payments import _generate_address
 
         address = _generate_address(currency, user.sub, "mainnet")
-    except Exception:
-        address = f"hopefx_{currency.lower()}_{user.sub[:8]}"
+    except Exception as exc:
+        logger.error("Deposit address generation failed for %s/%s: %s", currency, user.sub, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"{currency} deposit addresses are temporarily unavailable. No funds should be sent.",
+        ) from exc
 
     order = {
         "order_id": order_id,

@@ -27,7 +27,20 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload
+
+# ── F4-01b: the plan gate must exist on the side that counts ─────────────────
+#
+# `SubscriptionGate` in React and `PLAN_FEATURES` in TypeScript are UI
+# affordances, not authorization. These routes depended on `get_current_user`
+# alone, which checks *authentication* and never *plan*, so the advertised gate
+# existed on neither side. Same defect as the one already fixed in api/nocode.py.
+#
+# Deferred from the first pass because `/api/risk` is shared by two routers at
+# two different tiers, so it needs per-endpoint gating rather than one
+# router-level dependency.
+# Advertised in frontend/src/lib/subscription.ts as: prop-firm -> professional
+from monetization.subscription import require_plan
 from api.db_store import db_get, db_set
 
 logger = logging.getLogger(__name__)
@@ -70,7 +83,7 @@ class PropFirmStatus(BaseModel):
     response_model=PropFirmStatus,
     summary="Prop firm challenge status",
 )
-async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
+async def prop_firm_status(user: TokenPayload = Depends(require_plan("professional"))):
     """
     Return the current prop firm challenge metrics.
 
@@ -271,14 +284,14 @@ def _get_daily_stats(user_id: str, days: int = 30) -> list[dict]:
 @router.get("/prop-firm/history", summary="Prop firm challenge history")
 async def prop_firm_history(
     limit: int = Query(20, ge=1, le=100),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     challenges = _get_challenges(user.sub)
     return {"challenges": challenges, "total": len(challenges)}
 
 
 @router.get("/prop-firm/challenges", summary="Active prop firm challenges")
-async def prop_firm_challenges(user: TokenPayload = Depends(get_current_user)) -> dict:
+async def prop_firm_challenges(user: TokenPayload = Depends(require_plan("professional"))) -> dict:
     challenges = _get_challenges(user.sub)
     active = [c for c in challenges if c.get("result") == "active"]
     return {"challenges": active, "total": len(active)}
@@ -287,14 +300,14 @@ async def prop_firm_challenges(user: TokenPayload = Depends(get_current_user)) -
 @router.get("/prop-firm/daily-stats", summary="Daily P&L stats for prop firm")
 async def prop_firm_daily_stats(
     days: int = Query(30, ge=1, le=365),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     stats = _get_daily_stats(user.sub, days)
     return {"stats": stats, "total": len(stats)}
 
 
 @router.get("/prop-firm/breach-alerts", summary="Prop firm breach alerts")
-async def prop_firm_breach_alerts(user: TokenPayload = Depends(get_current_user)) -> dict:
+async def prop_firm_breach_alerts(user: TokenPayload = Depends(require_plan("professional"))) -> dict:
     alerts = _get_alerts(user.sub)
     return {"alerts": alerts, "total": len(alerts)}
 
@@ -305,7 +318,7 @@ async def prop_firm_breach_alerts(user: TokenPayload = Depends(get_current_user)
 )
 async def acknowledge_breach_alert(
     alert_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     key = _ALERTS_KEY.format(uid=user.sub)
     alerts = _get_alerts(user.sub)
@@ -321,7 +334,7 @@ async def acknowledge_breach_alert(
 
 
 @router.get("/prop-firm/accounts", summary="Prop firm accounts")
-async def prop_firm_accounts(user: TokenPayload = Depends(get_current_user)) -> dict:
+async def prop_firm_accounts(user: TokenPayload = Depends(require_plan("professional"))) -> dict:
     accounts = []
     try:
         from core.app_state import app_state

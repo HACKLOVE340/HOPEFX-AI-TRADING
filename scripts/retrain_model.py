@@ -52,7 +52,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL_DIR = os.getenv("ML_MODEL_DIR", "ml/saved_models")
+from ml.model_paths import model_dir as _resolve_model_dir
+
+_DEFAULT_MODEL_DIR = str(_resolve_model_dir())
 _DEFAULT_SYMBOLS = os.getenv("ML_SYMBOLS", "XAU_USD").split(",")
 _H1_CSV_DIR = os.getenv("ML_H1_CSV_DIR", "data")
 
@@ -364,7 +366,7 @@ Examples:
                 logger.info("  %s accuracy=%s  f1=%s", f"{name:<20}", acc, f1)
                 logger.info("  %s saved → %s", f"{'':20}", path)
         except Exception:
-            logger.exception("Failed for %s: %s", sym)
+            logger.exception("Failed for %s", sym)
             all_ok = False
 
     if not all_ok:

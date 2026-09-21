@@ -24,17 +24,26 @@ psycopg2-binary>=2.9.0
 # and redis 8.x dropped the now-empty `asyncio` extra — so plain `redis` is
 # correct and avoids the "does not provide the extra 'asyncio'" pip warning.
 redis>=5.0.0
+# celery: REQUIRED in the runtime image, not optional. docker-compose.yml defines
+# celery-worker and celery-beat services whose command execs `celery -A celery_app
+# ...`, and celery_app.py (30KB of real task definitions for the ml/billing/risk/
+# infra queues) imports celery at module scope. It was listed ONLY in
+# requirements-ci.txt and commented out in requirements-optional.txt, so the
+# Dockerfile — which installs requirements.txt — never put it in the image, and
+# both services died at startup with:
+#   OCI runtime create failed: exec: "celery": executable file not found in $PATH
+celery[redis]>=5.4.0
 kubernetes-asyncio>=29.0.0   # K8s ConfigMap fallback for kill switch cross-pod propagation
 kubernetes>=29.0.0            # sync K8s client (used when no event loop is running)
 
 # ── Auth & security (pinned exactly — CVE surface is non-negotiable) ──────────
 # To upgrade: audit CVE list, run full test suite, update checksums.
-PyJWT==2.12.0
+PyJWT==2.13.0  # GHSA: JWK public key accepted as HMAC secret (HS256 forgery) fixed in 2.12.1+; empty-key signing now rejected
 itsdangerous>=2.1.2
 argon2-cffi>=23.1.0,<24.0.0
 bcrypt>=4.1.3,<6.0.0
 passlib==1.7.4
-cryptography==46.0.7
+cryptography>=50.0.0  # CVE-2026-69247: PKCS#7 EnvelopedData decryption exposes a Bleichenbacher oracle; fixed in 50.0.0. (Earlier floor was 47.0.0 for the bundled-OpenSSL GHSA through 46.0.7.)
 pyotp>=2.9.0,<3.0.0
 # python-ecdsa removed: package abandoned at 0.18.0, no 0.19.x release exists.
 # CVE-2024-49298 (Minerva timing attack) is mitigated by the `cryptography`
@@ -43,22 +52,33 @@ hdwallet>=3.6.1,<4.0.0
 pydantic[email]>=2.5.0,<3.0.0
 email-validator>=2.1.0,<3.0.0
 # Web framework — pin minor to avoid breaking middleware changes
-fastapi>=0.115.0,<1.0.0
+fastapi>=0.136.0,<1.0.0  # >=0.136 resolves with the patched starlette 1.3.x line
 uvicorn[standard]>=0.27.0,<1.0.0
-starlette>=0.40.0,<1.0.0  # CVE-2024-47874 fixed in 0.40.0
+starlette>=1.3.1  # GHSA: Host-header path poisoning, UNC StaticFiles SSRF, form() limit DoS fixed in 1.3.x
 
 # ── Data & numerics ───────────────────────────────────────────────────────────
 pandas>=2.1.0
 numpy>=1.26.0
 requests>=2.33.1  # CVE-2026-25645 fixed in 2.33.0+
-aiohttp>=3.13.5,<3.14  # CVE-2025-69223..69230, CVE-2026-22815..34520 fixed in 3.13.x
+aiohttp>=3.14.1  # GHSA: websocket frame / C-parser max_line_size / pipelined-request / compressed-body / cross-origin-redirect advisories fixed in 3.14.x (tests use tests/support/aioresponses_shim, not the 3.14-incompatible aioresponses lib)
 anyio>=4.4.0    # SNYK-PYTHON-ANYIO-7361842 (race condition) fixed in 4.4.0+
 h11>=0.16.0     # SNYK-PYTHON-H11-10293728 (request smuggling) fixed in 0.16.0+
 certifi>=2026.2.25  # CVE-2024-39689 fixed in 2024.7.4+; use latest CA bundle
 vaderSentiment>=3.3.2
 textblob>=0.18.0,<1.0.0          # secondary sentiment scorer (news/sentiment.py)
 openai>=1.0.0
+# chromadb: PYSEC-2026-311 (pre-auth RCE) affects the HTTP SERVER endpoint
+# /api/v2/.../collections when trust_remote_code=true. We use only the embedded
+# chromadb.PersistentClient (research/vector_store.py) — no HTTP server is run
+# and trust_remote_code is never set — so the vulnerable path is unreachable.
+# No fixed release exists yet; revisit when chromadb ships a patched version.
 chromadb>=0.4.0
+# Transitive via textblob, pinned here only to hold a security floor:
+# CVE-2026-79675 (CRITICAL, JVM argument injection), CVE-2026-71513 (RCE via
+# AllowlistUnpickler dotted-name bypass), CVE-2026-72818, CVE-2026-78680 —
+# all fixed in 3.10.3. A floor in a range manifest is invisible to a scanner
+# that reads ranges, which is why requirements.lock is now scanned too.
+nltk>=3.10.3
 # stable-baselines3 2.3+ supports gymnasium 1.x (API-stable since gym 0.26).
 # Pin gymnasium to <2.0 to avoid breaking the SB3 VecEnv wrappers until SB3
 # explicitly declares gymnasium 2.x support.
@@ -104,7 +124,7 @@ matplotlib>=3.8.0
 python-dotenv>=1.2.2  # CVE: SNYK-PYTHON-PYTHONDOTENV-16115271 fixed in 1.2.2+
 pyyaml>=6.0.1
 keyring>=24.0.0
-msgpack>=1.0.0
+msgpack>=1.2.1
 lz4>=4.0.0
 numba>=0.59.0
 pillow>=12.2.0  # CVE-2026-25990, CVE-2026-40192 fixed in 12.x
@@ -236,3 +256,12 @@ locust>=2.24.0,<3.0.0
 # Required by examples/build_notebook.py
 nbformat>=5.9.0
 ipython>=8.12.0
+urllib3>=1.26.19 # not directly required, pinned by Snyk to avoid a vulnerability
+onnxruntime>=1.24.1 # not directly required, pinned by Snyk to avoid a vulnerability
+protobuf>=4.25.8 # not directly required, pinned by Snyk to avoid a vulnerability
+soupsieve>=2.8.4 # not directly required, pinned by Snyk to avoid a vulnerability
+werkzeug>=2.3.8 # not directly required, pinned by Snyk to avoid a vulnerability
+sympy>=1.12 # not directly required, pinned by Snyk to avoid a vulnerability
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
+idna>=3.15 # not directly required, pinned by Snyk to avoid a vulnerability
+pygments>=2.20.0 # not directly required, pinned by Snyk to avoid a vulnerability

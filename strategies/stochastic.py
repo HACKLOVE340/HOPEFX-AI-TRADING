@@ -87,6 +87,32 @@ class StochasticStrategy(BaseStrategy):
 
         return k_percent, d_percent
 
+    def analyze(self, data: Any) -> dict[str, Any]:
+        """Return the current %K/%D snapshot.
+
+        ``BaseStrategy`` declares ``analyze`` abstract, and this class did not
+        implement it — so ``StochasticStrategy(...)`` raised
+        ``TypeError: Can't instantiate abstract class`` and the strategy could
+        never be constructed, let alone backtested. It was still listed in
+        ``strategies/__init__.py`` as one of the thirteen available strategies.
+
+        The backtest path calls ``generate_signal(DataFrame)`` directly and does
+        not need this, but the ABC does, and callers that follow the documented
+        ``analyze() → generate_signal()`` contract deserve a real answer rather
+        than a stub.
+        """
+        frame = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        if frame.empty or not {"high", "low", "close"} <= set(frame.columns):
+            return {"k": None, "d": None, "error": "insufficient OHLC data"}
+        k, d = self.calculate_stochastic(frame)
+        return {
+            "k": float(k.iloc[-1]),
+            "d": float(d.iloc[-1]),
+            "price": float(frame["close"].iloc[-1]),
+            "oversold": self.oversold,
+            "overbought": self.overbought,
+        }
+
     def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         market_data = analysis
         """

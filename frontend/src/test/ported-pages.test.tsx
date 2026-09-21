@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 
 // ─── Mocked API surface (only the modules the five pages consume) ───────────────
@@ -68,7 +69,7 @@ beforeEach(() => {
 // ─── Observability ──────────────────────────────────────────────────────────────
 describe('Observability page', () => {
   it('shows a loading state before data resolves', () => {
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(screen.getByText('Loading telemetry…')).toBeInTheDocument();
   });
 
@@ -76,14 +77,14 @@ describe('Observability page', () => {
     mocks.observabilityApi.metrics.mockReturnValue(ok({ cpu_percent: 12.5, memory_percent: 40, error_rate: 0.01, active_connections: 7 }));
     mocks.observabilityApi.services.mockReturnValue(ok({ services: [{ name: 'api-gateway', status: 'healthy', uptime_seconds: 3600, version: '1.2.3' }] }));
     mocks.observabilityApi.alerts.mockReturnValue(ok({ alerts: [{ id: 'a1', severity: 'warning', message: 'High latency', service: 'oms' }] }));
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(await screen.findByText('12.5%')).toBeInTheDocument();
     expect(screen.getByText('api-gateway')).toBeInTheDocument();
     expect(screen.getByText('High latency')).toBeInTheDocument();
   });
 
   it('renders empty states when nothing is returned', async () => {
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(await screen.findByText('No service data.')).toBeInTheDocument();
     expect(screen.getByText('No active alerts. 🎉')).toBeInTheDocument();
   });
@@ -92,12 +93,12 @@ describe('Observability page', () => {
     mocks.observabilityApi.metrics.mockReturnValue(fail());
     mocks.observabilityApi.services.mockReturnValue(fail());
     mocks.observabilityApi.alerts.mockReturnValue(fail());
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     expect(await screen.findByText('Failed to load observability data.')).toBeInTheDocument();
   });
 
   it('re-fetches when Refresh is clicked', async () => {
-    render(<Observability />);
+    render(<MemoryRouter><Observability /></MemoryRouter>);
     await screen.findByText('No service data.');
     const calls = mocks.observabilityApi.metrics.mock.calls.length;
     fireEvent.click(screen.getByText('↻ Refresh'));
@@ -108,7 +109,7 @@ describe('Observability page', () => {
 // ─── Transparency ─────────────────────────────────────────────────────────────
 describe('Transparency page', () => {
   it('shows a loading state first', () => {
-    render(<Transparency />);
+    render(<MemoryRouter><Transparency /></MemoryRouter>);
     expect(screen.getByText('Loading decisions…')).toBeInTheDocument();
   });
 
@@ -116,7 +117,7 @@ describe('Transparency page', () => {
     mocks.transparencyApi.stats.mockReturnValue(ok({ total_decisions: 42, win_rate: 61.5 }));
     mocks.transparencyApi.decisions.mockReturnValue(ok({ decisions: [{ trade_id: 't1', symbol: 'XAUUSD', direction: 'long', confidence: 0.8, outcome: 'win', reasoning: 'momentum' }] }));
     mocks.transparencyApi.auditLog.mockReturnValue(ok({ entries: [{ action_type: 'kill_switch_armed', timestamp: '2026-01-01' }] }));
-    render(<Transparency />);
+    render(<MemoryRouter><Transparency /></MemoryRouter>);
     expect(await screen.findByText('42')).toBeInTheDocument();
     expect(screen.getByText('XAUUSD')).toBeInTheDocument();
     expect(screen.getByText('momentum')).toBeInTheDocument();
@@ -124,7 +125,7 @@ describe('Transparency page', () => {
   });
 
   it('renders empty states', async () => {
-    render(<Transparency />);
+    render(<MemoryRouter><Transparency /></MemoryRouter>);
     expect(await screen.findByText('No decisions recorded yet.')).toBeInTheDocument();
     expect(screen.getByText('No audit entries.')).toBeInTheDocument();
   });
@@ -133,7 +134,7 @@ describe('Transparency page', () => {
     mocks.transparencyApi.stats.mockReturnValue(fail());
     mocks.transparencyApi.decisions.mockReturnValue(fail());
     mocks.transparencyApi.auditLog.mockReturnValue(fail());
-    render(<Transparency />);
+    render(<MemoryRouter><Transparency /></MemoryRouter>);
     expect(await screen.findByText('Failed to load transparency data.')).toBeInTheDocument();
   });
 });
@@ -141,33 +142,33 @@ describe('Transparency page', () => {
 // ─── News & Sentiment ───────────────────────────────────────────────────────────
 describe('NewsSentiment page', () => {
   it('shows a loading state first', () => {
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(screen.getByText('Loading news…')).toBeInTheDocument();
   });
 
   it('renders sentiment tiles and article feed', async () => {
     mocks.newsApi.sentimentLatest.mockReturnValue(ok({ overall_score: 7.2, bullish_pct: 60, bearish_pct: 25, news_count: 12 }));
     mocks.newsApi.feed.mockReturnValue(ok({ articles: [{ id: 'n1', title: 'Gold rallies on Fed pause', source: 'Reuters', sentiment: 'bullish', impact: 'high' }] }));
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(await screen.findByText('Gold rallies on Fed pause')).toBeInTheDocument();
     expect(screen.getByText('7.2')).toBeInTheDocument();
   });
 
   it('surfaces a nuclear sentiment alert when flagged', async () => {
     mocks.newsApi.sentimentLatest.mockReturnValue(ok({ nuclear_alert: true, symbol: 'XAUUSD' }));
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(await screen.findByText(/Nuclear sentiment alert active/)).toBeInTheDocument();
   });
 
   it('renders an empty feed message', async () => {
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(await screen.findByText('No recent news.')).toBeInTheDocument();
   });
 
   it('shows an error banner when both requests fail', async () => {
     mocks.newsApi.sentimentLatest.mockReturnValue(fail());
     mocks.newsApi.feed.mockReturnValue(fail());
-    render(<NewsSentiment />);
+    render(<MemoryRouter><NewsSentiment /></MemoryRouter>);
     expect(await screen.findByText('Failed to load news & sentiment.')).toBeInTheDocument();
   });
 });
@@ -175,7 +176,7 @@ describe('NewsSentiment page', () => {
 // ─── ML-Ops Dashboard ───────────────────────────────────────────────────────────
 describe('MLDashboard page', () => {
   it('shows a loading state first', () => {
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     expect(screen.getByText('Loading pipeline…')).toBeInTheDocument();
   });
 
@@ -183,14 +184,14 @@ describe('MLDashboard page', () => {
     mocks.mlOpsApi.health.mockReturnValue(ok({ running: true, retraining_state: 'idle', drift_history_count: 3, latest_drift: { is_drifted: false } }));
     mocks.mlOpsApi.shadow.mockReturnValue(ok({ shadows: { 'model-2026-01-01': { auc: 0.7 } } }));
     mocks.mlOpsApi.retrainHistory.mockReturnValue(ok({ history: ['retrained 2026-01-01'] }));
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     expect(await screen.findByText('Running')).toBeInTheDocument();
     expect(screen.getByText('model-2026-01-01')).toBeInTheDocument();
     expect(screen.getByText('retrained 2026-01-01')).toBeInTheDocument();
   });
 
   it('triggers a retrain and shows the returned message', async () => {
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     await screen.findByText('No shadow deployments.');
     fireEvent.click(screen.getByText('Trigger Retrain'));
     expect(await screen.findByText('Retrain triggered.')).toBeInTheDocument();
@@ -199,7 +200,7 @@ describe('MLDashboard page', () => {
 
   it('promotes a shadow model', async () => {
     mocks.mlOpsApi.shadow.mockReturnValue(ok({ shadows: { 'model-x': {} } }));
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     fireEvent.click(await screen.findByText('Promote'));
     await waitFor(() => expect(mocks.mlOpsApi.promote).toHaveBeenCalledWith('model-x'));
     expect(await screen.findByText('Model promoted.')).toBeInTheDocument();
@@ -209,7 +210,7 @@ describe('MLDashboard page', () => {
     mocks.mlOpsApi.health.mockReturnValue(fail());
     mocks.mlOpsApi.shadow.mockReturnValue(fail());
     mocks.mlOpsApi.retrainHistory.mockReturnValue(fail());
-    render(<MLDashboard />);
+    render(<MemoryRouter><MLDashboard /></MemoryRouter>);
     expect(await screen.findByText('Failed to load ML-Ops data.')).toBeInTheDocument();
   });
 });
@@ -217,7 +218,7 @@ describe('MLDashboard page', () => {
 // ─── Strategy Builder ───────────────────────────────────────────────────────────
 describe('StrategyBuilder page', () => {
   it('shows a loading state first', () => {
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     expect(screen.getByText('Loading templates…')).toBeInTheDocument();
   });
 
@@ -225,7 +226,7 @@ describe('StrategyBuilder page', () => {
     mocks.nocodeApi.templates.mockReturnValue(ok({ templates: [
       { id: 'tpl-momentum', name: 'Momentum', category: 'trend', complexity: 'beginner', parameters: { lookback: 14 } },
     ] }));
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     const card = await screen.findByText('Momentum');
     fireEvent.click(card);
     expect(await screen.findByText(/Configure/)).toBeInTheDocument();
@@ -238,22 +239,22 @@ describe('StrategyBuilder page', () => {
       { id: 'tpl-momentum', name: 'Momentum', parameters: {} },
     ] }));
     mocks.nocodeApi.deploy.mockReturnValue(ok({ message: 'Strategy deployed.' }));
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     fireEvent.click(await screen.findByText('Momentum'));
     fireEvent.click(await screen.findByText('🚀 Deploy Strategy'));
     await waitFor(() => expect(mocks.nocodeApi.deploy).toHaveBeenCalledTimes(1));
-    expect(mocks.nocodeApi.deploy.mock.calls[0][0]).toMatchObject({ template_id: 'tpl-momentum', symbol: 'XAUUSD', timeframe: 'M15' });
+    expect(mocks.nocodeApi.deploy.mock.calls[0]?.[0]).toMatchObject({ template_id: 'tpl-momentum', symbol: 'XAUUSD', timeframe: 'M15' });
     expect(await screen.findByText('Strategy deployed.')).toBeInTheDocument();
   });
 
   it('renders the empty template state', async () => {
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     expect(await screen.findByText('No templates available.')).toBeInTheDocument();
   });
 
   it('shows an error banner when templates fail to load', async () => {
     mocks.nocodeApi.templates.mockReturnValue(fail());
-    render(<StrategyBuilder />);
+    render(<MemoryRouter><StrategyBuilder /></MemoryRouter>);
     expect(await screen.findByText('Failed to load strategy templates.')).toBeInTheDocument();
   });
 });

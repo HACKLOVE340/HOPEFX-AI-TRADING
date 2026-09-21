@@ -54,6 +54,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+from core.ai_contracts import HumanApproval, ResearchCandidate
+from security.ai_repair_sandbox import validate_repair_source
+from strategies.strategy_execution_boundary import ExecutionScope, StrategyExecutionBoundary
+
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
@@ -145,6 +149,7 @@ class StrategyVersion:
     activated_at: datetime | None = None
     validation_errors: list[str] = field(default_factory=list)
     performance_metrics: dict[str, float] = field(default_factory=dict)
+    candidate: ResearchCandidate | None = None
     instance: Any = None  # The compiled strategy instance
 
     def to_dict(self) -> dict[str, Any]:
@@ -203,6 +208,27 @@ class ASTSafetyValidator(ast.NodeVisitor):
             self.errors.append(f"Line {node.lineno}: forbidden attribute access '.{node.attr}'")
         self.generic_visit(node)
 
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        """Catch the same names reached by subscript instead of attribute.
+
+        `visit_Attribute` only sees `ast.Attribute` nodes, so it caught
+        `x.__subclasses__` but not `x.__dict__['__subclasses__']` — a subscript
+        whose key is a plain string constant. That gap was a working bypass:
+
+            type.__dict__['__subclasses__'](object)
+
+        passed validation and reached the entire loaded type hierarchy, 715
+        classes, from inside the restricted namespace.
+
+        `__dict__` itself is deliberately not on the forbidden list — strategies
+        legitimately introspect their own config — so the check belongs on the
+        key rather than on the attribute that produced the mapping.
+        """
+        key = node.slice
+        if isinstance(key, ast.Constant) and isinstance(key.value, str) and key.value in _FORBIDDEN_ATTRIBUTES:
+            self.errors.append(f"Line {node.lineno}: forbidden attribute access via subscript '[{key.value!r}]'")
+        self.generic_visit(node)
+
 
 class DynamicStrategyRegistry:
     """
@@ -226,6 +252,7 @@ class DynamicStrategyRegistry:
         self._db_session_factory: Any = None
         self._running = False
         self._subscriber_task: asyncio.Task | None = None
+        self._execution_boundary = StrategyExecutionBoundary()
 
     async def start(self, redis_client: Any = None, db_session_factory: Any = None) -> None:
         """Initialize the registry with Redis and DB connections."""
@@ -264,6 +291,7 @@ class DynamicStrategyRegistry:
         symbol: str,
         timeframe: str,
         author_id: str,
+        candidate: ResearchCandidate | None = None,
     ) -> str:
         """
         Register a new strategy version.
@@ -286,6 +314,7 @@ class DynamicStrategyRegistry:
             timeframe=timeframe,
             author_id=author_id,
             state=StrategyState.VALIDATING,
+            candidate=candidate,
         )
 
         # Phase 1: AST safety validation
@@ -295,6 +324,14 @@ class DynamicStrategyRegistry:
             version.validation_errors = errors
             self._versions[version_id] = version
             raise ValueError(f"Strategy validation failed: {'; '.join(errors)}")
+
+        # Phase 1b: Disposable compile and static repair-sandbox validation.
+        sandbox_result = validate_repair_source(source_code)
+        if not sandbox_result.accepted:
+            version.state = StrategyState.FAILED
+            version.validation_errors = list(sandbox_result.reason_codes)
+            self._versions[version_id] = version
+            raise ValueError(f"Strategy sandbox validation failed: {'; '.join(sandbox_result.reason_codes)}")
 
         # Phase 2: Compilation in isolated namespace
         try:
@@ -328,14 +365,26 @@ class DynamicStrategyRegistry:
         )
         return version_id
 
-    async def activate_strategy(self, version_id: str) -> None:
+    async def activate_strategy(
+        self,
+        version_id: str,
+        *,
+        scope: ExecutionScope,
+        approval: HumanApproval | None = None,
+    ) -> None:
         """
         Activate a validated strategy version.
 
-        Atomically swaps the previous active version (if any) for this name.
-        Publishes an update event to Redis so other pods sync.
+        Existing callers retain the legacy activation path. AI candidates carry
+        an explicit lifecycle contract and must pass the additive boundary
+        before activation at paper or live scope.
         """
         async with self._lock:
+            version = self._versions.get(version_id)
+            if version and version.candidate is not None:
+                decision = self._execution_boundary.evaluate(version.candidate, scope, approval)
+                if not decision.allowed:
+                    raise ValueError(f"Strategy activation denied ({decision.reason_code}): {decision.reason}")
             version = self._versions.get(version_id)
             if not version:
                 raise ValueError(f"Version not found: {version_id}")
@@ -421,6 +470,53 @@ class DynamicStrategyRegistry:
 
         Returns the strategy class instance (not the class itself).
         The namespace provides access to allowed imports only.
+
+        Trust boundary — read before changing anything here
+        ---------------------------------------------------
+        This executes caller-supplied Python. `ASTSafetyValidator` above is a
+        genuine denylist — it blocks the textbook escapes, including
+        `().__class__.__bases__[0].__subclasses__()`, `object.__subclasses__()`
+        and `__globals__` — and `allowed_globals` below withholds the dangerous
+        builtins. Together they raise the cost considerably. **But it is a
+        denylist on a Turing-complete language, so it is defence in depth, not
+        a boundary, and must not be described as a sandbox.**
+
+        The concrete reason to believe that: `type.__dict__['__subclasses__']`
+        reached the entire loaded type hierarchy — 715 classes — and passed
+        validation, because `visit_Attribute` never sees a subscript.
+        `visit_Subscript` now closes that specific hole. The point is not that
+        one hole existed; it is that finding it took ten minutes, and nobody
+        can prove the next one is not there.
+
+        So the actual control is **who can reach this**, not what the namespace
+        contains:
+
+        - `api/dynamic_strategies.py::register_strategy` — `_require_admin()`
+        - `api/nocode.py::deploy_template` — `require_plan("professional")`,
+          and it compiles from a vetted template rather than raw source
+
+        An admin can already stop the engine, move funds through the broker
+        adapters, and rewrite risk limits. Code execution adds nothing to an
+        account that holds those. That is the boundary this feature sits on,
+        and it is deliberate: custom strategies are the product.
+
+        What this means in practice:
+
+        - Do **not** relax `_require_admin()` on the register endpoint, or
+          expose `_compile_strategy` on any route reachable by a lower tier.
+          The gate is the security control; the namespace is not.
+        - Do **not** add convenience entries to `allowed_globals` — anything
+          holding a reference to a module, a file, or a class hierarchy widens
+          the escape surface with no compensating benefit.
+        - Real isolation would mean executing in a separate process with
+          dropped privileges, a seccomp profile and no network, communicating
+          over a pipe. That is a design change, not a patch here, and it is the
+          only thing that would let this endpoint be opened to non-admins.
+
+        CodeQL flags this line as code injection (alert #24744). The finding is
+        accurate as far as it goes — this *is* `exec` on caller input. It is
+        accepted on the strength of the admin gate above, not on the strength
+        of the namespace restriction.
         """
         # Provide a restricted set of allowed modules
         import numpy as np
@@ -534,90 +630,39 @@ class DynamicStrategyRegistry:
     # ── Persistence ───────────────────────────────────────────────────────────
 
     async def _load_from_database(self) -> None:
-        """Load all strategy versions from the database on startup."""
-        if not self._db_session_factory:
-            logger.debug("DynamicStrategyRegistry: no DB session factory — skipping load")
-            return
+        """No-op: the registry is memory-only. Persistence is not implemented.
 
-        try:
-            from database.models import DynamicStrategy
+        This used to query ``database.models.DynamicStrategy``, which does not
+        exist — `database/models.py` defines nineteen models and not that one,
+        and no migration creates a table for it. The method never reached that
+        import anyway: ``_db_session_factory`` is assigned only by ``start()``,
+        and ``start()`` is called from nowhere, so the guard returned first.
 
-            session = self._db_session_factory()
-            try:
-                records = session.query(DynamicStrategy).all()
-                for record in records:
-                    version = StrategyVersion(
-                        version_id=record.version_id,
-                        name=record.name,
-                        source_code=record.source_code,
-                        source_hash=record.source_hash,
-                        symbol=record.symbol,
-                        timeframe=record.timeframe,
-                        author_id=record.author_id,
-                        state=StrategyState(record.state),
-                        created_at=record.created_at,
-                        activated_at=record.activated_at,
-                    )
-                    # Re-compile active strategies
-                    if version.state == StrategyState.ACTIVE:
-                        try:
-                            version.instance = self._compile_strategy(version.name, version.source_code)
-                            self._active[version.name] = version
-                        except Exception as exc:
-                            logger.error(
-                                "Failed to recompile active strategy %s: %s",
-                                version.name,
-                                exc,
-                            )
-                            version.state = StrategyState.FAILED
-                            version.validation_errors = [f"Recompilation failed: {exc}"]
+        Re-enabling this is a product decision, not a repair. The body that was
+        here re-compiled every ACTIVE record's ``source_code`` at startup via
+        ``_compile_strategy``. Since ``/register`` accepts Python source from a
+        caller, persisting it would mean user-supplied code stored in the
+        database and executed on every boot — turning any future gap in
+        ``_validate_safety`` into a problem that survives restarts.
 
-                    self._versions[version.version_id] = version
-
-                logger.info("DynamicStrategyRegistry: loaded %d versions from DB", len(records))
-            finally:
-                session.close()
-        except ImportError:
-            logger.debug("DynamicStrategy model not available — skipping DB load")
-        except Exception as exc:
-            logger.warning("DynamicStrategyRegistry: DB load failed: %s", exc)
+        Kept as a method with its two call sites intact so wiring persistence
+        later is filling this in, not rediscovering where it belongs.
+        See S-51 in docs/HARDENING_BACKLOG.md.
+        """
+        if self._db_session_factory is not None:
+            logger.warning(
+                "DynamicStrategyRegistry: a DB session factory was supplied but "
+                "persistence is not implemented — strategies remain in memory only. "
+                "See S-51 in docs/HARDENING_BACKLOG.md."
+            )
 
     async def _persist_version(self, version: StrategyVersion) -> None:
-        """Persist a strategy version to the database."""
-        if not self._db_session_factory:
-            return
+        """No-op: the registry is memory-only. See ``_load_from_database``.
 
-        try:
-            from database.models import DynamicStrategy
-
-            session = self._db_session_factory()
-            try:
-                record = session.query(DynamicStrategy).filter(DynamicStrategy.version_id == version.version_id).first()
-                if record:
-                    record.state = version.state.value
-                    record.activated_at = version.activated_at
-                    record.source_hash = version.source_hash
-                else:
-                    record = DynamicStrategy(
-                        version_id=version.version_id,
-                        name=version.name,
-                        source_code=version.source_code,
-                        source_hash=version.source_hash,
-                        symbol=version.symbol,
-                        timeframe=version.timeframe,
-                        author_id=version.author_id,
-                        state=version.state.value,
-                        created_at=version.created_at,
-                        activated_at=version.activated_at,
-                    )
-                    session.add(record)
-                session.commit()
-            finally:
-                session.close()
-        except ImportError:
-            logger.debug("DynamicStrategy model not available — skipping persist")
-        except Exception as exc:
-            logger.warning("DynamicStrategyRegistry: persist failed: %s", exc)
+        Called from register, activate and deactivate. It used to write to
+        ``database.models.DynamicStrategy``, which does not exist.
+        """
+        return
 
     # ── Cross-pod synchronization ─────────────────────────────────────────────
 

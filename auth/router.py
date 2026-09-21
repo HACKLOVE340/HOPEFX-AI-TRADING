@@ -118,6 +118,35 @@ _SALT_PASSWORD_RESET = "hopefx-password-reset-v1"  # noqa: S105
 _EMAIL_VERIFY_TTL = int(os.getenv("EMAIL_VERIFY_TTL_SECONDS", str(24 * 3600)))  # 24 h
 _PASSWORD_RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", str(3600)))  # 1 h
 
+# Fixed responses for the two unauthenticated endpoints that take an email
+# address. They are constants rather than inline literals so the "same string in
+# every branch" property is visible in one place and testable — the whole point
+# is that no code path can accidentally return something more specific.
+_ENUMERATION_SAFE_RESET_MESSAGE = "If that email is registered, a reset link has been sent."
+_ENUMERATION_SAFE_VERIFY_MESSAGE = "If that email is registered and unverified, a verification link has been sent."
+
+
+def _cookies_require_secure() -> bool:
+    """Whether auth cookies get the ``Secure`` flag.
+
+    One definition for every ``set_cookie`` in this module. There used to be
+    two: ``login`` and ``get_csrf_token`` read ``APP_ENV``, while the two
+    rotations inside ``refresh`` read ``ENVIRONMENT``. ``.env.example`` sets
+    both — ``APP_ENV=production`` on line 15, ``ENVIRONMENT=production`` far
+    down at line 1008 where it is described as controlling uvicorn reload — so
+    a deployment that sets only the first (the primary one, and the one the
+    other 100-odd call sites in this codebase read) got Secure cookies at login
+    and then had them silently re-issued **without** Secure on every refresh.
+    Token rotation mints the freshest credentials in the system; those are the
+    last ones that should be allowed to travel in cleartext.
+
+    ``APP_ENV`` wins, falling back to ``ENVIRONMENT`` — the same precedence
+    ``api/admin.py`` and ``api/trading.py`` already use to reconcile the two.
+    """
+    env = os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "development"
+    return env.strip().lower() in ("production", "staging")
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 _bearer = HTTPBearer(auto_error=False)
@@ -137,6 +166,7 @@ async def _auth_to_thread(_fn, /, *args, **kwargs):
     """Run a blocking auth call on the dedicated auth thread pool."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_AUTH_EXECUTOR, functools.partial(_fn, *args, **kwargs))
+
 
 # Module-level service reference — injected from app.py startup
 _auth_service = None
@@ -296,9 +326,29 @@ def _check_ip_rate_limit(ip: str) -> None:
         )
 
 
-def set_auth_service(service) -> None:
+def set_auth_service(service):
+    """Install the auth service, returning the one it displaced.
+
+    Returning the previous value lets a caller restore it without reaching into
+    module globals — which is what test fixtures need. Three test files
+    installed a mock here and never put the real service back; one of those
+    mocks approves every login, so it silently disabled authentication for the
+    remainder of the process. See docs/HARDENING_BACKLOG.md S6-05.
+    """
     global _auth_service
+    previous = _auth_service
     _auth_service = service
+    return previous
+
+
+def reset_auth_service() -> None:
+    """Drop any injected auth service, restoring lazy resolution.
+
+    Counterpart to :func:`set_auth_service`, mirroring
+    :func:`reset_rate_limit_state`. Call this in test teardown.
+    """
+    global _auth_service
+    _auth_service = None
 
 
 def reset_rate_limit_state() -> None:
@@ -541,10 +591,25 @@ async def verify_email(token: str):
 
 @router.post("/resend-verification")
 async def resend_verification(body: ForgotPasswordRequest, request: Request):
+    """Re-send the email-verification link.
+
+    Answers uniformly whether or not the address exists. Previously an unknown
+    address got 400 "Email not found" while a known one got 200 — so this
+    endpoint enumerated the user table for anyone who could call it, even though
+    its sibling /forgot-password was written specifically to avoid that
+    (pre-launch finding Q-02).
+
+    "Email already verified" is also folded into the uniform response: it is a
+    different message, and knowing an address is registered *and* verified is
+    strictly more than the caller should learn from an unauthenticated endpoint.
+    """
     _check_ip_rate_limit(_get_client_ip(request))
     ok, msg, raw_verify_token = await asyncio.to_thread(_svc().resend_verification, body.email)
     if not ok:
-        raise HTTPException(status_code=400, detail=msg) from None
+        # Log the real reason server-side; tell the caller nothing that
+        # distinguishes a known address from an unknown one.
+        logger.info("resend-verification declined: %s", msg)
+        return {"message": _ENUMERATION_SAFE_VERIFY_MESSAGE}
     if raw_verify_token:
         signed_verify_token = _make_signed_token(
             {"tok": raw_verify_token, "email": body.email},
@@ -559,7 +624,7 @@ async def resend_verification(body: ForgotPasswordRequest, request: Request):
             send_verification_email(body.email, username, signed_verify_token)
         except Exception as _e:
             logger.warning("Resend verification email failed: %s", _e)
-    return {"message": msg}
+    return {"message": _ENUMERATION_SAFE_VERIFY_MESSAGE}
 
 
 @router.post("/login")
@@ -645,7 +710,7 @@ async def login(
     # page refresh. Secure flag is set in production/staging only.
     access_token = tokens.get("access_token", "")
     refresh_token_val = tokens.get("refresh_token", "")
-    _secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
+    _secure = _cookies_require_secure()
 
     if access_token:
         # Cookie max_age must match the JWT TTL exactly — use the canonical
@@ -722,7 +787,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     # Rotate the access token cookie to match the new token TTL exactly.
     new_access = tokens.get("access_token", "")
     if new_access:
-        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        _secure = _cookies_require_secure()
         from auth.jwt import _get_access_token_expire_minutes as _jwt_expire_min
 
         _max_age = _jwt_expire_min() * 60
@@ -738,7 +803,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     # Rotate the refresh token cookie as well so the new token is persisted.
     new_refresh = tokens.get("refresh_token", "")
     if new_refresh:
-        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        _secure = _cookies_require_secure()
         _refresh_max_age = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")) * 86400
         response.set_cookie(
             key="hopefx_refresh_token",
@@ -854,25 +919,26 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     by the signature — no DB timestamp lookup required on redemption.
     """
     _check_ip_rate_limit(_get_client_ip(request))
-    _, msg, raw_reset_token = await asyncio.to_thread(functools.partial(_svc().request_password_reset, body.email))
-    if raw_reset_token:
-        signed_reset_token = _make_signed_token(
-            {"tok": raw_reset_token, "email": body.email},
-            salt=_SALT_PASSWORD_RESET,
-            max_age_seconds=_PASSWORD_RESET_TTL,
-        )
-        try:
-            from core.email_service import send_password_reset_email
+    # Minting, hashing, signing and sending all live in auth/password_reset.py
+    # so the admin-triggered reset cannot drift onto a different expiry, salt or
+    # hashing choice. A send failure stays non-fatal here: this response must
+    # look identical whether or not the address is registered.
+    try:
+        from auth.password_reset import send_password_reset_for_email
 
-            user = await asyncio.to_thread(_svc().get_user_by_email, body.email)
-            username = user.username if user else body.email
-            send_password_reset_email(body.email, username, signed_reset_token)
-        except Exception as _e:
-            logger.warning("Password reset email failed: %s", _e)
-    else:
+        signed_reset_token = await asyncio.to_thread(send_password_reset_for_email, body.email)
+    except Exception as _e:
+        logger.warning("Password reset email failed: %s", _e)
         signed_reset_token = None
 
-    response = {"message": msg}
+    # Return one fixed string rather than `msg`. The status code was already
+    # always 200 and the docstring above already claimed enumeration was
+    # prevented, but the *body* still distinguished the two cases:
+    # request_password_reset() returns "Password reset email sent" for a known
+    # address and "If that email is registered, a reset link has been sent." for
+    # an unknown one. Two different strings is all an attacker needs, so the
+    # uniform status code bought nothing (pre-launch finding Q-02).
+    response = {"message": _ENUMERATION_SAFE_RESET_MESSAGE}
     if signed_reset_token and os.getenv("APP_ENV", "").lower() == "test":
         response["_dev_reset_token"] = signed_reset_token
     return response
@@ -1048,7 +1114,7 @@ async def get_csrf_token(response: Response) -> dict:
     Call once on page load before submitting any form.
     """
     token = secrets.token_hex(_CSRF_TOKEN_BYTES)
-    secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
+    secure = _cookies_require_secure()
     response.set_cookie(
         key=_CSRF_COOKIE_NAME,
         value=token,

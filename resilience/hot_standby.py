@@ -179,6 +179,12 @@ class StateSnapshot:
     version: int
     captured_at: str  # ISO timestamp
     pod_id: str
+    # Highest equity the leader ever observed. Replicated because drawdown is
+    # measured against it: a promoted standby that only learns the *current*
+    # equity adopts it as its own peak, reports 0% drawdown, and resumes
+    # trading even when the primary had already auto-halted on a breach.
+    # Defaulted so snapshots written before this field still deserialise.
+    peak_equity: float = 0.0
 
 
 @dataclass
@@ -233,6 +239,8 @@ class HotStandbyReplicator:
         self._positions: dict[str, Any] = {}
         self._equity: float = 0.0
         self._balance: float = 0.0
+        # Monotonic high-water mark of observed equity — see StateSnapshot.
+        self._peak_equity: float = 0.0
         self._fills: list[dict] = []
 
         self._running = False
@@ -310,6 +318,8 @@ class HotStandbyReplicator:
         """Update equity/balance snapshot."""
         self._equity = equity
         self._balance = balance if balance is not None else equity
+        # Only ever rises: this is the reference the drawdown gate measures against.
+        self._peak_equity = max(self._peak_equity, equity)
 
     def record_fill(self, fill: dict[str, Any]) -> None:
         """Append a fill to the replication ring buffer."""
@@ -537,6 +547,7 @@ class HotStandbyReplicator:
             {
                 "equity": self._equity,
                 "balance": self._balance,
+                "peak_equity": self._peak_equity,
                 "version": version,
                 "pod_id": self._pod_id,
                 "captured_at": datetime.now(UTC).isoformat(),
@@ -583,12 +594,16 @@ class HotStandbyReplicator:
                 version=version,
                 captured_at=equity_data.get("captured_at", ""),
                 pod_id=equity_data.get("pod_id", "unknown"),
+                # Fall back to the restored equity for pre-field snapshots, so the
+                # peak is never *below* current equity.
+                peak_equity=float(equity_data.get("peak_equity") or equity_data.get("equity", 0.0)),
             )
 
             # Restore into local buffer so we start replicating from here
             self._positions = positions
             self._equity = snapshot.equity
             self._balance = snapshot.balance
+            self._peak_equity = max(snapshot.peak_equity, snapshot.equity)
             self._fills = fills
             self._stats.state_version = version
 

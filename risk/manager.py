@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import signal as _signal
 import sys
@@ -61,7 +62,54 @@ logger = logging.getLogger(__name__)
 _ACCOUNT_EQUITY = float(os.getenv("RISK_ACCOUNT_EQUITY") or os.getenv("INITIAL_BALANCE") or "100000")
 _MAX_POSITION_PCT = float(os.getenv("RISK_MAX_POSITION_PCT", "0.05"))
 _MIN_POSITION_PCT = float(os.getenv("RISK_MIN_POSITION_PCT", "0.001"))
+
+
+def _executable_lot_ceiling() -> float:
+    """The largest lot count the order validator will actually accept.
+
+    Sizing here is expressed in percent-of-equity; ``validation.OrderValidator``
+    rejects on an absolute lot count. Read its limit rather than restating the
+    number, so the two cannot drift into disagreeing — which is exactly what had
+    happened (see the clamp in ``calculate_position_size``).
+
+    ``ORDER_MAX_QTY`` overrides both when set, so an operator raising the ceiling
+    raises it in one place. Imported lazily to keep ``risk`` free of an
+    import-time dependency on ``validation``.
+    """
+    env = os.getenv("ORDER_MAX_QTY")
+    if env:
+        try:
+            return float(env)
+        except ValueError:
+            logger.warning("ORDER_MAX_QTY=%r is not a number — using the validator default", env)
+    try:
+        from validation import ValidatorConfig
+
+        return float(ValidatorConfig().max_qty)
+    except Exception as exc:  # validation unavailable — fail open to the known default
+        logger.debug("could not read ValidatorConfig.max_qty (%s) — using 10.0", exc)
+        return 10.0
+
+
 _KELLY_FRACTION = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))
+# Cap on the raw Kelly *bankroll fraction*, distinct from _MAX_POSITION_PCT
+# which caps the resulting *position notional*. These were previously the same
+# constant, so Kelly saturated at 0.05 for any probability above ~0.356 and the
+# criterion returned an identical value for every tradable signal — see
+# docs/HARDENING_BACKLOG.md S1-06. Half-Kelly (0.5) is the conventional ceiling
+# before the separate _KELLY_FRACTION multiplier is applied.
+_MAX_KELLY_FRACTION = float(os.getenv("RISK_MAX_KELLY_FRACTION", "0.5"))
+
+# ── Default stop / target geometry ────────────────────────────────────────────
+# _compute_stop_take() places the stop at _STOP_ATR_MULT x ATR and the target at
+# _TARGET_ATR_MULT x ATR. _DEFAULT_REWARD_RISK is derived from them rather than
+# written out a second time, so Kelly's payoff term cannot drift away from the
+# stops the manager actually sets — the duplication failure mode from S13-01.
+_STOP_ATR_MULT = float(os.getenv("RISK_STOP_ATR_MULT", "1.0"))
+_TARGET_ATR_MULT = float(os.getenv("RISK_TARGET_ATR_MULT", "2.0"))
+_DEFAULT_REWARD_RISK = _TARGET_ATR_MULT / max(_STOP_ATR_MULT, 1e-9)
+# Sentinel for "caller did not supply a confidence" — see calculate_position_size.
+_DEFAULT_CONFIDENCE = 0.7
 _MAX_DAILY_LOSS_PCT = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05"))
 _MAX_DRAWDOWN_PCT = float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10"))
 _MAX_OPEN_POSITIONS = int(os.getenv("RISK_MAX_OPEN_POSITIONS", "3"))
@@ -179,7 +227,11 @@ class RiskAssessment:
     risk_level: str  # RiskLevel constant
     reason: str  # human-readable approval/rejection reason
     sizing: PositionSizingResult | None = None
-    data_quality: float = 1.0
+    #: The measured data quality, or None when nothing measured it. This
+    #: defaulted to 1.0 — so an assessment built with the feed down reported
+    #: flawless data beside a decision that had nothing to look at. Rule 2: an
+    #: unmeasured value is absent, never best case.
+    data_quality: float | None = None
     sentiment_score: float = 0.0
     impact_score: float = 0.0
     drawdown_pct: float = 0.0
@@ -356,8 +408,18 @@ class _MinimalSignal:
         "features",
         "probability",
         "symbol",
+        # POSIX timestamp of the tick this signal was derived from. Without it
+        # enforce_pre_trade's freshness check found no timestamp to measure and
+        # the 5s staleness budget size_order passes was silently skipped — the
+        # "never trade on a stale tick" invariant could not fire at all on the
+        # decision-engine path. See docs/HARDENING_BACKLOG.md S5-01.
+        "tick_ts",
         "tick_mid",
         "tick_spread",
+        # Caller-supplied stop/target, so size_order can measure the trade's
+        # real reward:risk instead of synthesising it from confidence (S1-12).
+        "stop_loss_price",
+        "take_profit_price",
     )
 
     def __init__(
@@ -368,15 +430,28 @@ class _MinimalSignal:
         probability: float,
         tick_mid: float = 0.0,
         tick_spread: float = 1.0,
+        tick_ts: float | None = None,
+        stop_loss_price: float | None = None,
+        take_profit_price: float | None = None,
+        data_quality: float | None = None,
     ) -> None:
         self.symbol = symbol
         self.direction = direction
+        self.tick_ts = tick_ts
         self.confidence = confidence
         self.probability = probability
-        self.data_quality = 1.0
+        # None = "the caller did not measure this", NOT "perfect". This was a
+        # hardcoded 1.0 that no caller could override, so every
+        # calculate_position_size() call — including the live decision engine's
+        # — asserted flawless data it had never looked at. size_order() now
+        # falls back to the orchestrator and refuses if that cannot measure
+        # either. See RiskManager._measured_data_quality.
+        self.data_quality = data_quality
         self.features: dict = {}
         self.tick_mid = tick_mid
         self.tick_spread = tick_spread
+        self.stop_loss_price = stop_loss_price
+        self.take_profit_price = take_profit_price
 
 
 # ── Rolling correlation calculator ────────────────────────────────────────────
@@ -574,7 +649,7 @@ class RiskManager:
         signal,
         reason: str,
         risk_level: str,
-        data_quality: float = 1.0,
+        data_quality: float | None = None,
         sentiment_score: float = 0.0,
         impact_score: float = 0.0,
     ) -> RiskAssessment:
@@ -601,7 +676,14 @@ class RiskManager:
         Returns RiskAssessment with approved=True/False and full context.
         Consumed by Gatekeeper and execution pipeline.
         """
-        data_quality = self._get_data_quality(signal)
+        # The *measured* value, not the reported one. This read
+        # _get_data_quality(), whose 1.0 fallback made the gate below unable to
+        # fire on an unmeasured feed — the same defect §E12 closed in
+        # size_order(), which that phase missed one method over. The trade was
+        # still refused (assess() calls size_order(), which does refuse), but
+        # the assessment reported reason="zero_size" and data_quality=1.0,
+        # naming neither the cause nor the truth.
+        data_quality = self._measured_data_quality(signal)
         features = self._get_orchestrator_features(signal)
         sentiment_score = float(features.get("news_sentiment_score", 0.0))
         impact_score = float(features.get("macro_impact_score", 0.0))
@@ -622,6 +704,18 @@ class RiskManager:
                 reason=f"daily_dd:{self._state.daily_drawdown * 100:.2f}%",
                 risk_level=RiskLevel.CRITICAL,
                 data_quality=data_quality,
+            )
+
+        if data_quality is None:
+            # `None < _MIN_DATA_QUALITY` is a TypeError, so absence needs its
+            # own branch rather than falling into the numeric comparison.
+            return self._rejected_assessment(
+                signal,
+                reason="data_quality:unmeasured",
+                risk_level=RiskLevel.HIGH,
+                data_quality=None,
+                sentiment_score=sentiment_score,
+                impact_score=impact_score,
             )
 
         if data_quality < _MIN_DATA_QUALITY:
@@ -660,10 +754,20 @@ class RiskManager:
         lineage_id: str,
         reason: str = "",
     ) -> PositionSizingResult:
-        """Return a zero-quantity PositionSizingResult and log the rejection reason."""
+        """Return a zero-quantity PositionSizingResult and log the rejection reason.
+
+        The reason is also carried on the result via ``_halt_reason_override``,
+        so ``result.reason`` names the gate that refused instead of the generic
+        ``"position_size_zero"``. It was previously logged only, which meant a
+        caller — or an operator reading a lineage record rather than the log —
+        could see that sizing refused but not why. ``_zero_sized_with_reason``
+        already did this for the calculate_position_size path; this is the same
+        treatment for the size_order path.
+        """
         if reason:
             logger.warning("RiskManager: zero-size — %s", reason)
-        return PositionSizingResult(
+            self._record_refusal(symbol, direction, lineage_id, reason)
+        result = PositionSizingResult(
             symbol=symbol,
             direction=direction,
             quantity=0.0,
@@ -673,6 +777,45 @@ class RiskManager:
             risk_usd=0.0,
             lineage_id=lineage_id,
         )
+        if reason:
+            result._halt_reason_override = reason
+        return result
+
+    def _record_refusal(self, symbol: str, direction: str, lineage_id: str, reason: str) -> None:
+        """Put this refusal in the decision ledger (Group 3 Ch 7).
+
+        Refusals are first-class entries there, not absences: a ledger of
+        actions taken cannot tell a system that was never asked from one that
+        refused, and on this platform the refusals ARE the evidence that
+        governance worked. Until now the only record of one was a WARNING line.
+
+        **Recording must never change what this path decides.** A ledger write
+        that raised would turn a refusal into a crash — strictly worse than the
+        defect it documents — so it is wrapped. Wrapped LOUDLY: `except
+        Exception: pass` on a governance path is how F248's alert failures went
+        unnoticed for as long as they did. The ledger is a record, not a
+        control; losing an entry must not stop the refusal, and must not be
+        silent either.
+        """
+        try:
+            from ai.ledger import decisions
+
+            decisions.refuse(
+                actor="risk.manager",
+                actor_kind="system",
+                authority_tier="execute",
+                context=f"size a {direction} position in {symbol}",
+                options=("size the position", "refuse"),
+                by=reason,
+                evidence={"symbol": symbol, "direction": direction, "lineage_id": lineage_id},
+            )
+        except Exception as exc:  # pragma: no cover - exercised by an injected failure
+            logger.error(
+                "RiskManager: the refusal %r was NOT recorded in the decision ledger: %s. "
+                "The trade is still refused; the governance record is missing.",
+                reason,
+                exc,
+            )
 
     def _compute_stop_take(
         self,
@@ -681,10 +824,62 @@ class RiskManager:
         atr_proxy: float,
     ) -> tuple:
         """Return (stop_loss_usd, take_profit_usd) for a given direction."""
-        tp_dist = atr_proxy * 2.0
+        sl_dist = atr_proxy * _STOP_ATR_MULT
+        tp_dist = atr_proxy * _TARGET_ATR_MULT
         if direction == "long":
-            return mid_price - atr_proxy, mid_price + tp_dist
-        return mid_price + atr_proxy, mid_price - tp_dist
+            return mid_price - sl_dist, mid_price + tp_dist
+        return mid_price + sl_dist, mid_price - tp_dist
+
+    @staticmethod
+    def _numeric_or_none(v: Any) -> float | None:
+        """Return *v* as a float only if it is genuinely a finite int/float.
+
+        ``float()`` alone is too permissive to gate a money decision on: any
+        object implementing ``__float__`` passes, and a Mock returns 1.0. See
+        S1-12, where that turned a signal carrying no stops into a fabricated
+        1:1 reward:risk ratio.
+        """
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return None
+        f = float(v)
+        return f if math.isfinite(f) else None
+
+    @staticmethod
+    def _reward_risk_from_prices(
+        entry_price: float | None,
+        stop_loss: float | None,
+        take_profit: float | None,
+    ) -> float | None:
+        """Reward-to-risk ratio implied by a trade's stop and target (S1-12).
+
+        Returns ``None`` when it cannot be measured — no stop, no target, or a
+        stop sitting on the entry (zero risk, undefined ratio). ``None`` means
+        "fall back", never "assume something favourable".
+        """
+
+        # Require genuine numbers. `float()` alone is too permissive: anything
+        # implementing __float__ passes, and a Mock returns 1.0 — which turned a
+        # signal carrying no stops at all into a fabricated 1:1 ratio, sizing a
+        # trade that should have been refused. Only a real int/float may set the
+        # payoff term; everything else falls back.
+        def _num(v: Any) -> float | None:
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                return None
+            f = float(v)
+            return f if math.isfinite(f) else None
+
+        entry = _num(entry_price)
+        sl = _num(stop_loss)
+        tp = _num(take_profit)
+        if entry is None or sl is None or tp is None:
+            return None
+
+        risk = abs(entry - sl)
+        reward = abs(tp - entry)
+
+        if not math.isfinite(risk) or not math.isfinite(reward) or risk <= 0.0:
+            return None
+        return reward / risk
 
     def notify_position_opened(self, symbol: str) -> None:
         """Called when a new position is opened."""
@@ -753,7 +948,12 @@ class RiskManager:
                 f"max_open_positions:{open_pos}",
             )
 
-        data_quality = self._get_data_quality(signal)
+        # Gate on the *measured* value, not the reported one: an unmeasured
+        # feed must refuse rather than score itself perfect (see
+        # _measured_data_quality). This is the condition the gate exists for.
+        data_quality = self._measured_data_quality(signal)
+        if data_quality is None:
+            return self._zero_sizing(symbol, direction, lineage_id, "data_quality:unmeasured")
         if data_quality < _MIN_DATA_QUALITY:
             return self._zero_sizing(
                 symbol,
@@ -786,17 +986,80 @@ class RiskManager:
         sentiment_f = self._sentiment_factor(sentiment_score)
         impact_f = self._impact_factor(impact_score)
         dd_f = self._drawdown_factor()
-        kelly_f = self._kelly(prob, conf)
+        # Kelly's payoff term must come from the trade's stop and target, not
+        # from model confidence (S1-12). Prefer the caller's explicit stops;
+        # otherwise use the ratio implied by _compute_stop_take below.
+        reward_risk = self._reward_risk_from_prices(
+            getattr(signal, "tick_mid", None),
+            getattr(signal, "stop_loss_price", None),
+            getattr(signal, "take_profit_price", None),
+        )
+        # Deliberately NOT defaulting to _DEFAULT_REWARD_RISK here. `conf` feeds
+        # nothing else in this function, so always supplying a ratio would drop
+        # confidence out of sizing altogether and make size insensitive to
+        # signal quality — a larger change than S1-12 asks for, and one that
+        # wants the backtest comparison the finding calls for. Callers that
+        # supply real stops get the correct payoff term; callers that do not
+        # keep the legacy confidence proxy unchanged.
+        kelly_f = self._kelly(prob, conf, reward_risk=reward_risk)
 
         # ── Notional size ──────────────────────────────────────────────────
         # `equity` was captured in the locked snapshot above (honors
         # equity_override); do not re-read shared state here.
         base_notional = equity * kelly_f * _KELLY_FRACTION
         final_notional = base_notional * quality_f * sentiment_f * impact_f * dd_f
-        final_notional = max(
-            equity * _MIN_POSITION_PCT,
-            min(final_notional, equity * _MAX_POSITION_PCT),
-        )
+
+        # Cap first, then decide whether what remains is worth trading.
+        #
+        # This used to be max(equity * _MIN_POSITION_PCT, ...), which lifted a
+        # zeroed notional back up to the minimum: every risk-reducing factor
+        # (data quality, sentiment, macro impact, drawdown) could drive the size
+        # to zero and the trade still opened at 0.1% of equity. The graduated
+        # risk factors could not actually prevent a trade — only the hard gates
+        # could. See docs/HARDENING_BACKLOG.md S1-07.
+        # Honour the *tighter* of the environment ceiling and the caller's
+        # RiskConfig. The clamp previously read only the module global, so a
+        # RiskManager built with RiskConfig(max_position_size_pct=0.02) had 5%
+        # applied — a limit accepted, stored, reported back by get_limits(), and
+        # never enforced. Config may tighten the ceiling, never loosen it.
+        # See docs/HARDENING_BACKLOG.md S1-13.
+        position_cap_pct = min(_MAX_POSITION_PCT, self._config.max_position_size_pct)
+        final_notional = min(final_notional, equity * position_cap_pct)
+
+        # Cap loss-at-the-stop, not just exposure. Notional is what is on the
+        # table; risk is what actually leaves the account if the stop is hit,
+        # and with a wide stop a position well inside the notional cap can still
+        # lose several times the configured limit. Only applies when the caller
+        # supplied a stop — without one there is no distance to size against.
+        # See docs/HARDENING_BACKLOG.md S1-14.
+        _entry = float(getattr(signal, "tick_mid", 0.0) or 0.0)
+        _sl = self._numeric_or_none(getattr(signal, "stop_loss_price", None))
+        if _sl is not None and _entry > 0:
+            stop_distance = abs(_entry - _sl)
+            if stop_distance > 0:
+                max_loss = equity * position_cap_pct
+                # loss = (notional / entry) * stop_distance  <=  max_loss
+                max_notional_by_risk = max_loss * _entry / stop_distance
+                if max_notional_by_risk < final_notional:
+                    logger.debug(
+                        "size_order: risk-at-stop cap binds for %s — notional "
+                        "%.2f -> %.2f (stop_distance=%.4f, max_loss=%.2f)",
+                        symbol,
+                        final_notional,
+                        max_notional_by_risk,
+                        stop_distance,
+                        max_loss,
+                    )
+                    final_notional = max_notional_by_risk
+
+        _min_notional = equity * _MIN_POSITION_PCT
+        if final_notional < _min_notional:
+            return self._zero_sizing(
+                symbol,
+                direction,
+                lineage_id,
+                f"below_min_position:{final_notional:.2f}<{_min_notional:.2f}",
+            )
 
         raw_mid = getattr(signal, "tick_mid", 0.0)
         if raw_mid <= 0:
@@ -1034,12 +1297,13 @@ class RiskManager:
         account_balance: float | None = None,
         account_equity: float | None = None,
         direction: str = "long",
-        confidence: float = 0.7,
+        confidence: float = _DEFAULT_CONFIDENCE,
         probability: float = 0.55,
         signal_strength: float = 0.7,
         stop_loss_price: float | None = None,
         take_profit_price: float | None = None,
         volatility: float = 0.0,
+        data_quality: float | None = None,
         **kwargs,
     ) -> PositionSizingResult:
         """
@@ -1050,22 +1314,46 @@ class RiskManager:
         (account_equity, signal_strength, stop_loss_price, take_profit_price,
         volatility) signatures so that all callers are satisfied.
 
+        ``data_quality`` is the caller's own measurement of the market data
+        behind this decision, if it has one. When omitted, sizing uses the
+        orchestrator's tick confidence and refuses if that is unavailable.
+
         Returns a PositionSizingResult with an additional .approved property
         and .recommended_size alias for downstream consumers.
         """
         equity = float(account_equity or account_balance or self._state.account_equity or _ACCOUNT_EQUITY)
-        # Use signal_strength as confidence when confidence is at default
-        effective_confidence = max(confidence, signal_strength)
+        # Prefer the caller's explicit confidence; fall back to signal_strength
+        # only when confidence was left at its default.
+        #
+        # This was `max(confidence, signal_strength)`, which floored every
+        # signal at the 0.7 default: the ML gate admits signals from 0.52
+        # upward, so any confidence below 0.7 was discarded and replaced by
+        # 0.7. Sizing therefore could not distinguish a marginal signal from a
+        # strong one. See docs/HARDENING_BACKLOG.md S1-06.
+        effective_confidence = float(signal_strength) if confidence == _DEFAULT_CONFIDENCE else float(confidence)
 
         # Accept ``price`` as an alias for ``entry_price`` (legacy callers)
         effective_entry = float(entry_price) or float(kwargs.pop("price", 0.0))
 
+        # tick_ts carries the age of the market data this signal was derived
+        # from, so the pre-trade staleness invariant has something to measure.
+        # Callers that know it should pass it; when absent the check is skipped
+        # exactly as before, so this cannot break existing callers.
         sig = _MinimalSignal(
             symbol=symbol,
             direction=direction,
             confidence=effective_confidence,
             probability=probability,
             tick_mid=effective_entry,
+            tick_ts=kwargs.pop("tick_ts", None),
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
+            # Callers that have measured their data quality (backtests,
+            # simulations, replays) can assert it here. Callers that have not
+            # leave it None, and size_order() falls back to the orchestrator —
+            # refusing outright if that cannot measure it either, rather than
+            # assuming perfect data as the old hardcoded 1.0 did.
+            data_quality=data_quality,
         )
 
         # Size against the supplied equity via equity_override — NO mutation of
@@ -1089,6 +1377,38 @@ class RiskManager:
                     result.quantity,
                     max_notional,
                 )
+
+        # Clamp to the absolute lot ceiling the order validator enforces.
+        #
+        # Every cap above this point is expressed as a *percentage of equity*;
+        # validation.OrderValidator rejects on an *absolute lot count*
+        # (max_qty, default 10.0). Two different units, never reconciled — so on a
+        # large account the percentage sizing legitimately exceeds the lot
+        # ceiling and the order is rejected downstream. At $1M equity this
+        # produced a recommendation of 10.2564 lots against a maximum of 10.0:
+        # the risk engine reported `approved`, and the executor answered
+        # "Quantity 10.2564 exceeds maximum 10.0". A correctly sized trade simply
+        # did not execute, and nothing in the sizing result said why.
+        #
+        # Clamping here rather than raising the validator's ceiling: the ceiling
+        # is a real safety limit, and reducing a size can never create risk that
+        # was not already approved. Read from the same config the validator uses
+        # so the two cannot drift apart again.
+        max_lots = _executable_lot_ceiling()
+        if max_lots > 0 and result.quantity > max_lots:
+            _original = result.quantity
+            scale = max_lots / result.quantity
+            result.quantity = max_lots
+            if result.notional_usd > 0:
+                result.notional_usd *= scale
+            logger.info(
+                "calculate_position_size: clamped %.4f -> %.4f lots to stay inside "
+                "the order validator's max_qty (%.4f); the unclamped size would "
+                "have been rejected at execution",
+                _original,
+                result.quantity,
+                max_lots,
+            )
 
         # Patch stop/take-profit if supplied
         if stop_loss_price is not None:
@@ -1238,25 +1558,121 @@ class RiskManager:
         return max(0.1, 1.0 - frac * _DD_SIZE_SCALE)
 
     @staticmethod
-    def _kelly(probability: float, confidence: float) -> float:
+    def _kelly(
+        probability: float,
+        confidence: float,
+        reward_risk: float | None = None,
+    ) -> float:
+        """Kelly bankroll fraction for a signal.
+
+        ``reward_risk`` is Kelly's ``b`` — how much the trade wins per unit
+        risked, i.e. ``|target - entry| / |entry - stop|``. Pass it whenever the
+        stop and target are known.
+
+        It used to be synthesised from the model's confidence
+        (``max(0.5, confidence * 3.0)``), which is a different quantity
+        entirely. Break-even then moved with the model's certainty instead of
+        with the trade's actual stop and target: at ``confidence=0.7``
+        (``b=2.1``) any win probability above 0.323 counted as positive edge, on
+        2.1:1 odds that nothing verified. Sizing was consequently more
+        aggressive than the configured stops justified. See S1-12.
+
+        The confidence proxy is kept only as a fallback for callers that supply
+        no stops, so their behaviour is unchanged.
+
+        Bounded by ``_MAX_KELLY_FRACTION`` — a cap on the *bankroll fraction*.
+        It was previously bounded by ``_MAX_POSITION_PCT`` (0.05), which is a
+        cap on the resulting *position notional*: a unit confusion that made
+        this function saturate at its ceiling for any probability above ~0.356
+        and therefore return the same value for every tradable signal. Combined
+        with a hardcoded probability and a floored confidence, that fixed every
+        position at exactly 1.25% of equity. See S1-06.
+        """
         p = max(0.01, min(probability, 0.99))
         q = 1.0 - p
-        b = max(0.5, confidence * 3.0)
+
+        if reward_risk is not None and math.isfinite(reward_risk) and reward_risk > 0.0:
+            b = float(reward_risk)
+        else:
+            # No measurable ratio — legacy confidence proxy.
+            b = max(0.5, confidence * 3.0)
+
         kelly = (p * b - q) / b
-        return max(0.0, min(kelly, _MAX_POSITION_PCT))
+        return max(0.0, min(kelly, _MAX_KELLY_FRACTION))
 
     # ── Orchestrator data access ──────────────────────────────────────────────
 
-    def _get_data_quality(self, signal) -> float:
-        """Authoritative source: orchestrator tick confidence."""
+    def _measured_data_quality(self, signal) -> float | None:
+        """Data quality as actually measured, or ``None`` when it was not.
+
+        The orchestrator's tick confidence is the only real measurement
+        available here. ``None`` means every one of these happened:
+
+        * no orchestrator was wired onto this RiskManager
+        * ``get_latest_tick()`` raised
+        * ``get_latest_tick()`` returned nothing — Redis down, gold feed down,
+          or the cached tick too stale to be returned at all
+
+        Callers that gate on this must treat ``None`` as a refusal. Rule 2: an
+        unmeasured value is absent, never best case; and for a safety gate,
+        absent has to behave like failure. This used to fall back to
+        ``getattr(signal, "data_quality", 1.0)``, and ``Signal`` has no such
+        field — so a dead feed scored a perfect 1.0 and sailed through the
+        ``< RISK_MIN_DATA_QUALITY`` check that exists for exactly that case.
+        """
         if self._orch is not None:
             try:
                 tick = self._orch.get_latest_tick()
-                if tick is not None:
-                    return tick.confidence
             except Exception as exc:
-                logger.debug("RiskManager: orchestrator tick fetch failed: %s", exc)
-        return getattr(signal, "data_quality", 1.0)
+                # Was debug. A feed this path cannot reach is the exact
+                # condition the gate downstream exists for — it should not take
+                # debug logging to find out it happened.
+                logger.warning("RiskManager: orchestrator tick fetch failed: %s", exc)
+            else:
+                if tick is not None:
+                    # A malformed confidence must not raise out of the sizing
+                    # path: fall through to "unmeasured" and let the gate
+                    # refuse, rather than crashing the decision loop.
+                    try:
+                        return float(tick.confidence)
+                    except (TypeError, ValueError):
+                        logger.warning(
+                            "RiskManager: tick confidence is not numeric: %r",
+                            getattr(tick, "confidence", None),
+                        )
+                else:
+                    # Debug, not warning: this is called once per gate check
+                    # AND once per assess_risk() report, so warning here would
+                    # log the same dead feed several times per decision.
+                    # _zero_sizing already logs the refusal itself at warning.
+                    logger.debug("RiskManager: orchestrator returned no tick for data quality")
+
+        # A caller that *supplies* a value has asserted it — backtests and
+        # simulations know their own data quality. A caller that supplies
+        # nothing has not, and `getattr(..., 1.0)` turned that silence into a
+        # perfect score.
+        supplied = getattr(signal, "data_quality", None)
+        if supplied is not None:
+            try:
+                return float(supplied)
+            except (TypeError, ValueError):
+                logger.warning("RiskManager: signal.data_quality is not numeric: %r", supplied)
+        return None
+
+    def _get_data_quality(self, signal) -> float:
+        """Data quality for *reporting*, with a best-case fallback.
+
+        ``assess_risk()`` records this into ``RiskAssessment.data_quality``,
+        which is typed ``float``, so this keeps its total signature. It is
+        deliberately NOT what ``size_order()`` gates on — see
+        :meth:`_measured_data_quality`. Narrowing the reported record's shape is
+        a separate, wider change than closing the sizing fail-open, and is
+        tracked rather than smuggled in alongside it.
+        """
+        measured = self._measured_data_quality(signal)
+        if measured is not None:
+            return measured
+        return float(getattr(signal, "data_quality", 1.0))
 
     def _get_orchestrator_features(self, signal) -> dict:
         """Authoritative source: orchestrator ML features."""
@@ -1503,12 +1919,17 @@ class RiskManager:
         account_equity: float,
         volatility: float,
         existing_positions: list[Any],
+        data_quality: float | None = None,
     ) -> PositionSizingResult:
         """
         Full position-size calculation with halt, R/R, and sizing checks.
 
         Returns a zero-quantity PositionSizingResult with a descriptive reason
         when any pre-trade gate rejects the signal.
+
+        ``data_quality`` is threaded through to ``calculate_position_size`` —
+        see its docstring. Omitted means "not measured", and sizing then
+        depends on the orchestrator rather than assuming perfect data.
         """
         if self._halt or self._trading_halted:
             return self._make_zero_result(
@@ -1541,6 +1962,7 @@ class RiskManager:
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
             volatility=volatility,
+            data_quality=data_quality,
         )
 
     # ── VaR ───────────────────────────────────────────────────────────────────
@@ -2143,6 +2565,57 @@ class RiskManager:
             if self._dd_tracker is not None:
                 self._dd_tracker.update(equity=self._state.account_equity)
 
+    def _resolve_kill_switch(self):
+        """The global kill switch object, or None when there is none.
+
+        Looks at the app first because `_halt_trading` fires that one, so the
+        two directions agree on which switch they mean; falls back to the module
+        singleton for a process that never built the FastAPI app.
+        """
+        try:
+            import app as _app  # late import to avoid a circular dependency
+
+            switch = getattr(_app, "kill_switch", None)
+            if switch is not None:
+                return switch
+        except Exception as exc:
+            # Expected in a bare process (engine, CLI, tests) where the FastAPI
+            # app was never built. Not a failure: the module singleton below is
+            # the answer. The genuine failure — neither source resolving — logs
+            # at ERROR, and _kill_switch_refusal treats it as engaged.
+            logger.debug("RiskManager: app kill switch unavailable (%s); using the module singleton", exc)
+        try:
+            from kill_switch import kill_switch as switch
+
+            return switch
+        except Exception as exc:
+            logger.error("RiskManager: kill switch unresolvable (%s)", exc)
+            return None
+
+    def _kill_switch_refusal(self) -> str | None:
+        """A reason to refuse, or None when the switch is clear.
+
+        A **read at decision time**, deliberately, rather than a callback that
+        halts the manager when the switch fires. `KillSwitch.register_callback`
+        already exists for that and has zero production registrants — a
+        subscription nobody made is the failure mode this repository keeps
+        producing. A read cannot be forgotten.
+
+        Unreadable counts as engaged. "I cannot tell whether trading is halted"
+        must never resolve to "trade".
+        """
+        switch = self._resolve_kill_switch()
+        if switch is None:
+            return "kill_switch:unresolvable"
+        try:
+            if switch.is_active():
+                reason = getattr(switch, "reason", "") or "active"
+                return f"kill_switch:{reason}"
+        except Exception as exc:
+            logger.error("RiskManager: could not read the kill switch (%s); refusing the trade", exc)
+            return f"kill_switch:unreadable:{exc}"
+        return None
+
     def validate_trade(
         self,
         symbol: str,
@@ -2161,6 +2634,16 @@ class RiskManager:
         size limit, and daily loss limit.
         """
         qty = size if size is not None else quantity
+
+        # The GLOBAL switch first. _halt below is this manager's own halt, and
+        # the two are not the same thing: _halt_trading fires the global switch,
+        # but a switch engaged by an operator, by the Redis latch, by the K8s
+        # configmap or by a broker's cancel-on-disconnect never set _halt. That
+        # direction had no wiring at all, so validate_trade answered "approved"
+        # with the kill switch active — measured, not inferred.
+        kill_switch_reason = self._kill_switch_refusal()
+        if kill_switch_reason:
+            return False, kill_switch_reason
 
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"

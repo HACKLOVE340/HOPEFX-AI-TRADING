@@ -8,6 +8,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Vite inlines these at build time, so env_file below is too late for
+      # them. Empty is the correct default: the UI then uses same-origin /api
+      # and wss://<page host>, which is how this compose file serves it. Set
+      # them in .env only when the API lives on a different domain.
+      args:
+        VITE_API_URL: "${VITE_API_URL:-}"
+        VITE_WS_URL: "${VITE_WS_URL:-}"
+        VITE_NUCLEAR_WS_URL: "${VITE_NUCLEAR_WS_URL:-}"
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -17,6 +25,15 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      # The app inspects the Celery broker for its health page. Without these it
+      # fell back to redis://localhost:6379/1 — the app container itself, where
+      # nothing listens — and reported "Celery inspect failed: Error 111
+      # connecting to localhost:6379" while every other component reached
+      # redis:6379 fine. celery_app.py now derives these from REDIS_URL when
+      # unset; they are stated here too so the three services that talk to the
+      # broker are configured identically and visibly.
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/2
       # TLS enforcement — auto-upgrades redis:// → rediss:// at runtime.
       # In production, set REDIS_URL=rediss://... in .env instead.
       IS_FORCE_TLS: ${IS_FORCE_TLS:-false}
@@ -28,8 +45,15 @@ services:
       # Default monitor = observe + log, never block. Flip to enforce only
       # after a clean soak (watch /health/invariants).
       HOPEFX_INVARIANT_MODE: ${HOPEFX_INVARIANT_MODE:-monitor}
+      # Staged rollout: enforce the can't-halt-the-desk pair (order_authorization,
+      # pre_trade) now; they only refuse a single bad order. Promote reconciliation
+      # + ledger (which can trip the kill switch / halt ALL trading) only after a
+      # clean monitor soak — see docs/INVARIANT_ROLLOUT.md. Remove a kind = instant rollback.
+      HOPEFX_INVARIANT_ENFORCE_KINDS: ${HOPEFX_INVARIANT_ENFORCE_KINDS:-order_authorization,pre_trade}
       HOPEFX_INVARIANT_FAIL_CLOSED: ${HOPEFX_INVARIANT_FAIL_CLOSED:-0}
       RISK_MAX_TICK_STALENESS_S: ${RISK_MAX_TICK_STALENESS_S:-5.0}
+      # Four-eyes gate: orders >= this USD notional need an approver (0=off).
+      RISK_HUMAN_APPROVAL_NOTIONAL_USD: ${RISK_HUMAN_APPROVAL_NOTIONAL_USD:-0}
       RISK_MAX_SYMBOL_EXPOSURE_USD: ${RISK_MAX_SYMBOL_EXPOSURE_USD:-1000000.0}
       RISK_APPROVED_VAR_USD: ${RISK_APPROVED_VAR_USD:-0}
       # ── HOPEFXBrain — sourced from .env (set these before docker compose up) ──
@@ -100,7 +124,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      # start_period covers FIRST boot, which is the slowest: preflight runs 20
+      # alembic migrations (measured 23s on SQLite at full CPU; postgres here is
+      # capped at 0.5 CPU) before `python app.py` even starts, and importing the
+      # app costs a further 10.5s at full CPU. 60s did not cover that, so a
+      # first deploy was reported unhealthy while still legitimately starting.
+      # Raising it delays only when failures begin to COUNT; a genuinely broken
+      # app still fails, just later and without the false negative.
+      start_period: 180s
 
   # ── Trading engine — event-driven pipeline ────────────────────────────────
   # Runs core/main_loop.py: MarketIngest → StrategyEngine → Gatekeeper → FIXRouter
@@ -325,6 +356,19 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Resource limits — sized for an 8GB / 2-core VPS (Hostinger KVM 2). Without
+    # a cap here this is the one service most likely to grow unbounded under
+    # real trading load and OOM the box, taking the app/trading containers
+    # down with it — exactly what the app/trading limits below are meant to
+    # prevent, so leaving postgres uncapped defeated the point of having them.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
 
   redis:
     image: redis:7-alpine
@@ -354,6 +398,56 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    # Docker-level backstop above redis's own --maxmemory 512mb (process
+    # overhead, connection buffers) — the internal cap governs the data set,
+    # this just stops the whole container from growing past that.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 640M
+        reservations:
+          cpus: "0.05"
+          memory: 128M
+
+  # ── Local inference (optional) ───────────────────────────────────────────
+  # Started only with:  docker compose --profile local-ai up
+  #
+  # Behind a profile rather than on by default because it is the heaviest thing
+  # in this file and the box also executes trades. `scripts/vps_capability_report.py`
+  # says which tier this machine can hold; an oversized model does not degrade,
+  # it swaps the box to a standstill.
+  #
+  # The app reaches it at OLLAMA_BASE_URL=http://ollama:11434 — set that in .env
+  # when you enable the profile, or the local leg has nothing to talk to.
+  ollama:
+    image: ollama/ollama:0.12.6
+    profiles: ["local-ai"]
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    # Not published to the host: the model server answers the app over the
+    # compose network only. An exposed 11434 is an unauthenticated endpoint that
+    # will run whatever prompt reaches it, on your hardware.
+    expose:
+      - "11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          # Sized for the spec's 1B-4B CPU tier. Raise BOTH this and
+          # LOCAL_MODEL_TIER together for a larger model — raising the tier
+          # alone gets a model the container cannot hold.
+          cpus: "2.0"
+          memory: 6G
+        reservations:
+          cpus: "0.5"
+          memory: 2G
 
   prometheus:
     image: prom/prometheus:v2.51.0
@@ -377,6 +471,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 384M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
 
   alertmanager:
     build:
@@ -393,6 +495,11 @@ services:
       ALERTMANAGER_SMTP_HOST: ${ALERTMANAGER_SMTP_HOST:-localhost:587}
       ALERTMANAGER_SMTP_USERNAME: ${ALERTMANAGER_SMTP_USERNAME:-}
       ALERTMANAGER_SMTP_PASSWORD: ${ALERTMANAGER_SMTP_PASSWORD:-}
+      # Referenced by alertmanager.yml.tmpl but previously passed through
+      # nowhere, so the PagerDuty routing_key was always empty — which is a
+      # hard startup error, not a disabled channel. The template now omits the
+      # block entirely when this is unset.
+      ALERTMANAGER_PAGERDUTY_KEY: ${ALERTMANAGER_PAGERDUTY_KEY:-}
     volumes:
       - alertmanager_data:/alertmanager
     depends_on:
@@ -404,6 +511,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 96M
+        reservations:
+          cpus: "0.02"
+          memory: 32M
 
   grafana:
     image: grafana/grafana:10.4.0
@@ -428,8 +543,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 192M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
 
   nginx:
+    # Opt-in. Start it with:  docker compose --profile standalone-proxy up -d
+    #
+    # This service binds host ports 80 and 443. On a host that already runs a
+    # reverse proxy on those ports — Traefik in `network_mode: host`, which is
+    # how the production VPS is set up — the bind fails and the container never
+    # leaves the `Created` state. That is exactly what a container audit found:
+    # `hopefx-ai-trading-nginx-1  Created`, no restart loop, no logs, and a
+    # reader reasonably concluding the site's entry point was down when in fact
+    # Traefik was serving it.
+    #
+    # The workaround in circulation was `--scale nginx=0` on every single
+    # `docker compose up`, which is folklore: forget it once and the stack
+    # half-starts a container that cannot run. A profile states the rule in the
+    # file instead. Use this service only when nothing else owns 80/443.
+    profiles: ["standalone-proxy"]
     build:
       context: ./nginx
       dockerfile: Dockerfile
@@ -451,9 +589,18 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 32M
+        reservations:
+          cpus: "0.02"
+          memory: 16M
 
 volumes:
   postgres_data:
+  ollama_models:
   redis_data:
   prometheus_data:
   alertmanager_data:

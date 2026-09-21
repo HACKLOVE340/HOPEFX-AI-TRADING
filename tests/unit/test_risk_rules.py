@@ -14,7 +14,6 @@ No external services required.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -75,21 +74,28 @@ class TestRiskManagerAssessRisk:
         result = rm.assess_risk(self._account(equity=rm._state.account_equity), [])
         assert result.can_trade is True
 
-    def test_drawdown_warning_triggers_fcm(self, rm):
-        """Near-max drawdown must block trading (FCM push is best-effort)."""
+    def test_drawdown_over_limit_blocks_trading(self, rm):
+        """Near-max drawdown must block trading.
+
+        Renamed from test_drawdown_warning_triggers_fcm, which promised
+        something it never checked. It patched ``risk.manager.push_manager`` and
+        ``risk.manager._device_tokens`` with ``create=True`` — neither name
+        exists in that module, and ``risk/manager.py`` sends no push
+        notifications at all; its drawdown alerting goes through
+        ``_send_telegram_alert``. ``push_manager`` lives in
+        ``mobile.push_notifications`` and is used only by ``api/mobile.py``;
+        ``send_drawdown_warning`` exists nowhere in the tree.
+
+        So the two patches created attributes nothing reads, the mock was never
+        asserted against, and the only real assertion was the drawdown halt
+        below. The patches are gone and the name now matches the check.
+        """
         rm._config.max_drawdown_pct = 0.10
         # 11% drawdown — exceeds limit → halt fires.
         rm.update_equity(rm._state.peak_equity * (1 - 0.11))
 
-        mock_push = MagicMock()
-        mock_push.send_drawdown_warning.return_value = True
-
-        with (
-            patch("risk.manager.push_manager", mock_push, create=True),
-            patch("risk.manager._device_tokens", {"user-1": ["token-abc"]}, create=True),
-        ):
-            result = rm.assess_risk(self._account(equity=rm._state.account_equity), [])
-            assert result.can_trade is False
+        result = rm.assess_risk(self._account(equity=rm._state.account_equity), [])
+        assert result.can_trade is False
 
     def test_high_margin_usage_raises_risk_level(self, rm):
         """Margin > 80% should raise risk level to HIGH."""

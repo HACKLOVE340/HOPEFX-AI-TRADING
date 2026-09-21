@@ -29,7 +29,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from api.auth import TokenPayload
-from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from ._shared import _audit_payload, _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
+from analytics.ratios import downside_deviation
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,101 +45,114 @@ _BREACH_KEY = "superadmin:risk:prop_breaches"
 # ── Circuit Breakers ──────────────────────────────────────────────────────────
 
 
+# Limit names this page has always displayed. They are thresholds inside one
+# CircuitBreaker, not separately addressable breakers, so they are shown as
+# placeholders and are never reported as live.
+_PLACEHOLDER_LIMITS = (
+    ("daily_drawdown", "max_daily_drawdown_pct"),
+    ("total_drawdown", "max_total_drawdown_pct"),
+    ("order_rate", "max_orders_per_minute"),
+    ("position_size", "max_position_size_pct"),
+    ("consecutive_losses", "max_consecutive_losses"),
+)
+
+
+def _live_cb_state(name: str, cb: Any) -> dict:
+    """Project a registered CircuitBreaker onto the page's row shape.
+
+    Read off ``get_status()`` rather than guessed attributes: the previous
+    version reported ``failure_count``, ``last_failure_time`` and
+    ``failure_threshold``, none of which exist on this class, so every row
+    showed the ``getattr`` defaults regardless of the breaker's real state.
+    """
+    status = cb.get_status()
+    breach = status.get("last_breach") or {}
+    return {
+        "name": name,
+        "live": True,
+        "state": status.get("state", "closed"),
+        "manual_override": status.get("manual_override", False),
+        "consecutive_losses": status.get("consecutive_losses", 0),
+        "daily_drawdown": status.get("daily_drawdown", 0.0),
+        "total_drawdown": status.get("total_drawdown", 0.0),
+        "open_positions": status.get("open_positions", 0),
+        "last_failure": breach.get("timestamp"),
+        "last_failure_reason": breach.get("reason"),
+        "limits": status.get("limits", {}),
+    }
+
+
+def _placeholder_cb_states() -> list[dict]:
+    """Rows to render when no CircuitBreaker has been constructed yet.
+
+    Marked ``live: False`` so the page cannot imply that a breaker is armed
+    when none exists. This block previously invented six breaker names with
+    plausible thresholds and served them as state.
+    """
+    try:
+        from risk.circuit_breakers import RiskLimits
+
+        limits = RiskLimits()
+    except Exception:  # pragma: no cover - defensive
+        limits = None
+
+    return [
+        {
+            "name": name,
+            "live": False,
+            "state": "unknown",
+            "threshold": getattr(limits, attr, None),
+            "note": "no CircuitBreaker is registered; this is a configured limit, not live state",
+        }
+        for name, attr in _PLACEHOLDER_LIMITS
+    ]
+
+
 def _load_cb_states() -> list[dict]:
-    """Load circuit breaker states from the live risk module, falling back to Redis cache."""
+    """Circuit breaker rows for the superadmin risk page.
+
+    Live registered breakers first. Only when none is registered does the page
+    fall back to the Redis cache and then to placeholder rows, and both of
+    those carry ``live: False`` so an operator can tell "the breaker is closed"
+    from "there is no breaker".
+    """
     states: list[dict] = []
     try:
-        # Attempt to get the global registry if it exists
-        try:
-            from risk.circuit_breakers import _GLOBAL_REGISTRY
+        from risk.circuit_breakers import get_circuit_breakers
 
-            for name, cb in _GLOBAL_REGISTRY.items():
-                states.append(
-                    {
-                        "name": name,
-                        "state": cb.state.value if hasattr(cb, "state") else "closed",
-                        "failure_count": getattr(cb, "failure_count", 0),
-                        "last_failure": cb.last_failure_time.isoformat()
-                        if getattr(cb, "last_failure_time", None)
-                        else None,
-                        "last_success": cb.last_success_time.isoformat()
-                        if getattr(cb, "last_success_time", None)
-                        else None,
-                        "threshold": getattr(cb, "failure_threshold", 5),
-                    }
-                )
-        except (ImportError, AttributeError):  # nosec B110
-            pass
+        for name, cb in get_circuit_breakers().items():
+            try:
+                states.append(_live_cb_state(name, cb))
+            except Exception as exc:
+                logger.warning("Circuit breaker %s could not be read: %s", name, exc)
     except Exception as exc:
         logger.debug("Circuit breaker live load: %s", exc)
 
-    if not states:
-        # Fall back to Redis-persisted state
-        try:
-            from cache.redis_client import get_sync_redis_client
-
-            rc = get_sync_redis_client()
-            if rc:
-                raw = rc.get(_CB_STATE_KEY)
-                if raw:
-                    states = json.loads(raw)
-        except Exception:  # nosec B110  # noqa: S110
-            pass
-
-    if not states:
-        # Bootstrap with known breaker names from the codebase
-        states = [
-            {
-                "name": "daily_drawdown",
-                "state": "closed",
-                "failure_count": 0,
-                "last_failure": None,
-                "last_success": None,
-                "threshold": 3,
-            },
-            {
-                "name": "total_drawdown",
-                "state": "closed",
-                "failure_count": 0,
-                "last_failure": None,
-                "last_success": None,
-                "threshold": 1,
-            },
-            {
-                "name": "order_rate",
-                "state": "closed",
-                "failure_count": 0,
-                "last_failure": None,
-                "last_success": None,
-                "threshold": 10,
-            },
-            {
-                "name": "position_size",
-                "state": "closed",
-                "failure_count": 0,
-                "last_failure": None,
-                "last_success": None,
-                "threshold": 5,
-            },
-            {
-                "name": "broker_connection",
-                "state": "closed",
-                "failure_count": 0,
-                "last_failure": None,
-                "last_success": None,
-                "threshold": 3,
-            },
-            {
-                "name": "ml_engine",
-                "state": "closed",
-                "failure_count": 0,
-                "last_failure": None,
-                "last_success": None,
-                "threshold": 5,
-            },
-        ]
+    if states:
         _persist_cb_states(states)
-    return states
+        return states
+
+    # Fall back to the last known snapshot, then to placeholders.
+    try:
+        from cache.redis_client import get_sync_redis_client
+
+        rc = get_sync_redis_client()
+        if rc:
+            raw = rc.get(_CB_STATE_KEY)
+            if raw:
+                cached = json.loads(raw)
+                if isinstance(cached, list) and cached:
+                    # A cached row describes a breaker that is not registered
+                    # right now, so it is history, not live state.
+                    for row in cached:
+                        if isinstance(row, dict):
+                            row["live"] = False
+                            row.setdefault("note", "cached snapshot; no breaker is currently registered")
+                    return cached
+    except Exception:  # nosec B110  # noqa: S110
+        pass
+
+    return _placeholder_cb_states()
 
 
 def _persist_cb_states(states: list[dict]) -> None:
@@ -159,60 +174,100 @@ async def get_circuit_breakers(
     return {"circuit_breakers": states, "total": len(states)}
 
 
+def _live_breaker(name: str):
+    """Return the registered CircuitBreaker called *name*, or None."""
+    try:
+        from risk.circuit_breakers import get_circuit_breakers
+
+        return get_circuit_breakers().get(name)
+    except Exception as exc:
+        logger.error("Circuit breaker registry unavailable: %s", exc)
+        return None
+
+
+def _actor(user: TokenPayload) -> str:
+    """Who to write into the breaker's audit trail."""
+    for attr in ("email", "username", "sub", "user_id"):
+        value = getattr(user, attr, None)
+        if isinstance(value, str) and value:
+            return value
+    return "superadmin"
+
+
 @router.post("/risk/circuit-breakers/{name}/reset")
 async def reset_circuit_breaker(
     name: str,
+    reason: str = Query("manual reset from superadmin console", max_length=500),
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
-    states = _load_cb_states()
-    found = False
-    for cb in states:
-        if cb["name"] == name:
-            cb["state"] = "closed"
-            cb["failure_count"] = 0
-            cb["last_success"] = _utcnow().isoformat()
-            found = True
-            break
-    if not found:
-        return {"ok": False, "error": f"Circuit breaker '{name}' not found"}
-    _persist_cb_states(states)
-    # Also reset on live object if available
-    try:
-        from risk.circuit_breakers import _GLOBAL_REGISTRY
+    """Lift the manual hold on a breaker and re-arm its normal recovery path.
 
-        if name in _GLOBAL_REGISTRY:
-            _GLOBAL_REGISTRY[name].reset()
-    except Exception:  # nosec B110  # noqa: S110
-        pass
-    _log_superadmin_action(user, "circuit_breaker_reset", {"name": name})
-    return {"ok": True, "name": name, "new_state": "closed"}
+    This does not force the breaker closed. If the underlying drawdown breach
+    is still live the breaker stays OPEN, because resuming trading through the
+    limit on an operator's click is the failure this subsystem exists to
+    prevent. The response says which of the two happened.
+    """
+    cb = _live_breaker(name)
+    if cb is None:
+        # Previously this edited a cached JSON blob and answered ok: true, so a
+        # name that matched nothing real looked like a successful reset.
+        return {
+            "ok": False,
+            "name": name,
+            "error": f"No live circuit breaker named '{name}' is registered",
+            "hint": "GET /superadmin/risk/circuit-breakers lists registered breakers; rows with live=false cannot be actioned",
+        }
+
+    cb.reset(reason=reason, authorized_by=_actor(user))
+    state_after = cb.get_status().get("state")
+    _persist_cb_states(_load_cb_states())
+    _log_superadmin_action(user, "circuit_breaker_reset", {"name": name, "reason": reason, "state_after": state_after})
+    return {
+        "ok": True,
+        "name": name,
+        "new_state": state_after,
+        "trading_resumed": state_after == "closed",
+        "detail": (
+            "manual hold lifted; breaker is closed and trading is permitted"
+            if state_after == "closed"
+            else "manual hold lifted, but the breaker remains open on live risk state and will recover on its own cooldown"
+        ),
+    }
 
 
 @router.post("/risk/circuit-breakers/{name}/open")
 async def force_open_circuit_breaker(
     name: str,
+    reason: str = Query("manual halt from superadmin console", max_length=500),
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
-    states = _load_cb_states()
-    found = False
-    for cb in states:
-        if cb["name"] == name:
-            cb["state"] = "open"
-            cb["last_failure"] = _utcnow().isoformat()
-            found = True
-            break
-    if not found:
-        return {"ok": False, "error": f"Circuit breaker '{name}' not found"}
-    _persist_cb_states(states)
-    try:
-        from risk.circuit_breakers import _GLOBAL_REGISTRY
+    """Halt new orders on a breaker and hold it open until a human resets it.
 
-        if name in _GLOBAL_REGISTRY:
-            _GLOBAL_REGISTRY[name].force_open()
-    except Exception:  # nosec B110  # noqa: S110
-        pass
-    _log_superadmin_action(user, "circuit_breaker_force_open", {"name": name})
-    return {"ok": True, "name": name, "new_state": "open"}
+    Open positions are not flattened and resting orders are not cancelled —
+    that is the kill switch (`POST /superadmin/nuclear/kill-switch`).
+    """
+    cb = _live_breaker(name)
+    if cb is None:
+        return {
+            "ok": False,
+            "name": name,
+            "error": f"No live circuit breaker named '{name}' is registered",
+            "hint": "nothing was halted; use the kill switch to stop trading when no breaker is registered",
+        }
+
+    cb.force_open(reason=reason, authorized_by=_actor(user))
+    state_after = cb.get_status().get("state")
+    _persist_cb_states(_load_cb_states())
+    _log_superadmin_action(
+        user, "circuit_breaker_force_open", {"name": name, "reason": reason, "state_after": state_after}
+    )
+    return {
+        "ok": True,
+        "name": name,
+        "new_state": state_after,
+        "new_orders_blocked": state_after == "open",
+        "detail": "new orders are rejected; open positions were not flattened",
+    }
 
 
 # ── VaR / ES Metrics ─────────────────────────────────────────────────────────
@@ -285,11 +340,16 @@ async def get_var_metrics(
                 # Ratios
                 mean_r = float(np.nan_to_num(returns.mean()))
                 std_r = float(np.nan_to_num(returns.std())) or 1.0
-                downside_vals = returns[returns < 0]
-                downside = float(np.nan_to_num(downside_vals.std())) if len(downside_vals) > 0 else 1.0
-                downside = downside or 1.0
+                # Downside deviation: RMS shortfall below zero over ALL periods.
+                # This was `returns[returns < 0].std()` (F120) with a second
+                # defect on top: `downside = downside or 1.0` substituted a
+                # denominator of 1.0 whenever the real one was zero, so a series
+                # with no losses — or with identical losses, whose dispersion is
+                # zero — reported `mean_r * sqrt(252)` as a Sortino ratio. That
+                # is a fabricated number, not a fallback.
+                downside = downside_deviation(returns)
                 sharpe = mean_r / std_r * (252**0.5)
-                sortino = mean_r / downside * (252**0.5)
+                sortino = mean_r / downside * (252**0.5) if downside > 1e-12 else 0.0
                 calmar = mean_r / abs(max_dd) if max_dd != 0 else 0.0
 
                 metrics.update(
@@ -411,7 +471,7 @@ async def run_stress_test(
         }
     except Exception as exc:
         logger.error("Stress test run error: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
 
 
 # ── Prop Firm Breaches ────────────────────────────────────────────────────────
@@ -466,7 +526,7 @@ async def get_prop_breaches(
             for r in rows:
                 bid = f"breach_{r.id}"
                 if bid not in existing_ids:
-                    meta = json.loads(r.metadata or "{}") if r.metadata else {}
+                    meta = _audit_payload(r)
                     breaches.append(
                         {
                             "breach_id": bid,

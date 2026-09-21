@@ -260,8 +260,9 @@ const ChartContainer: React.FC<{ onChartClick: (ctx: ChartClickContext) => void 
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setDims({ width, height });
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      setDims({ width: rect.width, height: rect.height });
     });
     ro.observe(containerRef.current);
     return () => ro.disconnect();
@@ -282,6 +283,7 @@ const ChartContainer: React.FC<{ onChartClick: (ctx: ChartClickContext) => void 
           onChartReady={handleChartReady}
           signals={signals}
           levels={levels}
+          patterns={patterns}
           height={540}
         />
       </PanelErrorBoundary>
@@ -403,7 +405,7 @@ const ChartDashboard: React.FC = () => {
   // Inject global CSS once
   useEffect(() => { injectGlobalCSS(); }, []);
 
-  const handleChartClick = useCallback((ctx: ChartClickContext) => {
+  const handleChartClick = useCallback((_ctx: ChartClickContext) => {
     setShowAIBot(true);
     // Context is already written to store by CoreChart via setClickContext
     // AIChartBot reads it and auto-triggers analysis

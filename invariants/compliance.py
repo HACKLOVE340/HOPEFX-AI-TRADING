@@ -40,8 +40,14 @@ def verify_no_spoofing(placed: int, cancelled: int, filled: int, max_cancel_rati
         return []
     cancel_ratio = cancelled / placed
     if cancel_ratio >= max_cancel_ratio and filled == 0:
-        return [_v(_RULE, CRITICAL,
-                   f"possible spoofing: {cancelled}/{placed} cancelled, 0 filled", cancel_ratio=round(cancel_ratio, 3))]
+        return [
+            _v(
+                _RULE,
+                CRITICAL,
+                f"possible spoofing: {cancelled}/{placed} cancelled, 0 filled",
+                cancel_ratio=round(cancel_ratio, 3),
+            )
+        ]
     return []
 
 
@@ -94,6 +100,11 @@ def verify_approval_workflow(required_steps: Sequence[str], completed_steps: Seq
 
 def verify_no_privilege_escalation(granted_role_level: int, authorized_level: int) -> list[Violation]:
     if granted_role_level > authorized_level:
-        return [_v("No Loss Of Human Control", CONSTITUTIONAL,
-                   f"privilege escalation: granted level {granted_role_level} > authorized {authorized_level}")]
+        return [
+            _v(
+                "No Loss Of Human Control",
+                CONSTITUTIONAL,
+                f"privilege escalation: granted level {granted_role_level} > authorized {authorized_level}",
+            )
+        ]
     return []

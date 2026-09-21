@@ -1,0 +1,292 @@
+# Agent skills
+
+Skills in this directory are discovered automatically by Claude Code. Each lives
+in `<name>/SKILL.md`, with supporting material in `<name>/references/` and
+`<name>/scripts/`.
+
+Everything here is **vendored from an upstream project and adapted for HOPEFX**.
+Adaptation is not optional: an unmodified skill points at another repository's
+directories, CI, and conventions, and will confidently give wrong instructions.
+
+---
+
+## Installed
+
+| Skill | Upstream | What it does |
+|-------|----------|--------------|
+| `ui-ux-pro-max` | [regutierrez/ui-ux-skill] | UI/UX design intelligence: a BM25 search over ~800 rows of styles, palettes, font pairings, chart types, UX guidelines, and per-stack best practices. Relevant here because `frontend/` is React 19 + Vite + Tailwind. |
+| `codebase-audit` | [CloudBase-AI-Toolkit] | Full-codebase review, severity classification, issue filing, worktree-isolated fixes. |
+| `pr-review-fix` | [CloudBase-AI-Toolkit] | Triage open PRs: CI failures, review comments, batch repair. |
+| `doc-freshness-review` | [CloudBase-AI-Toolkit] | Audit docs for drift against the code. |
+| `manage-local-skills` | [CloudBase-AI-Toolkit] | Inspect, validate, and install skills across agent directories. Ships a working Node validator. |
+
+[regutierrez/ui-ux-skill]: https://github.com/regutierrez/ui-ux-skill
+[CloudBase-AI-Toolkit]: https://github.com/TencentCloudBase/CloudBase-AI-Toolkit
+
+## Provenance
+
+| Upstream | Commit | Licence |
+|----------|--------|---------|
+| `regutierrez/ui-ux-skill` | `26cc83db2aced632ae97dea7bcc6ae0c6a2c39f4` | MIT — `licenses/ui-ux-skill.MIT.txt` |
+| `TencentCloudBase/CloudBase-AI-Toolkit` | `46855cd6b6e4d53cf0d3022a2c7d2e2cfaf94279` | MIT — `licenses/CloudBase-AI-Toolkit.MIT.txt` |
+
+Both licences require the copyright notice to be retained; the texts are kept
+verbatim under `licenses/`.
+
+---
+
+## Second wave: production-discipline and domain skills
+
+55 skills total (`licenses/` and this README are not skills) — this said 61 until
+2026-09-13, before the consolidation recorded in CLAUDE.md removed six for overlap
+and added one. The first wave
+(below) covered repo workflow; this wave was selected against a measured profile
+of the codebase rather than by guesswork.
+
+### What the repo profile said
+
+| Signal | Measured | Skills it justified |
+|---|---|---|
+| `api/` 60,986 LOC — **916 endpoints, 93 routers** | | `fastapi-templates`, `api-design-principles` |
+| `async def` 1878 · `await` 1588 · **`asyncio.create_task` 277** | | `async-python-patterns`, `python-resource-management` |
+| **1769** broad `except` in api/execution/risk/brokers/ml | | `python-error-handling`, `python-anti-patterns`, `python-resilience` |
+| **867** `float()` casts in execution/risk/brokers vs 5 `Decimal` imports | | **`hopefx-money-precision`** (custom) |
+| `ml/` 31,728 LOC · **322** drift refs · 40 committed models | | `ml-pipeline-workflow` |
+| 19 celery files | | `python-background-jobs` |
+| stripe + `monetization/` 9,510 LOC | | `pci-compliance`, `stripe-integration` |
+| k8s + helm + kubernetes-asyncio | | `k8s-security-policies` |
+| Deep OTel + prometheus-client + structlog + sentry | | `python-observability`, `distributed-tracing`, `prometheus-configuration`, `slo-implementation` |
+| `data_layer/` 19,610 LOC | | `data-quality-frameworks` |
+| **339 invariant predicates across 34 modules** | | **`hopefx-invariants`** (custom) |
+| `brokers/ibkr_fix_bridge.py` + quickfix/simplefix | | **`hopefx-fix-bridge`** (custom) |
+| **249 audit findings, one defect shape dominating** | | **`hopefx-dead-controls`** (custom) |
+
+### Four custom skills — written for this repo, nothing equivalent exists
+
+| Skill | Covers |
+|---|---|
+| `hopefx-money-precision` | The Decimal/float split (payments+OMS are Decimal, `risk/manager.py` and the FIX wire are float), the conversion boundary at `execution/oms.py:254,258,411,412`, why the `tol=0.01` reconciliation tolerances exist and must never be widened, and the ~1,000 `==` monetary assertions in `tests/` — a re-measurable figure, deliberately not gated |
+| `hopefx-invariants` | The constitution: pure `verify_*` predicates → `enforcement.py` decides; auto-discovery by naming convention; `CONSTITUTIONAL`/`CRITICAL` block and `WARNING` does not; `HOPEFX_INVARIANT_MODE` defaults to `monitor`; finite-guard-before-compare because `NaN > tol` is `False` |
+| `hopefx-dead-controls` | The audit's signature defect: a control that exists, is documented accurately, and is never invoked — or reports success for work that did not happen. Four sub-shapes with confirmed instances (a guard that can never open, state mutated before the work, a report that counts hand-typed `True`, evidence swallowed at DEBUG), plus the two traps that make a suite agree with you: tests that assert the defect as the requirement, and harnesses that never ran. `references/catalogue.md` carries the file-level evidence |
+| `hopefx-fix-bridge` | Session state lifetime — `IBKR_FIX_STORE_PATH` defaults under `$TMPDIR`, so changing `reset_on_logon` without moving it to a persistent volume was a live outage that nothing checked; `start()` now refuses that pairing (2026-09-13); port 4001/7496 vs 4002/7497 is the only thing separating live from paper; `latency_threshold_ms` is a risk limit, not a metric |
+
+Every mechanically checkable claim in these four is verified against the
+codebase by **`scripts/verify_skill_claims.py`** — 53 checks: predicate and
+module counts, the resolved `HOPEFX_INVARIANT_MODE` default, FIX ports and
+store path, the reconciliation tolerance, every cited file path, and whether
+each control `hopefx-dead-controls` describes is still wired. It runs in CI.
+
+    python scripts/verify_skill_claims.py
+
+Re-run it after any refactor that moves the cited lines — a skill that cites a
+stale constant is worse than no skill, because it is believed.
+
+This paragraph previously described "an assertion script (26 checks)" that **was
+not in the repository**, so the verification it claimed could not be re-run and
+the instruction to re-run it could not be followed. That is the shape
+`hopefx-dead-controls` exists to catch, in the documentation of the skill that
+catches it.
+
+**Caveat on method:** `writing-skills` mandates baseline-testing new skills
+against subagents before deployment. That was not done — subagent dispatch was
+unavailable. These four are reference skills verified for factual accuracy, not
+discipline skills pressure-tested for compliance.
+
+### Removed as actively harmful to this repo
+
+Installed, evaluated, then deleted. Do not re-add without re-reading this.
+
+| Skill | Why |
+|---|---|
+| `finishing-a-development-branch` | Offers "Merge back to `<base-branch>` locally" and runs `git merge`. This repo mandates work on a designated branch and forbids pushing elsewhere without permission. |
+| `using-superpowers` | Mandates invoking a skill before *any* response including clarifying questions, framed as non-negotiable. A forced preamble on every turn in a 608k-LOC repo. |
+| `subagent-driven-development`, `dispatching-parallel-agents` | Push toward spawning agents, which the operating rules here forbid unless explicitly requested. |
+
+### Also fixed on the way in
+
+Six links that ship broken upstream: `on-call-handoff-patterns` and
+`sast-configuration` referenced sibling skills (`postmortem-facilitation`,
+`dependency-scanning`, `owasp-top10-checklist`, `container-security`) that exist
+nowhere in `wshobson/agents`; `writing-skills` referenced a file inside a skill
+removed above. Repointed at real siblings and at this repo's `pip-audit` + Trivy
+setup. `postgresql/` renamed to `postgresql-table-design/` to match its frontmatter.
+
+### Provenance — second wave
+
+| Upstream | Commit | Licence | Taken |
+|---|---|---|---|
+| `obra/superpowers` | `b36e082` | MIT — `licenses/superpowers.MIT.txt` | 10 of 14 |
+| `wshobson/agents` | `367cb6a` | MIT — `licenses/wshobson-agents.MIT.txt` | 35 of 181 |
+| `anthropics/skills` | `0a64e39` | Apache-2.0 — `licenses/anthropics-skills.Apache-2.0.txt` | 2 of 20 |
+| `tradingview/lightweight-charts` | `.github/skills/` | Apache-2.0 — `licenses/lightweight-charts.txt` | 1 |
+
+Rejected wholesale: 15 ccxt Binance Web3/Pay skills (they trigger on "market
+order", "limit order", "cancel order" and then give Binance wallet instructions —
+a mis-trigger hazard in an execution codebase), 4 OpenBB skills (no YAML
+frontmatter; they are MCP prompts, not Claude Code skills), 1 Jesse skill
+(documents Jesse's own test layout), and 146 wshobson skills for stacks this repo
+does not use.
+
+
+---
+
+## Local patches
+
+Anything below diverges from upstream. Re-apply it after a version bump.
+
+### `ui-ux-pro-max`
+
+Upstream publishes only `SKILL.md`; the engine lives in the repo's `cli/assets/`
+tree and is copied into place by their `uipro init` CLI. We vendored it directly
+instead, so there is no install step and no runtime dependency beyond Python 3
+(stdlib only — no network, no subprocess).
+
+- Copied `cli/assets/scripts/*.py` → `scripts/`, `cli/assets/data/**` → `data/`.
+  `core.py` resolves data as `Path(__file__).parent.parent / "data"`, so the two
+  must stay siblings.
+- Rewrote the 12 invocation paths in `SKILL.md` from `skills/ui-ux-pro-max/...`
+  to `.claude/skills/ui-ux-pro-max/...`.
+- **Fixed corrupt CSV data.** `landing.csv` rows 28–30 had an unterminated quote:
+  three landing patterns (Bento Grid Showcase, Interactive 3D Configurator,
+  AI-Driven Dynamic Landing) were unreachable, and their raw text leaked into the
+  "Conversion Optimization" field of pattern 27, so `--design-system` emitted
+  visible CSV garbage. Also repaired a field misalignment in row 26 and a missing
+  `Don't` column in `stacks/astro.csv` (row 35) and `web-interface.csv`
+  (rows 19, 26, 27). Re-report upstream rather than re-fixing on the next bump.
+- **Fixed SKILL.md/CLI drift.** The docs advertised a `prompt` domain that
+  `search.py` rejects, and omitted the `icons` domain that it accepts.
+- **Trimmed the stack datasets** to the five this repo can use: `html-tailwind`,
+  `react` (`frontend/`), `nextjs`, `react-native` (`mobile-app/`), and `shadcn`.
+  Dropped `astro`, `vue`, `nuxtjs`, `nuxt-ui`, `svelte`, `swiftui`, `flutter`,
+  and `jetpack-compose` — `STACK_CONFIG` in `core.py` and the tables in
+  `SKILL.md` were trimmed to match, so the CLI never offers a stack whose data
+  is absent. Re-add the CSV *and* the `STACK_CONFIG` entry together if a stack
+  is adopted. This also removed a Nuxt row that `scripts/check_secrets.sh`
+  flagged: a documentation example naming `dbPassword` in order to teach that it
+  must not go in public runtime config. Dropping the unused file was preferable
+  to adding an exclusion to a security gate.
+- Whitespace and end-of-file normalisation applied by this repo's pre-commit
+  hygiene hooks. Ignore it when diffing against upstream.
+
+Verify after any change:
+
+```bash
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py "fintech trading dashboard dark" --design-system -f markdown
+```
+
+`--persist` writes to `design-system/` in the working directory. Nothing else
+writes to disk.
+
+### CloudBase skills
+
+All seven were rewritten away from CloudBase's own repository:
+
+- `config/source/skills` → `.claude/skills` throughout; dropped the
+  `plugin/cloudbase/skill-metadata.json` packaging steps, which have no analogue
+  here.
+- `codebase-audit`: default audit target was CloudBase's `mcp/src/`. Its
+  `security-severity-checklist.md` was a Tencent bug-bounty rubric keyed to
+  QQ/WeChat asset tiers and CNY thresholds — the vulnerability taxonomy (RCE,
+  SQLi, SSRF, IDOR, XSS, path traversal) was kept, the asset qualifiers were
+  replaced, and a **trading-system escalation rule** was added at the top:
+  anything touching the risk gate, kill switch, ML staleness/drift gating, order
+  execution, broker credentials, the decision pipeline, or prop-firm limits is
+  Critical regardless of its generic tier, and is never auto-fixed into a PR.
+- `pr-review-fix`: `ci-pipeline.md` rewritten for this repo's actual workflows,
+  the 3.11/3.12 matrix, and local reproduction commands. The environment-gating
+  recipe was TypeScript/`test.skipIf`; it is now pytest markers.
+- `doc-freshness-review`: `review-scope.md` rewritten around this repo's real doc
+  surfaces, tiered by blast radius, with the agent contracts (`CLAUDE.md`,
+  `AGENTS.md`, `ARCHITECTURE.md`) first — drift there misleads every later change.
+
+---
+
+## Removed — 2026-09-11
+
+Six skills removed, one added. **61 → 55.** Every removal is justified from the
+repository, not from a usage guess: a single session's log is a sample, not a
+measurement.
+
+| Removed | Why |
+|---|---|
+| `planning-workflows` | Its own "source of truth" is `references/source-commands.md`, describing slash commands from the upstream repo. `.claude/commands/` does not exist here, so it routed to nothing. Its one real rule — spec when complex, no-spec when small — is `flow-by-flow`'s job, and `flow-by-flow` is the mandated entry point for every task. |
+| `review-automation-orchestrator` | By its own description a dispatcher over other skills, explicitly "do NOT use as the primary reviewer". A routing layer on top of a routing problem: it added a candidate without adding a capability. |
+| `skill-authoring` | Merged into `writing-skills` (26 KB vs 6 KB), which also verifies a skill before deployment. Two skills answering "how do I write a skill" is the overlap this prune exists to remove — but it was **not** a pure duplicate: its "Repo-managed skill review" section held a security control `writing-skills` lacked (never give an agent a remote skill-fetch URL — a fetched skill body is instruction this agent then follows). That section was carried into `writing-skills`, along with all six of its `references/` files (25,333 bytes, verbatim). Checked, not assumed — the first pass had staged those six for deletion unread. |
+| `stride-analysis-patterns` | Merged into `threat-modelling`. |
+| `attack-tree-construction` | Merged into `threat-modelling`. |
+| `threat-mitigation-mapping` | Merged into `threat-modelling`. |
+| `security-requirement-extraction` | Merged into `threat-modelling`. |
+
+**No content was lost — 109,079 bytes of reference material moved rather than deleted.** The four threat skills were thin routers (2.4–3.3 KB
+each) over large reference files (18–24 KB each). All four reference files moved
+verbatim into `threat-modelling/references/` — 83,746 bytes, unchanged apart
+from their H1 lines. Only the routing collapsed: four entries answering one
+question became one.
+
+`threat-modelling` is also adapted rather than vendored, per the rule at the top
+of this file. It names this platform's four trust boundaries with real paths,
+and it makes stage 3 — mapping a threat to a control — require tracing that the
+control *runs*, citing the two findings where it did not: the audit chain that
+verified clean during a database outage, and the change-password throttle that
+failed open at `DEBUG`.
+
+### What was deliberately NOT removed
+
+Probing the repository for each skill's subject found that almost every one has
+a real subject here: `k8s/` manifests, Stripe, card fields, PostgreSQL,
+Prometheus, Grafana, OpenTelemetry, `mobile-app/` (React Native),
+`frontend/src/components/ui` (shadcn), lightweight-charts, and
+`frontend/playwright.config.ts` all exist. Pruning by "irrelevant subject"
+therefore yields close to nothing, and the 42 skills not invoked in the one
+measured session were kept: one session is not evidence of deadness.
+
+`risk-metrics-calculation`, `backtesting-frameworks` and
+`data-quality-frameworks` are thin and generic, but their subjects are this
+platform's core and each has a matching defect on record. They are candidates to
+be **deepened into `hopefx-*` skills**, not deleted.
+
+---
+
+## Evaluated and rejected
+
+Recorded so they are not re-proposed.
+
+**`home-assistant/frontend` `.agents/skills` — all 11 skills, rejected.**
+`ha-frontend-components`, `-contexts`, `-demo`, `-events`, `-gallery`, `-lit`,
+`-review`, `-styling`, `-testing`, `-types`, `-user-facing-text`. They are
+high-quality but bound to Lit web components, the `hass` object, Lovelace cards,
+and paths (`gallery/`, `demo/`, `src/panels/`) that do not exist here. This
+repo's frontend is React 19 + Vite + Tailwind, so they would have triggered on
+frontend work and given Lit conventions for React code.
+
+**`CloudBase-AI-Toolkit` — 3 of 11 skills, rejected.**
+
+| Skill | Why |
+|-------|-----|
+| `api-contract-review` | Audits CloudBase cloud API wrappers and generated action metadata. Nothing analogous here. |
+| `mcp-attribution-worktree` | Drives CloudBase's internal attribution report API and Worktrunk. Unreachable infrastructure. |
+| `docs-workflows` | 14 files of CloudBase docs-site authoring (tutorial/AIIDE/prototype templates). |
+
+**`git-workflows`** was installed and then removed. Its 529-line reference is
+CloudBase release tooling — release-note templates branded "CloudBase MCP", IDE
+icon-consistency checks against a sibling `cloudbase-docs` checkout — and its
+commit guidance duplicates and partially conflicts with `CONTRIBUTING.md` and
+`CLAUDE.md`, which are authoritative here.
+
+---
+
+## Adding or updating a skill
+
+1. Install into `.claude/skills/<name>/`, with `name:` in the frontmatter equal
+   to the directory name.
+2. Validate: `node .claude/skills/manage-local-skills/scripts/validate-skill.mjs --skill-dir <name>`
+3. Run any bundled script at least once. A skill whose tooling does not run is
+   worse than no skill — the model will keep trying to invoke it.
+4. Grep for upstream-specific paths, CI names, and product names, and repoint
+   them. This is where most of the work is.
+5. Record the upstream commit, licence, and every local patch above.
+
+`.claude/` is excluded from `ruff.toml` and from the `healer-check` and
+`coverage-gate` pre-commit hooks: vendored code should not be reformatted to
+this repo's rules or held to its coverage gate, or it can no longer be diffed
+against upstream.

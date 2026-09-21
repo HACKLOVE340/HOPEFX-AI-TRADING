@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload
 from ._shared import _log_superadmin_action, _require_superadmin, _utcnow
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -420,7 +421,7 @@ async def run_tests_now(
         }
     except Exception as exc:
         logger.warning("auto_healing run_tests_now fallback: %s", exc)
-        return {"ok": False, "error": str(exc), "ts": _utcnow().isoformat()}
+        return {"ok": False, "error": safe_error(exc), "ts": _utcnow().isoformat()}
 
 
 @router.get("/auto-healing/pending-approval")
@@ -479,5 +480,5 @@ async def approve_patch(
             return {"ok": True, "approved_at": _utcnow().isoformat()}
     except Exception as exc:
         logger.warning("auto_healing approve_patch: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     return {"ok": False, "error": "Redis unavailable"}

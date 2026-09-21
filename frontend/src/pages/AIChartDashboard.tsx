@@ -14,9 +14,14 @@
  *   - tradingApi.regime() + brainState() for the header strip
  */
 
-import React, { useEffect, useState, Component } from 'react';
+import { PageShell } from '../components/system/PageShell';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import {
+  Sparkles, Brain, Radar, ScanSearch, Cpu,
+
+} from 'lucide-react';
 import { AIChart } from '../components/charts/AIChart';
 import { cn, extractApiError } from '../lib/utils';
 import { useStore, selectWsStatus, selectIsAuth, useHasHydrated } from '../store';
@@ -48,7 +53,6 @@ interface MarketRegime {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function apiSym(s: string) { return s.replace('/', '_'); }
 
 function regimeColor(r?: string): string {
   if (!r) return '#64748b';
@@ -89,14 +93,14 @@ function RegimeStrip() {
   });
 
   return (
-    <div className="flex items-center gap-4 px-4 py-2.5 bg-[#0a1628] border-b border-[#1e2d3d] text-[11px] flex-wrap shrink-0">
+    <div className="flex items-center gap-4 px-4 py-2.5 bg-[#0a1628] border-b border-[var(--border)] text-[11px] flex-wrap shrink-0">
 
       {/* WS indicator */}
       <div className="flex items-center gap-1.5">
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            wsStatus === 'connected' ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
+            wsStatus === 'connected' ? 'bg-[var(--bull)] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
         <span className="text-slate-500 capitalize">
@@ -104,7 +108,7 @@ function RegimeStrip() {
         </span>
       </div>
 
-      <div className="w-px h-4 bg-[#1e2d3d]" />
+      <div className="w-px h-4 bg-[var(--border)]" />
 
       {/* Regime */}
       {regime ? (
@@ -127,7 +131,7 @@ function RegimeStrip() {
             <span className="text-slate-500">Conf</span>
             <span
               className="font-bold tabular-nums"
-              style={{ color: regime.confidence >= 0.7 ? '#00e676' : '#ffb800' }}
+              style={{ color: regime.confidence >= 0.7 ? 'var(--bull)' : '#ffb800' }}
             >
               {(regime.confidence * 100).toFixed(0)}%
             </span>
@@ -139,15 +143,15 @@ function RegimeStrip() {
 
       {brain && (
         <>
-          <div className="w-px h-4 bg-[#1e2d3d]" />
+          <div className="w-px h-4 bg-[var(--border)]" />
           <div className="flex items-center gap-1.5">
             <span className="text-slate-500">Brain</span>
-            <span className="text-[#00d4ff] font-semibold uppercase">{brain.mode}</span>
+            <span className="text-[var(--accent)] font-semibold uppercase">{brain.mode}</span>
           </div>
           {brain.active_strategies?.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap">
               {brain.active_strategies.slice(0, 4).map((s) => (
-                <span key={s} className="px-1.5 py-0.5 rounded bg-[#1e2d3d] text-[9px] text-slate-400 font-mono">
+                <span key={s} className="px-1.5 py-0.5 rounded bg-[var(--border)] text-[9px] text-slate-400 font-mono">
                   {s}
                 </span>
               ))}
@@ -171,8 +175,8 @@ function TfSelector({ value, onChange }: { value: TF; onChange: (tf: TF) => void
           className={cn(
             'px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors',
             value === tf
-              ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-              : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+              ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+              : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
           )}
         >
           {tf}
@@ -198,11 +202,11 @@ class ChartErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-[300px] bg-[#0d1421] border border-[#1e2d3d] rounded-lg gap-2">
-          <span className="text-[#ff1744] text-xs font-semibold">{this.props.label} failed to load</span>
+        <div className="flex flex-col items-center justify-center h-[300px] bg-[var(--surface)] border border-[var(--border)] rounded-lg gap-2">
+          <span className="text-[var(--bear)] text-xs font-semibold">{this.props.label} failed to load</span>
           <span className="text-slate-600 text-[10px]">{this.state.message}</span>
           <button
-            className="mt-2 px-3 py-1 text-[11px] bg-[#1e2d3d] text-slate-400 rounded hover:bg-[#263548]"
+            className="mt-2 px-3 py-1 text-[11px] bg-[var(--border)] text-slate-400 rounded hover:bg-[#263548]"
             onClick={() => this.setState({ hasError: false, message: '' })}
           >
             Retry
@@ -221,12 +225,18 @@ export default function AIChartDashboard() {
   const [timeframe, setTimeframe] = useState<TF>('1h');
 
   return (
-    <div className="page-content" style={{ flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+    <PageShell title="AI Chart Dashboard" width="standard" related={[
+          { to: '/ai-chart', label: 'AI chart bot', hint: 'Single-symbol deep analysis', icon: Brain },
+          { to: '/pattern-detector', label: 'Pattern detector', hint: 'Named chart patterns', icon: ScanSearch },
+          { to: '/trade', label: 'Trading ticket', hint: 'Act on what you see', icon: Cpu },
+          { to: '/watchlist', label: 'Watchlist', hint: 'Instruments you follow', icon: Radar },
+          { to: '/signals', label: 'Signal feed', hint: 'Model output per symbol', icon: Sparkles },
+        ]}>
 
       {/* ── Top bar ────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 px-4 py-2.5 bg-[#0a0f1a] border-b border-[#1e2d3d] shrink-0">
+      <div className="flex items-center gap-4 px-4 py-2.5 bg-[#0a0f1a] border-b border-[var(--border)] shrink-0">
         <div>
-          <h1 className="text-[14px] font-bold text-slate-100 leading-tight">AI Chart Dashboard</h1>
+
           <p className="text-[11px] text-slate-500">Multi-symbol AI analysis</p>
         </div>
         <div className="flex-1" />
@@ -260,7 +270,7 @@ export default function AIChartDashboard() {
               <button
                 onClick={() => navigate('/trade', { state: { signal: { symbol: sym } } })}
                 className="absolute top-2 right-2 z-10 px-2 py-1 rounded text-[10px] font-bold"
-                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', cursor: 'pointer' }}
+                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: 'var(--link)', cursor: 'pointer' }}
                 title={`Go to Trade page for ${sym}`}
               >
                 ⚡ Trade
@@ -278,6 +288,8 @@ export default function AIChartDashboard() {
           ))}
         </div>
       </div>
-    </div>
+
+
+    </PageShell>
   );
 }

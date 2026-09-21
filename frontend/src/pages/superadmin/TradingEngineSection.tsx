@@ -7,6 +7,8 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
+import { Ban, Banknote, BarChart3, OctagonAlert, Pause, Play, Settings, Shield, Target, Timer, TrendingUp, Zap } from 'lucide-react';
 
 interface EngineConfig {
   paper_trading_mode: boolean;
@@ -58,6 +60,7 @@ const TradingEngineSection: React.FC = () => {
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState('');
   const [msg, setMsg]         = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
@@ -91,8 +94,10 @@ const TradingEngineSection: React.FC = () => {
     setSaving(true); setMsg('');
     try {
       await superadminApi.updateEngineConfig(cfg);
+      setMsgOk(true);
       setMsg('Engine configuration saved');
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
@@ -103,8 +108,10 @@ const TradingEngineSection: React.FC = () => {
     try {
       await superadminApi.killSwitch(!cfg.kill_switch_active);
       setCfg(c => c ? { ...c, kill_switch_active: !c.kill_switch_active } : c);
+      setMsgOk(true);
       setMsg(`Kill switch ${!cfg.kill_switch_active ? 'ACTIVATED — all trading halted' : 'deactivated — trading resumed'}`);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Kill switch failed'));
     } finally { setSaving(false); setConfirm(null); }
   };
@@ -114,9 +121,11 @@ const TradingEngineSection: React.FC = () => {
     try {
       if (action === 'pause') await superadminApi.pauseTrading('Superadmin manual pause');
       else                    await superadminApi.resumeTrading();
+      setMsgOk(true);
       setMsg(`Trading ${action === 'pause' ? 'paused' : 'resumed'}`);
       setTimeout(load, 1000);
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, `${action} failed`));
     } finally { setSaving(false); setConfirm(null); }
   };
@@ -149,11 +158,11 @@ const TradingEngineSection: React.FC = () => {
           border: `1px solid ${borderColor}`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 9, height: 9, borderRadius: '50%', background: dotColor, display: 'inline-block', boxShadow: isRunning ? '0 0 6px #4ade80' : 'none' }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: dotColor, display: 'inline-block', boxShadow: isRunning ? '0 0 6px var(--gain)' : 'none' }} />
+            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: textColor }}>
               Engine {label}
             </span>
-            <span style={{ fontSize: 12, color: '#475569', marginLeft: 4 }}>{status.mode}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-faint)', marginLeft: 4 }}>{status.mode}</span>
           </div>
           {[
             { label: 'Uptime',         value: `${Math.floor(status.uptime_seconds / 3600)}h ${Math.floor((status.uptime_seconds % 3600) / 60)}m` },
@@ -161,9 +170,9 @@ const TradingEngineSection: React.FC = () => {
             { label: 'Last Signal',    value: status.last_signal_at ? new Date(status.last_signal_at).toLocaleTimeString() : 'N/A' },
             { label: 'Heartbeat',      value: status.heartbeat_ok ? '✅ OK' : '❌ Miss' },
           ].map(s => (
-            <div key={s.label} style={{ fontSize: 12, color: '#94a3b8' }}>
-              <span style={{ color: '#475569' }}>{s.label}: </span>
-              <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{s.value}</span>
+            <div key={s.label} style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+              <span style={{ color: 'var(--text-faint)' }}>{s.label}: </span>
+              <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{s.value}</span>
             </div>
           ))}
 
@@ -173,7 +182,7 @@ const TradingEngineSection: React.FC = () => {
               <span style={{
                 fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
                 background: status.last_signal_direction === 'buy' ? '#052e1688' : '#450a0a88',
-                color: status.last_signal_direction === 'buy' ? '#4ade80' : '#f87171',
+                color: status.last_signal_direction === 'buy' ? 'var(--gain)' : 'var(--loss)',
                 border: `1px solid ${status.last_signal_direction === 'buy' ? '#16a34a' : '#dc2626'}`,
                 textTransform: 'uppercase' as const,
               }}>
@@ -181,15 +190,15 @@ const TradingEngineSection: React.FC = () => {
               </span>
               {typeof status.last_signal_confidence === 'number' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 60, height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: 60, height: 5, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{
                       width: `${Math.round(status.last_signal_confidence * 100)}%`,
                       height: '100%',
-                      background: status.last_signal_confidence >= 0.7 ? '#4ade80' : status.last_signal_confidence >= 0.55 ? '#fbbf24' : '#f87171',
+                      background: status.last_signal_confidence >= 0.7 ? 'var(--gain)' : status.last_signal_confidence >= 0.55 ? 'var(--warn)' : 'var(--loss)',
                       borderRadius: 3,
                     }} />
                   </div>
-                  <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                     {Math.round(status.last_signal_confidence * 100)}%
                   </span>
                 </div>
@@ -233,30 +242,30 @@ const TradingEngineSection: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>🛑</span>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#f87171' }}>KILL SWITCH ACTIVE</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--loss)' }}>KILL SWITCH ACTIVE</div>
               <div style={{ fontSize: 12, color: '#fca5a5' }}>All trading is halted across the entire platform</div>
             </div>
           </div>
-          <ActionBtn label="Resume Trading" onClick={() => setConfirm('kill')} variant="success" icon="▶️" loading={saving} />
+          <ActionBtn label="Resume Trading" onClick={() => setConfirm('kill')} variant="success" icon={<Play size={18} aria-hidden />} loading={saving} />
         </div>
       )}
 
       {/* Metrics */}
       {metrics && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 20 }}>
-          <KpiTile label="Trades Today"      value={metrics.trades_today}                    icon="📊" accent="#3b82f6" />
-          <KpiTile label="Open Positions"    value={metrics.open_positions}                  icon="📈" accent="#22c55e" />
-          <KpiTile label="PnL Today"         value={`$${metrics.pnl_today.toFixed(2)}`}      icon="💰" accent={metrics.pnl_today >= 0 ? '#22c55e' : '#ef4444'} />
-          <KpiTile label="Win Rate"          value={`${(metrics.win_rate_today * 100).toFixed(1)}%`} icon="🎯" accent="#8b5cf6" />
-          <KpiTile label="Avg Execution"     value={`${metrics.avg_execution_ms}ms`}         icon="⚡" accent="#f59e0b" />
-          <KpiTile label="Rejected Orders"   value={metrics.rejected_orders}                 icon="🚫" accent="#ef4444" />
-          <KpiTile label="Kill Triggers"     value={metrics.kill_switch_triggers}            icon="🛑" accent="#dc2626" />
-          <KpiTile label="Uptime"            value={`${metrics.uptime_hours.toFixed(1)}h`}   icon="⏱️" accent="#06b6d4" />
+          <KpiTile label="Trades Today"      value={metrics.trades_today}                    icon={<BarChart3 size={18} aria-hidden />} accent="#3b82f6" />
+          <KpiTile label="Open Positions"    value={metrics.open_positions}                  icon={<TrendingUp size={18} aria-hidden />} accent="#22c55e" />
+          <KpiTile label="PnL Today"         value={`$${metrics.pnl_today.toFixed(2)}`}      icon={<Banknote size={18} aria-hidden />} accent={metrics.pnl_today >= 0 ? '#22c55e' : '#ef4444'} />
+          <KpiTile label="Win Rate"          value={`${(metrics.win_rate_today * 100).toFixed(1)}%`} icon={<Target size={18} aria-hidden />} accent="#8b5cf6" />
+          <KpiTile label="Avg Execution"     value={`${metrics.avg_execution_ms}ms`}         icon={<Zap size={18} aria-hidden />} accent="#f59e0b" />
+          <KpiTile label="Rejected Orders"   value={metrics.rejected_orders}                 icon={<Ban size={18} aria-hidden />} accent="#ef4444" />
+          <KpiTile label="Kill Triggers"     value={metrics.kill_switch_triggers}            icon={<OctagonAlert size={18} aria-hidden />} accent="#dc2626" />
+          <KpiTile label="Uptime"            value={`${metrics.uptime_hours.toFixed(1)}h`}   icon={<Timer size={18} aria-hidden />} accent="#06b6d4" />
         </div>
       )}
 
       {/* Engine status + controls */}
-      <SectionCard title="Engine Controls" icon="⚙️" accent="#ef4444"
+      <SectionCard title="Engine Controls" icon={<Settings size={18} aria-hidden />} accent="#ef4444"
         subtitle={`Status: ${cfg.engine_status} · Broker: ${cfg.broker_type}`}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <StatusBadge status={cfg.engine_status} />
@@ -267,8 +276,8 @@ const TradingEngineSection: React.FC = () => {
             loading={saving}
           />
           {cfg.engine_status === 'running'
-            ? <ActionBtn label="Pause Engine" onClick={() => setConfirm('pause')} variant="warning" icon="⏸️" loading={saving} />
-            : <ActionBtn label="Resume Engine" onClick={() => pauseResume('resume')} variant="success" icon="▶️" loading={saving} />
+            ? <ActionBtn label="Pause Engine" onClick={() => setConfirm('pause')} variant="warning" icon={<Pause size={18} aria-hidden />} loading={saving} />
+            : <ActionBtn label="Resume Engine" onClick={() => pauseResume('resume')} variant="success" icon={<Play size={18} aria-hidden />} loading={saving} />
           }
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -279,7 +288,7 @@ const TradingEngineSection: React.FC = () => {
       </SectionCard>
 
       {/* Risk parameters */}
-      <SectionCard title="Risk Parameters" icon="🛡️" accent="#f59e0b"
+      <SectionCard title="Risk Parameters" icon={<Shield size={18} aria-hidden />} accent="#f59e0b"
         actions={<ActionBtn label={saving ? 'Saving…' : 'Save'} onClick={save} variant="primary" loading={saving} size="sm" />}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <Input label="Max Open Positions"        value={cfg.max_open_positions}           onChange={e => set('max_open_positions', Number(e.target.value))}           type="number" />
@@ -313,16 +322,7 @@ const TradingEngineSection: React.FC = () => {
         </div>
       </SectionCard>
 
-      {msg && (
-        <div style={{
-          padding: '12px 16px', borderRadius: 8, marginTop: 4,
-          background: msg.includes('failed') || msg.includes('ACTIVATED') ? '#450a0a' : '#052e16',
-          color: msg.includes('failed') || msg.includes('ACTIVATED') ? '#f87171' : '#4ade80',
-          fontSize: 13, fontWeight: 600,
-        }}>
-          {msg}
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} />
 
       {/* ── Decision Engine & Gatekeeper Status ── */}
       <DecisionEnginePanel />
@@ -335,6 +335,7 @@ const TradingEngineSection: React.FC = () => {
 const DecisionEnginePanel: React.FC = () => {
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadErr, setLoadErr] = useState('');
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -345,7 +346,10 @@ const DecisionEnginePanel: React.FC = () => {
       const res = await superadminApi.engineStatus();
       if (!mountedRef.current) return;
       setStatus(res.data);
-    } catch { /* non-fatal */ }
+      setLoadErr('');
+    } catch (e) {
+      if (mountedRef.current) setLoadErr(extractApiError(e, 'Failed to load decision-engine status'));
+    }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -367,22 +371,23 @@ const DecisionEnginePanel: React.FC = () => {
 
   return (
     <>
-      <SectionCard title="Decision Engine Pipeline" icon="⚡" accent="#f59e0b">
+      <SectionCard title="Decision Engine Pipeline" icon={<Zap size={18} aria-hidden />} accent="#f59e0b">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 13, color: '#64748b' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
-          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: 12 }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>5-phase HOPEFXDecisionEngine — runs on every market tick</div>
+          <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
             {loading ? '…' : '↻'}
           </button>
         </div>
+        {loadErr && <ActionBanner message={loadErr} ok={false} onDismiss={() => setLoadErr('')} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {phases.map(p => (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#60a5fa', flexShrink: 0 }}>
+            <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: 'var(--link)', flexShrink: 0 }}>
                 {p.id}
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{p.name}</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{p.desc}</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{p.desc}</div>
               </div>
             </div>
           ))}
@@ -390,32 +395,34 @@ const DecisionEnginePanel: React.FC = () => {
         {status && (
           <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
             {Object.entries(status as Record<string, unknown>).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
-              <div key={key} style={{ background: '#1e293b', borderRadius: 6, padding: '8px 12px' }}>
-                <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{String(val)}</div>
+              <div key={key} style={{ background: 'var(--raised)', borderRadius: 6, padding: '8px 12px' }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{String(val)}</div>
               </div>
             ))}
           </div>
         )}
       </SectionCard>
 
-      <SectionCard title="Gatekeeper Checks (11)" icon="🛡️" accent="#22c55e">
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
-          All 11 checks must pass before any trade is executed. Failures are logged to the audit trail.
+      <SectionCard title="Gatekeeper Checks (11)" icon={<Shield size={18} aria-hidden />} accent="#22c55e">
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 12 }}>
+          Reference list of the checks the gatekeeper applies — all 11 must pass before any trade is
+          executed, and failures are logged to the audit trail. This panel does not report live check
+          state; see the engine status above.
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
           {gatekeeperChecks.map((check, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: '#0f172a', border: '1px solid #1e293b' }}>
-              <span style={{ color: '#22c55e', fontSize: 14 }}>✓</span>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>{check}</span>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>•</span>
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{check}</span>
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>Decision Outcomes</div>
+        <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 6 }}>Decision Outcomes</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {['NO_SIGNAL', 'ML_FILTERED', 'RISK_BLOCKED', 'SIZING_REJECTED', 'EXECUTED', 'EXECUTION_ERROR'].map(o => (
-              <span key={o} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#1e293b', color: '#94a3b8', fontFamily: 'monospace' }}>{o}</span>
+              <span key={o} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--raised)', color: 'var(--text-dim)', fontFamily: 'monospace' }}>{o}</span>
             ))}
           </div>
         </div>

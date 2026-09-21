@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
+import QRCode from '../components/QRCode';
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CryptoOption = 'BTC' | 'ETH' | 'USDT';
@@ -40,12 +42,6 @@ const fmtCrypto = (amount: number, currency: CryptoOption) => {
   const decimals = currency === 'BTC' ? 8 : currency === 'ETH' ? 6 : 2;
   return amount.toFixed(decimals) + ' ' + currency;
 };
-
-function buildQRDataURL(text: string): string {
-  // Returns a placeholder SVG QR — in production use a real QR library
-  const encoded = encodeURIComponent(text);
-  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encoded}&bgcolor=1e293b&color=f1f5f9&margin=10`;
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -332,10 +328,18 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
           </div>
 
           <div style={styles.qrSection}>
-            <img
-              src={buildQRDataURL(depositInfo.address)}
-              alt="Payment QR code"
-              style={styles.qrImage}
+            {/* Encoded in-browser. Never round-trip a payment address through a
+                third-party image service — whoever serves the picture chooses
+                where the money goes. */}
+            <QRCode
+              value={depositInfo.address}
+              size={180}
+              alt={`Deposit address QR code for ${depositInfo.address}`}
+              fallback={
+                <div style={styles.qrFallback}>
+                  QR unavailable — copy the address below instead.
+                </div>
+              }
             />
           </div>
 
@@ -482,7 +486,11 @@ const styles: Record<string, React.CSSProperties> = {
   addressHeader: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 },
   addressTitle: { fontSize: 13, color: '#64748b', marginBottom: 4 },
   qrSection: { display: 'flex', justifyContent: 'center', marginBottom: 24 },
-  qrImage: { width: 180, height: 180, borderRadius: 8, border: '1px solid #334155' },
+  qrFallback: {
+    width: 180, height: 180, borderRadius: 8, border: '1px solid #334155',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    textAlign: 'center', padding: 16, fontSize: 12, color: '#94a3b8',
+  },
   addressBox: {
     background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
     padding: '12px 16px', marginBottom: 16,

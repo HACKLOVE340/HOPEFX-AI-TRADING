@@ -146,7 +146,13 @@ class ModelDriftTracker:
             stat = abs(win_mean - ref_mean) / ref_std
             p_value = 0.01 if stat > 2.0 else 0.5
 
-        drifted = p_value < _DRIFT_P_THRESHOLD
+        # bool(), not a bare comparison: scipy returns numpy scalars, so
+        # `p_value < threshold` is a numpy.bool_. That value is put straight
+        # into the payload GET /api/ml/drift returns, and neither json.dumps
+        # nor FastAPI's jsonable_encoder can serialise it -- so the endpoint
+        # 500s from the moment the KS test actually runs, which is exactly
+        # when it has something to say.
+        drifted = bool(p_value < _DRIFT_P_THRESHOLD)
         ts = datetime.now(UTC).isoformat()
         self._last_check_ts = ts
 

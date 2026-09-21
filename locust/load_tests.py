@@ -107,11 +107,11 @@ class PublicUser(HttpUser):
     def market_data(self):
         symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic
         with self.client.get(
-            f"/api/market-data/{symbol}",
+            f"/api/trading/ohlcv/{symbol}?timeframe=M5&limit=100",
             catch_response=True,
-            name="/api/market-data/[symbol]",
+            name="/api/trading/ohlcv/[symbol]",
         ) as r:
-            _check(r, "market_data", (200, 404, 503))
+            _check(r, "market_data", (200, 401, 403, 503))
 
     @task(2)
     def prometheus_metrics(self):
@@ -120,13 +120,18 @@ class PublicUser(HttpUser):
 
     @task(2)
     def risk_status(self):
+        # Was /api/risk/status, which is not a registered route — the /api/risk
+        # prefix belongs to the prop-firm and calculator routers. The risk
+        # metrics snapshot is /api/trading/risk. 404 is no longer accepted:
+        # accepting it is what let both this task and market_data measure
+        # nothing for as long as they did.
         with self.client.get(
-            "/api/risk/status",
+            "/api/trading/risk",
             headers=_auth_headers(),
             catch_response=True,
-            name="/api/risk/status",
+            name="/api/trading/risk",
         ) as r:
-            _check(r, "risk_status", (200, 401, 403, 404, 503))
+            _check(r, "risk_status", (200, 401, 403, 503))
 
     @task(1)
     def auth_login_attempt(self):
@@ -282,13 +287,16 @@ class AuthenticatedTrader(HttpUser):
 
     @task(1)
     def get_risk_metrics(self):
+        # Was /api/risk/metrics, which is not a registered route. The /api/risk
+        # prefix belongs to api/prop_firm.py and api/risk_calculator.py;
+        # prop-firm-status is the risk snapshot served under it.
         with self.client.get(
-            "/api/risk/metrics",
+            "/api/risk/prop-firm-status",
             headers=_auth_headers(),
             catch_response=True,
-            name="/api/risk/metrics",
+            name="/api/risk/prop-firm-status",
         ) as r:
-            _check(r, "risk_metrics", (200, 401, 403, 404, 503))
+            _check(r, "risk_metrics", (200, 401, 403, 503))
 
     @task(1)
     def get_trade_history(self):

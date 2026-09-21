@@ -42,7 +42,7 @@ const TrialBanner: React.FC = () => {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
-      fontSize: 13,
+      fontSize: 'var(--fs-body)',
       color: urgency ? '#fca5a5' : '#93c5fd',
     }}>
       <span>

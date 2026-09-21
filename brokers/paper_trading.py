@@ -202,6 +202,46 @@ class PaperTradingBroker(BrokerConnector):
     without connecting to real exchanges.
     """
 
+    #: Every Redis namespace created during a test run carries this prefix, so a
+    #: run's keys can be swept as a group instead of accumulating for ever.
+    TEST_NAMESPACE_PREFIX = "pytest:"
+
+    #: One token per process. Assigned lazily so importing this module outside a
+    #: test run costs nothing.
+    _TEST_RUN_TOKEN: str | None = None
+
+    @staticmethod
+    def _in_test_mode() -> bool:
+        """True when this process is a test run.
+
+        ``PYTEST_CURRENT_TEST`` is set by pytest for the duration of each test,
+        and ``APP_ENV=test`` is what the integration modules set at import. Both
+        are checked because a broker can be constructed at collection time,
+        before the first test has started.
+        """
+        return bool(os.getenv("PYTEST_CURRENT_TEST")) or os.getenv("APP_ENV", "").lower() == "test"
+
+    @classmethod
+    def _test_run_token(cls) -> str:
+        """The token scoping Redis keys for the current test.
+
+        Rotated per test by ``tests/conftest.py``, not merely per process. A
+        per-process token would keep two tests in the same run on one namespace:
+        dropping the in-memory registry between tests does not help, because the
+        next broker simply reloads the same keys from Redis. Stability *within*
+        a test is what matters — two resolves of the same user must reach the
+        same account.
+        """
+        if cls._TEST_RUN_TOKEN is None:
+            cls._TEST_RUN_TOKEN = uuid.uuid4().hex[:12]
+        return cls._TEST_RUN_TOKEN
+
+    @classmethod
+    def _new_test_run_token(cls) -> str:
+        """Start a fresh namespace scope. Called between tests."""
+        cls._TEST_RUN_TOKEN = uuid.uuid4().hex[:12]
+        return cls._TEST_RUN_TOKEN
+
     def __init__(
         self,
         config: dict[str, Any] | None = None,
@@ -280,19 +320,40 @@ class PaperTradingBroker(BrokerConnector):
 
         # ── Redis namespace ───────────────────────────────────────────────────
         # Resolve the Redis namespace used to scope this instance's keys.
-        # Explicit value always wins.  When None, use a stable identifier in
-        # production (so state survives restarts) but a fresh UUID in test
-        # environments (so concurrent test instances don't share state).
+        # Explicit value wins.  When None, derive a stable identifier from the
+        # user so production state survives restarts.
         if namespace is not None:
             self._redis_namespace: str = namespace
-        elif os.getenv("APP_ENV", "").lower() == "test":
-            # In test mode, auto-isolate each instance to prevent cross-test
-            # pollution when a real Redis is available in the test environment.
-            self._redis_namespace = str(uuid.uuid4())
         else:
             # Production default: derive from user_id ("paper" by default).
             # Stable across restarts so Redis persists open positions/orders.
             self._redis_namespace = user_id
+
+        # Under a test run, scope whatever was resolved above to this process.
+        #
+        # This used to be an ``elif`` on the ``namespace is None`` branch, so an
+        # explicit namespace opted out of test isolation entirely — and
+        # ``core/account_registry.py`` always passes one
+        # (``namespace=f"user:{user_id}"``), which is exactly the path the
+        # isolation tests exercise. Two users therefore got two *permanent*
+        # namespaces and every order they placed accumulated in the shared Redis
+        # for ever.
+        #
+        # The damage was not theoretical. ``test_trading_endpoints_are_isolated``
+        # failed with "alice's order is visible in bob's positions". It was not
+        # alice's order: it was bob's own position, 13 lots accumulated across
+        # earlier runs of the same test and reloaded from
+        # ``hopefx:user:bob:positions:XAUUSD``. The registry and the endpoints
+        # were both correct.
+        #
+        # Prefixing rather than replacing keeps per-user namespaces distinct
+        # *within* a run, so the isolation tests still do real work, while
+        # guaranteeing nothing survives *between* runs. The shared prefix also
+        # makes a run's keys sweepable as a group — 424 orphaned key sets had
+        # accumulated from the old auto-isolating UUID branch, which prevented
+        # sharing but cleaned up nothing.
+        if self._in_test_mode():
+            self._redis_namespace = f"{self.TEST_NAMESPACE_PREFIX}{self._test_run_token()}:{self._redis_namespace}"
 
         # ── Redis state persistence ───────────────────────────────────────────
         # Orders and positions are persisted to Redis so they survive process
@@ -311,6 +372,9 @@ class PaperTradingBroker(BrokerConnector):
         # Tracks when each symbol's price was last updated by a LIVE feed.
         # Symbols absent from this dict are using hardcoded fallback prices.
         self._price_timestamps: dict[str, float] = {}
+        # Symbols whose market_prices entry came from a feed rather than the
+        # seed table below. See has_live_price().
+        self._fed_symbols: set[str] = set()
         self._price_stale_secs = float(os.getenv("PAPER_PRICE_STALE_SECONDS", "120"))
         # When True, raise StalePriceError instead of filling at a stale/fallback price.
         # Default False to preserve offline demo / backtest behaviour.
@@ -402,9 +466,11 @@ class PaperTradingBroker(BrokerConnector):
             password = _os.getenv("REDIS_PASSWORD", "") or None
 
             # Inject REDIS_PASSWORD when not already embedded in the URL.
-            if password and "@" not in redis_url.split("://", 1)[-1]:
-                scheme, rest = redis_url.split("://", 1)
-                redis_url = f"{scheme}://:{password}@{rest}"
+            # Shared helper: the inline version raised ValueError on an empty or
+            # schemeless REDIS_URL instead of degrading.
+            from cache.redis_client import inject_redis_password
+
+            redis_url = inject_redis_password(redis_url, password)
 
             r = _redis_lib.from_url(
                 redis_url,
@@ -447,8 +513,53 @@ class PaperTradingBroker(BrokerConnector):
             self._restore_state_from_redis()
         return True
 
+    def _save_balance_to_redis(self) -> None:
+        """Persist the cash balance after it moves.
+
+        Called from the only two places that move it — commission and realised
+        P&L on close. Persistence must never be able to break a fill, so any
+        failure is logged and swallowed, exactly as position persistence does.
+        """
+        if self._redis_state is None:
+            return
+        try:
+            self._redis_state.save_balance(self.balance)
+        except Exception as exc:
+            logger.warning("PaperTradingBroker: Redis save_balance failed: %s", exc)
+
     def _restore_state_from_redis(self) -> None:
-        """Reload open orders and positions from Redis after a restart."""
+        """Reload balance, open orders and positions from Redis after a restart.
+
+        The balance restore is new. Positions were already durable and the
+        balance was not, so every restart replayed the open book against
+        starting capital: every closed trade the account had ever made was
+        silently erased and equity jumped to ``initial_balance``. Nothing
+        logged an error — a fresh account is an ordinary thing to be — so the
+        number looked plausible and the P&L history did not survive a deploy.
+
+        A restored balance always wins over ``initial_balance``, and the
+        restore is logged with both figures so the substitution is visible. To
+        genuinely reset an account, delete its ``hopefx:<ns>:balance`` key or
+        give the broker a new namespace.
+        """
+        try:
+            persisted_balance = self._redis_state.load_balance()
+            # None means "never saved" — a new namespace, which correctly keeps
+            # initial_balance. It is not the same as a balance of 0.0, which is
+            # an account that has been wiped out and must restore as zero.
+            if persisted_balance is not None:
+                previous = self.balance
+                self.balance = persisted_balance
+                self.equity = persisted_balance
+                if abs(previous - persisted_balance) > 1e-9:
+                    logger.info(
+                        "PaperTradingBroker: restored balance $%.2f from Redis (initial was $%.2f)",
+                        persisted_balance,
+                        previous,
+                    )
+        except Exception as exc:
+            logger.warning("PaperTradingBroker: balance restore from Redis failed: %s", exc)
+
         try:
             state = self._redis_state.load_state_on_boot()
             restored_positions = 0
@@ -744,6 +855,7 @@ class PaperTradingBroker(BrokerConnector):
         commission = (quantity / self._standard_lot_units) * self._commission_per_lot
         self.balance -= commission
         self.equity = self.balance
+        self._save_balance_to_redis()
         logger.debug(
             "Commission charged: $%.4f (qty=%.0f lots=%.4f rate=%.2f/lot)",
             commission,
@@ -861,9 +973,12 @@ class PaperTradingBroker(BrokerConnector):
         else:
             gross_pnl = (position.entry_price - exit_price) * position.quantity
 
-        # Apply gross P&L then deduct closing commission
+        # Apply gross P&L then deduct closing commission.
+        # _deduct_commission persists the balance, so the write below covers the
+        # zero-commission case (commission_per_lot=0 returns early).
         self.balance += gross_pnl
         self.equity = self.balance
+        self._save_balance_to_redis()
         close_commission = self._deduct_commission(position.quantity)
         net_pnl = gross_pnl - close_commission
 
@@ -1105,7 +1220,30 @@ class PaperTradingBroker(BrokerConnector):
         """
         self.market_prices[symbol] = price
         self._price_timestamps[symbol] = time.time()
+        self._fed_symbols.add(symbol)
+        self._fed_symbols.add(symbol.upper())
         logger.debug("Updated %s price to $%s", symbol, price)
+
+    def has_live_price(self, symbol: str) -> bool:
+        """True when *symbol*'s entry in ``market_prices`` came from a feed.
+
+        ``market_prices`` is seeded with a hardcoded table so offline demos and
+        backtests can fill orders. Those seeds are not market data — the gold
+        seed is 3300.0, commented "~May 2026", against a spot price nearer 4400
+        — so anything presenting one as a quote shows a number that is both
+        wrong and frozen.
+
+        ``api/ws_live.py::_get_live_price`` did exactly that. It reads this dict
+        at level 2 of a four-level chain, above the Redis tick cache (level 3)
+        and the event bus (level 4). The seed is always present once the broker
+        connects, so those two levels were unreachable and the chart header sat
+        at "3,300.00  +0.00%" — beside a candle series drawn from real data
+        around 4,400 — with the badge reading DISCONNECTED throughout.
+
+        This lets a caller that wants live prices ask for live prices; the fill
+        path is unchanged and still uses the seeds when nothing better exists.
+        """
+        return symbol in self._fed_symbols or symbol.upper() in self._fed_symbols
 
     def _update_position(
         self,

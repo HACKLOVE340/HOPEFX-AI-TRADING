@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { useStore, selectRiskSnapshot, selectAccount } from '../../store';
+import { useStore, selectRiskSnapshot, selectAccount, selectKillSwitch } from '../../store';
 
 const fmtPct = (v: number | null | undefined, dp = 1): string =>
   v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(dp)}%`;
@@ -27,10 +27,10 @@ const Cell: React.FC<{
   return (
     <div title={title} style={{
       flex: 1, minWidth: 120, padding: '10px 12px',
-      background: '#0f172a', border: '1px solid #1e293b', borderRadius: 9,
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: fg, marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-title)', fontWeight: 800, color: fg, marginTop: 2 }}>{value}</div>
     </div>
   );
 };
@@ -39,7 +39,8 @@ export const RiskTransparencyStrip: React.FC = () => {
   const risk    = useStore(selectRiskSnapshot);
   const account = useStore(selectAccount);
 
-  const killSwitch = risk?.kill_switch_active ?? account?.kill_switch ?? false;
+  // Shared selector — see S10-02.
+  const killSwitch = useStore(selectKillSwitch);
 
   // Prefer the live WS snapshot; fall back to account metrics where present.
   const dailyLoss   = risk?.daily_loss_pct;
@@ -55,16 +56,16 @@ export const RiskTransparencyStrip: React.FC = () => {
 
   return (
     <div style={{
-      background: '#0d1421',
+      background: 'var(--surface)',
       border: `1px solid ${killSwitch ? 'rgba(248,113,113,0.4)' : '#1e293b'}`,
       borderRadius: 12, padding: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>🛡️ Risk State</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>🛡️ Risk State</span>
         <span style={{
           fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',
-          color: killSwitch ? '#f87171' : '#22c55e',
+          color: killSwitch ? 'var(--loss)' : '#22c55e',
           background: killSwitch ? 'rgba(248,113,113,0.12)' : 'rgba(34,197,94,0.12)',
           border: `1px solid ${killSwitch ? 'rgba(248,113,113,0.35)' : 'rgba(34,197,94,0.3)'}`,
         }}>
@@ -73,7 +74,7 @@ export const RiskTransparencyStrip: React.FC = () => {
       </div>
 
       {!hasAny ? (
-        <div style={{ fontSize: 13, color: '#475569' }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
           Risk telemetry will appear once the live feed is connected.
         </div>
       ) : (

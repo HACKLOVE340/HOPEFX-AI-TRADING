@@ -32,8 +32,13 @@ _RULE = "No Loss Of Human Control"
 def verify_alert_escalated(unacked_seconds: float, escalate_after_seconds: float, escalated: bool) -> list[Violation]:
     """An alert unacknowledged past its window must have escalated."""
     if _is_finite_number(unacked_seconds) and unacked_seconds > escalate_after_seconds and not escalated:
-        return [_v("No Silent Failure", CRITICAL,
-                   f"alert unacked {unacked_seconds}s (> {escalate_after_seconds}s) but not escalated")]
+        return [
+            _v(
+                "No Silent Failure",
+                CRITICAL,
+                f"alert unacked {unacked_seconds}s (> {escalate_after_seconds}s) but not escalated",
+            )
+        ]
     return []
 
 
@@ -44,12 +49,18 @@ def verify_incident_has_root_cause(resolved: bool, root_cause: str | None) -> li
     return []
 
 
-def verify_postmortem_complete(severity_rank: int, postmortem_required_rank: int,
-                               postmortem_done: bool) -> list[Violation]:
+def verify_postmortem_complete(
+    severity_rank: int, postmortem_required_rank: int, postmortem_done: bool
+) -> list[Violation]:
     """A sufficiently severe incident must have a completed postmortem."""
     if severity_rank >= postmortem_required_rank and not postmortem_done:
-        return [_v("No Unexplained System Behavior", WARNING,
-                   f"severity-{severity_rank} incident missing required postmortem")]
+        return [
+            _v(
+                "No Unexplained System Behavior",
+                WARNING,
+                f"severity-{severity_rank} incident missing required postmortem",
+            )
+        ]
     return []
 
 
@@ -91,8 +102,13 @@ def verify_retired_strategy_stopped(retired: bool, still_trading: bool, strategy
 def verify_emergency_governance(kill_switch_owner: Any, required_owner: Any) -> list[Violation]:
     """Emergency authority must rest with the designated human/role, not drift."""
     if required_owner is not None and kill_switch_owner != required_owner:
-        return [_v(_RULE, CONSTITUTIONAL,
-                   f"emergency authority drifted: owner {kill_switch_owner!r} != required {required_owner!r}")]
+        return [
+            _v(
+                _RULE,
+                CONSTITUTIONAL,
+                f"emergency authority drifted: owner {kill_switch_owner!r} != required {required_owner!r}",
+            )
+        ]
     return []
 
 

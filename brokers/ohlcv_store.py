@@ -45,6 +45,7 @@ UTC = timezone.utc
 from typing import Any
 
 import pandas as pd
+from utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ class OHLCVStore:
             r.ping()
             self._cache = MarketDataCache(r)
             self._redis_ok = True
-            logger.debug("OHLCVStore: Redis connected at %s", _REDIS_URL)
+            logger.debug("OHLCVStore: Redis connected at %s", redact_url(_REDIS_URL))
         except Exception as exc:
             logger.debug("OHLCVStore: Redis unavailable (%s) — using ring buffer", exc)
             self._cache = None

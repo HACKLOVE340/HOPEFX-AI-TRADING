@@ -5,6 +5,8 @@ import { api } from '../../hooks/useApi';
 import type { IntegrationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
+import { Plug } from 'lucide-react';
 
 const DEFAULT: IntegrationSettings = {
   tradingview_enabled: false, tradingview_webhook_secret: '',
@@ -22,15 +24,27 @@ const IntegrationsSection: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
   const [webhookTestResult, setWebhookTestResult] = useState<'ok' | 'fail' | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<IntegrationSettings>('/settings/integrations')
       .then((r) => setForm({ ...DEFAULT, ...r.data }))
-      .catch((err: unknown) => console.warn('[Settings/Integrations] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/Integrations] load:', err);
+        // DEFAULT blanks every credential on this form — MT4/MT5 passwords,
+        // cTrader client secret, webhook secrets. Saving after a failed GET
+        // would post those empty strings over the stored values and break the
+        // live connections. Refuse to render a form we could not populate.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<IntegrationSettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -57,22 +71,32 @@ const IntegrationsSection: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading integrations…
+    </div>
+  );
+
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon={<Plug size={18} aria-hidden />} title="Integrations" description="Connect external platforms, trading terminals, and automation tools." />
+      <ErrorBanner message="Couldn't load your integration settings. Nothing has been changed — saving now would overwrite your stored credentials with blanks." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 
   return (
     <div>
-      <SectionHeader icon="🔌" title="Integrations" description="Connect external platforms, trading terminals, and automation tools." />
+      <SectionHeader icon={<Plug size={18} aria-hidden />} title="Integrations" description="Connect external platforms, trading terminals, and automation tools." />
 
       {/* TradingView */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>TradingView Webhooks</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Receive alerts from TradingView Pine Script strategies.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>TradingView Webhooks</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Receive alerts from TradingView Pine Script strategies.</div>
           </div>
           <Toggle id="tv-enabled" label="" checked={form.tradingview_enabled} onChange={(v) => update({ tradingview_enabled: v })} />
         </div>
@@ -87,8 +111,8 @@ const IntegrationsSection: React.FC = () => {
                 type="password"
               />
             </Field>
-            <div style={{ fontSize: 12, color: '#64748b', background: '#0f172a', padding: '10px 14px', borderRadius: 8, border: '1px solid #1e293b' }}>
-              Webhook URL: <code style={{ color: '#60a5fa' }}>{window.location.origin}/api/webhooks/tradingview</code>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
+              Webhook URL: <code style={{ color: 'var(--link)' }}>{window.location.origin}/api/webhooks/tradingview</code>
             </div>
           </>
         )}
@@ -98,8 +122,8 @@ const IntegrationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>MetaTrader 4</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Connect via MT4 bridge for signal execution.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>MetaTrader 4</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Connect via MT4 bridge for signal execution.</div>
           </div>
           <Toggle id="mt4-enabled" label="" checked={form.mt4_enabled} onChange={(v) => update({ mt4_enabled: v })} />
         </div>
@@ -117,8 +141,8 @@ const IntegrationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>MetaTrader 5</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Connect via MT5 bridge for signal execution.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>MetaTrader 5</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Connect via MT5 bridge for signal execution.</div>
           </div>
           <Toggle id="mt5-enabled" label="" checked={form.mt5_enabled} onChange={(v) => update({ mt5_enabled: v })} />
         </div>
@@ -136,8 +160,8 @@ const IntegrationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>cTrader Open API</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>OAuth2 connection to cTrader-compatible brokers.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>cTrader Open API</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>OAuth2 connection to cTrader-compatible brokers.</div>
           </div>
           <Toggle id="ctrader-enabled" label="" checked={form.ctrader_enabled} onChange={(v) => update({ ctrader_enabled: v })} />
         </div>
@@ -154,8 +178,8 @@ const IntegrationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>Zapier</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Trigger Zaps on trade events.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Zapier</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Trigger Zaps on trade events.</div>
           </div>
           <Toggle id="zapier-enabled" label="" checked={form.zapier_enabled} onChange={(v) => update({ zapier_enabled: v })} />
         </div>
@@ -171,8 +195,8 @@ const IntegrationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>Google Sheets</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Auto-log trades to a Google Sheet.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Google Sheets</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Auto-log trades to a Google Sheet.</div>
           </div>
           <Toggle id="sheets-enabled" label="" checked={form.google_sheets_enabled} onChange={(v) => update({ google_sheets_enabled: v })} />
         </div>
@@ -190,8 +214,8 @@ const IntegrationsSection: React.FC = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>Custom Webhook</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>POST trade events to any HTTP endpoint.</div>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)' }}>Custom Webhook</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>POST trade events to any HTTP endpoint.</div>
           </div>
           <Toggle id="webhook-enabled" label="" checked={form.webhook_enabled} onChange={(v) => update({ webhook_enabled: v })} />
         </div>

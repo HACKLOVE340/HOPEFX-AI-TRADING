@@ -17,7 +17,7 @@ import { useStore } from '../store';
 import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import type { UserRole } from '../store';
 import { Eye, EyeOff, Activity, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, isSafeRedirectPath } from '../lib/utils';
 import AppBackground from '../components/AppBackground';
 
 // ── Error normaliser ──────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ function SkeletonField() {
 function shimBar(w: number | string, h: number, mb = 0): React.CSSProperties {
   return {
     width: w, height: h, marginBottom: mb, borderRadius: 6,
-    background: 'linear-gradient(90deg,#1e293b 25%,#334155 50%,#1e293b 75%)',
+    background: 'linear-gradient(90deg,var(--raised) 25%,var(--surface-hover) 50%,var(--raised) 75%)',
     backgroundSize: '200% 100%',
     animation: 'shimmer 1.4s infinite',
   };
@@ -91,19 +91,15 @@ const Login: React.FC = () => {
     || (location.state as { from?: { pathname: string } })?.from?.pathname;
 
   useEffect(() => {
-    const id = 'hopefx-shimmer';
-    if (!document.getElementById(id)) {
-      const st = document.createElement('style');
-      st.id = id;
-      st.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
-      document.head.appendChild(st);
-    }
+    // The `shimmer` keyframes used to be injected into <head> here at runtime.
+    // index.css already defines them globally (audit #68) — as it does `spin` —
+    // so this was a third copy of a rule that was always present.
     document.title = 'Sign In — HOPEFX';
     return () => { document.title = 'HOPEFX'; };
   }, []);
 
   function resolveDestination(role: UserRole): string {
-    if (requestedFrom && requestedFrom !== '/login') {
+    if (requestedFrom && requestedFrom !== '/login' && isSafeRedirectPath(requestedFrom)) {
       const isSuperAdminRoute = requestedFrom.startsWith('/superadmin');
       const isAdminRoute      = ['/audit', '/security', '/auto-heal', '/whitelabel'].some(
         (p) => requestedFrom.startsWith(p),
@@ -189,9 +185,9 @@ const Login: React.FC = () => {
 
             {/* Email or Username */}
             <div style={s.field}>
-              <label style={s.label} htmlFor="identifier">Email or Username</label>
+              <label style={s.label} htmlFor="identifier" id="identifier-label">Email or Username</label>
               <input
-                id="identifier"
+                id="identifier" aria-labelledby="identifier-label"
                 type="text"
                 value={identifier}
                 onChange={(e) => { setIdentifier(e.target.value); setError(''); setShowTotp(false); }}
@@ -209,12 +205,12 @@ const Login: React.FC = () => {
             {/* Password */}
             <div style={s.field}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <label style={s.label} htmlFor="password">Password</label>
+                <label style={s.label} htmlFor="password" id="password-label">Password</label>
                 <Link to="/forgot-password" style={s.forgotLink}>Forgot password?</Link>
               </div>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="password"
+                  id="password" aria-labelledby="password-label"
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(''); }}
@@ -242,12 +238,12 @@ const Login: React.FC = () => {
             {/* TOTP — revealed when server signals 2FA is required */}
             {showTotp && (
               <div style={s.field}>
-                <label style={s.label} htmlFor="totp">
+                <label style={s.label} htmlFor="totp" id="totp-label">
                   <ShieldCheck size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
                   Authenticator Code
                 </label>
                 <input
-                  id="totp"
+                  id="totp" aria-labelledby="totp-label"
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]{6,8}"
@@ -259,7 +255,12 @@ const Login: React.FC = () => {
                   style={{ ...inputStyle('totp'), letterSpacing: 4, fontFamily: 'monospace', fontSize: 18 }}
                   placeholder="000000"
                   autoComplete="one-time-code"
-                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  // autoFocus is deliberate here: this field is revealed only
+                  // after the server asks for 2FA, so focus follows the step the
+                  // user was just moved to rather than stealing it on page load.
+                  // (The `eslint-disable` that stood here named
+                  // jsx-a11y/no-autofocus, a rule this config never enabled —
+                  // eslint reported it as an unused directive on every run.)
                   autoFocus
                   disabled={loading}
                 />
@@ -289,18 +290,14 @@ const Login: React.FC = () => {
 
         <div style={s.footer}>
           <Link to="/register" style={s.link}>Create account</Link>
-          <span style={{ color: '#334155' }}>·</span>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
           <Link to="/forgot-password" style={s.link}>Forgot password</Link>
-          <span style={{ color: '#334155' }}>·</span>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
           <Link to="/status" style={s.link}>System Status</Link>
-          <span style={{ color: '#334155' }}>·</span>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
           <a href="mailto:support@hopefx.io" style={s.link}>Support</a>
         </div>
       </div>
-      <style>{`
-        @keyframes spin    { to { transform: rotate(360deg); } }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-      `}</style>
     </div>
   );
 };
@@ -343,22 +340,22 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     flexShrink: 0,
   },
-  logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 24px' },
+  logo:    { fontSize: 24, fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 },
+  tagline: { fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 24px' },
   form:    { display: 'flex', flexDirection: 'column', gap: 16 },
   field:   { display: 'flex', flexDirection: 'column' },
   label: {
-    fontSize: 11, fontWeight: 700, color: '#94a3b8',
+    fontSize: 11, fontWeight: 700, color: 'var(--text-dim)',
     textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6,
   },
   input: {
-    background: '#0f172a',
-    border: '1px solid #334155',
+    background: 'var(--surface)',
+    border: '1px solid var(--border-strong)',
     borderRadius: 8,
     padding: '12px 14px',
     /* 16px prevents iOS Safari from zooming on focus */
     fontSize: 16,
-    color: '#f8fafc',
+    color: 'var(--text-strong)',
     outline: 'none',
     transition: 'border-color 0.15s, box-shadow 0.15s',
     width: '100%',
@@ -374,19 +371,19 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     touchAction: 'manipulation',
   },
-  forgotLink: { fontSize: 13, color: '#60a5fa', textDecoration: 'none', fontWeight: 500, minHeight: 44, display: 'inline-flex', alignItems: 'center' },
-  totpHint:   { fontSize: 11, color: '#64748b', marginTop: 6 },
+  forgotLink: { fontSize: 'var(--fs-body)', color: 'var(--link)', textDecoration: 'none', fontWeight: 500, minHeight: 44, display: 'inline-flex', alignItems: 'center' },
+  totpHint:   { fontSize: 11, color: 'var(--text-muted)', marginTop: 6 },
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
     background: 'rgba(248,113,113,0.08)',
     border: '1px solid rgba(248,113,113,0.25)',
     borderRadius: 8, padding: '10px 14px',
-    fontSize: 13, color: '#f87171', lineHeight: 1.5,
+    fontSize: 'var(--fs-body)', color: 'var(--loss)', lineHeight: 1.5,
   },
   btn: {
     background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
     color: '#fff', border: 'none', borderRadius: 8,
-    padding: '14px', fontSize: 15, fontWeight: 700,
+    padding: '14px', fontSize: 'var(--fs-value)', fontWeight: 700,
     cursor: 'pointer', marginTop: 4,
     /* 48px min height for comfortable touch */
     minHeight: 48,
@@ -397,9 +394,9 @@ const s: Record<string, React.CSSProperties> = {
   },
   footer: {
     display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
-    gap: '8px 12px', marginTop: 24, fontSize: 13,
+    gap: '8px 12px', marginTop: 24, fontSize: 'var(--fs-body)',
   },
-  link: { color: '#64748b', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
+  link: { color: 'var(--text-muted)', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };
 
 export default Login;

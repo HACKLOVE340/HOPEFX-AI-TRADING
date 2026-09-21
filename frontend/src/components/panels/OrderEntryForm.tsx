@@ -12,11 +12,13 @@
 
 import React, { useState, useCallback, useEffect, useRef, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useStore, selectIsBlackout } from '../../store';
+import { useStore, selectIsBlackout, selectFeedLive } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, cn, extractApiError } from '../../lib/utils';
+import { fmtPrice, cn, extractApiError, describeSubmitFailure } from '../../lib/utils';
+import { useConfirm } from '../ConfirmDialog';
+import { useHotkeys } from '../../hooks/useHotkeys';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,7 +50,11 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+      {/* The id lets NumInput point `aria-labelledby` here. htmlFor alone is a
+          sibling reference, which is correct at runtime but not verifiable from
+          the control's own props — so the control carries the name too, as a
+          REFERENCE to this element rather than a copy of its text. */}
+      <label id={`${id}-label`} htmlFor={id} className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
         {label}
       </label>
       {children}
@@ -77,6 +83,8 @@ function NumInput({
   return (
     <input
       id={id}
+      // Field renders `<label id={`${id}-label`}>` for this same id.
+      aria-labelledby={`${id}-label`}
       type="number"
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -85,7 +93,7 @@ function NumInput({
       min={min}
       disabled={disabled}
       className={cn(
-        'w-full bg-[#0d1421] border border-[#1e2d3d] rounded px-2.5 py-1.5',
+        'w-full bg-[var(--surface)] border border-[var(--border)] rounded px-2.5 py-1.5',
         'text-[12px] text-slate-200 placeholder-slate-600',
         'focus:outline-none focus:border-[#3b82f6] transition-colors',
         'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -98,7 +106,7 @@ function NumInput({
 // ── Risk preview ──────────────────────────────────────────────────────────────
 
 function RiskPreview({
-  side,
+  side: _side,
   entry,
   sl,
   tp,
@@ -130,17 +138,17 @@ function RiskPreview({
   if (!slDist && !tpDist) return null;
 
   return (
-    <div className="flex gap-3 px-2.5 py-2 rounded bg-[#0d1421] border border-[#1e2d3d] text-[10px]">
+    <div className="flex gap-3 px-2.5 py-2 rounded bg-[var(--surface)] border border-[var(--border)] text-[10px]">
       {maxLoss && (
         <div className="flex flex-col gap-0.5">
           <span className="text-slate-500">Max loss</span>
-          <span className="text-[#ff1744] font-semibold">${maxLoss}</span>
+          <span className="text-[var(--bear)] font-semibold">${maxLoss}</span>
         </div>
       )}
       {rr && (
         <div className="flex flex-col gap-0.5">
           <span className="text-slate-500">R:R</span>
-          <span className={cn('font-semibold', parseFloat(rr) >= 2 ? 'text-[#00e676]' : 'text-[#ffb800]')}>
+          <span className={cn('font-semibold', parseFloat(rr) >= 2 ? 'text-[var(--bull)]' : 'text-[#ffb800]')}>
             1:{rr}
           </span>
         </div>
@@ -163,6 +171,8 @@ interface OrderEntryFormProps {
   defaultLimitPx?:  string;
   defaultSl?:       string;
   defaultTp?:       string;
+  /** Pre-filled position size, e.g. the lot size RiskCalculator just sized. */
+  defaultQty?:      string;
   onOrderPlaced?: () => void;
 }
 
@@ -174,7 +184,7 @@ const ORDER_TYPES: { value: OrderType; label: string }[] = [
   { value: 'stop',   label: 'Stop'   },
 ];
 
-function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, defaultSl, defaultTp, onOrderPlaced }: OrderEntryFormProps) {
+function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, defaultSl, defaultTp, defaultQty, onOrderPlaced }: OrderEntryFormProps) {
   const uid        = useId();
   const prices     = useStore((s) => s.prices);
   const account    = useStore((s) => s.account);
@@ -187,21 +197,66 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   const liveSymbols = Object.keys(prices);
   const symbols = liveSymbols.length > 0 ? liveSymbols : FALLBACK_SYMBOLS;
 
-  const [symbol,    setSymbol]    = useState(symbolProp ?? symbols[0] ?? 'XAU/USD');
+  // Controlled by the parent when `symbolProp` is supplied, internal otherwise.
+  //
+  // This was `useState(symbolProp ?? symbols[0] ?? 'XAU/USD')`, and useState's
+  // argument is read once, on mount. On the Trade page the parent passes
+  // `symbol={selectedSymbol}` and re-renders with a new value each time you
+  // click a symbol card — which this state then ignored, forever holding
+  // whatever was selected when the form first mounted (XAU/USD).
+  //
+  // The card highlighted, the heading changed, the positions table changed, and
+  // the order form silently kept trading gold. The symbol dropdown that would
+  // have let you correct it is hidden precisely when `symbolProp` is passed
+  // (see the `!symbolProp` guard below), so there was no way back.
+  //
+  // That is a money-path defect, not a cosmetic one: selecting GBP/USD and
+  // pressing Buy submitted an order in XAU/USD. The confirmation dialog names
+  // the real symbol, which is the only thing that stood between this and a
+  // wrong-instrument fill.
+  const [internalSymbol, setInternalSymbol] = useState(symbols[0] ?? 'XAU/USD');
+  const symbol = symbolProp ?? internalSymbol;
+  const setSymbol = setInternalSymbol;
   const [side,      setSide]      = useState<Side>(defaultSide ?? 'buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
-  const [qty,       setQty]       = useState('0.01');
+  const [qty,       setQty]       = useState(defaultQty ?? '0.01');
   const [limitPx,   setLimitPx]   = useState(defaultLimitPx ?? '');
   const [sl,        setSl]        = useState(defaultSl ?? '');
   const [tp,        setTp]        = useState(defaultTp ?? '');
   const [submitting, setSubmitting] = useState(false);
+
+  // S10-04: `b` / `s` set the direction without reaching for the mouse. Bare
+  // letters are safe here only because `useHotkeys` refuses to fire from inside
+  // a field or while a dialog is open — without that, typing a quantity would
+  // arm a side. Submission is deliberately NOT bound: Enter already submits the
+  // form natively, and it still goes through the confirmation.
+  useHotkeys({
+    b: () => setSide('buy'),
+    s: () => setSide('sell'),
+  });
   const [result,    setResult]    = useState<{ ok: boolean; msg: string } | null>(null);
+  // Confirmation for capital-committing actions (S10-01). Falls back to
+  // "cancel" when no provider is mounted, so an order never proceeds
+  // unconfirmed in an isolated render.
+  const confirm    = useConfirm();
+  // Surfaced in the confirmation so the trader is told when the price the
+  // order is sized against may be stale (S9-01).
+  // `selectFeedLive`, not `s.feedStale`: connected-with-nothing-received-yet
+  // is also not a price you should size an order against (F1-02), and a
+  // second local copy of this rule is how S10-02 started.
+  const feedLive   = useStore(selectFeedLive);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-clear the result banner after 4 seconds so it doesn't linger.
   // The cleanup also fires on unmount, preventing setState-after-unmount.
+  //
+  // SUCCESS ONLY. A failure — including "filled but the stop was not placed,
+  // this position is UNPROTECTED" (F169) — must stay on screen until the trader
+  // dismisses it by acting. Auto-hiding a warning about an unprotected position
+  // after four seconds is how it gets missed.
   useEffect(() => {
     if (!result) return;
+    if (!result.ok) return;
     if (resultTimer.current) clearTimeout(resultTimer.current);
     resultTimer.current = setTimeout(() => setResult(null), 4_000);
     return () => {
@@ -284,16 +339,68 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
     if (sl) payload.stop_loss   = parseFloat(sl);
     if (tp) payload.take_profit = parseFloat(tp);
 
+    // Confirm before committing capital.
+    //
+    // Closing positions — which REDUCES exposure — was already gated behind a
+    // danger-variant dialog, while opening one was a single click. The risk
+    // asymmetry runs the other way: closing removes market exposure and is
+    // recoverable by re-entering; opening commits capital, arms a stop, and is
+    // recoverable only by paying the spread again. The confirmation restates
+    // magnitude (symbol, side, quantity, entry, stop, max loss) so the person
+    // confirming can actually check it, rather than agreeing to a category.
+    // See docs/HARDENING_BACKLOG.md S10-01 and S10-03.
+    const lines = [
+      `${side === 'buy' ? 'BUY' : 'SELL'} ${qtyNum} ${symbol}`,
+      orderType === 'market'
+        ? `at market${entryPrice > 0 ? ` (~${entryPrice})` : ''}`
+        : `${orderType} @ ${payload.price}`,
+      sl ? `Stop loss: ${slNum}` : 'Stop loss: NONE',
+      tp ? `Take profit: ${tpNum}` : 'Take profit: none',
+      slNum > 0 && entryPrice > 0
+        ? `Max loss at stop: $${(Math.abs(entryPrice - slNum) * qtyNum).toFixed(2)}`
+        : null,
+      feedLive ? null : 'WARNING: the price feed is not live — the entry shown may be stale.',
+    ].filter(Boolean);
+
+    const ok = await confirm({
+      title:        'Place this order?',
+      description:  lines.join('\n'),
+      confirmLabel: side === 'buy' ? 'Buy' : 'Sell',
+      variant:      'danger',
+    });
+    if (!ok) return;
+
     setSubmitting(true);
     try {
-      await tradingApi.placeOrder(payload);
-      setResult({ ok: true, msg: `${side.toUpperCase()} ${qtyNum} ${symbol} placed` });
+      const res = await tradingApi.placeOrder(payload);
+
+      // The broker may accept the order and silently drop the bracket: adapters
+      // without native bracket support log the stop and discard it, so a filled
+      // order can leave an UNPROTECTED position. The API reports this as
+      // `stop_loss_placed` (null when no bracket was requested). Surfacing it
+      // here is the difference between "your stop is set" and "you have no
+      // stop and do not know it". See audit F151 / F169.
+      const slPlaced = (res as { data?: { stop_loss_placed?: boolean | null } })
+        ?.data?.stop_loss_placed;
+
+      if (slPlaced === false) {
+        setResult({
+          ok: false,
+          msg:
+            `${side.toUpperCase()} ${qtyNum} ${symbol} FILLED — but the STOP LOSS was ` +
+            `NOT placed with the broker. This position is UNPROTECTED. Close it or ` +
+            `set a stop manually.`,
+        });
+      } else {
+        setResult({ ok: true, msg: `${side.toUpperCase()} ${qtyNum} ${symbol} placed` });
+      }
       setQty('0.01');
       setSl('');
       setTp('');
       setLimitPx('');
       qc.invalidateQueries({ queryKey: ['positions'] });
       qc.invalidateQueries({ queryKey: ['account'] });
+      qc.invalidateQueries({ queryKey: ['trades'] });
       onOrderPlaced?.();
     } catch (e: unknown) {
       const httpStatus = (e as { response?: { status?: number } })?.response?.status;
@@ -303,7 +410,11 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
       } else if (httpStatus === 403) {
         detail = extractApiError(e, 'Order rejected — check KYC status or subscription plan.');
       } else {
-        detail = extractApiError(e, 'Order failed');
+        // F2-01: the old fallback said "Order failed". On a timeout — reachable
+        // at 30s on this axios instance — nothing came back, so whether the
+        // broker filled it is unknown, and "failed" invites a second order on
+        // top of a live one.
+        detail = describeSubmitFailure(e, 'order').message;
       }
       setResult({ ok: false, msg: detail });
     } finally {
@@ -314,7 +425,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   // price rather than the price at the time the callback was last created.
   // Omitting it caused stale-closure bugs where SL/TP validation used an
   // outdated entry price after a price tick updated tick?.ask / tick?.bid.
-  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced]);
+  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced, confirm, feedLive]);
 
   return (
     <Panel title="Order Entry">
@@ -338,7 +449,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
               id={`${uid}-sym`}
               value={symbol}
               onChange={(e) => setSymbol(e.target.value)}
-              className="w-full bg-[#0d1421] border border-[#1e2d3d] rounded px-2.5 py-1.5 text-[12px] text-slate-200 focus:outline-none focus:border-[#3b82f6]"
+              className="w-full bg-[var(--surface)] border border-[var(--border)] rounded px-2.5 py-1.5 text-[12px] text-slate-200 focus:outline-none focus:border-[#3b82f6]"
             >
               {symbols.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -349,14 +460,14 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
 
         {/* Live price strip */}
         {tick && (
-          <div className="flex gap-4 px-2.5 py-2 rounded bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+          <div className="flex gap-4 px-2.5 py-2 rounded bg-[var(--surface)] border border-[var(--border)] text-[11px]">
             <div className="flex flex-col gap-0.5">
               <span className="text-slate-500">Bid</span>
-              <span className="text-[#ff1744] font-semibold tabular-nums">{fmtPrice(tick.bid)}</span>
+              <span className="text-[var(--bear)] font-semibold tabular-nums">{fmtPrice(tick.bid)}</span>
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-slate-500">Ask</span>
-              <span className="text-[#00e676] font-semibold tabular-nums">{fmtPrice(tick.ask)}</span>
+              <span className="text-[var(--bull)] font-semibold tabular-nums">{fmtPrice(tick.ask)}</span>
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-slate-500">Spread</span>
@@ -371,39 +482,50 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
           </div>
         )}
 
-        {/* Buy / Sell toggle */}
-        <div className="grid grid-cols-2 gap-1.5">
+        {/* Buy / Sell toggle
+            S10-04: `aria-pressed` and a named group. These are buttons whose
+            selected state lived only in a CSS class, so nothing announced which
+            direction the order would go — on the control that decides exactly
+            that, next to a submit button that commits capital. The green/red
+            distinction was also the sole visual carrier, which is the F7-01
+            question applied to a control rather than a readout. */}
+        <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Order side">
           {(['buy', 'sell'] as Side[]).map((s) => (
             <button
               key={s}
               type="button"
+              aria-pressed={side === s}
               onClick={() => setSide(s)}
               className={cn(
                 'py-2 rounded font-bold text-[13px] border transition-colors',
                 side === s && s === 'buy'
-                  ? 'bg-[#00e676]/15 border-[#00e676]/50 text-[#00e676]'
+                  ? 'bg-[var(--bull)]/15 border-[var(--bull)]/50 text-[var(--bull)]'
                   : side === s && s === 'sell'
-                  ? 'bg-[#ff1744]/15 border-[#ff1744]/50 text-[#ff1744]'
-                  : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                  ? 'bg-[var(--bear)]/15 border-[var(--bear)]/50 text-[var(--bear)]'
+                  : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
               )}
             >
               {s === 'buy' ? '▲ Buy' : '▼ Sell'}
+              <span className="ml-1 text-[9px] opacity-50" aria-hidden="true">
+                {s === 'buy' ? 'B' : 'S'}
+              </span>
             </button>
           ))}
         </div>
 
-        {/* Order type tabs */}
-        <div className="flex gap-1">
+        {/* Order type tabs — same treatment (S10-04). */}
+        <div className="flex gap-1" role="group" aria-label="Order type">
           {ORDER_TYPES.map(({ value, label }) => (
             <button
               key={value}
               type="button"
+              aria-pressed={orderType === value}
               onClick={() => setOrderType(value)}
               className={cn(
                 'flex-1 py-1 rounded text-[11px] font-semibold border transition-colors',
                 orderType === value
-                  ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                  : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                  ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+                  : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
               )}
             >
               {label}
@@ -473,8 +595,8 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
             'w-full py-2.5 rounded font-bold text-[13px] border-none transition-colors',
             'disabled:opacity-40 disabled:cursor-not-allowed',
             side === 'buy'
-              ? 'bg-[#00e676] text-[#0d1421] hover:bg-[#00c853]'
-              : 'bg-[#ff1744] text-white hover:bg-[#d50000]',
+              ? 'bg-[var(--bull)] text-[var(--surface)] hover:bg-[#00c853]'
+              : 'bg-[var(--bear)] text-white hover:bg-[#d50000]',
           )}
         >
           {isBlackout
@@ -491,8 +613,8 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
             className={cn(
               'px-3 py-2 rounded text-[11px] font-medium border',
               result.ok
-                ? 'bg-[#00e676]/10 border-[#00e676]/20 text-[#00e676]'
-                : 'bg-[#ff1744]/10 border-[#ff1744]/20 text-[#ff1744]',
+                ? 'bg-[var(--bull)]/10 border-[var(--bull)]/20 text-[var(--bull)]'
+                : 'bg-[var(--bear)]/10 border-[var(--bear)]/20 text-[var(--bear)]',
             )}
           >
             {result.msg}

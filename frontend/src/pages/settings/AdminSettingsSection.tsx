@@ -4,6 +4,8 @@ import { api } from '../../hooks/useApi';
 import type { AdminSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ErrorBanner } from '../../components/ErrorBanner';
+import { Wrench } from 'lucide-react';
 
 const DEFAULT: AdminSettings = {
   allow_new_registrations: true,
@@ -34,13 +36,25 @@ const AdminSettingsSection: React.FC = () => {
   const [smtpTesting, setSmtpTesting] = useState(false);
   const [smtpTestResult, setSmtpTestResult] = useState<'ok' | 'fail' | null>(null);
   const [killSwitchConfirm, setKillSwitchConfirm] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
     api.get<AdminSettings>('/admin/settings')
       .then((r) => setForm({ ...DEFAULT, ...r.data }))
-      .catch((err: unknown) => console.warn('[Settings/Admin] load:', err))
+      .catch((err: unknown) => {
+        console.warn('[Settings/Admin] load:', err);
+        // Never leave DEFAULT on screen looking like saved configuration. This
+        // form is saved wholesale, and DEFAULT reports global_kill_switch as
+        // false — so a failed GET plus one unrelated edit could resume trading
+        // platform-wide while the page looked entirely normal throughout.
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const update = useCallback((patch: Partial<AdminSettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
@@ -48,7 +62,11 @@ const AdminSettingsSection: React.FC = () => {
   const handleSave = async () => {
     setSaving(true); setError('');
     try {
-      await api.post('/admin/settings', form);
+      // The kill switch is deliberately NOT part of this payload. It has its own
+      // endpoint and its own confirmation; saving a settings object must never be
+      // able to flip the control that halts trading as a side effect.
+      const { global_kill_switch: _killSwitch, ...payload } = form;
+      await api.post('/admin/settings', payload);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
@@ -91,19 +109,32 @@ const AdminSettingsSection: React.FC = () => {
   };
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', padding: 20 }}>
-      <div style={{ width: 18, height: 18, border: '2px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', padding: 20 }}>
+      <div style={{ width: 18, height: 18, border: '2px solid var(--border-strong)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       Loading admin settings…
+    </div>
+  );
+
+  // Refuse to render an editable form we could not populate. Showing defaults
+  // here is worse than showing nothing: they are indistinguishable from real
+  // configuration, and saving replaces the real values with them.
+  if (loadFailed) return (
+    <div>
+      <SectionHeader icon={<Wrench size={18} aria-hidden />} title="Admin Settings" description="Platform-wide controls. Only visible to administrators." />
+      <ErrorBanner message="Couldn't load admin settings. Nothing has been changed — reload to try again." />
+      <div style={{ marginTop: 14 }}>
+        <Button variant="secondary" onClick={load}>Retry</Button>
+      </div>
     </div>
   );
 
   return (
     <div>
-      <SectionHeader icon="🔧" title="Admin Settings" description="Platform-wide controls. Only visible to administrators." />
+      <SectionHeader icon={<Wrench size={18} aria-hidden />} title="Admin Settings" description="Platform-wide controls. Only visible to administrators." />
 
       {/* Registration */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 4 }}>User Registration</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>User Registration</h3>
         <Toggle id="allow-reg" label="Allow new registrations" description="When disabled, the register page returns a 403." checked={form.allow_new_registrations} onChange={(v) => update({ allow_new_registrations: v })} />
         <Toggle id="email-verify" label="Require email verification" description="New users must verify their email before logging in." checked={form.require_email_verification} onChange={(v) => update({ require_email_verification: v })} />
         <Toggle id="force-2fa" label="Force 2FA for admins" description="All admin accounts must have 2FA enabled." checked={form.force_2fa_for_admins} onChange={(v) => update({ force_2fa_for_admins: v })} />
@@ -128,7 +159,7 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* Announcement banner */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 4 }}>Announcement Banner</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>Announcement Banner</h3>
         <Toggle id="announcement" label="Show announcement banner" description="Display a banner at the top of the app for all users." checked={form.announcement_enabled} onChange={(v) => update({ announcement_enabled: v })} />
         {form.announcement_enabled && (
           <>
@@ -144,7 +175,7 @@ const AdminSettingsSection: React.FC = () => {
               <div style={{
                 marginTop: 8, padding: '10px 14px', background: '#78350f',
                 border: '1px solid #92400e', borderRadius: 8,
-                fontSize: 13, color: '#fbbf24',
+                fontSize: 'var(--fs-body)', color: 'var(--warn)',
               }}>
                 Preview: {form.announcement_banner}
               </div>
@@ -155,7 +186,7 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* IP whitelist */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 4 }}>IP Whitelist</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 4 }}>IP Whitelist</h3>
         <Toggle id="ip-whitelist" label="Enable IP whitelist" description="Only allow logins from the listed IP addresses." checked={form.ip_whitelist_enabled} onChange={(v) => update({ ip_whitelist_enabled: v })} />
         {form.ip_whitelist_enabled && (
           <>
@@ -171,17 +202,17 @@ const AdminSettingsSection: React.FC = () => {
               <Button variant="secondary" size="sm" onClick={addIp}>Add</Button>
             </div>
             {form.ip_whitelist.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#64748b' }}>No IPs added. All IPs are blocked when whitelist is enabled.</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>No IPs added. All IPs are blocked when whitelist is enabled.</div>
             ) : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {form.ip_whitelist.map((ip) => (
                   <div key={ip} style={{
                     display: 'flex', alignItems: 'center', gap: 6,
-                    background: '#0f172a', border: '1px solid #334155',
-                    borderRadius: 6, padding: '4px 10px', fontSize: 13, color: '#94a3b8',
+                    background: 'var(--surface)', border: '1px solid var(--border-strong)',
+                    borderRadius: 6, padding: '4px 10px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)',
                   }}>
                     {ip}
-                    <button onClick={() => removeIp(ip)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
+                    <button onClick={() => removeIp(ip)} style={{ background: 'none', border: 'none', color: 'var(--loss)', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
                   </div>
                 ))}
               </div>
@@ -192,7 +223,7 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* SMTP */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 14 }}>SMTP / Email</h3>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: 'var(--text)', marginTop: 0, marginBottom: 14 }}>SMTP / Email</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
           <Field label="SMTP Host"><Input value={form.smtp_host} onChange={(e) => update({ smtp_host: e.target.value })} placeholder="smtp.example.com" /></Field>
           <Field label="Port"><Input type="number" value={form.smtp_port} onChange={(e) => update({ smtp_port: Number(e.target.value) })} /></Field>
@@ -212,8 +243,8 @@ const AdminSettingsSection: React.FC = () => {
 
       {/* Global kill switch */}
       <Card danger>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#fca5a5', marginTop: 0, marginBottom: 8 }}>Global Kill Switch</h3>
-        <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 14 }}>
+        <h3 style={{ fontSize: 'var(--fs-value)', fontWeight: 700, color: '#fca5a5', marginTop: 0, marginBottom: 8 }}>Global Kill Switch</h3>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 14 }}>
           Immediately halt ALL automated trading across every user account on the platform.
           This cannot be undone without manual intervention.
         </p>
@@ -230,7 +261,7 @@ const AdminSettingsSection: React.FC = () => {
             {killSwitchConfirm && (
               <button
                 onClick={() => setKillSwitchConfirm(false)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 13 }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'var(--fs-body)'}}
               >
                 Cancel
               </button>

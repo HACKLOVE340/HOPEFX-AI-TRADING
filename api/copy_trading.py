@@ -14,7 +14,20 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload
+
+# ── F4-01b: the plan gate must exist on the side that counts ─────────────────
+#
+# `SubscriptionGate` in React and `PLAN_FEATURES` in TypeScript are UI
+# affordances, not authorization: anyone with devtools can set the store's plan,
+# and nothing stops a direct call carrying a valid free-tier token. The routes
+# below depended on `get_current_user` alone, which checks *authentication* and
+# never *plan*, so the advertised gate existed on neither side.
+#
+# Same defect, and the same sentence, as the one already fixed in api/nocode.py.
+# Admin and superadmin bypass require_plan by design.
+# Advertised in frontend/src/lib/subscription.ts as: copy-trading -> professional
+from monetization.subscription import require_plan
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +41,15 @@ def _get_copy_engine():
 
         engine = getattr(app_state, "copy_trading_engine", None)
         if engine is None:
-            from social.advanced_copy_trading import AdvancedCopyTrading
+            # The process singleton, which is what ``init_social`` assigns to
+            # app_state during a normal boot. This used to construct
+            # ``AdvancedCopyTradingEngine`` from social/copy_trading_engine.py —
+            # a different class with a different interface and none of the
+            # methods this router calls, so the fallback path was guaranteed to
+            # fail every request it served.
+            from social import copy_trading_engine
 
-            engine = AdvancedCopyTrading()
+            engine = copy_trading_engine
             app_state.copy_trading_engine = engine
         return engine
     except Exception as e:
@@ -39,7 +58,7 @@ def _get_copy_engine():
 
 
 @router.get("/my-copies")
-async def get_my_copies():
+async def get_my_copies(user: TokenPayload = Depends(require_plan("professional"))):
     """
     Retrieve all active copy trading subscriptions for the current user.
     Returns: list of copies with master trader info, performance, and settings.
@@ -49,22 +68,27 @@ async def get_my_copies():
         return {"copies": [], "total": 0}
 
     try:
-        copies = await engine.get_user_copies()
+        copies = await engine.get_user_copies(user_id=user.sub)
         return {"copies": copies, "total": len(copies)}
     except Exception as e:
-        logger.error(f"Failed to get copies: {e}")
-        return {"copies": [], "total": 0}
+        # Deliberately not an empty list. This handler used to swallow the
+        # AttributeError from the missing engine method and answer
+        # {"copies": [], "total": 0} — indistinguishable from "you follow
+        # nobody", which is how a feature that could not work at all went
+        # unnoticed. An empty list must mean the user has no copies.
+        logger.error("Failed to list copies for %s: %s", user.sub, e)
+        raise HTTPException(status_code=503, detail="Copy trading is unavailable") from e
 
 
 @router.post("/copies/{copy_id}/pause")
-async def pause_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
+async def pause_copy(copy_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Pause an active copy trading subscription."""
     engine = _get_copy_engine()
     if not engine:
         raise HTTPException(status_code=503, detail="Copy trading engine unavailable")
 
     try:
-        result = await engine.pause_copy(copy_id)
+        result = await engine.pause_copy(copy_id, user_id=user.sub)
         return {"status": "paused", "copy_id": copy_id, **result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -73,14 +97,14 @@ async def pause_copy(copy_id: str, user: TokenPayload = Depends(get_current_user
 
 
 @router.post("/copies/{copy_id}/resume")
-async def resume_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
+async def resume_copy(copy_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Resume a paused copy trading subscription."""
     engine = _get_copy_engine()
     if not engine:
         raise HTTPException(status_code=503, detail="Copy trading engine unavailable")
 
     try:
-        result = await engine.resume_copy(copy_id)
+        result = await engine.resume_copy(copy_id, user_id=user.sub)
         return {"status": "active", "copy_id": copy_id, **result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -89,14 +113,14 @@ async def resume_copy(copy_id: str, user: TokenPayload = Depends(get_current_use
 
 
 @router.post("/copies/{copy_id}/stop")
-async def stop_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
+async def stop_copy(copy_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Stop and remove a copy trading subscription permanently."""
     engine = _get_copy_engine()
     if not engine:
         raise HTTPException(status_code=503, detail="Copy trading engine unavailable")
 
     try:
-        result = await engine.stop_copy(copy_id)
+        result = await engine.stop_copy(copy_id, user_id=user.sub)
         return {"status": "stopped", "copy_id": copy_id, **result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -105,7 +129,7 @@ async def stop_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)
 
 
 @router.patch("/copies/{copy_id}/risk")
-async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Depends(get_current_user)):
+async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Depends(require_plan("professional"))):
     """
     Adjust risk settings for a copy trading subscription.
     Payload: { max_drawdown_pct, lot_multiplier, max_open_trades }
@@ -115,7 +139,7 @@ async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Dep
         raise HTTPException(status_code=503, detail="Copy trading engine unavailable")
 
     try:
-        result = await engine.adjust_risk(copy_id, payload)
+        result = await engine.adjust_risk(copy_id, payload, user_id=user.sub)
         return {"status": "updated", "copy_id": copy_id, "settings": result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -124,14 +148,20 @@ async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Dep
 
 
 @router.get("/copies/{copy_id}/performance")
-async def get_copy_performance(copy_id: str):
-    """Get performance metrics for a specific copy subscription."""
+async def get_copy_performance(copy_id: str, user: TokenPayload = Depends(require_plan("professional"))):
+    """Get performance metrics for a specific copy subscription (must belong to the requesting user)."""
     engine = _get_copy_engine()
     if not engine:
         raise HTTPException(status_code=503, detail="Copy trading engine unavailable")
 
     try:
-        perf = await engine.get_copy_performance(copy_id)
+        perf = await engine.get_copy_performance(copy_id, user_id=user.sub)
+        # Engine returns None when copy_id doesn't exist or belongs to another user
+        if perf is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Copy subscription '{copy_id}' not found or does not belong to the requesting user",
+            )
         return perf
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -141,7 +171,11 @@ async def get_copy_performance(copy_id: str):
 
 @router.get("/masters")
 async def get_master_traders(
-    sort_by: str = Query("profit", pattern="^(profit|win_rate|followers|drawdown)$"),
+    # "drawdown" was accepted here and is recorded nowhere — no profile, trade
+    # or metric in this codebase carries a per-trader drawdown. It sorted by
+    # nothing and the list came back in an arbitrary order that looked ranked.
+    # Replaced with the two fields that are actually tracked.
+    sort_by: str = Query("profit", pattern="^(profit|win_rate|followers|sharpe|trades)$"),
     limit: int = Query(20, ge=1, le=100),
 ):
     """

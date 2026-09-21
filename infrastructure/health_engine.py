@@ -197,6 +197,13 @@ class HealthEngine:
             probe_duration_ms=duration_ms,
         )
 
+    async def run_ai_observation(self, observation_id: str, names: list[str] | None = None) -> Any:
+        """Return an immutable AI evidence record without triggering recovery."""
+        from core.ai_operations import observe_health
+
+        report = await self.run_all(names)
+        return observe_health(report, observation_id)
+
 
 # ---------------------------------------------------------------------------
 # Singleton
@@ -246,7 +253,20 @@ def _register_default_probes(engine: HealthEngine) -> None:
 
             rc = await get_redis()
             if rc is None:
-                return {"status": "error", "detail": "Redis client not initialised — check REDIS_URL"}
+                # Report the actual reason. This used to say "check REDIS_URL"
+                # unconditionally, which is wrong whenever the URL is fine and
+                # the circuit breaker has tripped — and it disagreed with three
+                # other pages that probe the *sync* client, which has no
+                # breaker. Naming the client removes the ambiguity.
+                from cache.redis_client import redis_unavailable_reason
+
+                code, explanation = redis_unavailable_reason()
+                return {
+                    "status": "error",
+                    "client": "async",
+                    "reason": code,
+                    "detail": f"async Redis client unavailable ({code}): {explanation}",
+                }
             pong = await rc.ping()
             info = await rc.info("server")
             mem_info = await rc.info("memory")
@@ -279,10 +299,26 @@ def _register_default_probes(engine: HealthEngine) -> None:
                     }
         except Exception:
             logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
+        # Redis had no answer, so nothing has been contacted. This used to
+        # return "ok" whenever BROKER_TYPE was "paper" -- the active mode -- so
+        # the broker component reported healthy having read an environment
+        # variable (F160). The broker could be absent, misconfigured, or an
+        # alias with no place_market_order at all (F107), and this stayed green.
+        #
+        # The detail string already said "(config only)" and was honest, but
+        # HealthReport.ok_count and _STATUS_RANK aggregate on `status`, not
+        # `detail`, so every rollup, badge and dashboard tile showed green. An
+        # operator reads the colour, not the string.
+        #
+        # "unknown" rather than "warning": "could not check" and "checked, and
+        # it is down" are different facts, and collapsing them would make an
+        # unreachable Redis look identical to a dead broker to whoever is on
+        # call. _STATUS_RANK already ranks unknown alongside warning, so
+        # rollups treat it with the same weight without losing the distinction.
         broker_type = os.getenv("BROKER_TYPE", os.getenv("BROKER_DEFAULT", "paper"))
         return {
-            "status": "ok" if broker_type == "paper" else "warning",
-            "detail": f"broker={broker_type} (config only)",
+            "status": "unknown",
+            "detail": f"broker={broker_type} (config only — no live status available)",
             "broker_type": broker_type,
         }
 
@@ -417,8 +453,18 @@ def _register_default_probes(engine: HealthEngine) -> None:
                             data = json.loads(raw) if isinstance(raw, str | bytes) else {}
                         except (json.JSONDecodeError, ValueError):
                             data = {}
+                        from core.account_metrics import tick_age_seconds
+
                         ts_val = data.get("ts", data.get("timestamp", data.get("time")))
-                        age_s = time.time() - float(ts_val) if ts_val is not None else 0.0
+                        age_s = tick_age_seconds(ts_val)
+                        if age_s is None:
+                            # An unreadable timestamp is not a fresh tick. This
+                            # used to become 0.0 and grade "ok".
+                            return {
+                                "status": "warning",
+                                "detail": f"tick at {key} has no usable timestamp (ts={ts_val!r})",
+                                "key": key,
+                            }
                         return {
                             "status": "ok" if age_s < 120 else "warning",
                             "detail": f"last tick age={age_s:.1f}s key={key}",
@@ -467,16 +513,18 @@ def _register_default_probes(engine: HealthEngine) -> None:
             return {"status": "error", "detail": str(exc)}
 
     async def _probe_celery() -> dict[str, Any]:
-        try:
-            from celery_app import celery_app
+        """Delegates to the shared probe.
 
-            inspect = celery_app.control.inspect(timeout=3.0)
-            stats = inspect.stats()
-            if stats:
-                return {"status": "ok", "detail": f"workers={len(stats)} active", "worker_count": len(stats)}
-            return {"status": "warning", "detail": "No Celery workers responded", "worker_count": 0}
-        except Exception as exc:
-            return {"status": "warning", "detail": f"Celery inspect failed: {exc}"}
+        This function used to hold its own copy of the check. So did
+        api/superadmin/reliability.py, and so did api/superadmin/system_health.py
+        with a shorter timeout and a blocking call — three implementations that
+        could not agree even when Celery was healthy, and did not, in the
+        deployed report: DOWN here, WARNING there, OK on this page, all within
+        twelve minutes.
+        """
+        from infrastructure.service_probes import probe_celery
+
+        return await probe_celery()
 
     async def _probe_env_vars() -> dict[str, Any]:
         required = ["SECURITY_JWT_SECRET", "DATABASE_URL"]

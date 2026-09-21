@@ -30,6 +30,44 @@ from risk.manager import RiskConfig, RiskManager
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _data_layer_reports_safe(monkeypatch):
+    """Give every test in this file a data layer that says it is safe to trade.
+
+    These tests are about order flow, fills, callbacks and metrics -- not about
+    data-layer safety, which has its own file
+    (tests/unit/test_data_layer_gate_fails_closed.py).
+
+    They previously passed without this because the gate read
+    ``if orchestrator._started and not orchestrator.is_safe_to_trade()``: the
+    real singleton is never started in a unit test, so the whole check was
+    skipped and every order sailed through. That skip was F84 -- the gate was a
+    no-op in exactly the degraded state it exists for -- so removing it means
+    these tests must now say what they assume rather than inherit it from a bug.
+    """
+    import sys
+
+    import data_layer.orchestrator  # noqa: F401  — populate sys.modules
+
+    # sys.modules, not the package attribute: data_layer/__init__.py binds the
+    # name `orchestrator` on the package to a MarketDataOrchestrator *instance*,
+    # shadowing its own submodule.
+    module = sys.modules["data_layer.orchestrator"]
+
+    class _SafeOrchestrator:
+        _started = True
+
+        @staticmethod
+        def is_safe_to_trade() -> bool:
+            return True
+
+        @staticmethod
+        def get_latest_tick(_symbol):
+            return None
+
+    monkeypatch.setattr(module, "orchestrator", _SafeOrchestrator(), raising=False)
+
+
 class TestExecutionRequest:
     def test_valid_buy_market(self):
         req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0, order_type="MARKET")

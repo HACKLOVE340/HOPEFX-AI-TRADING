@@ -32,7 +32,7 @@ const Pill: React.FC<{
       background: colors.bg, border: `1px solid ${colors.bd}`,
       minWidth: 110,
     }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {label}
       </span>
       <span style={{ fontSize: 14, fontWeight: 700, color: colors.fg }}>{value}</span>
@@ -53,7 +53,7 @@ export const MlSafetyStrip: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div style={{ padding: '14px 16px', fontSize: 13, color: '#475569' }}>
+      <div style={{ padding: '14px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>
         Loading model health…
       </div>
     );
@@ -62,8 +62,8 @@ export const MlSafetyStrip: React.FC = () => {
   if (isError || !data) {
     return (
       <div style={{
-        padding: '12px 16px', fontSize: 13, color: '#94a3b8',
-        background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10,
+        padding: '12px 16px', fontSize: 'var(--fs-body)', color: 'var(--text-dim)',
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
       }}>
         Model health unavailable.
       </div>
@@ -80,26 +80,26 @@ export const MlSafetyStrip: React.FC = () => {
 
   return (
     <div style={{
-      background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12,
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
       padding: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>🧠 Model Health &amp; Safety Gates</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)' }}>🧠 Model Health &amp; Safety Gates</span>
         <span style={{
           fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 5,
           textTransform: 'uppercase', letterSpacing: '0.06em',
-          color: statusTone === 'ok' ? '#22c55e' : statusTone === 'warn' ? '#fbbf24' : '#f87171',
+          color: statusTone === 'ok' ? '#22c55e' : statusTone === 'warn' ? 'var(--warn)' : 'var(--loss)',
           background: statusTone === 'ok' ? 'rgba(34,197,94,0.12)' : statusTone === 'warn' ? 'rgba(251,191,36,0.12)' : 'rgba(248,113,113,0.12)',
           border: `1px solid ${statusTone === 'ok' ? 'rgba(34,197,94,0.3)' : statusTone === 'warn' ? 'rgba(251,191,36,0.3)' : 'rgba(248,113,113,0.3)'}`,
         }}>
           {data.status}
         </span>
         {data.model_id && (
-          <span style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>
             {data.model_id}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#334155' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
           {data.predict_count.toLocaleString()} inferences
         </span>
       </div>
@@ -147,11 +147,29 @@ export const MlSafetyStrip: React.FC = () => {
         />
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 11, color: '#334155', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <span>Long threshold: <strong style={{ color: '#64748b' }}>{data.threshold_long.toFixed(3)}</strong></span>
-        <span>Short threshold: <strong style={{ color: '#64748b' }}>{data.threshold_short.toFixed(3)}</strong></span>
-        {data.last_trained_at && (
-          <span>Trained: <strong style={{ color: '#64748b' }}>{new Date(data.last_trained_at).toLocaleDateString()}</strong></span>
+      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-faint)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <span>Long threshold: <strong style={{ color: 'var(--text-muted)' }}>{data.threshold_long.toFixed(3)}</strong></span>
+        <span>Short threshold: <strong style={{ color: 'var(--text-muted)' }}>{data.threshold_short.toFixed(3)}</strong></span>
+        {/* The date the freshness gate ACTED on, preferred over the meta file's.
+            They disagree: `model_provenance_at` is the sha256-bound timestamp in
+            registry.json (2026-04-01 for the committed artifact), while
+            `last_trained_at` comes from advanced_oos_meta.json (2026-06-26) —
+            the same bytes, nearly three months apart. Showing the meta date beside
+            a stale badge that means 167 days was a contradiction on screen
+            whichever record is right. Which one IS right is an ML decision, open
+            as MODEL-PROVENANCE-DISAGREES; until then this shows the date the
+            platform blocked on, and falls back to the meta file when the gate
+            reports no provenance. */}
+        {(data.model_provenance_at ?? data.last_trained_at) && (
+          <span title={
+            data.model_provenance_at
+              ? 'The training date the freshness gate measured, from the model registry.'
+              : 'From the model metadata file; the freshness gate could not read provenance.'
+          }>
+            Trained: <strong style={{ color: 'var(--text-muted)' }}>
+              {new Date((data.model_provenance_at ?? data.last_trained_at) as string).toLocaleDateString()}
+            </strong>
+          </span>
         )}
         <span style={{ marginLeft: 'auto' }}>
           Updated {new Date(data.checked_at).toLocaleTimeString()}

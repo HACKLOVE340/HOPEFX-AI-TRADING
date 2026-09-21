@@ -75,7 +75,22 @@ except ImportError:  # pydantic not installed (e.g. minimal test env)
 # --------------------------------------------------------------------------- #
 # Default path for the manual file flag                                        #
 # --------------------------------------------------------------------------- #
-_DEFAULT_FLAG_FILE = Path(__file__).parent / "kill_switch.flag"
+# Overridable, because the default resolves inside the image layer
+# (/app/kill_switch.flag) and every shipped Kubernetes deployment runs with
+# `readOnlyRootFilesystem: true`. There the write raises OSError, so the file
+# layer of a five-layer control never worked at all — and nothing in the
+# repository could move it, since `flag_file=` was set only by a test script
+# (F139). Point this at a persistent volume in production; the manifests do.
+_FLAG_FILE_ENV = "KILL_SWITCH_FLAG_FILE"
+
+
+def _default_flag_file() -> Path:
+    """Resolved per call, so the environment can be set before construction."""
+    override = os.environ.get(_FLAG_FILE_ENV, "").strip()
+    return Path(override) if override else Path(__file__).parent / "kill_switch.flag"
+
+
+_DEFAULT_FLAG_FILE = _default_flag_file()
 
 
 class KillSwitch:
@@ -103,7 +118,7 @@ class KillSwitch:
         event_bus=None,
         deactivation_token: str | None = None,
     ) -> None:
-        self._flag_file: Path = flag_file or _DEFAULT_FLAG_FILE
+        self._flag_file: Path = flag_file or _default_flag_file()
         # JSON state file sits next to the flag file and survives restarts.
         self._state_file: Path = self._flag_file.with_suffix(".state.json")
         self._poll_interval: float = poll_interval_sec
@@ -118,6 +133,11 @@ class KillSwitch:
         self._active: bool = False
         self._reason: str = ""
         self._activated_at: datetime | None = None
+        # None = no activation attempted yet. False = this pod halted but could
+        # not write the Redis latch, so other pods were never told (split-brain).
+        # Surfaced through status() because a log line is too easy to miss for
+        # the one control whose job is to stop everything, everywhere.
+        self._latch_broadcast_ok: bool | None = None
 
         self._callbacks: list[Callable[[str], None]] = []
         self._running: bool = False
@@ -334,6 +354,55 @@ class KillSwitch:
         except Exception as exc:
             logger.debug("Kill switch: Redis latch check failed (non-fatal): %s", exc)
 
+    def _resolve_active_broker(self):
+        """
+        Resolve the live broker object, or None when nothing is connected.
+
+        Resolution order:
+          1. ``execution.engine.get_active_broker()``
+          2. ``execution.smart_router.get_router()._primary_broker``
+          3. ``core.app_state.app_state.broker``
+
+        Steps 1 and 2 are forward compatibility: neither module exposes that
+        accessor today, so both raise ImportError and fall through. Step 3 is
+        what actually resolves, because ComponentRegistry publishes the broker
+        onto the app_state singleton at startup.
+
+        This lives in one place deliberately. Both callers used to inline the
+        chain, and the copies drifted: ``check_broker_cod`` kept step 3 while
+        ``_broker_cancel_all`` stopped at step 2, which meant the kill switch
+        could never find a broker to cancel against and silently skipped the
+        mass cancel on every activation. One resolver cannot drift from itself.
+
+        Best-effort by contract: this never raises.
+        """
+        try:
+            from execution.engine import get_active_broker
+
+            broker = get_active_broker()
+            if broker is not None:
+                return broker
+        except Exception:  # nosec B110 — execution engine may not expose an accessor  # noqa: S110
+            pass
+
+        try:
+            from execution.smart_router import get_router
+
+            router = get_router()
+            if router is not None:
+                broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
+                if broker is not None:
+                    return broker
+        except Exception:  # nosec B110 — smart router may not expose an accessor  # noqa: S110
+            pass
+
+        try:
+            from core.app_state import app_state as _app_state
+
+            return getattr(_app_state, "broker", None)
+        except Exception:  # nosec B110 — app state may not be importable in isolation
+            return None
+
     async def _check_broker_cod(self) -> None:
         """
         Verify broker-level Cancel-on-Disconnect (CoD) at kill-switch startup.
@@ -367,32 +436,7 @@ class KillSwitch:
 
         The check is best-effort: failure never prevents startup.
         """
-        broker = None
-
-        try:
-            from execution.engine import get_active_broker
-
-            broker = get_active_broker()
-        except Exception:  # nosec B110  # noqa: S110
-            pass
-
-        if broker is None:
-            try:
-                from execution.smart_router import get_router
-
-                router = get_router()
-                if router is not None:
-                    broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
-            except Exception:  # nosec B110  # noqa: S110
-                pass
-
-        if broker is None:
-            try:
-                from core.app_state import app_state as _app_state
-
-                broker = getattr(_app_state, "broker", None)
-            except Exception:  # nosec B110  # noqa: S110
-                pass
+        broker = self._resolve_active_broker()
 
         if broker is None:
             logger.debug("KillSwitch.check_broker_cod: no active broker yet — CoD check deferred")
@@ -432,14 +476,39 @@ class KillSwitch:
         indefinitely after an intended manual reset.
         """
         _LATCH_TTL = 7 * 24 * 3600  # 7 days
+        # Failure to write this latch is the definition of split-brain: this pod
+        # has stopped trading and no other pod has been told to. S2-01 recorded
+        # exactly that outcome as CRITICAL, reached by a different route (two
+        # KillSwitch instances). A latch that cannot be written reaches the same
+        # place, so it is neither logged quietly nor described as "non-fatal".
+        #
+        # It still does not raise: the local halt has already succeeded, and
+        # throwing here would unwind the one stop that did work.
         try:
             r = self._get_latch_redis()
-            if r is not None:
-                r.set(self._REDIS_LATCH_KEY, "true", ex=_LATCH_TTL)
-                r.set(self._REDIS_REASON_KEY, reason, ex=_LATCH_TTL)
-                logger.info("Kill switch: Redis distributed latch written (TTL=%ds)", _LATCH_TTL)
+            if r is None:
+                # _get_latch_redis() swallows every exception and returns None,
+                # so this branch used to write nothing and log nothing at all —
+                # the quietest possible failure for the loudest possible control.
+                self._latch_broadcast_ok = False
+                logger.critical(
+                    "KILL SWITCH NOT BROADCAST — no Redis client available. This pod has "
+                    "halted, but other pods have NOT been told to and may still be trading. "
+                    "Halt them manually and check REDIS_URL / REDIS_PASSWORD.",
+                )
+                return
+            r.set(self._REDIS_LATCH_KEY, "true", ex=_LATCH_TTL)
+            r.set(self._REDIS_REASON_KEY, reason, ex=_LATCH_TTL)
+            self._latch_broadcast_ok = True
+            logger.info("Kill switch: Redis distributed latch written (TTL=%ds)", _LATCH_TTL)
         except Exception as exc:
-            logger.warning("Kill switch: could not write Redis latch (non-fatal): %s", exc)
+            self._latch_broadcast_ok = False
+            logger.critical(
+                "KILL SWITCH NOT BROADCAST — writing the Redis latch failed (%s). This pod "
+                "has halted, but other pods have NOT been told to and may still be trading. "
+                "Halt them manually and check Redis connectivity.",
+                exc,
+            )
 
     def _clear_redis_latch(self) -> None:
         """Remove the Redis kill-switch latch on deactivation."""
@@ -480,9 +549,13 @@ class KillSwitch:
             password = os.getenv("REDIS_PASSWORD", "") or None
 
             # Inject REDIS_PASSWORD when not already embedded in the URL.
-            if password and "@" not in redis_url.split("://", 1)[-1]:
-                scheme, rest = redis_url.split("://", 1)
-                redis_url = f"{scheme}://:{password}@{rest}"
+            # Shared helper: the inline version raised ValueError on an empty or
+            # schemeless REDIS_URL. On the kill switch, whose Redis latch is what
+            # survives a restart, that turned a config typo into an exception in
+            # the one component that has to work when things are going wrong.
+            from cache.redis_client import inject_redis_password
+
+            redis_url = inject_redis_password(redis_url, password)
 
             # socket_connect_timeout prevents indefinite blocking when Redis is down.
             return _redis_lib.from_url(
@@ -515,6 +588,11 @@ class KillSwitch:
             "state_file": str(self._state_file),
             "state_file_exists": self._state_file.exists(),
             "deactivation_token_configured": bool(self._deactivation_token),
+            # None until an activation has been attempted; False means this pod
+            # halted without being able to tell the others. A log line alone is
+            # not enough for that — an operator looking at kill-switch status
+            # needs to see that the halt was local-only.
+            "latch_broadcast_ok": self._latch_broadcast_ok,
         }
 
     # ---------------------------------------------------------------------- #
@@ -552,11 +630,24 @@ class KillSwitch:
         if self._event_bus is not None:
             self._publish_event(reason)
 
-        # Write the flag file so that sibling processes can also detect it
+        # Write the flag file so that sibling processes can also detect it.
+        # A failure here does not stop the activation — the in-memory layer has
+        # already halted this process — but it does mean one of the five
+        # independent layers is gone, and cross-process detection with it. That
+        # is an operator event on the control of last resort, not the WARNING
+        # it used to be (F139).
         try:
+            self._flag_file.parent.mkdir(parents=True, exist_ok=True)
             self._flag_file.write_text(f"activated_at={self._activated_at.isoformat()}\nreason={reason}\n")
         except OSError as exc:
-            logger.warning("Could not write kill switch flag file: %s", exc)
+            logger.error(
+                "KILL SWITCH FLAG FILE NOT WRITTEN (%s): %s. This process is halted, but sibling "
+                "processes cannot detect the halt through the file layer. Set %s to a writable "
+                "volume.",
+                self._flag_file,
+                exc,
+                _FLAG_FILE_ENV,
+            )
 
         # Persist state to JSON so the next process restart can restore it.
         self._persist_state()
@@ -596,31 +687,14 @@ class KillSwitch:
         """
         Best-effort broker-level mass cancel on kill switch activation.
 
-        Resolves the active broker from the module registry and calls
-        cancel_all_orders(). Async brokers (OANDA, MT5) are dispatched
-        via asyncio. Failure is logged but never prevents the kill switch
-        from activating — the flag is already set before this is called.
+        Resolves the active broker via ``_resolve_active_broker`` — the same
+        chain ``check_broker_cod`` uses — and calls cancel_all_orders(). Async
+        brokers (OANDA, MT5) are dispatched via asyncio. Failure is logged but
+        never prevents the kill switch from activating — the flag is already
+        set before this is called.
         """
         try:
-            # Try to get the active broker from the execution engine registry
-            broker = None
-            try:
-                from execution.engine import get_active_broker
-
-                broker = get_active_broker()
-            except Exception:  # nosec B110 — execution engine may not be initialised; try fallback  # noqa: S110
-                pass
-
-            # Fallback: try the smart router's primary broker
-            if broker is None:
-                try:
-                    from execution.smart_router import get_router
-
-                    router = get_router()
-                    if router is not None:
-                        broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
-                except Exception:  # nosec B110 — smart router may not be initialised; logged below  # noqa: S110
-                    pass
+            broker = self._resolve_active_broker()
 
             if broker is None:
                 logger.warning("KillSwitch._broker_cancel_all: no active broker found — skipping broker cancel")

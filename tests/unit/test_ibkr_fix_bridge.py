@@ -7,6 +7,7 @@ FIXAdapter is mocked — no FIX network required.
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,6 +18,35 @@ from execution.fix_adapter import FIXExecType, FIXFillReport, FIXOrder, FIXOrdTy
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _allow_fix_start(monkeypatch):
+    """Opt in to FIX startup for tests that exercise start().
+
+    `IBKRFIXBridge.start()` refuses unless IBKR_FIX_ALLOW_START is set -- a
+    fail-closed default so an unconfigured deployment cannot dial a broker
+    gateway. These tests predate that guard and drive start() directly, so they
+    opt in explicitly rather than the guard being softened.
+
+    `test_start_is_refused_without_the_opt_in` below covers the guard itself, so
+    it is pinned rather than merely bypassed.
+    """
+    monkeypatch.setenv("IBKR_FIX_ALLOW_START", "true")
+
+
+def test_start_is_refused_without_the_opt_in(monkeypatch, tmp_path):
+    """The guard must actually refuse -- otherwise the fixture above hides it."""
+    monkeypatch.delenv("IBKR_FIX_ALLOW_START", raising=False)
+    bridge = IBKRFIXBridge(
+        config=IBKRFIXConfig(
+            store_path=str(tmp_path / "store"),
+            log_path=str(tmp_path / "logs"),
+        )
+    )
+    with pytest.raises(RuntimeError, match="IBKR_FIX_ALLOW_START"):
+        bridge.start()
+    assert bridge._started is False
 
 
 def _make_fill_report(cl_ord_id="test_cl_ord"):
@@ -178,6 +208,58 @@ class TestStart:
         assert bridge._cfg_file is not None
         assert Path(bridge._cfg_file).exists()
         # Cleanup
+        bridge.stop()
+
+    def test_start_refuses_session_continuity_on_an_ephemeral_store(self, tmp_path, monkeypatch):
+        """`reset_on_logon=False` with a $TMPDIR store is the documented outage.
+
+        `.claude/skills/hopefx-fix-bridge/SKILL.md` calls these one decision,
+        not two: turning ResetOnLogon off is what you do for true session
+        continuity and gap-fill, and it makes IBKR expect the sequence numbers
+        to survive. The default store lives under `tempfile.gettempdir()`,
+        which a container restart wipes, so the next logon is rejected.
+
+        Nothing enforced the coupling before this test. The combination was
+        constructible and `start()` dialled the gateway with it.
+        """
+        monkeypatch.delenv("IBKR_FIX_STORE_PATH", raising=False)
+        (tmp_path / "ephemeral").mkdir()
+        monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path / "ephemeral"))
+
+        cfg = IBKRFIXConfig(reset_on_logon=False, log_path=str(tmp_path / "logs"))
+        # The default really is the ephemeral one — otherwise this test proves
+        # nothing about the shipped configuration.
+        assert cfg.store_path.startswith(str(tmp_path / "ephemeral"))
+
+        bridge = IBKRFIXBridge(config=cfg)
+        with patch("brokers.ibkr_fix_bridge.FIXAdapter", return_value=_make_mock_adapter()) as adapter_cls:
+            with pytest.raises(RuntimeError, match="IBKR_FIX_STORE_PATH"):
+                bridge.start()
+
+        adapter_cls.assert_not_called()
+        assert bridge._started is False
+
+    def test_start_allows_session_continuity_on_a_persistent_store(self, tmp_path, monkeypatch):
+        """The refusal is about the store being ephemeral, not about the flag.
+
+        Without this, the guard above could be satisfied by refusing
+        `reset_on_logon=False` outright, which would forbid the very
+        configuration the skill says you want for gap-fill.
+        """
+        (tmp_path / "ephemeral").mkdir()
+        monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path / "ephemeral"))
+        mock_adapter = _make_mock_adapter()
+        cfg = IBKRFIXConfig(
+            reset_on_logon=False,
+            store_path=str(tmp_path / "persistent" / "store"),
+            log_path=str(tmp_path / "logs"),
+        )
+        bridge = IBKRFIXBridge(config=cfg)
+
+        with patch("brokers.ibkr_fix_bridge.FIXAdapter", return_value=mock_adapter):
+            bridge.start()
+
+        assert bridge._started is True
         bridge.stop()
 
 

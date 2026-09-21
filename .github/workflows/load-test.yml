@@ -1,0 +1,136 @@
+# Runs k6/load_tests.js, which nothing did until now.
+#
+# The suite defines seven budgets — p95 http_req_duration < 500 ms, p99 order
+# latency < 1 s, p95 signal < 300 ms, p95 ML inference < 800 ms, p95 macro
+# < 400 ms, and error rates below 1% on both error_rate and http_req_failed —
+# and none of them had ever been measured, because no workflow referenced the
+# file. tests/unit/test_k6_load_tests.py checks the script's *contents*, which
+# would pass just as happily if every threshold were unreachable.
+#
+# Not a pull-request gate, deliberately. Driven locally against a real server,
+# the suite comes back at 96% of checks passing with http_req_failed at 3.64%,
+# and every one of those failures is /api/trading/ohlcv/{symbol} answering 503
+# because no market-data feed is attached. A required check that is red for an
+# environmental reason is exactly the pathology being removed from codacy.yml,
+# so this runs nightly and on demand until CI can supply a feed. Wire it to
+# pull_request in the same change that fixes that.
+#
+#   * load (~8 min) runs nightly.
+#   * smoke, soak, spike, stress and breakpoint are available on
+#     workflow_dispatch. A 30-minute soak per push is the kind of thing that
+#     made Codacy runs queue for 44 minutes.
+#
+# k6 exits non-zero when a threshold is breached, and nothing here swallows it.
+# A load run that cannot fail measures nothing.
+name: Load Test
+
+on:
+  schedule:
+    - cron: "0 3 * * *"  # nightly at 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "k6 scenario"
+        required: true
+        default: load
+        type: choice
+        options: [smoke, load, soak, spike, stress, breakpoint]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-test-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  k6:
+    name: k6 (${{ inputs.scenario || 'load' }})
+    runs-on: ubuntu-latest
+    # Long enough for the nightly load scenario (2 min ramp + 5 min hold + 1 min
+    # down) plus boot, and short enough that a hung run releases the runner.
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Generate a dev environment
+        # Never invent secrets: this writes local-only placeholders and seeds a
+        # dev user, exactly as a contributor's first run does.
+        run: python scripts/bootstrap_dev.py
+
+      - name: Start the API
+        run: |
+          python run.py --mode api > api.log 2>&1 &
+          echo "API_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health > /dev/null; then
+              echo "API is up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become healthy in 60s"
+          cat api.log
+          exit 1
+
+      - name: Mint a load-test token
+        run: |
+          TOKEN=$(python -c "
+          from auth.jwt import create_access_token
+          print(create_access_token({'sub': 'loadtest@hopefx.local', 'role': 'admin', 'user_id': 'loadtest'}))
+          " | tail -1)
+          echo "::add-mask::$TOKEN"
+          echo "LOADTEST_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Install k6
+        run: |
+          curl -sSL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz \
+            | tar -xz --strip-components=1 -C /usr/local/bin k6-v0.54.0-linux-amd64/k6
+          k6 version
+
+      - name: Run k6
+        env:
+          SCENARIO: ${{ inputs.scenario || 'load' }}
+          BASE_URL: http://localhost:8000
+          # Without a token the suite can only reach /health, /api/status,
+          # /api/macro/snapshot and /metrics — every latency budget it exists to
+          # measure sits behind auth. This is a locally-minted token signed with
+          # the dev secret this job just generated; no secret is invented and
+          # none is required from the repository.
+          AUTH_TOKEN: ${{ env.LOADTEST_TOKEN }}
+        run: |
+          mkdir -p k6/results
+          k6 run \
+            --env "BASE_URL=$BASE_URL" \
+            --env "SCENARIO=$SCENARIO" \
+            --summary-export "k6/results/${SCENARIO}-summary.json" \
+            k6/load_tests.js
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: k6-results-${{ github.run_id }}
+          path: |
+            k6/results/
+            api.log
+          retention-days: 14
+
+      - name: Stop the API
+        if: always()
+        run: kill "$API_PID" 2>/dev/null || true

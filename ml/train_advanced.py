@@ -52,6 +52,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import hashlib
+import shutil
 import sys
 import warnings
 from datetime import datetime, timedelta, timezone
@@ -77,7 +79,7 @@ MODEL_DIR = ROOT / "ml" / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 import os as _os
-from typing import ClassVar
+from typing import Any, ClassVar
 
 # When HOPEFX_CI=1 (set by tests/conftest.py) use minimal model params so
 # every test that trains a model finishes well within the 20 s timeout.
@@ -91,90 +93,70 @@ _CV = 2 if _CI else 3
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _fetch_oanda_h1(years: int) -> pd.DataFrame | None:
-    """Fetch XAU_USD H1 candles from OANDA v3 API.
+class CorruptTrainingDataError(RuntimeError):
+    """Raised when a training source contains implausible price history."""
 
-    Paginates the OANDA ``/v3/instruments/XAU_USD/candles`` endpoint in
-    5 000-candle chunks to build the requested history.  Returns a DataFrame
-    with DatetimeIndex (UTC, tz-naive) and columns ``open/high/low/close/volume``
-    or *None* when credentials are missing or the fetch fails.
 
-    Environment variables consumed
-    --------------------------------
-    OANDA_API_KEY      — Personal Access Token (required)
-    OANDA_ACCOUNT_ID   — Account number (required)
-    OANDA_ENV          — ``"practice"`` (default) | ``"live"``
+def _assert_price_history_is_plausible(df, csv_path) -> None:
+    """Refuse to train on a price series containing impossible moves.
+
+    ``data/XAUUSD_50Y.csv`` is the first cache candidate below, and 23.5% of its
+    pre-2000 daily bars move more than 20% in a single day — one by 518%. Its
+    1990 rows dip to $81 in a year gold traded near $380; its 1999 rows dip to
+    $56. ``api/trading.py`` already declines to serve this same file to charts,
+    with a comment saying its "pre-2000 bars are corrupted (isolated bad prints,
+    e.g. $43 when gold was ~$270), which would feed bad data into charts."
+
+    So the corruption was known and the chart was defended from it, while
+    training loaded it by preference and no stage of the pipeline looked. The
+    model's reported 57.34% out-of-sample accuracy was measured over a history
+    a quarter of which never happened.
+
+    This raises rather than filtering. Dropping a quarter of the bars would
+    leave a series with silent multi-year gaps and train on it anyway, which
+    replaces a visible problem with an invisible one. Choosing the data is the
+    operator's call — ``data/XAUUSD_40Y.csv`` covers 2000→2026 with zero
+    implausible moves — and the message says so.
+
+    ``TRAIN_MAX_SPIKE_RATE`` raises the tolerance for a deliberate run;
+    ``TRAIN_ALLOW_CORRUPT_HISTORY=true`` disables the gate entirely.
     """
-    import asyncio
-    from datetime import timezone
+    import os as _os
 
-    api_key = _os.environ.get("OANDA_API_KEY", "")
-    account_id = _os.environ.get("OANDA_ACCOUNT_ID", "")
-    if not api_key or not account_id:
-        logger.info("OANDA credentials not set (OANDA_API_KEY / OANDA_ACCOUNT_ID) — skipping OANDA H1 fetch")
-        return None
-
-    oanda_env = _os.environ.get("OANDA_ENV", "practice")
-
-    async def _do_fetch() -> pd.DataFrame | None:
-        from brokers.oanda_broker import OandaBroker
-
-        broker = OandaBroker({"login": account_id, "password": api_key, "server": oanda_env})
-        if not await broker.connect():
-            logger.warning("OANDA broker connect() failed — skipping H1 fetch")
-            return None
-
-        try:
-            end_dt = datetime.now(timezone.utc)
-            start_dt = end_dt - timedelta(days=years * 365)
-            all_candles: list[dict] = []
-            chunk_size = 5000
-            current_from = start_dt
-
-            while current_from < end_dt:
-                chunk_to = min(current_from + timedelta(hours=chunk_size), end_dt)
-                candles = await broker.get_ohlcv_candles(
-                    instrument="XAU_USD",
-                    granularity="H1",
-                    from_time=current_from.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    to_time=chunk_to.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                )
-                if not candles:
-                    break
-                all_candles.extend(candles)
-                # Advance past the last candle we received
-                last_ts = candles[-1]["time"]
-                try:
-                    last_dt = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
-                except ValueError:
-                    last_dt = chunk_to
-                current_from = last_dt + timedelta(hours=1)
-
-            return all_candles
-        finally:
-            await broker.disconnect()
+    if _os.getenv("TRAIN_ALLOW_CORRUPT_HISTORY", "").strip().lower() in ("1", "true", "yes"):
+        logger.warning("TRAIN_ALLOW_CORRUPT_HISTORY set — skipping price-history sanity gate")
+        return
 
     try:
-        candles = asyncio.run(_do_fetch())
-    except Exception as exc:
-        logger.warning("OANDA H1 fetch failed: %s", exc)
-        return None
+        from data_layer.validation import detect_price_spikes
+    except ImportError:  # pragma: no cover - data_layer is always present in-repo
+        return
 
-    if not candles:
-        logger.warning("OANDA H1 fetch returned no candles")
-        return None
+    report = detect_price_spikes(df)
+    if not report["spike_count"]:
+        return
 
-    df = pd.DataFrame(candles)
-    df["time"] = pd.to_datetime(df["time"], utc=True).dt.tz_localize(None)
-    df = df.set_index("time").sort_index()
-    df.index.name = None
-    logger.info(
-        "OANDA H1: fetched %d bars (%s → %s)",
-        len(df),
-        df.index[0].date(),
-        df.index[-1].date(),
+    threshold = float(_os.getenv("TRAIN_MAX_SPIKE_RATE", "0.002"))
+    detail = (
+        f"{report['spike_count']} of {report['total_bars']} bars "
+        f"({report['spike_rate'] * 100:.2f}%) move more than 20% in one bar; "
+        f"largest move {report['max_abs_return'] * 100:.0f}%. "
+        f"Worst: {report['worst']}"
     )
-    return df
+    if report["spike_rate"] <= threshold:
+        logger.warning("Price history sanity: %s — %s", csv_path, detail)
+        return
+
+    clean_hint = ""
+    if report.get("first_clean_index"):
+        clean_hint = f" History appears clean from {report['first_clean_index']} onward."
+    raise CorruptTrainingDataError(
+        f"Refusing to train on {csv_path}: {detail}.{clean_hint}\n"
+        "A bar that moves 500% in one session is not data.\n"
+        "  Clean source:  --cached-csv data/XAUUSD_40Y.csv --years 25\n"
+        "                 (2000→2026, zero implausible moves)\n"
+        "  Override:      TRAIN_MAX_SPIKE_RATE=<rate> or TRAIN_ALLOW_CORRUPT_HISTORY=true"
+    )
 
 
 def fetch_gold_ohlcv(
@@ -183,32 +165,30 @@ def fetch_gold_ohlcv(
     use_cached: bool = False,
     cached_csv: str | None = None,
 ) -> pd.DataFrame:
-    """Download XAUUSD OHLCV — OANDA H1 preferred, Yahoo Finance daily fallback.
+    """Load XAUUSD OHLCV from the bundled long-history CSV, Yahoo Finance fallback.
+
+    No broker dependency: the training data source is the local multi-decade CSV
+    (50 years of daily gold) so a full retrain is reproducible offline and does
+    not require OANDA (or any) credentials. Yahoo Finance (``GC=F``) remains a
+    last-resort fallback only when the cache is missing.
 
     Priority order
     --------------
-    1. OANDA v3 H1 candles (``XAU_USD``) — real institutional data at the
-       same granularity the live engine trades.
-    2. Cached CSV on disk (when ``use_cached=True``).
-    3. Yahoo Finance daily (``GC=F``) — kept as a long-history fallback.
+    1. Cached CSV on disk — default ``data/XAUUSD_50Y.csv`` (≈50y daily).
+    2. Yahoo Finance daily (``GC=F``) — last-resort long-history fallback.
 
     Parameters
     ----------
     symbol      : Yahoo Finance ticker used only for the fallback path (e.g. ``"GC=F"``).
-    years       : Years of history to fetch.
-    use_cached  : If True, try to load from ``cached_csv`` before any download.
-    cached_csv  : Path to cached CSV (default: ``data/XAUUSD_H1.csv`` then ``data/XAUUSD_40Y.csv``).
+    years       : Years of history to keep (date-filtered from the CSV).
+    use_cached  : If True, load from ``cached_csv`` before any download (default path).
+    cached_csv  : Path to cached CSV (default: ``data/XAUUSD_50Y.csv`` then ``data/XAUUSD_40Y.csv``).
     """
-    # ── 1. Try OANDA H1 ───────────────────────────────────────────────────────
-    oanda_df = _fetch_oanda_h1(years)
-    if oanda_df is not None and not oanda_df.empty:
-        return oanda_df
-
-    # ── 2. Try cached CSV ─────────────────────────────────────────────────────
+    # ── 1. Cached CSV (the default, broker-free data source) ───────────────────
     if use_cached:
         for csv_candidate in [
             cached_csv,
-            str(ROOT / "data" / "XAUUSD_H1.csv"),
+            str(ROOT / "data" / "XAUUSD_50Y.csv"),
             str(ROOT / "data" / "XAUUSD_40Y.csv"),
         ]:
             if not csv_candidate:
@@ -228,10 +208,11 @@ def fetch_gold_ohlcv(
                         df.index[0].date(),
                         df.index[-1].date(),
                     )
+                    _assert_price_history_is_plausible(df, csv_path)
                     return df
                 logger.warning("Cached CSV empty after date filter — trying next source")
 
-    # ── 3. Yahoo Finance daily fallback ───────────────────────────────────────
+    # ── 2. Yahoo Finance daily fallback (only when the cache is unavailable) ───
     logger.info("Falling back to Yahoo Finance daily data for %s", symbol)
     import yfinance as yf
 
@@ -683,6 +664,202 @@ def extract_feature_importance(model, feature_names: list[str]) -> dict:
     return {}
 
 
+def archive_artifact_before_overwrite(path: Path, registry: Any | None = None) -> Path | None:
+    """Preserve the artifact about to be overwritten, and repoint its registry entries.
+
+    This is the mechanism that produced the registry corruption repaired by
+    ``repair_model_registry.py --resync``, rather than the damage it caused.
+
+    This module writes ``advanced_oos.pkl`` with ``joblib.dump`` and never
+    touches the registry — a grep for "registry" here returns nothing. So each
+    retrain replaces the bytes that existing entries describe, in place and
+    silently. Four entries ended up pointing at one file with two different
+    recorded accuracies because three of them described a model that no longer
+    existed at that path. ``MODEL_IDENTITY.md`` says the same in prose:
+    retraining in place *"left every older registry entry pointing at the new
+    file while still describing the model it replaced."*
+
+    Repairing the manifest without fixing this means the next retrain
+    reproduces it.
+
+    So before the overwrite, the current artifact is copied to a
+    content-addressed name — ``advanced_oos.<sha12>.pkl`` — and every registry
+    entry whose recorded ``sha256`` matches those bytes is repointed at the
+    copy. Each entry then describes a file that still exists and still contains
+    what the entry says it does.
+
+    The sidecar travels with it, for provenance rather than for the audit.
+    ``audit_manifest`` resolves ``<stem>_meta.json`` from the *artifact's own*
+    stem, so an archived ``advanced_oos.<sha12>.pkl`` looks for
+    ``advanced_oos.<sha12>_meta.json`` and simply finds nothing if it was not
+    archived — it does not fall back to the new model's metadata, and a missing
+    sidecar is explicitly not treated as a mismatch.
+
+    The cost of dropping it is quieter and worse: the archived bytes would have
+    no record of what they measured, so the accuracy on the registry entry
+    could never again be checked against anything. That is precisely the
+    situation ``--resync`` had to guess its way out of.
+
+    Scope, stated plainly: archives match ``ml/saved_models/*.pkl`` in
+    ``.gitignore`` and are deliberately **not** committed — a copy of every
+    historical model would bloat the repository. They are runtime state on the
+    machine that trained. After a fresh clone the repointed entries will be
+    reported by ``audit_manifest`` as ``missing_artifacts``, and can be cleared
+    with ``repair_model_registry.py --prune-missing``.
+
+    That is the intended trade. An entry naming a file that is honestly absent
+    is a reportable finding; an entry naming a file that exists and contains a
+    different model is a silent lie, and is what this codebase actually had.
+
+    Returns the archive path, or ``None`` when there was nothing to preserve
+    (the first training run). Never raises: failing to update the manifest must
+    not abort a training run, and must not lose the archived bytes either.
+    """
+    path = Path(path)
+    if not path.exists():
+        return None
+
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    archive = path.with_name(f"{path.stem}.{digest[:12]}{path.suffix}")
+
+    # Content-addressed, so re-archiving identical bytes is a no-op rather than
+    # a second copy.
+    if not archive.exists():
+        shutil.copy2(path, archive)
+        logger.info("Archived previous artifact %s → %s", path.name, archive.name)
+
+    sidecar = path.with_name(f"{path.stem}_meta.json")
+    archived_sidecar = archive.with_name(f"{archive.stem}_meta.json")
+    if sidecar.exists() and not archived_sidecar.exists():
+        shutil.copy2(sidecar, archived_sidecar)
+        logger.info("Archived sidecar %s → %s", sidecar.name, archived_sidecar.name)
+
+    if registry is None:
+        return archive
+
+    try:
+        manifest = registry._load()
+        versions = manifest.get("versions", {})
+        repointed = []
+        for name, entry in versions.items():
+            # Match on the digest, not the filename: the entry's own record of
+            # which bytes it describes is the authority. An entry pointing at
+            # this path with a *different* digest was already inconsistent and
+            # is not this function's to rewrite.
+            if entry.get("sha256") == digest:
+                entry["file"] = str(archive)
+                repointed.append(name)
+
+        if repointed:
+            registry._save(manifest)
+            logger.info(
+                "Repointed %d registry entr(y/ies) at the archived artifact so they still describe "
+                "the bytes they were registered with: %s",
+                len(repointed),
+                repointed,
+            )
+    except Exception as exc:
+        # The bytes are already safe on disk; a manifest problem must not abort
+        # training or undo the archive.
+        logger.warning(
+            "Could not repoint registry entries at %s (%s). The archived artifact is intact; "
+            "run scripts/repair_model_registry.py to reconcile the manifest.",
+            archive.name,
+            exc,
+        )
+
+    return archive
+
+
+def write_feature_stats(X: pd.DataFrame, path: Path | None = None) -> dict[str, dict[str, float]]:
+    """Write the per-feature training distribution the drift guard compares against.
+
+    ``ml/saved_models/feature_stats.json`` had four readers — the inference
+    engine's drift guard, ``DriftMonitor.from_feature_stats``, the model-card
+    endpoint, and two retrain workflows that list it as a build output — and no
+    writer anywhere in the codebase. ``InferenceEngine._load_train_stats``'s
+    docstring even named this module as the producer. The file never existed, so
+    ``drift_guard_active()`` was False in every deployment and drift went
+    unmonitored for the life of the project. The workflows' ``git add ... ||
+    true`` swallowed the missing path on every run.
+
+    Format is fixed by the reader::
+
+        {"feature_name": {"mean": float, "std": float}, ...}
+
+    Two classes of column are deliberately omitted rather than written, because
+    both produce a guard that runs and can never fire correctly:
+
+    * **No finite values.** A NaN mean makes every z-score NaN, and
+      ``NaN > threshold`` is False, so the feature is silently exempt while
+      appearing covered.
+    * **Zero variance.** The guard divides by ``max(train_std, 1e-9)``, so a
+      constant feature yields either z=0 or z≈1e9 — never a meaningful signal,
+      and the latter would pin the guard to permanent drift.
+
+    Omitting them lets the coverage check in ``_check_feature_drift`` see the
+    real picture instead of counting dead columns as monitored.
+
+    Std is the population standard deviation (``ddof=0``): the guard compares a
+    live window mean against the training distribution itself, not against a
+    sample estimate of a wider one.
+    """
+    path = Path(path) if path is not None else MODEL_DIR / "feature_stats.json"
+
+    stats: dict[str, dict[str, float]] = {}
+    skipped_nonfinite: list[str] = []
+    skipped_constant: list[str] = []
+
+    for col in X.columns:
+        series = pd.to_numeric(X[col], errors="coerce")
+        finite = series[np.isfinite(series)]
+        if finite.empty:
+            skipped_nonfinite.append(str(col))
+            continue
+
+        mean = float(finite.mean())
+        std = float(finite.std(ddof=0))
+        if not np.isfinite(mean) or not np.isfinite(std) or std <= 0.0:
+            skipped_constant.append(str(col))
+            continue
+
+        stats[str(col)] = {"mean": mean, "std": std}
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with Path(path).open("w", encoding="utf-8") as f:
+        json.dump(stats, f, indent=2, sort_keys=True)
+
+    logger.info("Saved drift-guard feature stats (%d features) → %s", len(stats), path)
+    if skipped_nonfinite:
+        logger.warning(
+            "feature_stats: %d column(s) had no finite values and are NOT monitored for drift: %s",
+            len(skipped_nonfinite),
+            skipped_nonfinite[:10],
+        )
+    if skipped_constant:
+        logger.warning(
+            "feature_stats: %d constant column(s) are NOT monitored for drift: %s",
+            len(skipped_constant),
+            skipped_constant[:10],
+        )
+    return stats
+
+
+def write_feature_importances(importance: dict, path: Path | None = None) -> None:
+    """Persist feature importances, the other artifact the workflows claim to produce.
+
+    ``retrain.yml`` and ``quarterly_retrain.yml`` both upload and commit
+    ``ml/saved_models/feature_importances.json``. Like ``feature_stats.json`` it
+    was never written by anything; ``extract_feature_importance`` computed the
+    values, logged the top ten, and dropped them into the training report only.
+    """
+    path = Path(path) if path is not None else MODEL_DIR / "feature_importances.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with Path(path).open("w", encoding="utf-8") as f:
+        json.dump(importance or {}, f, indent=2, sort_keys=True)
+    logger.info("Saved feature importances (%d features) → %s", len(importance or {}), path)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
@@ -969,8 +1146,21 @@ def oos_eval_advanced(
     oos_start = X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
     oos_end = X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
 
-    # Save OOS model with metadata sidecar
+    # Save OOS model with metadata sidecar.
+    #
+    # Preserve whatever is already at this path first. Overwriting it in place
+    # is what left older registry entries describing a model that no longer
+    # existed there — the defect repaired by repair_model_registry.py --resync.
     out_path = MODEL_DIR / "advanced_oos.pkl"
+    try:
+        from ml.model_registry import get_registry
+
+        _registry = get_registry()
+    except Exception as _reg_exc:
+        logger.debug("registry unavailable for archival: %s", _reg_exc)
+        _registry = None
+    archive_artifact_before_overwrite(out_path, registry=_registry)
+
     joblib.dump(model, out_path)
     logger.info("Saved OOS model → %s", out_path)
 
@@ -1005,6 +1195,48 @@ def oos_eval_advanced(
             "Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600."
         ),
     }
+    # ── Calibration, measured on the held-out set ────────────────────────────
+    #
+    # `proba` above is the model's predicted probability on X_oos, and `y_oos`
+    # is what actually happened — the only data in this function that can
+    # answer "when it says 70%, does it happen 70% of the time?".
+    #
+    # ml/inference_engine.py used to score calibration as `1.0 if a calibrator
+    # pickle loaded else 0.0` and said in its own docstring that nothing in
+    # training recorded a real number. This is that number. A badly-fitted
+    # calibrator used to clear any MIN_CALIBRATION threshold; now it cannot.
+    #
+    # Written to its own file rather than only into `meta`, because the
+    # inference engine must read it without depending on the shape of the
+    # training metadata, and because a run that could not measure must leave
+    # NO file — an absent report is unmeasured, and ModelQualityGate fails
+    # closed on that. Writing a placeholder would recreate the defect.
+    from ml.calibration_metrics import calibration_report as _calibration_report
+
+    _cal = _calibration_report(np.asarray(proba, dtype=float), np.asarray(y_oos, dtype=float))
+    cal_path = MODEL_DIR / "calibration_report.json"
+    if _cal is None:
+        meta["calibration"] = None
+        logger.warning(
+            "Calibration NOT measured on the OOS set (n=%d, needs >=100 and both classes). "
+            "No calibration_report.json written — the quality gate will treat the model as "
+            "unmeasured rather than passed.",
+            n,
+        )
+        Path(cal_path).unlink(missing_ok=True)
+    else:
+        meta["calibration"] = _cal.as_dict()
+        with Path(cal_path).open("w", encoding="utf-8") as f:
+            json.dump(_cal.as_dict(), f, indent=2, sort_keys=True)
+        logger.info(
+            "Calibration on OOS: ECE=%.4f Brier=%.4f score=%.4f (n=%d) → %s",
+            _cal.ece,
+            _cal.brier,
+            _cal.calibration_score,
+            _cal.n_samples,
+            cal_path,
+        )
+
     meta_path = MODEL_DIR / "advanced_oos_meta.json"
     with Path(meta_path).open("w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
@@ -1027,7 +1259,7 @@ def oos_eval_advanced(
     }
 
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Train advanced XAUUSD stacking ensemble",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1096,17 +1328,18 @@ def main():
     )
     parser.add_argument(
         "--use-cached",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help=(
-            "Load OHLCV from data/XAUUSD_40Y.csv instead of downloading. "
-            "Speeds up repeated runs and CI. Falls back to download if file missing."
+            "Load OHLCV from the bundled long-history CSV (data/XAUUSD_50Y.csv) — the "
+            "default, broker-free data source. Pass --no-use-cached to force a Yahoo download."
         ),
     )
     parser.add_argument(
         "--cached-csv",
         type=str,
         default=None,
-        help="Path to cached OHLCV CSV (used with --use-cached; default: data/XAUUSD_40Y.csv)",
+        help="Path to cached OHLCV CSV (used with --use-cached; default: data/XAUUSD_50Y.csv)",
     )
     parser.add_argument(
         "--smoke",
@@ -1116,7 +1349,7 @@ def main():
             "Completes in ~30 s. For CI and quick sanity checks."
         ),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # ── Smoke-test overrides ──────────────────────────────────────────────────
     if args.smoke:
@@ -1243,6 +1476,13 @@ def main():
     importance = extract_feature_importance(final_model, list(X_cv.columns))
     if importance:
         logger.info("Top features: %s", list(importance.keys())[:10])
+    write_feature_importances(importance)
+
+    # The drift guard's only input. Computed from the CV training matrix —
+    # the distribution the final model was actually fitted on, which is what
+    # live feature means must be compared against. Without this file
+    # InferenceEngine.drift_guard_active() is False and drift is undetected.
+    write_feature_stats(X_cv)
 
     # ── Held-out OOS evaluation ───────────────────────────────────────────────
     oos_metrics: ClassVar[dict] = {}
@@ -1345,6 +1585,31 @@ def main():
     logger.info("=" * 65)
 
     return report
+
+
+def retrain_advanced_predictor(
+    years: int = 50,
+    oos_years: int = 4,
+    stacking: bool = True,
+) -> dict:
+    """Programmatic retrain entry point for the advanced_oos model.
+
+    ``TrainingManager._dispatch_training`` imported this name and it did not
+    exist, so every advanced_oos retrain job raised ImportError into the job
+    handler and was recorded as failed. The module only ever had the argparse
+    ``main()``.
+
+    Defaults mirror the production retrain documented in AGENTS.md
+    (``--years 50 --oos-years 4 --stacking``). Returns ``main()``'s report dict,
+    which is what the caller stores as the job's metrics.
+
+    This is a full retrain: expect 10-60 minutes depending on hardware. The
+    caller already runs it on a worker thread.
+    """
+    argv = ["--years", str(years), "--oos-years", str(oos_years)]
+    if stacking:
+        argv.append("--stacking")
+    return main(argv)
 
 
 if __name__ == "__main__":

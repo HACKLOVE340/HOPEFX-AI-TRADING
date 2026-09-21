@@ -13,6 +13,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { voiceApi } from './useApi';
+import { publishSpeech } from '../hub/speechBus';
+import { pronounce } from '../hub/pronunciation';
 
 // ── Cloud TTS availability (cached once per page load) ────────────────────────
 // The backend /api/voice/* routes provide higher-quality cloud TTS/STT when a
@@ -77,7 +79,88 @@ export interface UseVoice {
   /** Speak `text` aloud (cancels any in-progress utterance). */
   speak: (text: string) => void;
   cancelSpeak: () => void;
+  /** The text of the utterance currently being spoken, or '' when silent. */
+  spokenText: string;
+  /**
+   * How far through that utterance synthesis has actually got, 0-1 — or **null**
+   * when nothing has measured it.
+   *
+   * Measured, never estimated. Cloud TTS plays through an `<audio>` element and
+   * reports `currentTime / duration`; Web Speech emits `boundary` events
+   * carrying a character index. Neither is available while muted, before the
+   * first event fires, or on an engine that does not emit them, and in those
+   * cases this stays null.
+   *
+   * Null must not be read as zero. A caller that stepped a highlight from a
+   * word-count timer would drift within two sentences and point at the wrong
+   * panel while the AI described another — precise and wrong, which is worse
+   * than imprecise and right.
+   */
+  speechProgress: number | null;
 }
+
+
+/**
+ * What the OS should actually be asked to SAY.
+ *
+ * Assistant replies are Markdown and were handed to the speech engine raw, so
+ * the platform asked the OS to pronounce "star star Dashboard arrow Account
+ * star star" and "underscore open-paren" — measured in Chromium by spying on
+ * `window.speechSynthesis.speak` while driving /ai-assistant.
+ *
+ * This is a READ-ALOUD transform only. The on-screen text and the transcript
+ * keep their formatting; only the string going to the voice is flattened. It is
+ * deliberately not a Markdown parser — a parser would pull in a dependency and
+ * an AST to produce a flat string, and the failure mode here is a mispronounced
+ * character, not a wrong document.
+ *
+ * Exported so it can be tested directly: the hook needs a browser, the rule
+ * does not.
+ */
+export function speechText(markdown: string): string {
+  let t = markdown ?? '';
+
+  // Fenced code: keep the code, drop the fence and its language tag.
+  t = t.replace(/```[a-zA-Z0-9_-]*\n?([\s\S]*?)```/g, '$1');
+  // Inline code, emphasis, strikethrough — keep the words, drop the marks.
+  t = t.replace(/`([^`]+)`/g, '$1');
+  t = t.replace(/~~([^~]+)~~/g, '$1');
+  t = t.replace(/(\*\*\*|___)(\S[\s\S]*?\S|\S)\1/g, '$2');
+  t = t.replace(/(\*\*|__)(\S[\s\S]*?\S|\S)\1/g, '$2');
+  t = t.replace(/(\*|_)(\S[\s\S]*?\S|\S)\1/g, '$2');
+  // A link is read by its text; the URL is noise out loud. Images likewise.
+  t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+  // Headings, block quotes, list bullets: the marker is layout, not language.
+  t = t.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+  t = t.replace(/^\s{0,3}>\s?/gm, '');
+  t = t.replace(/^\s*[-*+]\s+/gm, '');
+  t = t.replace(/^\s*\d+[.)]\s+/gm, '');
+  // A horizontal rule has nothing to say.
+  t = t.replace(/^\s*([-*_])\1{2,}\s*$/gm, '');
+  // Any leftover emphasis characters that did not pair up.
+  t = t.replace(/[*_`]+/g, '');
+
+  // Line breaks become sentence breaks: without this the engine runs lines
+  // together, and a run of blank lines becomes a long dead pause.
+  // Line breaks become sentence breaks BETWEEN lines only. Appending to the
+  // last line as well made every single-line reply end in a spoken full stop
+  // it never had.
+  const lines = t
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines
+    .reduce((acc, line, i) => {
+      if (i === 0) return line;
+      const sep = /[.!?:,;—]$/.test(acc) ? ' ' : '. ';
+      return acc + sep + line;
+    }, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 
 export function useVoice(lang = 'en-US'): UseVoice {
   const sttSupported = getRecognitionCtor() !== null;
@@ -85,6 +168,8 @@ export function useVoice(lang = 'en-US'): UseVoice {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [spokenText, setSpokenText] = useState('');
+  const [speechProgress, setSpeechProgress] = useState<number | null>(null);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const onFinalRef = useRef<((t: string) => void) | undefined>(undefined);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -108,8 +193,10 @@ export function useVoice(lang = 'en-US'): UseVoice {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interim += r[0].transcript;
+        const alt = r?.[0];
+        if (!alt) continue;
+        if (r.isFinal) finalText += alt.transcript;
+        else interim += alt.transcript;
       }
       setTranscript((finalText || interim).trim());
       if (finalText && onFinalRef.current) onFinalRef.current(finalText.trim());
@@ -132,6 +219,10 @@ export function useVoice(lang = 'en-US'): UseVoice {
     stopCloudAudio();
     if (ttsAvailable()) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
     setSpeaking(false);
+    // Cleared together. A stale utterance with a live progress figure would
+    // leave a highlight burning on a panel nobody is talking about.
+    setSpokenText('');
+    setSpeechProgress(null);
   }, [stopCloudAudio]);
 
   const speakWebSpeech = useCallback((t: string) => {
@@ -140,17 +231,32 @@ export function useVoice(lang = 'en-US'): UseVoice {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(t);
       u.lang = lang;
-      u.onend = () => setSpeaking(false);
-      u.onerror = () => setSpeaking(false);
+      // A real measurement from the engine, not a timer. Not every browser
+      // emits it (Firefox historically did not), and where it does not,
+      // progress stays null and the caller falls back to a whole-utterance
+      // highlight rather than a drifting one.
+      u.onboundary = (e: SpeechSynthesisEvent) => {
+        if (t.length > 0 && typeof e.charIndex === 'number') {
+          setSpeechProgress(Math.max(0, Math.min(1, e.charIndex / t.length)));
+        }
+      };
+      u.onend = () => { setSpeaking(false); setSpokenText(''); setSpeechProgress(null); };
+      u.onerror = () => { setSpeaking(false); setSpokenText(''); setSpeechProgress(null); };
       window.speechSynthesis.speak(u);
       setSpeaking(true);
+      setSpokenText(t);
+      setSpeechProgress(null);
     } catch {
       setSpeaking(false);
+      setSpokenText('');
+      setSpeechProgress(null);
     }
   }, [lang]);
 
   const speak = useCallback((text: string) => {
-    const t = (text ?? '').trim();
+    // Flattened before it reaches any engine — cloud or Web Speech — because
+    // both pronounce Markdown. See `speechText`.
+    const t = pronounce(speechText(text ?? '').trim());
     if (!t) return;
     // Prefer cloud TTS when configured; fall back to Web Speech on any failure.
     void cloudTtsAvailable().then((cloud) => {
@@ -164,9 +270,24 @@ export function useVoice(lang = 'en-US'): UseVoice {
             const url = URL.createObjectURL(res.data as Blob);
             const audio = new Audio(url);
             audioRef.current = audio;
-            audio.onended = () => { setSpeaking(false); try { URL.revokeObjectURL(url); } catch { /* ignore */ } };
+            audio.ontimeupdate = () => {
+              // `duration` is NaN until metadata loads, and Infinity for a
+              // stream. Both are "not measured", not zero.
+              const d = audio.duration;
+              if (Number.isFinite(d) && d > 0) {
+                setSpeechProgress(Math.max(0, Math.min(1, audio.currentTime / d)));
+              }
+            };
+            audio.onended = () => {
+              setSpeaking(false);
+              setSpokenText('');
+              setSpeechProgress(null);
+              try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+            };
             audio.onerror = () => { setSpeaking(false); speakWebSpeech(t); };
             setSpeaking(true);
+            setSpokenText(t);
+            setSpeechProgress(null);
             void audio.play().catch(() => { setSpeaking(false); speakWebSpeech(t); });
           } catch {
             speakWebSpeech(t);
@@ -175,6 +296,33 @@ export function useVoice(lang = 'en-US'): UseVoice {
         .catch(() => speakWebSpeech(t));
     });
   }, [speakWebSpeech, stopCloudAudio]);
+
+  /**
+   * Tell the rest of the app what is being said (§7 lip sync, everywhere).
+   *
+   * Before this, speech was component state: `AICore` could animate its head
+   * because it owned the hook, and `PresenceAnywhere` — the presence on every
+   * other page in the platform — could not, so its mouth was painted shut for
+   * the life of the component while the assistant talked. See `hub/speechBus`.
+   *
+   * It publishes `spokenText`, which is the string the ENGINE was given —
+   * `speak` flattens Markdown through `speechText` first. The mouth is driven
+   * by a character index into that string, so publishing the raw Markdown
+   * would index a different string from the one being spoken and land the
+   * mouth on the wrong character for the whole reply.
+   *
+   * It publishes `speechProgress` verbatim, null included. Null means nobody
+   * measured it and `mouthFor` holds a steady shape; substituting zero here
+   * would pin every head in the app to the first character of the utterance.
+   */
+  useEffect(() => {
+    publishSpeech({ utterance: spokenText, progress: speechProgress, speaking });
+  }, [speaking, spokenText, speechProgress]);
+
+  // A component that unmounts mid-utterance cancels synthesis below. Without
+  // this the bus would hold that frame forever and every head in the app would
+  // keep an open mouth over an utterance nobody can hear.
+  useEffect(() => () => { publishSpeech({ utterance: '', progress: null, speaking: false }); }, []);
 
   // Cancel any in-flight speech/recognition on unmount.
   useEffect(() => () => {
@@ -195,6 +343,8 @@ export function useVoice(lang = 'en-US'): UseVoice {
     stopListening,
     speak,
     cancelSpeak,
+    spokenText,
+    speechProgress,
   };
 }
 

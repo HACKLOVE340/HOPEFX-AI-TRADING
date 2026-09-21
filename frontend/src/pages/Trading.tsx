@@ -6,13 +6,18 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RelatedPages } from '../components';
+import {
+  Zap, Brain, Eye, BookOpen, Shield,
+
+} from 'lucide-react';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
 } from 'lightweight-charts';
 import type { UTCTimestamp } from 'lightweight-charts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useStore, useHasHydrated, selectIsAuth } from '../store';
+import { useStore, useHasHydrated, selectIsAuth, selectFeedLive } from '../store';
 import { tradingApi } from '../hooks/useApi';
 import { usePositions, useAccount, useSignals } from '../hooks/useOrchestratorData';
 // Import guarded variants from the barrel — each panel has its own
@@ -28,8 +33,10 @@ import {
 } from '../components/panels';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative, extractApiError } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative, extractApiError, sameSymbol, positionSide } from '../lib/utils';
 import type { PriceTick } from '../store';
+import { assessBars } from '../lib/barQuality';
+import { toUTCSeconds as toUTC } from '../lib/chartTime';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -70,39 +77,71 @@ interface AIAnalysisResult {
 
 function apiSym(s: string) { return s.replace('/', '_'); }
 
-function toUTC(ts: number | string): UTCTimestamp {
-  if (typeof ts === 'string') return Math.floor(new Date(ts).getTime() / 1000) as UTCTimestamp;
-  // Auto-detect ms vs seconds: values > 1e10 are milliseconds
-  return Math.floor(ts > 1_000_000_000_000 ? ts / 1000 : ts) as UTCTimestamp;
+
+/**
+ * Price formatting per instrument class.
+ *
+ * The chart used lightweight-charts' default (2 decimals, minMove 0.01) for
+ * every symbol. On EUR/USD that renders 1.08 instead of 1.08512 — the price
+ * scale collapses to a handful of distinct labels and the candles look flat,
+ * which is a large part of why this did not read like a real chart. JPY pairs
+ * need 3, metals 2, crypto 2, and everything else 5.
+ */
+export function priceFormatFor(symbol: string): { precision: number; minMove: number } {
+  const s = symbol.toUpperCase().replace('/', '');
+  if (s.includes('JPY')) return { precision: 3, minMove: 0.001 };
+  if (s.startsWith('XAU') || s.startsWith('XAG')) return { precision: 2, minMove: 0.01 };
+  if (s.startsWith('BTC') || s.startsWith('ETH')) return { precision: 2, minMove: 0.01 };
+  return { precision: 5, minMove: 0.00001 };
 }
+
+/**
+ * True when a live tick is too far from the bar it would update to be the same
+ * instrument.
+ *
+ * The deployed terminal showed XAU/USD with the header reading Bid 3,299.85
+ * while the candles sat around 4,390 — and drew a vertical line plunging
+ * between the two, because the tick was written straight onto the last bar. A
+ * 25% gap is not a price move, it is two sources disagreeing about what the
+ * symbol is. Drawing it as a candle presents a data fault as a market event.
+ */
+export function tickIsOffScale(tickPrice: number, barClose: number): boolean {
+  if (!Number.isFinite(tickPrice) || !Number.isFinite(barClose) || barClose === 0) return true;
+  return Math.abs(tickPrice - barClose) / Math.abs(barClose) > TICK_MAX_DIVERGENCE;
+}
+
+/** Beyond this fractional gap, a tick is treated as a different instrument. */
+const TICK_MAX_DIVERGENCE = 0.10;
 
 // ── TopBar ────────────────────────────────────────────────────────────────────
 
 interface TopBarProps {
   symbol: string; setSymbol: (s: string) => void;
   timeframe: string; setTimeframe: (t: string) => void;
-  tick: PriceTick | undefined; wsStatus: string;
+  tick: PriceTick | undefined; wsStatus: string; feedLive: boolean;
 }
 
-function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: TopBarProps) {
+function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus, feedLive }: TopBarProps) {
   const navigate = useNavigate();
   const account = useStore((s) => s.account);
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2 bg-[#0a1628] border-b border-[#1e2d3d] shrink-0 flex-wrap">
-      {/* Branding */}
-      <span className="text-[13px] font-bold text-[#00d4ff] tracking-widest shrink-0">
-        HOPEFX
-      </span>
-      <span className="text-[10px] text-slate-600 shrink-0">TERMINAL</span>
+    <div className="flex items-center gap-3 px-3 py-2 bg-[#0a1628] border-b border-[var(--border)] shrink-0 flex-wrap">
+      {/* Branding doubles as the page's only h1. This page rendered ZERO
+          h1-h3 elements, so it had no document outline for a screen reader to
+          navigate by (audit F173). The visual treatment is unchanged. */}
+      <h1 className="flex items-baseline gap-2 m-0 shrink-0">
+        <span className="text-[13px] font-bold text-[var(--accent)] tracking-widest">HOPEFX</span>
+        <span className="text-[10px] font-normal text-slate-600">TERMINAL</span>
+      </h1>
 
-      <div className="w-px h-4 bg-[#1e2d3d]" />
+      <div className="w-px h-4 bg-[var(--border)]" />
 
       {/* Symbol selector */}
       <select
         value={symbol}
         onChange={(e) => setSymbol(e.target.value)}
-        className="bg-[#0d1421] border border-[#1e2d3d] rounded px-2 py-1 text-[13px] font-bold text-slate-200 focus:outline-none focus:border-[#3b82f6] cursor-pointer"
+        className="bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-[13px] font-bold text-slate-200 focus:outline-none focus:border-[#3b82f6] cursor-pointer"
       >
         {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
       </select>
@@ -111,13 +150,13 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
       {tick ? (
         <div className="flex items-center gap-3 text-[12px]">
           <span className="text-slate-500">Bid</span>
-          <span className="font-bold text-[#ff1744] tabular-nums">{fmtPrice(tick.bid)}</span>
+          <span className="font-bold text-[var(--bear)] tabular-nums">{fmtPrice(tick.bid)}</span>
           <span className="text-slate-500">Ask</span>
-          <span className="font-bold text-[#00e676] tabular-nums">{fmtPrice(tick.ask)}</span>
+          <span className="font-bold text-[var(--bull)] tabular-nums">{fmtPrice(tick.ask)}</span>
           <span className="text-slate-500">Spread</span>
           <span className="text-[#ffb800] tabular-nums">{fmtPrice(tick.ask - tick.bid, 3)}</span>
           {tick.change_pct !== undefined && (
-            <span className={cn('tabular-nums font-semibold', tick.change_pct >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+            <span className={cn('tabular-nums font-semibold', tick.change_pct >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>
               {tick.change_pct >= 0 ? '+' : ''}{tick.change_pct.toFixed(2)}%
             </span>
           )}
@@ -126,7 +165,7 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
         <span className="text-[11px] text-slate-600">Awaiting price…</span>
       )}
 
-      <div className="w-px h-4 bg-[#1e2d3d]" />
+      <div className="w-px h-4 bg-[var(--border)]" />
 
       {/* Timeframe buttons */}
       <div className="flex gap-1">
@@ -137,8 +176,8 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
             className={cn(
               'px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors',
               timeframe === tf
-                ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+                : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
             )}
           >
             {tf}
@@ -153,28 +192,29 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
         <div className="flex items-center gap-4 text-[11px]">
           <span className="text-slate-500">Balance <span className="text-slate-300 font-semibold">${fmtPrice(account.balance)}</span></span>
           <span className="text-slate-500">Equity <span className="text-slate-300 font-semibold">${fmtPrice(account.equity)}</span></span>
-          <span className="text-slate-500">P&L <span className={cn('font-semibold', account.daily_pnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>{fmtPnl(account.daily_pnl)}</span></span>
+          <span className="text-slate-500">P&L <span className={cn('font-semibold', (account.daily_pnl ?? 0) >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>{fmtPnl(account.daily_pnl)}</span></span>
         </div>
       )}
 
       {/* Quick nav */}
       <button onClick={() => navigate('/journal')}
-        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[var(--border)] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
         📓 Journal
       </button>
       <button onClick={() => navigate('/risk-calculator')}
-        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[var(--border)] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
         🛡 Risk Calc
       </button>
 
       {/* WS status */}
+      {/* F10-01: keyed to the feed, not the socket. Third copy of this badge. */}
       <span className={cn(
         'text-[10px] px-2 py-0.5 rounded font-bold border',
-        wsStatus === 'connected'
-          ? 'bg-[#00e676]/10 border-[#00e676]/30 text-[#00e676]'
+        feedLive
+          ? 'bg-[var(--bull)]/10 border-[var(--bull)]/30 text-[var(--bull)]'
           : 'bg-[#ffb800]/10 border-[#ffb800]/30 text-[#ffb800]',
       )}>
-        {wsStatus === 'connected' ? '● LIVE' : '○ REST'}
+        {feedLive ? '● LIVE' : wsStatus === 'connected' ? '● STALLED' : '○ REST'}
       </span>
     </div>
   );
@@ -192,12 +232,38 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   const candleRef    = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
   const maRef        = useRef<ISeriesApi<'Line'> | null>(null);
+  // Newest bar time in the series — guards update() against "Cannot update
+  // oldest data" after a timeframe switch.
+  const lastBarTimeRef = useRef<number | null>(null);
+  // fitContent() belongs to the first load only; re-running it on every
+  // refresh discards the user's zoom and pan.
+  const didFitRef = useRef(false);
+  // One warning per mount when the tick and the OHLCV disagree on instrument.
+  const offScaleWarnedRef = useRef(false);
   const rafRef       = useRef<number>(0);
+  // The selected symbol, reachable without being a dependency. The tick-update
+  // effect below names the instrument in its off-scale warning, and that is the
+  // ONLY thing it reads `symbol` for — so listing it there would re-run a tick
+  // write against a series the tick does not belong to, which is the very fault
+  // the warning exists to report. A ref is current without re-running anything.
+  const symbolRef = useRef(symbol);
+  symbolRef.current = symbol;
 
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
 
   const [chartError, setChartError] = useState<string | null>(null);
+  /*
+   * What the bars themselves are worth.
+   *
+   * `chartError` covers "nothing arrived" — the endpoint's 503, which already
+   * names the symbol, the timeframe and the feed to configure. This covers the
+   * other failure: bars that DID arrive and are not candles. Measured on the
+   * daily series this terminal can serve with no live feed, 62 of 500 have no
+   * body or no wicks, and every chart drew them as though the market had been
+   * still. See `lib/barQuality.ts`.
+   */
+  const [barNotice, setBarNotice] = useState<string | null>(null);
   const [loading, setLoading]       = useState(true);
   const [showVolume, setShowVolume] = useState(true);
   const [showMA, setShowMA]         = useState(true);
@@ -206,18 +272,52 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   useEffect(() => {
     if (!containerRef.current) return;
     const chart = createChart(containerRef.current, {
-      layout: { background: { color: '#060d18' }, textColor: '#64748b' },
-      grid:   { vertLines: { color: '#0d1421' }, horzLines: { color: '#0d1421' } },
-      rightPriceScale: { borderColor: '#1e2d3d' },
-      timeScale: { borderColor: '#1e2d3d', timeVisible: true, secondsVisible: false },
-      crosshair: { mode: 1 },
-      width:  containerRef.current.clientWidth,
-      height: 340,
+      layout: {
+        background: { color: '#060d18' },
+        textColor: '#9ca3af',
+        attributionLogo: false,
+      },
+      grid: { vertLines: { color: '#0d1421' }, horzLines: { color: '#0d1421' } },
+      rightPriceScale: {
+        borderColor: '#1e2d3d',
+        // Headroom above and below the series so candles never touch the edge —
+        // the default 0.2/0.1 crowds the last bar against the axis.
+        scaleMargins: { top: 0.12, bottom: 0.12 },
+        entireTextOnly: true,
+      },
+      timeScale: {
+        borderColor: '#1e2d3d',
+        timeVisible: true,
+        secondsVisible: false,
+        // Breathing room to the right of the last bar, as TradingView leaves,
+        // so the live candle and its price label are not against the scale.
+        rightOffset: 6,
+        barSpacing: 8,
+        minBarSpacing: 2,
+        fixLeftEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+      },
+      crosshair: {
+        mode: 1, // magnet — snaps to OHLC values like TradingView's default
+        vertLine: { color: '#4b5563', width: 1, style: 3, labelBackgroundColor: '#1e3a5f' },
+        horzLine: { color: '#4b5563', width: 1, style: 3, labelBackgroundColor: '#1e3a5f' },
+      },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+      width: containerRef.current.clientWidth,
+      height: containerRef.current.clientHeight || 340,
     });
     const candle = chart.addSeries(CandlestickSeries, {
       upColor: '#00e676', downColor: '#ff1744',
       borderUpColor: '#00e676', borderDownColor: '#ff1744',
       wickUpColor: '#00e676', wickDownColor: '#ff1744',
+      // Per-instrument precision. The default 2dp rendered EUR/USD as 1.08 and
+      // flattened the price scale to a few labels.
+      priceFormat: { type: 'price', ...priceFormatFor(symbol) },
+      lastValueVisible: true,
+      priceLineVisible: true,
+      priceLineWidth: 1,
+      priceLineStyle: 2,
     });
     const vol = chart.addSeries(HistogramSeries, {
       color: '#1e2d3d', priceFormat: { type: 'volume' }, priceScaleId: 'vol',
@@ -232,7 +332,13 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         if (containerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+          // Height as well as width. It was fixed at 340px at construction, so
+          // the chart never grew with its container and left dead space below
+          // on tall viewports while staying cramped in the stacked layout.
+          chartRef.current.applyOptions({
+            width: containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight || 340,
+          });
         }
       });
     });
@@ -246,7 +352,27 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
       volRef.current    = null;
       maRef.current     = null;
     };
+    // `symbol` is read once, to seed priceFormat at construction. Listing it
+    // would tear down and rebuild the whole chart on every instrument switch —
+    // losing the viewport, re-creating the ResizeObserver and re-subscribing
+    // the series. The effect immediately below keeps priceFormat in sync with
+    // `symbol` instead, which is the whole reason it exists.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep per-instrument precision in sync with the selected symbol.
+  //
+  // The chart is created once (deps `[]`), so priceFormat was frozen to
+  // whatever symbol was selected at mount: switching XAU/USD → EUR/USD kept
+  // 2dp and rendered 1.08 instead of 1.08512. Also re-fit the viewport, since
+  // a new instrument is a new price range and the previous zoom is meaningless.
+  useEffect(() => {
+    candleRef.current?.applyOptions({
+      priceFormat: { type: 'price', ...priceFormatFor(symbol) },
+    });
+    didFitRef.current = false;
+    offScaleWarnedRef.current = false;
+  }, [symbol, timeframe]);
 
   useEffect(() => {
     if (!candleRef.current || !hydrated || !isAuth) return;
@@ -257,9 +383,33 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         if (controller.signal.aborted) return;
         const raw = r.data as OHLCVCandle[] | { data?: OHLCVCandle[] };
         const data: OHLCVCandle[] = Array.isArray(raw) ? raw : (raw.data ?? []);
-        if (!data.length) { setChartError('No OHLCV data for this symbol/timeframe'); return; }
-        setCandles(data);
-        const sorted = [...data].sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
+        if (!data.length) {
+          // Clear the previous symbol's candles — otherwise switching to a
+          // symbol with no feed leaves the old instrument's chart on screen
+          // under the new symbol's label, so the chart looks stuck.
+          candleRef.current?.setData([]);
+          volRef.current?.setData([]);
+          maRef.current?.setData([]);
+          setBarNotice(null);
+          setCandles([]);
+          setChartError('No OHLCV data for this symbol/timeframe');
+          return;
+        }
+        // Sort BEFORE storing. This did `setCandles(data)` with the unsorted
+        // array while the series received `sorted`, so `candles[length - 1]`
+        // was not necessarily the newest bar — and that is the bar the live
+        // tick effect below updates.
+        const sorted = [...data]
+          .filter((c) => Number.isFinite(toUTC(c.timestamp)))
+          .sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
+        setCandles(sorted);
+
+        const newest = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
+        lastBarTimeRef.current = newest ? toUTC(newest.timestamp) : null;
+
+        setBarNotice(assessBars(sorted.map((c) => ({
+          time: toUTC(c.timestamp), open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume,
+        }))).notice);
         candleRef.current!.setData(sorted.map((c) => ({
           time: toUTC(c.timestamp), open: c.open, high: c.high, low: c.low, close: c.close,
         })));
@@ -270,18 +420,32 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
           })));
         }
         if (maRef.current) {
-          const maData = sorted.map((_, i, arr) => {
+          const maData = sorted.map((bar, i, arr) => {
             if (i < 19) return null;
             const avg = arr.slice(i - 19, i + 1).reduce((s, x) => s + x.close, 0) / 20;
-            return { time: toUTC(arr[i].timestamp), value: avg };
+            return { time: toUTC(bar.timestamp), value: avg };
           }).filter(Boolean) as { time: UTCTimestamp; value: number }[];
           maRef.current.setData(maData);
         }
-        chartRef.current?.timeScale().fitContent();
+        // Fit once, then leave the viewport alone. This ran fitContent() on
+        // every 30s refresh, which threw away the user's zoom and pan each
+        // time — no real chart does that. After the first load, only follow
+        // real time.
+        if (!didFitRef.current) {
+          chartRef.current?.timeScale().fitContent();
+          didFitRef.current = true;
+        }
         chartRef.current?.timeScale().scrollToRealTime();
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
+        // Same reason as the empty-data branch: never leave the old symbol's
+        // candles on screen when the new symbol's fetch fails.
+        candleRef.current?.setData([]);
+        volRef.current?.setData([]);
+        maRef.current?.setData([]);
+        setCandles([]);
+        setBarNotice(null);
         setChartError(extractApiError(err, 'Failed to load chart data'));
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -289,12 +453,38 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   }, [symbol, timeframe, hydrated, isAuth]);
 
   useEffect(() => {
-    if (!tick || !candleRef.current || !candles.length) return;
     // Align the live tick to the current bar's open time so it updates the
     // existing candle rather than creating a phantom future candle.
-    const last = candles[candles.length - 1]!;
+    const last = candles[candles.length - 1];
+    if (!tick || !candleRef.current || !last) return;
+
     const barTime = toUTC(last.timestamp);
     const mid = (tick.bid + tick.ask) / 2;
+
+    // lightweight-charts throws "Cannot update oldest data" if this is older
+    // than the series' newest bar — which happens on a timeframe switch, when
+    // setData() has replaced the series but this effect still closes over the
+    // previous `candles`.
+    if (!Number.isFinite(barTime)) return;
+    if (lastBarTimeRef.current !== null && barTime < lastBarTimeRef.current) return;
+
+    // Refuse a tick that cannot belong to this series. The deployed terminal
+    // showed XAU/USD with the header at 3,299.85 and the candles at ~4,390, and
+    // drew a vertical line plunging between them, because this wrote the tick
+    // straight onto the last bar. A 25% gap is not a price move — it is two
+    // sources disagreeing about the instrument, and rendering it as a candle
+    // presents a data fault as a market event.
+    if (tickIsOffScale(mid, last.close)) {
+      if (!offScaleWarnedRef.current) {
+        console.warn(
+          `[Trading] ignoring off-scale tick for ${symbolRef.current}: tick mid=${mid} vs last bar close=${last.close}. ` +
+          'The live feed and the OHLCV history disagree about this instrument.',
+        );
+        offScaleWarnedRef.current = true;
+      }
+      return;
+    }
+
     candleRef.current.update({
       time:  barTime,
       open:  last.open,
@@ -308,8 +498,10 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   useEffect(() => { maRef.current?.applyOptions({ visible: showMA }); }, [showMA]);
 
   const stats = useMemo(() => {
-    if (!candles.length) return null;
     const last = candles[candles.length - 1];
+    // Bind then guard: `candles.length` being non-zero does not narrow
+    // `candles[n]` for the compiler (audit #38).
+    if (!last) return null;
     const prev = candles[candles.length - 2];
     const chg  = prev ? ((last.close - prev.close) / prev.close) * 100 : 0;
     const high = Math.max(...candles.slice(-20).map((c) => c.high));
@@ -318,15 +510,15 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   }, [candles]);
 
   return (
-    <div className="bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden shrink-0">
-      <div className="flex items-center gap-3 px-3 py-2 border-b border-[#1e2d3d]">
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden shrink-0">
+      <div className="flex items-center gap-3 px-3 py-2 border-b border-[var(--border)]">
         {stats && (
           <div className="flex items-center gap-4 text-[11px]">
             <span className="text-slate-500">O <span className="text-slate-300 tabular-nums">{fmtPrice(stats.last.open)}</span></span>
-            <span className="text-slate-500">H <span className="text-[#00e676] tabular-nums">{fmtPrice(stats.last.high)}</span></span>
-            <span className="text-slate-500">L <span className="text-[#ff1744] tabular-nums">{fmtPrice(stats.last.low)}</span></span>
+            <span className="text-slate-500">H <span className="text-[var(--bull)] tabular-nums">{fmtPrice(stats.last.high)}</span></span>
+            <span className="text-slate-500">L <span className="text-[var(--bear)] tabular-nums">{fmtPrice(stats.last.low)}</span></span>
             <span className="text-slate-500">C <span className="text-slate-200 font-bold tabular-nums">{fmtPrice(stats.last.close)}</span></span>
-            <span className={cn('font-semibold tabular-nums', stats.chg >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+            <span className={cn('font-semibold tabular-nums', stats.chg >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>
               {stats.chg >= 0 ? '+' : ''}{stats.chg.toFixed(2)}%
             </span>
             <span className="text-slate-600">20H: <span className="text-slate-400">{fmtPrice(stats.high20)}</span></span>
@@ -349,12 +541,22 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         )}
         {chartError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-20 bg-[#060d18]">
-            <span className="text-[#ff1744] text-[12px]">⚠ {chartError}</span>
+            <span className="text-[var(--bear)] text-[12px]">⚠ {chartError}</span>
             <span className="text-slate-600 text-[10px]">Connect a broker or load historical data</span>
           </div>
         )}
         {/* Container is always rendered so the chart has a real size on init */}
         <div ref={containerRef} style={{ width: '100%', height: 340 }} />
+        {/*
+          Beside the chart, not over it. These bars are still worth looking at —
+          the point is that the operator knows what they are looking at. An
+          overlay would hide the thing it is describing.
+        */}
+        {barNotice && !chartError && (
+          <div role="status" className="px-2 pb-1 text-[10px] leading-snug text-[var(--warn)]">
+            {barNotice}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -379,7 +581,7 @@ function TradeHistoryPanel({ symbol }: { symbol: string }) {
   });
 
   if (isLoading) return <div className="p-4"><PanelSkeleton rows={5} /></div>;
-  if (isError)   return <div className="p-4 text-[11px] text-[#ff1744]">Failed to load trade history</div>;
+  if (isError)   return <div className="p-4 text-[11px] text-[var(--bear)]">Failed to load trade history</div>;
   if (!data?.length) return (
     <div className="flex items-center justify-center h-24 text-slate-600 text-[12px]">No closed trades yet</div>
   );
@@ -388,7 +590,7 @@ function TradeHistoryPanel({ symbol }: { symbol: string }) {
     <div className="overflow-x-auto">
       <table className="w-full text-[11px]">
         <thead>
-          <tr className="border-b border-[#1e2d3d]">
+          <tr className="border-b border-[var(--border)]">
             {['Symbol','Side','Size','Entry','Exit','P&L','Opened','Closed','Duration'].map((h) => (
               <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
             ))}
@@ -396,13 +598,13 @@ function TradeHistoryPanel({ symbol }: { symbol: string }) {
         </thead>
         <tbody>
           {data.map((t) => {
-            const isLong = t.side === 'long' || t.side === 'buy';
+            const isLong = positionSide(t) === 'long';  // F5-02
             const pnlPos = t.realized_pnl >= 0;
             return (
-              <tr key={t.id} className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/30 transition-colors">
+              <tr key={t.id} className="border-b border-[var(--surface)] hover:bg-[var(--border)]/30 transition-colors">
                 <td className="px-3 py-2 font-semibold text-slate-200">{t.symbol}</td>
                 <td className="px-3 py-2">
-                  <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold uppercase', isLong ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]')}>
+                  <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold uppercase', isLong ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]')}>
                     {isLong ? '▲ Long' : '▼ Short'}
                   </span>
                 </td>
@@ -410,7 +612,7 @@ function TradeHistoryPanel({ symbol }: { symbol: string }) {
                 <td className="px-3 py-2 tabular-nums text-slate-300">{fmtPrice(t.entry_price)}</td>
                 <td className="px-3 py-2 tabular-nums text-slate-300">{fmtPrice(t.exit_price)}</td>
                 <td className="px-3 py-2">
-                  <span className={cn('font-semibold tabular-nums', pnlPos ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+                  <span className={cn('font-semibold tabular-nums', pnlPos ? 'text-[var(--bull)]' : 'text-[var(--bear)]')}>
                     {fmtPnl(t.realized_pnl)}
                   </span>
                 </td>
@@ -430,9 +632,7 @@ function TradeHistoryPanel({ symbol }: { symbol: string }) {
 
 function SignalsSummaryPanel({ symbol }: { symbol: string }) {
   const signals  = useStore((s) => s.signals);
-  const filtered = signals.filter(
-    (sig) => sig.symbol === symbol || sig.symbol === symbol.replace('/', '_')
-  );
+  const filtered = signals.filter((sig) => sameSymbol(sig.symbol, symbol));
 
   if (!filtered.length) return (
     <div className="flex items-center justify-center h-24 text-slate-600 text-[12px]">No signals for {symbol}</div>
@@ -442,7 +642,7 @@ function SignalsSummaryPanel({ symbol }: { symbol: string }) {
     <div className="overflow-x-auto">
       <table className="w-full text-[11px]">
         <thead>
-          <tr className="border-b border-[#1e2d3d]">
+          <tr className="border-b border-[var(--border)]">
             {['Symbol','Direction','Confidence','Entry','SL','TP','R:R','Model','Status','Generated'].map((h) => (
               <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
             ))}
@@ -459,23 +659,23 @@ function SignalsSummaryPanel({ symbol }: { symbol: string }) {
             );
             const confColor = sig.confidence >= 0.75 ? '#00e676' : sig.confidence >= 0.55 ? '#ffb800' : '#ff6b35';
             return (
-              <tr key={sig.id} className="border-b border-[#0d1421] hover:bg-[#1e2d3d]/30 transition-colors">
+              <tr key={sig.id} className="border-b border-[var(--surface)] hover:bg-[var(--border)]/30 transition-colors">
                 <td className="px-3 py-2 font-semibold text-slate-200">{sig.symbol.replace('_','/')}</td>
                 <td className="px-3 py-2">
-                  <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold uppercase', isLong ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]')}>
+                  <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold uppercase', isLong ? 'bg-[var(--bull)]/10 text-[var(--bull)]' : 'bg-[var(--bear)]/10 text-[var(--bear)]')}>
                     {isLong ? '▲ Long' : '▼ Short'}
                   </span>
                 </td>
                 <td className="px-3 py-2 tabular-nums font-semibold" style={{ color: confColor }}>{(sig.confidence * 100).toFixed(0)}%</td>
                 <td className="px-3 py-2 tabular-nums text-slate-300">{fmtPrice(sig.entry_price)}</td>
-                <td className="px-3 py-2 tabular-nums text-[#ff1744]">{fmtPrice(sig.stop_loss)}</td>
-                <td className="px-3 py-2 tabular-nums text-[#00e676]">{fmtPrice(sig.take_profit)}</td>
+                <td className="px-3 py-2 tabular-nums text-[var(--bear)]">{fmtPrice(sig.stop_loss)}</td>
+                <td className="px-3 py-2 tabular-nums text-[var(--bull)]">{fmtPrice(sig.take_profit)}</td>
                 <td className="px-3 py-2 tabular-nums text-slate-400">{rr != null ? `1:${rr.toFixed(1)}` : '—'}</td>
                 <td className="px-3 py-2 text-slate-500 font-mono truncate max-w-[100px]">{sig.model}</td>
                 <td className="px-3 py-2">
                   <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-semibold',
-                    sig.status === 'active' ? 'bg-[#00e676]/10 text-[#00e676]' :
-                    sig.status === 'triggered' ? 'bg-[#3b82f6]/10 text-[#60a5fa]' :
+                    sig.status === 'active' ? 'bg-[var(--bull)]/10 text-[var(--bull)]' :
+                    sig.status === 'triggered' ? 'bg-[#3b82f6]/10 text-[var(--link)]' :
                     'bg-[#334155]/30 text-slate-500'
                   )}>{sig.status}</span>
                 </td>
@@ -540,11 +740,11 @@ function MarketRegimePanel({ symbol }: { symbol: string }) {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-500">Confidence</span>
-                <span className="text-[12px] font-semibold tabular-nums" style={{ color: data.confidence >= 0.7 ? '#00e676' : '#ffb800' }}>
+                <span className="text-[12px] font-semibold tabular-nums" style={{ color: data.confidence >= 0.7 ? 'var(--bull)' : '#ffb800' }}>
                   {(data.confidence * 100).toFixed(0)}%
                 </span>
               </div>
-              <div className="h-1.5 bg-[#1e2d3d] rounded-full overflow-hidden">
+              <div className="h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-500" style={{ width: `${data.confidence * 100}%`, backgroundColor: regimeColor(data.regime) }} />
               </div>
               <div className="flex items-center justify-between">
@@ -556,7 +756,7 @@ function MarketRegimePanel({ symbol }: { symbol: string }) {
                 <span className="text-[11px] text-slate-300 font-semibold uppercase">{data.trend}</span>
               </div>
               {data.description && (
-                <p className="text-[10px] text-slate-500 leading-relaxed border-t border-[#1e2d3d] pt-2">{data.description}</p>
+                <p className="text-[10px] text-slate-500 leading-relaxed border-t border-[var(--border)] pt-2">{data.description}</p>
               )}
             </>
           ) : (
@@ -564,20 +764,20 @@ function MarketRegimePanel({ symbol }: { symbol: string }) {
           )}
 
           {brain && (
-            <div className="border-t border-[#1e2d3d] pt-3 flex flex-col gap-2">
+            <div className="border-t border-[var(--border)] pt-3 flex flex-col gap-2">
               <span className="text-[10px] text-slate-500 uppercase tracking-wider">AI Brain</span>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-500">Mode</span>
-                <span className="text-[11px] font-semibold text-[#00d4ff] uppercase">{brain.mode}</span>
+                <span className="text-[11px] font-semibold text-[var(--accent)] uppercase">{brain.mode}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-500">Status</span>
-                <span className={cn('text-[11px] font-semibold uppercase', brain.status === 'active' ? 'text-[#00e676]' : 'text-[#ffb800]')}>{brain.status}</span>
+                <span className={cn('text-[11px] font-semibold uppercase', brain.status === 'active' ? 'text-[var(--bull)]' : 'text-[#ffb800]')}>{brain.status}</span>
               </div>
               {brain.active_strategies?.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {brain.active_strategies.slice(0, 3).map((s) => (
-                    <span key={s} className="px-1.5 py-0.5 rounded bg-[#1e2d3d] text-[9px] text-slate-400 font-mono">{s}</span>
+                    <span key={s} className="px-1.5 py-0.5 rounded bg-[var(--border)] text-[9px] text-slate-400 font-mono">{s}</span>
                   ))}
                 </div>
               )}
@@ -631,7 +831,7 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
           disabled={loading}
           className={cn(
             'w-full py-2 rounded text-[12px] font-bold border transition-colors',
-            'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa] hover:bg-[#1e3a5f]/80',
+            'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)] hover:bg-[#1e3a5f]/80',
             'disabled:opacity-40 disabled:cursor-not-allowed',
           )}
         >
@@ -639,7 +839,7 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
         </button>
 
         {error && (
-          <div className="px-3 py-2 rounded bg-[#ff1744]/10 border border-[#ff1744]/20 text-[#ff1744] text-[11px]">{error}</div>
+          <div className="px-3 py-2 rounded bg-[var(--bear)]/10 border border-[var(--bear)]/20 text-[var(--bear)] text-[11px]">{error}</div>
         )}
 
         {result && (
@@ -650,20 +850,20 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-slate-500">Confidence</span>
-              <span className="text-[12px] font-semibold tabular-nums" style={{ color: result.confidence >= 0.7 ? '#00e676' : '#ffb800' }}>
+              <span className="text-[12px] font-semibold tabular-nums" style={{ color: result.confidence >= 0.7 ? 'var(--bull)' : '#ffb800' }}>
                 {(result.confidence * 100).toFixed(0)}%
               </span>
             </div>
             {result.stop_loss && (
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-500">Stop Loss</span>
-                <span className="text-[11px] tabular-nums text-[#ff1744]">{fmtPrice(result.stop_loss)}</span>
+                <span className="text-[11px] tabular-nums text-[var(--bear)]">{fmtPrice(result.stop_loss)}</span>
               </div>
             )}
             {result.take_profit && (
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-500">Take Profit</span>
-                <span className="text-[11px] tabular-nums text-[#00e676]">{fmtPrice(result.take_profit)}</span>
+                <span className="text-[11px] tabular-nums text-[var(--bull)]">{fmtPrice(result.take_profit)}</span>
               </div>
             )}
             {result.regime && (
@@ -672,7 +872,7 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
                 <span className="text-[11px] text-slate-300 uppercase font-semibold">{result.regime}</span>
               </div>
             )}
-            <div className="border-t border-[#1e2d3d] pt-2">
+            <div className="border-t border-[var(--border)] pt-2">
               <p className="text-[10px] text-slate-400 leading-relaxed">{result.reasoning}</p>
             </div>
             {result.key_levels && result.key_levels.length > 0 && (
@@ -680,7 +880,7 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
                 <span className="text-[9px] text-slate-600 uppercase tracking-wider">Key Levels</span>
                 <div className="flex flex-wrap gap-1">
                   {result.key_levels.map((lvl) => (
-                    <span key={lvl} className="px-1.5 py-0.5 rounded bg-[#1e2d3d] text-[10px] text-slate-400 tabular-nums font-mono">{fmtPrice(lvl)}</span>
+                    <span key={lvl} className="px-1.5 py-0.5 rounded bg-[var(--border)] text-[10px] text-slate-400 tabular-nums font-mono">{fmtPrice(lvl)}</span>
                   ))}
                 </div>
               </div>
@@ -714,6 +914,7 @@ function EmergencyStopButton() {
       setDone(true); setConfirming(false);
       qc.invalidateQueries({ queryKey: ['account'] });
       qc.invalidateQueries({ queryKey: ['positions'] });
+      qc.invalidateQueries({ queryKey: ['trades'] });
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(extractApiError(e, 'Emergency stop failed'));
@@ -725,9 +926,9 @@ function EmergencyStopButton() {
 
   if (killSwitch || done) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 rounded border bg-[#ff1744]/10 border-[#ff1744]/30 animate-pulse">
-        <span className="w-2 h-2 rounded-full bg-[#ff1744]" />
-        <span className="text-[11px] font-bold text-[#ff1744] uppercase tracking-wider">Kill Switch Active</span>
+      <div className="flex items-center gap-2 px-3 py-2 rounded border bg-[var(--bear)]/10 border-[var(--bear)]/30 animate-pulse">
+        <span className="w-2 h-2 rounded-full bg-[var(--bear)]" />
+        <span className="text-[11px] font-bold text-[var(--bear)] uppercase tracking-wider">Kill Switch Active</span>
       </div>
     );
   }
@@ -741,8 +942,8 @@ function EmergencyStopButton() {
           'w-full py-2 rounded text-[12px] font-bold border transition-colors',
           'disabled:opacity-40 disabled:cursor-not-allowed',
           confirming
-            ? 'bg-[#ff1744] border-[#ff1744] text-white animate-pulse'
-            : 'bg-[#ff1744]/10 border-[#ff1744]/40 text-[#ff1744] hover:bg-[#ff1744]/20',
+            ? 'bg-[var(--bear)] border-[var(--bear)] text-white animate-pulse'
+            : 'bg-[var(--bear)]/10 border-[var(--bear)]/40 text-[var(--bear)] hover:bg-[var(--bear)]/20',
         )}
       >
         {loading ? 'Stopping…' : confirming ? '⚠ CONFIRM EMERGENCY STOP' : '🛑 Emergency Stop'}
@@ -752,7 +953,7 @@ function EmergencyStopButton() {
           Cancel
         </button>
       )}
-      {error && <div className="text-[10px] text-[#ff1744]">{error}</div>}
+      {error && <div className="text-[10px] text-[var(--bear)]">{error}</div>}
     </div>
   );
 }
@@ -761,7 +962,9 @@ function EmergencyStopButton() {
 
 function LeftSidebar({ symbol }: { symbol: string }) {
   return (
-    <div className="w-[280px] shrink-0 flex flex-col gap-2 overflow-y-auto">
+    // Full width when stacked, fixed 280px only in the xl three-column layout.
+    // `w-[280px] shrink-0` unconditionally is what made the panels overlap.
+    <div className="w-full xl:w-[280px] xl:shrink-0 flex flex-col gap-2 xl:overflow-y-auto">
       <OrderEntryForm symbol={symbol} />
       <Panel title="Controls">
         <EmergencyStopButton />
@@ -791,7 +994,7 @@ function RightSidebar({ rightTab, setRightTab }: RightSidebarProps) {
   ];
 
   return (
-    <div className="w-[280px] shrink-0 flex flex-col gap-2 overflow-hidden">
+    <div className="w-full xl:w-[280px] xl:shrink-0 flex flex-col gap-2 xl:overflow-hidden">
       {/* Tab bar */}
       <div className="flex gap-1 flex-wrap">
         {tabs.map(({ id, label }) => (
@@ -801,8 +1004,8 @@ function RightSidebar({ rightTab, setRightTab }: RightSidebarProps) {
             className={cn(
               'px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors',
               rightTab === id
-                ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+                : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
             )}
           >
             {label}
@@ -835,6 +1038,7 @@ function TradingPage() {
   useSignals();
 
   const wsStatus = useStore((s) => s.wsStatus);
+  const feedLive = useStore(selectFeedLive);
   const prices   = useStore((s) => s.prices);
   const tick     = prices[symbol];
 
@@ -843,10 +1047,21 @@ function TradingPage() {
       <TopBar
         symbol={symbol} setSymbol={setSymbol}
         timeframe={timeframe} setTimeframe={setTimeframe}
-        tick={tick} wsStatus={wsStatus}
+        tick={tick} wsStatus={wsStatus} feedLive={feedLive}
       />
 
-      <div className="flex flex-1 min-h-0 gap-2 p-2 overflow-hidden">
+      {/* Responsive terminal row.
+          This was `flex flex-1 min-h-0 gap-2 p-2 overflow-hidden` — a fixed
+          horizontal row holding two `w-[280px] shrink-0` panels either side of
+          a flexible centre. Below roughly 1280px, 280 + centre + 280 + gaps
+          exceeds the viewport; `shrink-0` forbids shrinking and
+          `overflow-hidden` clips rather than scrolls, so the panels visibly
+          overlapped on tablet widths.
+
+          Now: stack vertically and let the page scroll below `xl`, switch to
+          the three-column terminal layout at `xl` and above where there is
+          genuinely room for it. */}
+      <div className="flex flex-col xl:flex-row flex-1 min-h-0 gap-2 p-2 overflow-y-auto xl:overflow-hidden">
         {/* Left sidebar */}
         <LeftSidebar symbol={symbol} />
 
@@ -855,8 +1070,8 @@ function TradingPage() {
           <ChartPanel symbol={symbol} timeframe={timeframe} tick={tick} />
 
           {/* Bottom tabs */}
-          <div className="flex flex-col flex-1 min-h-0 bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden">
-            <div className="flex items-center gap-1 px-3 py-2 border-b border-[#1e2d3d] shrink-0">
+          <div className="flex flex-col flex-1 min-h-0 bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden">
+            <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--border)] shrink-0">
               {(['positions', 'history', 'signals'] as const).map((t) => (
                 <button
                   key={t}
@@ -864,8 +1079,8 @@ function TradingPage() {
                   className={cn(
                     'px-3 py-1 rounded text-[11px] font-semibold border transition-colors capitalize',
                     activeTab === t
-                      ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                      : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+                      ? 'bg-[#1e3a5f] border-[#3b82f6] text-[var(--link)]'
+                      : 'bg-transparent border-[var(--border)] text-slate-500 hover:border-[#334155]',
                   )}
                 >
                   {t}
@@ -883,6 +1098,16 @@ function TradingPage() {
         {/* Right sidebar */}
         <RightSidebar rightTab={rightTab} setRightTab={setRightTab} />
       </div>
+      <RelatedPages
+        links={[
+          { to: '/trade', label: 'Trading ticket', hint: 'Place an order', icon: Zap },
+          { to: '/ai-chart', label: 'AI charts', hint: 'Model analysis on the chart', icon: Brain },
+          { to: '/watchlist', label: 'Watchlist', hint: 'Instruments you follow', icon: Eye },
+          { to: '/journal', label: 'Trade journal', hint: 'What you did last time', icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size before you enter', icon: Shield },
+        ]}
+      />
+
     </div>
   );
 }

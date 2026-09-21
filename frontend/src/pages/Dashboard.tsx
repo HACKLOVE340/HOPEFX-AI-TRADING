@@ -14,11 +14,16 @@
  *   - ML model accuracy card
  */
 
+import { PageShell } from '../components/system/PageShell';
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowRight, BarChart3, BookOpen, Brain, Briefcase, Calculator, Calendar, ChevronRight, DollarSign, Eye, Globe, Inbox, LineChart, Link2, Radar, Radiation, Radio, Repeat, Rewind, Shield, TrendingUp, Trophy, Zap } from 'lucide-react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
-import { PageHeader, EmptyState, CrossLinkBar, Spinner } from '../components';
+import { EmptyState, CrossLinkBar, Spinner } from '../components';
+import { RiskHeadroomPanel } from '../components/system/RiskHeadroomPanel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
+import { DataAge } from '../components/ui/DataAge';
 import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
 import {
   useStore,
@@ -26,13 +31,14 @@ import {
   selectPositions,
   selectSignals,
   selectWsStatus,
+  selectFeedLive,
   selectEquityCurve,
   selectRiskSnapshot,
   selectMicrostructure,
   selectSentiment,
 } from '../store';
 import { mlApi, tradingApi } from '../hooks/useApi';
-import { extractApiError } from '../lib/utils';
+import { extractApiError, fmtSpread } from '../lib/utils';
 import type { EquityPoint } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -45,6 +51,38 @@ const fmtUSD = (n: number) =>
 
 const fmtPct = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 
+/**
+ * Statistical account fields are absent on a new account and before the first
+ * evaluation cycle (audit #37/#39). On a trading dashboard "no data yet" and
+ * "exactly zero" are very different claims, so render an em-dash rather than a
+ * confident 0.00 the user could mistake for a measured result.
+ *
+ * `??` would be wrong here for the same reason: a fabricated zero Sharpe reads
+ * as a real, terrible Sharpe.
+ */
+const has = (n: number | undefined): n is number => typeof n === 'number' && Number.isFinite(n);
+
+/**
+ * Colour thresholds for the stat row, in the units the API actually sends.
+ *
+ * `AccountMetrics.win_rate` and `max_drawdown` are percentages 0-100 — both
+ * paths of GET /api/trading/account compute them as `x / n * 100`. The tiles
+ * multiplied by 100 a second time, so a real 62.5% win rate would have
+ * rendered as 6250.0% and a 12.4% drawdown as 1240.00%. Nobody had seen it
+ * because both values were pinned at 0 until the endpoint learned to send
+ * null instead.
+ *
+ * The thresholds carried the same mistake in the other direction: `>= 0.55`
+ * against a 0-100 value passes any win rate above half a percent, and
+ * `< 0.1` fails any drawdown above a tenth of a percent. Named here so the
+ * unit is visible at the point of comparison rather than inferred from a bare
+ * decimal.
+ */
+export const WIN_RATE_GOOD_PCT = 55;   // 55% of closed trades profitable
+export const SHARPE_GOOD = 1.5;        // unitless ratio, sent as-is
+export const DRAWDOWN_WARN_PCT = 10;   // 10% peak-to-trough
+const orDash = (n: number | undefined, render: (v: number) => string) => (has(n) ? render(n) : '—');
+
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
 interface StatCardProps {
@@ -53,25 +91,67 @@ interface StatCardProps {
   sub?: string;
   positive?: boolean | null;
   highlight?: boolean;
+  /**
+   * What kind of number this is, which decides its weight in the row.
+   *
+   *   1  the figure the screen exists to show (equity)
+   *   2  money — balance and P&L
+   *   3  a statistic derived from closed trades
+   *
+   * All eight tiles used to carry identical weight, so nothing led the row.
+   * Defaults to 2, or 1 when the older `highlight` prop is set.
+   */
+  tier?: 1 | 2 | 3;
+  /** Page that explains this figure. Omit for a non-interactive tile. */
+  to?: string;
+  /** What the destination answers, used to build the accessible name. */
+  toHint?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ label, value, sub, positive, highlight }) => (
-  <div style={{ ...s.statCard, ...(highlight ? s.statCardHighlight : {}) }}>
-    <div style={s.statLabel}>{label}</div>
-    <div
-      style={{
-        ...s.statValue,
-        color:
-          positive === true  ? '#4ade80' :
-          positive === false ? '#f87171' :
-          '#f8fafc',
-      }}
+/**
+ * A headline figure. Given `to` the whole tile drills into the page that
+ * explains it — the trades behind a win rate, the curve behind a drawdown.
+ * Without `to` it stays an inert div rather than an empty tab stop. F187.
+ */
+const StatCard: React.FC<StatCardProps> = ({
+  label, value, sub, positive, highlight, tier, to, toHint,
+}) => {
+  const tone = positive === true ? 'gain' : positive === false ? 'loss' : undefined;
+
+  const body = (
+    <>
+      <div className="stat-tile-label flex items-center gap-1">
+        {label}
+        {to && (
+          <ChevronRight
+            size={11} strokeWidth={2.5} aria-hidden
+            className="ml-auto opacity-40 transition-opacity duration-150
+                       group-hover:opacity-100 group-focus-visible:opacity-100"
+          />
+        )}
+      </div>
+      <div className="stat-tile-value" data-tone={tone}>{value}</div>
+      {sub && <div className="stat-tile-sub">{sub}</div>}
+    </>
+  );
+
+  // `highlight` is the old single-tile emphasis; tier 1 subsumes it.
+  const resolvedTier = tier ?? (highlight ? 1 : 2);
+
+  if (!to) return <div className="stat-tile" data-tier={resolvedTier}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      className="stat-tile group min-h-[44px] cursor-pointer no-underline"
+      data-tier={resolvedTier}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
     >
-      {value}
-    </div>
-    {sub && <div style={s.statSub}>{sub}</div>}
-  </div>
-);
+      {body}
+    </Link>
+  );
+};
 
 // ─── Price ticker ─────────────────────────────────────────────────────────────
 // Symbol keys must match the WebSocket price_tick format (slash separator).
@@ -102,7 +182,7 @@ const TickerItem: React.FC<{ sym: string }> = ({ sym }) => {
       <span style={s.tickerPrice}>
         {tick ? fmt(tick.mid, decimals) : '—'}
       </span>
-      <span style={{ ...s.tickerChange, color: up === true ? '#4ade80' : up === false ? '#f87171' : '#64748b' }}>
+      <span style={{ ...s.tickerChange, color: up === true ? 'var(--gain)' : up === false ? 'var(--loss)' : 'var(--text-muted)' }}>
         {tick ? fmtPct(tick.change_pct) : '—'}
       </span>
       {tick && (
@@ -138,7 +218,8 @@ function toChartPoints(curve: EquityPoint[]): ChartPoint[] {
     }))
     // Deduplicate by time key (keep last) — duplicate timestamps crash the chart
     .reduce<ChartPoint[]>((acc, pt) => {
-      if (acc.length > 0 && acc[acc.length - 1]!.time === pt.time) {
+      const prev = acc[acc.length - 1];
+      if (prev && prev.time === pt.time) {
         acc[acc.length - 1] = pt;
       } else {
         acc.push(pt);
@@ -226,12 +307,22 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
 
 const PositionsTable: React.FC = () => {
   const positions = useStore(selectPositions);
+  const navigate  = useNavigate();
   const flashColors = useFlashMap(
     positions.map((p) => ({ id: p.id, value: p.unrealized_pnl })),
   );
 
   if (positions.length === 0) {
-    return <EmptyState compact icon="📭" title="No open positions" description="Your live positions will appear here once you place a trade." links={[{ label: 'Trade Now', href: '/trade', icon: '⚡' }]} />;
+    return <EmptyState
+        compact
+        icon={Inbox}
+        title="No open positions"
+        description="Positions appear here the moment an order fills. Open the ticket to place one."
+        links={[
+          { label: 'Open the ticket', href: '/trade' },
+          { label: 'Browse signals', href: '/signals' },
+        ]}
+      />;
   }
 
   return (
@@ -246,25 +337,45 @@ const PositionsTable: React.FC = () => {
         </thead>
         <tbody>
           {positions.map((p) => (
+            // The row opens the position, which is what clicking a position
+            // means. It used to go straight to the ticket with symbol and side
+            // in router state (audit F225) — useful, and one level too early:
+            // there was nowhere to go to READ a position, so the row had to
+            // double as a shortcut. That mechanism is not lost, it moved to an
+            // action on the detail page, where you press it already knowing
+            // what you are looking at. Keyboard-operable, not mouse-only.
             <tr
               key={p.id}
+              role="link"
+              tabIndex={0}
+              aria-label={`${p.symbol} ${p.side}, ${fmtUSD(p.unrealized_pnl)} unrealised — open the position`}
+              onClick={() => navigate(`/positions/${encodeURIComponent(p.id)}`)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate(`/positions/${encodeURIComponent(p.id)}`);
+                }
+              }}
+              className="cursor-pointer transition-colors duration-150 hover:bg-[var(--surface-hover)]
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset
+                         focus-visible:ring-sky-500"
               style={{
                 ...s.tr,
                 background: flashColors[p.id] ?? 'transparent',
                 transition: 'background 0.4s ease',
               }}
             >
-              <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
-              <td style={{ ...s.td, color: p.side === 'long' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>
+              <td style={{ ...s.td, fontWeight: 600, color: 'var(--text)' }}>{p.symbol}</td>
+              <td style={{ ...s.td, color: p.side === 'long' ? 'var(--gain)' : 'var(--loss)', fontWeight: 600, textTransform: 'uppercase' }}>
                 {p.side}
               </td>
               <td style={s.td}>{fmt(p.size, 2)}</td>
               <td style={s.td}>{fmt(p.entry_price, 4)}</td>
               <td style={s.td}>{fmt(p.current_price, 4)}</td>
-              <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+              <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
                 {fmtUSD(p.unrealized_pnl)}
               </td>
-              <td style={{ ...s.td, color: '#64748b', fontSize: 12 }}>
+              <td style={{ ...s.td, color: 'var(--text-muted)', fontSize: 12 }}>
                 {new Date(p.opened_at).toLocaleString()}
               </td>
             </tr>
@@ -282,7 +393,16 @@ const SignalsPanel: React.FC = () => {
   const active  = signals.filter((sig) => sig.status === 'active').slice(0, 6);
 
   if (active.length === 0) {
-    return <EmptyState compact icon="📡" title="No active signals" description="AI-generated trading signals will appear here in real-time." links={[{ label: 'Signals Feed', href: '/signals', icon: '📡' }]} />;
+    return <EmptyState
+        compact
+        icon={Radio}
+        title="No active signals"
+        description="The model publishes signals here as it finds them. You can also generate one yourself."
+        links={[
+          { label: 'Signal feed', href: '/signals' },
+          { label: 'Generate a strategy', href: '/ai-strategy' },
+        ]}
+      />;
   }
 
   return (
@@ -295,7 +415,7 @@ const SignalsPanel: React.FC = () => {
               style={{
                 ...s.signalBadge,
                 background: sig.direction === 'long' ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
-                color:      sig.direction === 'long' ? '#4ade80' : '#f87171',
+                color:      sig.direction === 'long' ? 'var(--gain)' : 'var(--loss)',
               }}
             >
               {sig.direction.toUpperCase()}
@@ -303,7 +423,7 @@ const SignalsPanel: React.FC = () => {
           </div>
           <div style={s.signalRow}>
             <span style={s.signalKey}>Confidence</span>
-            <span style={{ ...s.signalVal, color: sig.confidence > 0.75 ? '#4ade80' : sig.confidence > 0.55 ? '#fbbf24' : '#f87171' }}>
+            <span style={{ ...s.signalVal, color: sig.confidence > 0.75 ? 'var(--gain)' : sig.confidence > 0.55 ? 'var(--warn)' : 'var(--loss)' }}>
               {(sig.confidence * 100).toFixed(1)}%
             </span>
           </div>
@@ -313,16 +433,16 @@ const SignalsPanel: React.FC = () => {
           </div>
           <div style={s.signalRow}>
             <span style={s.signalKey}>SL / TP</span>
-            <span style={{ ...s.signalVal, color: '#f87171' }}>{fmt(sig.stop_loss, 4)}</span>
-            <span style={{ color: '#64748b', margin: '0 4px' }}>/</span>
-            <span style={{ ...s.signalVal, color: '#4ade80' }}>{fmt(sig.take_profit, 4)}</span>
+            <span style={{ ...s.signalVal, color: 'var(--loss)' }}>{fmt(sig.stop_loss, 4)}</span>
+            <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>/</span>
+            <span style={{ ...s.signalVal, color: 'var(--gain)' }}>{fmt(sig.take_profit, 4)}</span>
           </div>
           <div style={s.signalRow}>
             <span style={s.signalKey}>Model</span>
-            <span style={{ ...s.signalVal, color: '#94a3b8' }}>{sig.model}</span>
+            <span style={{ ...s.signalVal, color: 'var(--text-dim)' }}>{sig.model}</span>
           </div>
           <div style={{ background: '#1e293b', borderRadius: 4, height: 4, marginTop: 8 }}>
-            <div style={{ width: `${sig.confidence * 100}%`, height: 4, borderRadius: 4, background: sig.confidence > 0.75 ? '#4ade80' : sig.confidence > 0.55 ? '#fbbf24' : '#f87171', transition: 'width 0.4s ease' }} />
+            <div style={{ width: `${sig.confidence * 100}%`, height: 4, borderRadius: 4, background: sig.confidence > 0.75 ? 'var(--gain)' : sig.confidence > 0.55 ? 'var(--warn)' : 'var(--loss)', transition: 'width 0.4s ease' }} />
           </div>
         </div>
       ))}
@@ -339,7 +459,10 @@ interface AccuracyResponse {
   recall:        number;
   f1:            number;
   sharpe:        number;
-  win_rate:      number;
+  // Nullable: the server sends null when the evaluation measured no win rate,
+  // rather than substituting accuracy for it. Rendering that as 0.0% would be
+  // its own lie, so the card below shows "—".
+  win_rate:      number | null;
   total_signals: number;
   evaluated_at:  string;
   note?:         string;
@@ -363,11 +486,11 @@ const MlAccuracyCard: React.FC = () => {
   }, []);
 
   if (mlErr) {
-    return <p style={{ color: '#f87171', fontSize: 13, padding: '16px 0' }}>{mlErr}</p>;
+    return <p style={{ color: 'var(--loss)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>{mlErr}</p>;
   }
   if (!data) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13, padding: '16px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
         <Spinner size="sm" /> Loading model metrics…
       </div>
     );
@@ -384,7 +507,7 @@ const MlAccuracyCard: React.FC = () => {
 
   if (safeAccuracy === 0 && safeTotalSigs === 0) {
     return (
-      <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>
+      <p style={{ color: '#475569', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
         {data.note || 'No model metrics available yet.'}
       </p>
     );
@@ -392,7 +515,8 @@ const MlAccuracyCard: React.FC = () => {
 
   const metrics = [
     { key: 'Accuracy',  val: (safeAccuracy  * 100).toFixed(1) + '%', good: safeAccuracy  >= 0.60 },
-    { key: 'Win Rate',  val: (safeWinRate   * 100).toFixed(1) + '%', good: safeWinRate   >= 0.55 },
+    { key: 'Win Rate',  val: data.win_rate == null ? '—' : (safeWinRate * 100).toFixed(1) + '%',
+      good: data.win_rate == null ? undefined : safeWinRate >= 0.55 },
     { key: 'F1',        val: safeF1.toFixed(3),                       good: safeF1        >= 0.60 },
     { key: 'Sharpe',    val: safeSharpe.toFixed(2),                   good: safeSharpe    >= 1.5  },
     { key: 'Precision', val: (safePrecision * 100).toFixed(1) + '%',  good: safePrecision >= 0.60 },
@@ -407,7 +531,7 @@ const MlAccuracyCard: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{data.model_id ?? 'Model'}</div>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)' }}>{data.model_id ?? 'Model'}</div>
           <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
             {safeTotalSigs.toLocaleString()} signals · evaluated {evaluatedLabel}
           </div>
@@ -415,7 +539,7 @@ const MlAccuracyCard: React.FC = () => {
         <div style={{
           fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
           background: safeAccuracy >= 0.60 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.12)',
-          color: safeAccuracy >= 0.60 ? '#4ade80' : '#fbbf24',
+          color: safeAccuracy >= 0.60 ? 'var(--gain)' : 'var(--warn)',
           border: `1px solid ${safeAccuracy >= 0.60 ? '#4ade8044' : '#fbbf2444'}`,
         }}>
           {safeAccuracy >= 0.60 ? '✅ GATE PASSED' : '⚠️ BELOW THRESHOLD'}
@@ -426,7 +550,7 @@ const MlAccuracyCard: React.FC = () => {
           <div key={m.key} style={s.mlCard}>
             <div style={s.mlMetric}>
               <span style={s.mlKey}>{m.key}</span>
-              <span style={{ ...s.mlVal, color: m.good ? '#4ade80' : '#fbbf24' }}>{m.val}</span>
+              <span style={{ ...s.mlVal, color: m.good ? 'var(--gain)' : 'var(--warn)' }}>{m.val}</span>
             </div>
           </div>
         ))}
@@ -437,7 +561,7 @@ const MlAccuracyCard: React.FC = () => {
       <div style={{ background: '#0f172a', borderRadius: 4, height: 6, marginTop: 12 }}>
         <div style={{
           width: `${Math.min(safeAccuracy * 100, 100)}%`, height: 6, borderRadius: 4,
-          background: safeAccuracy >= 0.60 ? '#4ade80' : '#fbbf24',
+          background: safeAccuracy >= 0.60 ? 'var(--gain)' : 'var(--warn)',
           transition: 'width 0.6s ease',
         }} />
       </div>
@@ -448,27 +572,39 @@ const MlAccuracyCard: React.FC = () => {
 // ─── Market Regime panel ──────────────────────────────────────────────────────
 
 interface MarketRegime {
-  regime: string;
-  confidence: number;
-  volatility: string;
-  trend: string;
+  // Nullable in practice, not by design: `/trading/regime` returns a partial
+  // object before the classifier has enough bars, and typing these as required
+  // is what let the crash through tsc (F1-03).
+  regime: string | null;
+  confidence: number | null;
+  volatility: string | null;
+  trend: string | null;
   description?: string;
 }
 
 const MarketRegimePanel: React.FC = () => {
   const [regime, setRegime] = useState<MarketRegime | null>(null);
   const [err, setErr]       = useState(false);
+  // Whether the request has come back at all. Without it, a response that
+  // arrived but named no regime is indistinguishable from one still in flight,
+  // and the panel spins forever instead of admitting it has nothing.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     tradingApi.regime('XAU/USD')
-      .then((r) => setRegime(r.data as MarketRegime))
-      .catch(() => setErr(true));
+      .then((r) => { setRegime(r.data as MarketRegime); setLoaded(true); })
+      .catch(() => { setErr(true); setLoaded(true); });
   }, []);
 
-  if (err || !regime) {
+  // `!regime` only catches null. An object without a `regime` field passed the
+  // guard and then threw on `.replace` of undefined, taking the whole Dashboard
+  // route down rather than this panel — the F1-03 class, and the reason the
+  // Dashboard row of the F1 matrix could not be scored at all. Treat a payload
+  // that does not name a regime as no regime data.
+  if (err || !regime?.regime) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13 }}>
-        {err ? 'Regime data unavailable.' : <><Spinner size="sm" /> Loading…</>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 'var(--fs-body)'}}>
+        {err || loaded ? 'Regime data unavailable.' : <><Spinner size="sm" /> Loading…</>}
       </div>
     );
   }
@@ -481,25 +617,25 @@ const MarketRegimePanel: React.FC = () => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 16 }}>
       <div>
-        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: regimeColor }}>
           {regime.regime.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
         </div>
-        {regime.description && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{regime.description}</div>}
+        {regime.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{regime.description}</div>}
       </div>
       <div>
-        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Confidence</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>{(regime.confidence * 100).toFixed(1)}%</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Confidence</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>{regime.confidence != null ? `${(regime.confidence * 100).toFixed(1)}%` : '—'}</div>
       </div>
       <div>
-        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Volatility</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: regime.volatility === 'high' ? '#f87171' : regime.volatility === 'medium' ? '#fbbf24' : '#4ade80' }}>
-          {regime.volatility.charAt(0).toUpperCase() + regime.volatility.slice(1)}
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Volatility</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: regime.volatility === 'high' ? 'var(--loss)' : regime.volatility === 'medium' ? 'var(--warn)' : 'var(--gain)' }}>
+          {regime.volatility ? regime.volatility.charAt(0).toUpperCase() + regime.volatility.slice(1) : '—'}
         </div>
       </div>
       <div>
-        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Trend</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: regime.trend === 'up' ? '#4ade80' : regime.trend === 'down' ? '#f87171' : '#94a3b8' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Trend</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: regime.trend === 'up' ? 'var(--gain)' : regime.trend === 'down' ? 'var(--loss)' : 'var(--text-dim)' }}>
           {regime.trend === 'up' ? '↑ Bullish' : regime.trend === 'down' ? '↓ Bearish' : '→ Neutral'}
         </div>
       </div>
@@ -539,7 +675,10 @@ const RiskSnapshotPanel: React.FC = () => {
         },
         {
           label: 'Spread (XAU)',
-          value: micro?.spread != null ? `$${micro.spread.toFixed(2)}` : '—',
+          // fmtSpread, not a dollar figure: the terminal renders the same
+          // quantity as points, and two units for one number on two screens is
+          // not a comparison a trader should have to do in their head.
+          value: fmtSpread(micro?.spread),
           warn: micro?.spread != null && micro.spread > 0.5,
         },
         {
@@ -552,11 +691,11 @@ const RiskSnapshotPanel: React.FC = () => {
       ].map(({ label, value, warn }) => (
         <div key={label} style={{
           background: warn ? 'rgba(248,113,113,0.08)' : '#0f172a',
-          border: `1px solid ${warn ? '#f87171' : '#1e293b'}`,
+          border: `1px solid ${warn ? 'var(--loss)' : '#1e293b'}`,
           borderRadius: 8, padding: '10px 14px',
         }}>
-          <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: warn ? '#f87171' : '#f8fafc' }}>{value}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: warn ? 'var(--loss)' : 'var(--text-strong)' }}>{value}</div>
         </div>
       ))}
     </div>
@@ -565,19 +704,19 @@ const RiskSnapshotPanel: React.FC = () => {
 
 // ─── Quick-nav shortcuts ──────────────────────────────────────────────────────
 
-const QUICK_LINKS = [
-  { icon: '⚡', label: 'Trade',        path: '/trade'        },
-  { icon: '🧠', label: 'AI Chart Bot', path: '/ai-chart'     },
-  { icon: '☢️', label: 'Nuclear AI',   path: '/nuclear'      },
-  { icon: '📓', label: 'Journal',      path: '/journal'      },
-  { icon: '🏆', label: 'Performance',  path: '/performance'  },
-  { icon: '💹', label: 'P&L',          path: '/pnl'          },
-  { icon: '🌍', label: 'Geopolitical', path: '/geopolitical' },
-  { icon: '📡', label: 'Signal Feed',  path: '/signals'      },
-  { icon: '👁', label: 'Watchlist',    path: '/watchlist'    },
-  { icon: '🔗', label: 'Correlation',  path: '/correlation'  },
-  { icon: '🔁', label: 'Copy Trading', path: '/copy-trading' },
-  { icon: '▶️', label: 'Replay',       path: '/replay'       },
+const QUICK_LINKS: { icon: LucideIcon; label: string; path: string }[] = [
+  { icon: Zap,        label: 'Trade',        path: '/trade'        },
+  { icon: Brain,      label: 'AI Chart Bot', path: '/ai-chart'     },
+  { icon: Radiation,  label: 'Nuclear AI',   path: '/nuclear'      },
+  { icon: BookOpen,   label: 'Journal',      path: '/journal'      },
+  { icon: Trophy,     label: 'Performance',  path: '/performance'  },
+  { icon: DollarSign, label: 'P&L',          path: '/pnl'          },
+  { icon: Globe,      label: 'Geopolitical', path: '/geopolitical' },
+  { icon: Radar,      label: 'Signal Feed',  path: '/signals'      },
+  { icon: Eye,        label: 'Watchlist',    path: '/watchlist'    },
+  { icon: Link2,      label: 'Correlation',  path: '/correlation'  },
+  { icon: Repeat,     label: 'Copy Trading', path: '/copy-trading' },
+  { icon: Rewind,     label: 'Replay',       path: '/replay'       },
 ];
 
 const QuickNav: React.FC = () => (
@@ -586,11 +725,14 @@ const QuickNav: React.FC = () => (
       <Link
         key={path}
         to={path}
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
         style={{
           background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-          padding: '8px 14px', color: '#94a3b8',
+          minHeight: 44, padding: '0 14px', color: 'var(--text-dim)',
           fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
-          textDecoration: 'none', transition: 'border-color 0.15s, color 0.15s',
+          textDecoration: 'none', cursor: 'pointer',
+          transition: 'border-color 0.15s, color 0.15s',
         }}
         onMouseEnter={e => {
           (e.currentTarget as HTMLAnchorElement).style.borderColor = '#3b82f6';
@@ -601,7 +743,7 @@ const QuickNav: React.FC = () => (
           (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8';
         }}
       >
-        <span>{icon}</span> {label}
+        {React.createElement(icon, { size: 14, strokeWidth: 1.75, 'aria-hidden': true })} {label}
       </Link>
     ))}
   </div>
@@ -611,21 +753,35 @@ const QuickNav: React.FC = () => (
 
 const WsBadge: React.FC = () => {
   const status = useStore(selectWsStatus);
+  // F1-02 / S9-01: this badge said "Live", in glowing green, for as long as the
+  // socket was open — including while the server's broadcast loop was stalled
+  // and nothing had arrived for minutes. It is the one cue a trader glances at
+  // to decide whether the prices beside it can be trusted, so it must describe
+  // the *feed*, not the connection.
+  const feedLive   = useStore(selectFeedLive);
+  const lastDataAt = useStore((st) => st.lastDataAt);
+  const stalled    = status === 'connected' && !feedLive;
+
   const colors: Record<string, string> = {
     connected:    '#22c55e',
     connecting:   '#fbbf24',
     disconnected: '#64748b',
     error:        '#f87171',
   };
+  const dot = stalled ? '#ffb800' : (colors[status] ?? '#64748b');
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#94a3b8' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)' }}>
       <span style={{
         width: 8, height: 8, borderRadius: '50%',
-        background: colors[status] ?? '#64748b',
+        background: dot,
         display: 'inline-block',
-        boxShadow: status === 'connected' ? `0 0 6px ${colors.connected}` : 'none',
+        boxShadow: feedLive ? `0 0 6px ${colors.connected}` : 'none',
       }} />
-      {status === 'connected' ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1)}
+      {stalled
+        ? 'Stalled'
+        : status === 'connected' ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1)}
+      {stalled && <DataAge at={lastDataAt} />}
     </div>
   );
 };
@@ -640,61 +796,86 @@ const Dashboard: React.FC = () => {
   const acc = account;
 
   return (
-    <div className="page-content fade-in">
-      <PageHeader
-        title="Dashboard"
-        subtitle="Real-time trading overview"
-        icon="📊"
-        breadcrumbs={[{ label: "Dashboard" }]}
-        badge={<WsBadge />}
-        actions={
+    <PageShell
+      title="Dashboard"
+      subtitle="Real-time trading overview"
+      icon={BarChart3}
+      breadcrumbs={[{ label: "Dashboard" }]}
+      badge={<WsBadge />}
+      actions={
           <Link
             to="/trade"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
             style={{
               background: '#1d4ed8', border: '1px solid #3b82f6', borderRadius: 8,
-              color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 18px',
+              color: '#fff', fontSize: 'var(--fs-body)', fontWeight: 700,
+              minHeight: 44, padding: '0 18px', cursor: 'pointer',
               textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
             }}
           >
-            ⚡ New Trade
+            <Zap size={15} strokeWidth={2} aria-hidden /> New trade
           </Link>
         }
-      />
+      width="standard" related={[
+          { to: '/trade',           label: 'Trading ticket',  hint: 'Place or close an order',            icon: Zap },
+          { to: '/portfolio',       label: 'Portfolio',       hint: 'Every position and its allocation',  icon: Briefcase },
+          { to: '/pnl',             label: 'P&L breakdown',   hint: 'Where the money came from',          icon: LineChart },
+          { to: '/journal',         label: 'Trade journal',   hint: 'The trades behind these numbers',    icon: BookOpen },
+          { to: '/risk-calculator', label: 'Risk calculator', hint: 'Size the next trade',                icon: Shield },
+          { to: '/signals',         label: 'Signal feed',     hint: 'What the model sees right now',      icon: Radar },
+        ]}
+    >
+
 
       <PriceTicker />
 
       {!acc ? (
         <PanelSkeleton rows={3} />
       ) : (
-        <div style={s.statsGrid}>
-          <StatCard label="Balance"     value={'$' + fmt(acc.balance)} />
-          <StatCard label="Equity"      value={'$' + fmt(acc.equity)} highlight />
-          <StatCard label="Daily P&L"   value={fmtUSD(acc.daily_pnl)} positive={acc.daily_pnl >= 0} sub={fmtPct(acc.daily_pnl_pct)} />
-          <StatCard label="Total P&L"   value={fmtUSD(acc.total_pnl)} positive={acc.total_pnl >= 0} />
-          <StatCard label="Win Rate"    value={(acc.win_rate * 100).toFixed(1) + '%'} positive={acc.win_rate >= 0.55} />
-          <StatCard label="Sharpe"      value={acc.sharpe_ratio.toFixed(2)} positive={acc.sharpe_ratio >= 1.5} />
-          <StatCard label="Account DD"  value={(acc.max_drawdown * 100).toFixed(2) + '%'} positive={acc.max_drawdown < 0.1} />
-          <StatCard label="Open Trades" value={String(acc.open_trades)} />
+        <div className="stat-row-scope">
+          <div className="stat-row">
+            <StatCard label="Balance" to="/wallet" toHint="Wallet"     value={orDash(acc.balance, v => '$' + fmt(v))} tier={2} />
+            <StatCard label="Equity" to="/portfolio" toHint="Portfolio"      value={orDash(acc.equity, v => '$' + fmt(v))} tier={1} />
+            <StatCard label="Daily P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.daily_pnl, fmtUSD)} tier={2}
+              positive={has(acc.daily_pnl) ? acc.daily_pnl >= 0 : undefined}
+              sub={orDash(acc.daily_pnl_pct, fmtPct)} />
+            <StatCard label="Total P&L" to="/pnl" toHint="the P&L breakdown"   value={orDash(acc.total_pnl, fmtUSD)} tier={2}
+              positive={has(acc.total_pnl) ? acc.total_pnl >= 0 : undefined} />
+            <StatCard label="Win Rate" to="/journal" toHint="the trades behind it"    value={orDash(acc.win_rate, v => v.toFixed(1) + '%')} tier={3}
+              positive={has(acc.win_rate) ? acc.win_rate >= WIN_RATE_GOOD_PCT : undefined} />
+            <StatCard label="Sharpe" to="/performance" toHint="risk-adjusted performance"      value={orDash(acc.sharpe_ratio, v => v.toFixed(2))} tier={3}
+              positive={has(acc.sharpe_ratio) ? acc.sharpe_ratio >= SHARPE_GOOD : undefined} />
+            <StatCard label="Account DD" to="/performance" toHint="the drawdown curve"  value={orDash(acc.max_drawdown, v => v.toFixed(2) + '%')} tier={3}
+              positive={has(acc.max_drawdown) ? acc.max_drawdown < DRAWDOWN_WARN_PCT : undefined} />
+            <StatCard label="Open Trades" to="/portfolio" toHint="your positions" value={orDash(acc.open_trades, String)} tier={3} />
+          </div>
         </div>
       )}
 
       <div style={s.card}>
         <div style={s.cardHeader}>
-          <span style={s.cardTitle}>Live Equity Curve</span>
+          <h2 style={s.cardTitle}>Live Equity Curve</h2>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            {acc && (
-              <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+            {has(acc?.total_pnl) && (
+              <span style={{ fontSize: 'var(--fs-body)', color: acc.total_pnl >= 0 ? 'var(--gain)' : 'var(--loss)', fontWeight: 600 }}>
                 {fmtUSD(acc.total_pnl)}
               </span>
             )}
-            <Link to="/performance" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>
-              Full report →
+            <Link
+              to="/performance"
+              className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
+                         no-underline cursor-pointer transition-colors duration-150
+                         hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-sky-500"
+            >
+              Full report <ArrowRight size={12} strokeWidth={2} aria-hidden />
             </Link>
           </div>
         </div>
         {equityHistory.length === 0 ? (
           <EmptyState
-            icon="📈"
+            icon={TrendingUp}
             title="No equity history yet"
             description="Start trading to see your equity curve grow here."
             links={[{ label: '⚡ Start Trading', href: '/trade' }]}
@@ -705,18 +886,42 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
+      {/* How close is this account to being stopped out by a rule?
+          prop_firm_mode.json ships enabled with the FTMO ruleset, so a daily
+          loss limit and a maximum drawdown are live constraints on a fresh
+          deployment, and the margin call is a third. None of them appeared
+          anywhere in the UI: "margin level 1116.6%" is not what a trader is
+          afraid of. Renders nothing at all when nothing is measured. */}
+      <RiskHeadroomPanel />
+
       <div style={s.twoCol}>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 10 }}>
-            <span style={s.cardTitle}>Open Positions</span>
-            <Link to="/portfolio" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>View all →</Link>
+            <h2 style={s.cardTitle}>Open Positions</h2>
+            <Link
+              to="/portfolio"
+              className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
+                         no-underline cursor-pointer transition-colors duration-150
+                         hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-sky-500"
+            >
+              View all <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
           <PositionsTable />
         </div>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 10 }}>
-            <span style={s.cardTitle}>Active Signals</span>
-            <Link to="/ai-strategy" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Strategy gen →</Link>
+            <h2 style={s.cardTitle}>Active Signals</h2>
+            <Link
+              to="/ai-strategy"
+              className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6]
+                         no-underline cursor-pointer transition-colors duration-150
+                         hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2
+                         focus-visible:ring-sky-500"
+            >
+              Strategy gen <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
           <SignalsPanel />
         </div>
@@ -725,15 +930,19 @@ const Dashboard: React.FC = () => {
       <div style={s.twoCol}>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 12 }}>
-            <span style={s.cardTitle}>Market Regime — XAU/USD</span>
-            <Link to="/ai-chart" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>AI Chart →</Link>
+            <h2 style={s.cardTitle}>Market Regime — XAU/USD</h2>
+            <Link to="/ai-chart" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+              AI Chart <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
           <MarketRegimePanel />
         </div>
         <div style={s.card}>
           <div style={{ ...s.cardHeader, marginBottom: 12 }}>
-            <span style={s.cardTitle}>Risk Snapshot</span>
-            <Link to="/risk-calculator" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Calculator →</Link>
+            <h2 style={s.cardTitle}>Risk Snapshot</h2>
+            <Link to="/risk-calculator" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+              Calculator <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
           <RiskSnapshotPanel />
         </div>
@@ -741,28 +950,31 @@ const Dashboard: React.FC = () => {
 
       <div style={s.card}>
         <div style={{ ...s.cardHeader, marginBottom: 12 }}>
-          <span style={s.cardTitle}>ML Model Accuracy</span>
-          <Link to="/performance" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Performance →</Link>
+          <h2 style={s.cardTitle}>ML Model Accuracy</h2>
+          <Link to="/performance" className="inline-flex min-h-[44px] items-center gap-1 text-[12px] text-[#3b82f6] no-underline cursor-pointer transition-colors duration-150 hover:text-[var(--link)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+              Performance <ArrowRight size={12} strokeWidth={2} aria-hidden />
+            </Link>
         </div>
         <MlAccuracyCard />
       </div>
 
       <div style={s.card}>
-        <div style={{ ...s.cardTitle, marginBottom: 12 }}>Quick Navigation</div>
+        <h2 style={{ ...s.cardTitle, marginBottom: 12 }}>Quick Navigation</h2>
         <QuickNav />
       </div>
 
       <CrossLinkBar title="Explore" links={[
-        { label: 'Trade',           href: '/trade',            icon: '⚡', color: '#3b82f6' },
-        { label: 'Portfolio',       href: '/portfolio',        icon: '💼', color: '#4ade80' },
-        { label: 'AI Charts',       href: '/ai-chart',         icon: '📈', color: '#06b6d4' },
-        { label: 'Signals',         href: '/signals',          icon: '📡', color: '#a78bfa' },
-        { label: 'Risk Calculator', href: '/risk-calculator',  icon: '🧮', color: '#f59e0b' },
-        { label: 'Economic Calendar',href: '/calendar',        icon: '📅', color: '#f97316' },
-        { label: 'Leaderboard',     href: '/leaderboard',      icon: '🏆', color: '#fbbf24' },
-        { label: 'Performance',     href: '/performance',      icon: '📊', color: '#22c55e' },
+        { label: 'Trade',           href: '/trade',            icon: Zap, color: '#3b82f6' },
+        { label: 'Portfolio',       href: '/portfolio',        icon: Briefcase, color: '#4ade80' },
+        { label: 'AI Charts',       href: '/ai-chart',         icon: TrendingUp, color: '#06b6d4' },
+        { label: 'Signals',         href: '/signals',          icon: Radio, color: '#a78bfa' },
+        { label: 'Risk Calculator', href: '/risk-calculator',  icon: Calculator, color: '#f59e0b' },
+        { label: 'Economic Calendar',href: '/calendar',        icon: Calendar, color: '#f97316' },
+        { label: 'Leaderboard',     href: '/leaderboard',      icon: Trophy, color: '#fbbf24' },
+        { label: 'Performance',     href: '/performance',      icon: BarChart3, color: '#22c55e' },
       ]} />
-    </div>
+
+    </PageShell>
   );
 };
 
@@ -782,8 +994,9 @@ const s: Record<string, React.CSSProperties> = {
   tickerPrice:  { fontSize: 16, fontWeight: 700, color: '#f8fafc', margin: '3px 0' },
   tickerChange: { fontSize: 12, fontWeight: 600 },
 
-  // Stats grid: auto-fill so it collapses to 2 cols on mobile naturally
-  statsGrid:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 12 },
+  // Stats row: see `.stat-row` in index.css. It is a class, not a style here,
+  // because the column count has to follow the width of the row's own
+  // container, and an inline style cannot carry a container query.
   statCard:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '10px 12px' },
   statCardHighlight: { border: '1px solid #3b82f6', boxShadow: '0 0 12px rgba(59,130,246,0.15)' },
   statLabel:         { fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
@@ -792,7 +1005,12 @@ const s: Record<string, React.CSSProperties> = {
 
   card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 14px', marginBottom: 12 },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitle:  { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
+  // Rendered as <h2>. Every section title used to be a <span>, so the page
+  // offered one landmark — the <h1> from PageHeader — and no way for a screen
+  // reader to move between its seven regions (F173). `margin: 0` and the
+  // explicit size neutralise the h2 defaults, so this is a semantic change with
+  // no visual one.
+  cardTitle:  { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, margin: 0 },
 
   // twoCol: single column on mobile, 2 cols on sm+ — achieved via className
   twoCol: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: 12, marginBottom: 12 },

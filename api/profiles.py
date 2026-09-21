@@ -16,6 +16,8 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
+
 import hashlib
 import logging
 import os
@@ -84,8 +86,11 @@ def _get_or_create(user: TokenPayload) -> TraderProfile:
     if not profile:
         profile = _manager.create_profile(
             trader_id=user.sub,
-            username=getattr(user, "username", user.sub),
-            email=getattr(user, "email", ""),
+            # Both fields are declared Optional on TokenPayload, so the
+            # attribute exists and a getattr default never applies — `or` is
+            # what actually supplies the fallback.
+            username=user.username or user.sub,
+            email=user.email or "",
         )
     return profile
 
@@ -301,7 +306,7 @@ async def upload_avatar(
         for old in _AVATAR_DIR.glob(f"{stem}.*"):
             if old.name != name:
                 old.unlink(missing_ok=True)
-        (_AVATAR_DIR / name).write_bytes(data)
+        await asyncio.to_thread((_AVATAR_DIR / name).write_bytes, data)
     except OSError as exc:
         logger.error("avatar store failed for %s: %s", user.sub, exc)
         raise HTTPException(status_code=500, detail="Could not store avatar") from exc

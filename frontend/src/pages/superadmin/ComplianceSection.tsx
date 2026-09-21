@@ -8,7 +8,9 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { KYCRecord, AMLAlert, SanctionsHit } from './types';
-import { extractApiError } from '../../lib/utils';
+import { asArray, extractApiError } from '../../lib/utils';
+import { AlertTriangle, ClipboardList, FileText, Globe, IdCard, RefreshCw, Scroll, Siren } from 'lucide-react';
+import { ActionBanner } from '../../components/ActionBanner';
 
 interface RegulatoryReport {
   report_id: string;
@@ -35,13 +37,18 @@ const apiErr = (e: unknown, fallback: string) => {
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
+/** Fallback for an unrecognised key. Named so it is not itself an
+    index access, which `noUncheckedIndexedAccess` types as possibly
+    undefined (audit #38). Value is unchanged. */
+const KYC_STATUS_COLORS_DEFAULT = { color: 'var(--text-muted)', bg: '#1e293b' };
+
 const KYC_STATUS_COLORS: Record<string, { color: string; bg: string }> = {
-  unverified:   { color: '#64748b', bg: '#1e293b' },
-  pending:      { color: '#fbbf24', bg: '#78350f' },
-  submitted:    { color: '#60a5fa', bg: '#1e3a5f' },
+  unverified: KYC_STATUS_COLORS_DEFAULT,
+  pending:      { color: 'var(--warn)', bg: '#78350f' },
+  submitted:    { color: 'var(--link)', bg: '#1e3a5f' },
   under_review: { color: '#c084fc', bg: '#2e1065' },
-  approved:     { color: '#4ade80', bg: '#052e16' },
-  rejected:     { color: '#f87171', bg: '#450a0a' },
+  approved:     { color: 'var(--gain)', bg: '#052e16' },
+  rejected:     { color: 'var(--loss)', bg: '#450a0a' },
 };
 
 const ComplianceSection: React.FC = () => {
@@ -55,9 +62,21 @@ const ComplianceSection: React.FC = () => {
   const [kycFilter, setKycFilter] = useState('pending');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [confirm, setConfirm]   = useState<{ id: string; action: string; label: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
-  const [tab, setTab]           = useState<'kyc' | 'aml' | 'sanctions' | 'reports' | 'consent'>('kyc');
+  /**
+   * Section filter, not a tab bar.
+   *
+   * This state existed with five values and nothing ever rendered a control
+   * for it, so two of the five sections it named were never reachable. A tab
+   * bar would be wrong here — this component already renders INSIDE the
+   * SuperAdmin and Settings tab bars, and tabs inside tabs hide things twice.
+   * So it defaults to `all`, nothing is hidden until asked, and it narrows a
+   * long page instead of gating it.
+   */
+  const [tab, setTab] = useState<'all' | 'kyc' | 'aml' | 'sanctions' | 'reports' | 'consent'>('all');
+  const shows = (id: typeof tab) => tab === 'all' || tab === id;
   const [regType, setRegType]   = useState('cftc');
   const [regPeriod, setRegPeriod] = useState('');
   const [consentUserId, setConsentUserId] = useState('');
@@ -75,10 +94,10 @@ const ComplianceSection: React.FC = () => {
         superadminApi.regulatoryReports(),
       ]);
       if (!mountedRef.current) return;
-      setKyc(kycRes.data.records ?? kycRes.data);
-      setAml(amlRes.data.alerts ?? amlRes.data);
-      setSanctions(sanRes.data.hits ?? sanRes.data);
-      setRegReports(repRes.data.reports ?? repRes.data);
+      setKyc(asArray(kycRes.data, 'records'));
+      setAml(asArray(amlRes.data, 'alerts'));
+      setSanctions(asArray(sanRes.data, 'hits'));
+      setRegReports(asArray(repRes.data, 'reports'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError(apiErr(e, 'Failed to load compliance data'));
@@ -89,9 +108,10 @@ const ComplianceSection: React.FC = () => {
     try {
       const res = await superadminApi.consentLog(consentUserId || undefined);
       if (!mountedRef.current) return;
-      setConsentLog(res.data.entries ?? res.data);
+      setConsentLog(asArray(res.data, 'entries'));
     } catch (e: unknown) {
       if (!mountedRef.current) return;
+      setMsgOk(false);
       setMsg(apiErr(e, 'Failed to load consent log'));
     }
   }, [consentUserId]);
@@ -99,17 +119,19 @@ const ComplianceSection: React.FC = () => {
   useEffect(() => { load(); }, [load]);
   // Refresh every 60 s — compliance and financial data is not real-time.
   usePolling(load, 60_000);
-  useEffect(() => { if (tab === 'consent') loadConsent(); }, [tab, loadConsent]);
+  useEffect(() => { if (shows('consent')) loadConsent(); }, [tab, loadConsent]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const kycAction = async (userId: string, action: 'approve' | 'reject', reason?: string) => {
     setBusy(`${action}-${userId}`); setMsg('');
     try {
       if (action === 'approve') await superadminApi.approveKyc(userId);
       else                      await superadminApi.rejectKyc(userId, reason ?? 'Does not meet requirements');
+      setMsgOk(true);
       setMsg(`KYC ${action}d for user ${userId}`);
       setConfirm(null); setRejectReason('');
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, `KYC ${action} failed`));
     } finally { setBusy(null); }
   };
@@ -118,9 +140,11 @@ const ComplianceSection: React.FC = () => {
     setBusy(`aml-${alertId}`); setMsg('');
     try {
       await superadminApi.updateAmlAlert(alertId, status);
+      setMsgOk(true);
       setMsg(`AML alert ${alertId} marked as ${status}`);
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'AML update failed'));
     } finally { setBusy(null); }
   };
@@ -129,9 +153,11 @@ const ComplianceSection: React.FC = () => {
     setBusy(`sanction-${hitId}`); setMsg('');
     try {
       await superadminApi.clearSanctionsHit(hitId);
+      setMsgOk(true);
       setMsg(`Sanctions hit ${hitId} marked as ${status}`);
       load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, 'Sanctions update failed'));
     } finally { setBusy(null); }
   };
@@ -157,16 +183,45 @@ const ComplianceSection: React.FC = () => {
         />
       )}
 
+      {/* Section filter. Every section is visible by default; this narrows a
+          long page rather than hiding parts of it behind a second tab bar. */}
+      <div
+        role="group"
+        aria-label="Show compliance sections"
+        style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}
+      >
+        {([
+          ['all', 'All'], ['kyc', 'KYC'], ['aml', 'AML'],
+          ['sanctions', 'Sanctions'], ['reports', 'Reports'], ['consent', 'Consent'],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={tab === id}
+            onClick={() => setTab(id)}
+            style={{
+              padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+              fontSize: 12, fontWeight: 600,
+              background: tab === id ? 'var(--accent-soft)' : 'transparent',
+              border: `1px solid ${tab === id ? 'var(--accent)' : 'var(--border)'}`,
+              color: tab === id ? 'var(--accent)' : 'var(--text-dim)',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KpiTile label="KYC Pending"      value={pendingKyc}  icon="📋" accent="#f59e0b" />
-        <KpiTile label="AML Open Alerts"  value={openAml}     icon="🚨" accent="#ef4444" />
-        <KpiTile label="Sanctions Hits"   value={pendingSanc} icon="⚠️" accent="#dc2626" />
-        <KpiTile label="Total KYC"        value={kyc.length}  icon="🪪" accent="#3b82f6" />
+        <KpiTile label="KYC Pending"      value={pendingKyc}  icon={<ClipboardList size={18} aria-hidden />} accent="#f59e0b" />
+        <KpiTile label="AML Open Alerts"  value={openAml}     icon={<Siren size={18} aria-hidden />} accent="#ef4444" />
+        <KpiTile label="Sanctions Hits"   value={pendingSanc} icon={<AlertTriangle size={18} aria-hidden />} accent="#dc2626" />
+        <KpiTile label="Total KYC"        value={kyc.length}  icon={<IdCard size={18} aria-hidden />} accent="#3b82f6" />
       </div>
 
       {/* KYC Queue */}
-      <SectionCard title="KYC Review Queue" icon="🪪" accent="#f59e0b"
+      <SectionCard title="KYC Review Queue" icon={<IdCard size={18} aria-hidden />} accent="#f59e0b"
         subtitle="Identity verification — dual-approval workflow"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
@@ -176,36 +231,36 @@ const ComplianceSection: React.FC = () => {
                 { value: 'submitted', label: 'Submitted' }, { value: 'under_review', label: 'Under Review' },
                 { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Rejected' },
               ]} style={{ width: 150 }} />
-            <ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />
+            <ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={18} aria-hidden />} size="sm" />
           </div>
         }>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Status', 'Document', 'Country', 'Submitted', 'Reviewed', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {kyc.map(k => {
-                const sc = KYC_STATUS_COLORS[k.kyc_status] ?? KYC_STATUS_COLORS.unverified;
+                const sc = KYC_STATUS_COLORS[k.kyc_status] ?? KYC_STATUS_COLORS_DEFAULT;
                 return (
-                  <tr key={k.user_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
+                  <tr key={k.user_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '10px 12px' }}>
-                      <div style={{ fontWeight: 600, color: '#f1f5f9' }}>{k.username}</div>
-                      <div style={{ fontSize: 11, color: '#475569' }}>{k.email}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{k.username}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{k.email}</div>
                     </td>
                     <td style={{ padding: '10px 12px' }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: sc.color, background: sc.bg, border: `1px solid ${sc.color}33`, borderRadius: 4, padding: '2px 7px' }}>
                         {k.kyc_status.replace('_', ' ').toUpperCase()}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{k.document_type ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{k.country ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(k.submitted_at)}</td>
-                    <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(k.reviewed_at)}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{k.document_type ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{k.country ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(k.submitted_at)}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(k.reviewed_at)}</td>
                     <td style={{ padding: '10px 12px' }}>
                       {['pending', 'submitted', 'under_review'].includes(k.kyc_status) && (
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -219,7 +274,7 @@ const ComplianceSection: React.FC = () => {
               })}
             </tbody>
           </table>
-          {kyc.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No KYC records match the current filter.</div>}
+          {kyc.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No KYC records match the current filter.</div>}
         </div>
         {confirm?.action === 'reject' && (
           <div style={{ marginTop: 12 }}>
@@ -229,27 +284,27 @@ const ComplianceSection: React.FC = () => {
       </SectionCard>
 
       {/* AML Alerts */}
-      <SectionCard title="AML Alerts" icon="🚨" accent="#ef4444"
+      <SectionCard title="AML Alerts" icon={<Siren size={18} aria-hidden />} accent="#ef4444"
         subtitle="Anti-money laundering transaction monitoring">
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'Type', 'Severity', 'Amount', 'Description', 'Status', 'Date', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {aml.map(a => (
-                <tr key={a.alert_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{a.username}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{a.alert_type}</td>
+                <tr key={a.alert_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{a.username}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{a.alert_type}</td>
                   <td style={{ padding: '10px 12px' }}><SeverityBadge severity={a.severity} /></td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#f87171' }}>{a.amount.toLocaleString()} {a.currency}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--loss)' }}>{a.amount.toLocaleString()} {a.currency}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</td>
                   <td style={{ padding: '10px 12px' }}><StatusBadge status={a.status} size="sm" /></td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(a.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(a.created_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {a.status === 'open' && (
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -268,37 +323,44 @@ const ComplianceSection: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {aml.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No AML alerts.</div>}
+          {aml.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No AML alerts.</div>}
         </div>
       </SectionCard>
 
       {/* Sanctions */}
-      <SectionCard title="Sanctions Screening" icon="🌐" accent="#dc2626"
+      <SectionCard title="Sanctions Screening" icon={<Globe size={18} aria-hidden />} accent="#dc2626"
         subtitle="OFAC / UN / EU sanctions list matches">
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b' }}>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['User', 'List', 'Match Score', 'Status', 'Date', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {sanctions.map(s => (
-                <tr key={s.hit_id} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{s.username}</td>
-                  <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 12 }}>{s.list_name}</td>
+                <tr key={s.hit_id} className="sa-row" style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{s.username}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontSize: 12 }}>{s.list_name}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ flex: 1, height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden', minWidth: 80 }}>
+                      {/* The bar carried the whole meaning of this cell and
+                          had no accessible name, so a screen reader read the
+                          sanctions match score as an empty cell. */}
+                      <div
+                        role="img"
+                        aria-label={`Sanctions match score ${(s.match_score * 100).toFixed(0)} percent for ${s.username} against ${s.list_name}`}
+                        style={{ flex: 1, height: 6, background: 'var(--raised)', borderRadius: 3, overflow: 'hidden', minWidth: 80 }}
+                      >
                         <div style={{ height: '100%', width: `${s.match_score * 100}%`, background: s.match_score > 0.8 ? '#ef4444' : s.match_score > 0.6 ? '#f59e0b' : '#22c55e', borderRadius: 3 }} />
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: s.match_score > 0.8 ? '#f87171' : '#fbbf24' }}>{(s.match_score * 100).toFixed(0)}%</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: s.match_score > 0.8 ? 'var(--loss)' : 'var(--warn)' }}>{(s.match_score * 100).toFixed(0)}%</span>
                     </div>
                   </td>
                   <td style={{ padding: '10px 12px' }}><StatusBadge status={s.status} size="sm" /></td>
-                  <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{fmtDate(s.created_at)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {s.status === 'pending' && (
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -311,36 +373,141 @@ const ComplianceSection: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {sanctions.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No sanctions hits.</div>}
+          {sanctions.length === 0 && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)', fontSize: 'var(--fs-body)'}}>No sanctions hits.</div>}
         </div>
       </SectionCard>
 
-      {/* Regulatory Reporting */}
-      <SectionCard title="Regulatory Reporting" icon="📜" accent="#8b5cf6"
-        subtitle="CFTC / MiFID II / CAT filing status">
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {[
-            { label: 'CFTC Report',    endpoint: 'cftc',   color: '#3b82f6' },
-            { label: 'MiFID II',       endpoint: 'mifid2', color: '#8b5cf6' },
-            { label: 'CAT Filing',     endpoint: 'cat',    color: '#06b6d4' },
-            { label: 'Trade Report',   endpoint: 'trades', color: '#22c55e' },
-          ].map(r => (
-            <ActionBtn
-              key={r.endpoint}
-              label={`Generate ${r.label}`}
-              onClick={() => superadminApi.triggerRegReport(r.endpoint, new Date().toISOString().slice(0, 7)).then(() => setMsg(`${r.label} generation queued`)).catch(() => setMsg('Report generation failed'))}
-              variant="primary"
-              icon="📄"
+      {/* Regulatory Reporting.
+          Four buttons queued a report and the page never showed one: the
+          reports WERE fetched into `regReports` and then discarded, so
+          pressing Generate produced no visible effect ever. The period was
+          hardcoded to the current month, which is why `regType` and
+          `regPeriod` existed and did nothing. Both are now the control. */}
+      {shows('reports') && (
+      <SectionCard title="Regulatory Reporting" icon={<Scroll size={18} aria-hidden />} accent="#8b5cf6"
+        subtitle="CFTC / MiFID II / CAT filing status"
+        actions={<ActionBtn label="Refresh" onClick={load} icon={<RefreshCw size={13} aria-hidden />} size="sm" />}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+          <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            Report
+            <Select
+              value={regType}
+              onChange={e => setRegType(e.target.value)}
+              options={[
+                { value: 'cftc',   label: 'CFTC Report' },
+                { value: 'mifid2', label: 'MiFID II' },
+                { value: 'cat',    label: 'CAT Filing' },
+                { value: 'trades', label: 'Trade Report' },
+              ]}
+              style={{ width: 170, marginTop: 4 }}
             />
-          ))}
+          </label>
+          <label style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            Period
+            <Input
+              type="month"
+              value={regPeriod || new Date().toISOString().slice(0, 7)}
+              onChange={e => setRegPeriod(e.target.value)}
+              style={{ width: 160, marginTop: 4 }}
+            />
+          </label>
+          <ActionBtn
+            label="Generate report"
+            variant="primary"
+            icon={<FileText size={14} aria-hidden />}
+            onClick={() => superadminApi
+              .triggerRegReport(regType, regPeriod || new Date().toISOString().slice(0, 7))
+              .then(() => { setMsgOk(true); setMsg(`${regType.toUpperCase()} generation queued`); load(); })
+              .catch((e: unknown) => { setMsgOk(false); setMsg(apiErr(e, 'Report generation failed')); })}
+          />
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {['Report', 'Type', 'Period', 'Status', 'Generated', 'File'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {regReports.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: '18px 10px', color: 'var(--text-muted)' }}>
+                  No reports generated yet. Pick a type and period above; a queued report appears here once the filing job completes.
+                </td></tr>
+              ) : regReports.map(r => (
+                <tr key={r.report_id} style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 12 }}>{r.report_id}</td>
+                  <td style={{ padding: '8px 10px', textTransform: 'uppercase' }}>{r.type}</td>
+                  <td style={{ padding: '8px 10px', fontFamily: 'monospace' }}>{r.period}</td>
+                  <td style={{ padding: '8px 10px' }}><StatusBadge status={r.status} /></td>
+                  <td style={{ padding: '8px 10px', color: 'var(--text-dim)', fontFamily: 'monospace', fontSize: 12 }}>
+                    {r.generated_at ? new Date(r.generated_at).toLocaleString() : '—'}
+                  </td>
+                  <td style={{ padding: '8px 10px' }}>
+                    {r.download_url
+                      ? <a href={r.download_url} style={{ color: 'var(--link)' }}>Download</a>
+                      : <span style={{ color: 'var(--text-muted)' }}>not ready</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </SectionCard>
-
-      {msg && (
-        <div style={{ padding: '12px 16px', borderRadius: 8, marginTop: 8, background: msg.includes('failed') ? '#450a0a' : '#052e16', color: msg.includes('failed') ? '#f87171' : '#4ade80', fontSize: 13, fontWeight: 600 }}>
-          {msg}
-        </div>
       )}
+
+      {/* Consent log. Fetched into `consentLog` since this file was written
+          and rendered nowhere, along with the user filter that narrows it. */}
+      {shows('consent') && (
+      <SectionCard title="Consent Log" icon={<ClipboardList size={15} aria-hidden />} accent="#06b6d4"
+        subtitle="Who agreed to what, and when — the record a regulator asks for"
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Input
+              aria-label="Filter the consent log by user ID"
+              placeholder="Filter by user ID"
+              value={consentUserId}
+              onChange={e => setConsentUserId(e.target.value)}
+              style={{ width: 190 }}
+            />
+            <ActionBtn label="Refresh" onClick={loadConsent} icon={<RefreshCw size={13} aria-hidden />} size="sm" />
+          </div>
+        }>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-body)'}}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {['User', 'Event', 'When', 'Details'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {consentLog.length === 0 ? (
+                <tr><td colSpan={4} style={{ padding: '18px 10px', color: 'var(--text-muted)' }}>
+                  {consentUserId
+                    ? `No consent events recorded for ${consentUserId}.`
+                    : 'No consent events recorded yet.'}
+                </td></tr>
+              ) : consentLog.map((c, i) => (
+                <tr key={`${c.user_id}-${c.timestamp}-${i}`} style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 12 }}>{c.user_id}</td>
+                  <td style={{ padding: '8px 10px' }}>{c.event}</td>
+                  <td style={{ padding: '8px 10px', color: 'var(--text-dim)', fontFamily: 'monospace', fontSize: 12 }}>
+                    {c.timestamp ? new Date(c.timestamp).toLocaleString() : '—'}
+                  </td>
+                  <td style={{ padding: '8px 10px', color: 'var(--text-dim)' }}>{c.details || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+      )}
+
+      <ActionBanner message={msg} ok={msgOk} />
     </div>
   );
 };

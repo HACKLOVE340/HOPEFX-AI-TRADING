@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy to prop_firm_mode.json and fill in credentials. This file is gitignored.",
+  "_comment": "COMMITTED WITH PLACEHOLDERS FOR CI \u2014 see .gitignore. This file is NOT gitignored, so anything you type here can be committed. Put real credentials in environment variables instead, never in this file.",
   "_description": "Defines drawdown, daily-loss, and position-sizing rules for FTMO and Goat Funded (and compatible) prop-firm evaluation and funded accounts.",
   "enabled": true,
   "active_firm": "ftmo_standard",

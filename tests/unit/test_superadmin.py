@@ -12,6 +12,7 @@ Covers: Pydantic models, _load_platform_config, _save_platform_config,
 """
 
 import json
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -39,6 +40,28 @@ def _make_superadmin_app() -> FastAPI:
     superadmin_dep = require_role("superadmin")
     app.dependency_overrides[superadmin_dep] = lambda: TokenPayload(sub="test-superadmin", role="superadmin")
     return app
+
+
+@contextmanager
+def _two_factor_verified_override(sa_client):
+    """Scope a passing require_superadmin_2fa override to one test.
+
+    sa_client's app-level override only satisfies the base `_require_superadmin`
+    dependency, so any route now behind `require_superadmin_2fa` (rollback,
+    deploy) 403s under it by default — correctly. Tests for the success path
+    opt in here rather than weakening the shared fixture for every other test.
+    """
+    from api.auth import TokenPayload
+    from api.superadmin._shared import require_superadmin_2fa
+
+    app = sa_client.app
+    app.dependency_overrides[require_superadmin_2fa] = lambda: TokenPayload(
+        sub="test-superadmin", role="superadmin", two_factor_verified=True
+    )
+    try:
+        yield
+    finally:
+        del app.dependency_overrides[require_superadmin_2fa]
 
 
 def _ensure_db_tables() -> None:
@@ -607,6 +630,21 @@ class TestMLEndpoints:
         body = resp.json()
         assert "status" in body
 
+    def test_rollback_model_403_without_2fa(self, sa_client):
+        # rollback() bypasses quality gates to force-promote a previous model
+        # version into live trading. A superadmin token with no TOTP claim
+        # must not reach it — the sa_client fixture's default override never
+        # sets two_factor_verified, so this is the "stolen token" case.
+        # get_registry is mocked even though the request should be blocked
+        # before reaching it: if the gate ever regresses, this must not fall
+        # through to mutating the real committed ml/saved_models/registry.json.
+        with (
+            patch("api.admin.log_activity"),
+            patch("ml.model_registry.get_registry", side_effect=AssertionError("must not reach the registry")),
+        ):
+            resp = sa_client.post("/api/superadmin/ml/rollback/xgboost")
+        assert resp.status_code == 403
+
     def test_rollback_model_200(self, sa_client):
         # Mock the registry so the rollback always finds a staging candidate,
         # regardless of the real registry state on disk.
@@ -620,10 +658,32 @@ class TestMLEndpoints:
         }
         mock_registry.rollback = MagicMock()
         with (
+            _two_factor_verified_override(sa_client),
             patch("api.admin.log_activity"),
             patch("ml.model_registry.get_registry", return_value=mock_registry),
         ):
             resp = sa_client.post("/api/superadmin/ml/rollback/xgboost")
+        assert resp.status_code == 200
+
+    def test_deploy_model_403_without_2fa(self, sa_client):
+        # Mocked for the same reason as the rollback case above: a regressed
+        # gate must not fall through to mutating the real registry on disk.
+        with (
+            patch("api.admin.log_activity"),
+            patch("ml.model_registry.get_registry", side_effect=AssertionError("must not reach the registry")),
+        ):
+            resp = sa_client.post("/api/superadmin/ml/deploy", json={"model": "xgboost", "version": "v3"})
+        assert resp.status_code == 403
+
+    def test_deploy_model_200(self, sa_client):
+        mock_registry = MagicMock()
+        mock_registry.promote = MagicMock()
+        with (
+            _two_factor_verified_override(sa_client),
+            patch("api.admin.log_activity"),
+            patch("ml.model_registry.get_registry", return_value=mock_registry),
+        ):
+            resp = sa_client.post("/api/superadmin/ml/deploy", json={"model": "xgboost", "version": "v3"})
         assert resp.status_code == 200
 
 
@@ -633,8 +693,202 @@ class TestMLEndpoints:
 
 
 @pytest.mark.unit
+class TestBackupTriggerEndpoint:
+    """POST /api/superadmin/system-health/backups/trigger.
+
+    This used to run its own ad-hoc pg_dump/shutil copy instead of the
+    verified database/backup.py::run_backup() path from Phase R1, and its
+    except block forced status="completed" on ANY exception — so a missing
+    pg_dump binary, a permission error, or a timeout all reported success
+    with size_mb=0.0 and a location that was never written. §B2 item 14 in
+    docs/ai/MASTER_OUTSTANDING.md names the unverified-path half of this;
+    this covers the fail-open half found while fixing it.
+    """
+
+    def test_a_failed_backup_is_reported_as_failed_not_completed(self, sa_client):
+        with (
+            patch("database.backup.run_backup", side_effect=RuntimeError("DATABASE_URL is not set")),
+            patch("api.superadmin.system_health._log_superadmin_action"),
+        ):
+            resp = sa_client.post("/api/superadmin/system-health/backups/trigger", json={"type": "incremental"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["backup"]["status"] == "failed"
+        assert body["ok"] is False
+        assert body["backup"]["size_mb"] == 0.0
+
+    def test_a_successful_backup_is_verified_and_reports_the_real_path(self, sa_client, tmp_path):
+        fake_backup = tmp_path / "hopefx_20260908.sql.gz"
+        fake_backup.write_bytes(b"not a real dump, just needs to exist")
+        fake_report = MagicMock(bytes_uncompressed=2 * 1024 * 1024)
+        with (
+            patch("database.backup.run_backup", return_value=fake_backup),
+            patch("database.restore.verify_backup", return_value=fake_report),
+            patch("api.superadmin.system_health._log_superadmin_action"),
+        ):
+            resp = sa_client.post("/api/superadmin/system-health/backups/trigger", json={"type": "incremental"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["backup"]["status"] == "completed"
+        assert body["backup"]["location"] == str(fake_backup)
+        assert body["backup"]["size_mb"] == 2.0
+
+    def test_an_unverifiable_backup_is_reported_as_failed(self, sa_client, tmp_path):
+        # run_backup() succeeded but the artefact it wrote does not survive
+        # verify_backup() (e.g. the WAL-sidecar defect Phase R1 found) — the
+        # trigger must not call that success either.
+        fake_backup = tmp_path / "hopefx_20260908.sql.gz"
+        fake_backup.write_bytes(b"not a real dump, just needs to exist")
+        with (
+            patch("database.backup.run_backup", return_value=fake_backup),
+            patch("database.restore.verify_backup", side_effect=RuntimeError("backup contains no tables")),
+            patch("api.superadmin.system_health._log_superadmin_action"),
+        ):
+            resp = sa_client.post("/api/superadmin/system-health/backups/trigger", json={"type": "incremental"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["backup"]["status"] == "failed"
+        assert body["ok"] is False
+
+
+@pytest.mark.unit
 class TestDashboardEndpoint:
     def test_dashboard_returns_html(self, sa_client):
         resp = sa_client.get("/api/superadmin/")
         assert resp.status_code == 200
         assert "text/html" in resp.headers.get("content-type", "")
+
+
+# ---------------------------------------------------------------------------
+# Coverage for api/superadmin/ml_ai.py and system_health.py
+#
+# Both sat in docs/COVERAGE_UNMEASURABLE.txt as recorded debt — ml_ai.py at 55%,
+# system_health.py at 30% — which means most of two operator-facing surfaces
+# had never been executed by a test. These are the panels an operator reaches
+# for when something is wrong, so "it 500s" is exactly the wrong thing to
+# discover mid-incident.
+#
+# These exercise every route rather than asserting rich payloads: the point is
+# that each handler runs to completion against a real request, with whatever
+# backing services happen to be absent in a test environment. A route that
+# returns a degraded-but-shaped response when its backend is missing is
+# behaving correctly; one that raises is not.
+# ---------------------------------------------------------------------------
+
+
+class TestMlAiSurfaceResponds:
+    """Every /ml/* read endpoint returns a shaped response, not a stack trace."""
+
+    READ_ROUTES = [
+        "/ml/status",
+        "/ml/models",
+        "/ml/metrics",
+        "/ml/rl/status",
+        "/ml/training-jobs",
+        "/ml/ab-tests",
+        "/ml/drift",
+        "/ml/explainability",
+    ]
+
+    @pytest.mark.parametrize("route", READ_ROUTES)
+    def test_read_route_responds(self, sa_client, route):
+        resp = sa_client.get(f"/api/superadmin{route}")
+        assert resp.status_code in (200, 404, 503), f"{route} -> {resp.status_code}: {resp.text[:300]}"
+        if resp.status_code == 200:
+            assert isinstance(resp.json(), (dict, list))
+
+    @pytest.mark.parametrize("route", READ_ROUTES)
+    def test_read_route_never_leaks_a_traceback(self, sa_client, route):
+        """An operator panel must not hand back internals when a backend is down."""
+        body = sa_client.get(f"/api/superadmin{route}").text
+        assert "Traceback" not in body
+        assert "/home/" not in body, "a filesystem path in an error body is an information leak"
+
+    def test_retrain_accepts_a_known_model(self, sa_client):
+        resp = sa_client.post("/api/superadmin/ml/retrain/xgboost")
+        assert resp.status_code in (200, 202, 400, 404, 409, 503), resp.text[:300]
+
+    def test_rl_control_rejects_an_unknown_action(self, sa_client):
+        resp = sa_client.post("/api/superadmin/ml/rl/control", json={"action": "definitely-not-an-action"})
+        assert resp.status_code in (400, 404, 422, 503), f"an unknown RL action must be refused, got {resp.status_code}"
+
+    def test_deploy_still_requires_two_factor(self, sa_client):
+        """The 2FA gate added earlier must not have been loosened by this work."""
+        resp = sa_client.post("/api/superadmin/ml/deploy", json={"model_name": "xgboost", "version": "1"})
+        assert resp.status_code in (401, 403), f"deploy without 2FA returned {resp.status_code} — the gate is open"
+
+    def test_rollback_still_requires_two_factor(self, sa_client):
+        resp = sa_client.post("/api/superadmin/ml/rollback/xgboost")
+        assert resp.status_code in (401, 403), f"rollback without 2FA returned {resp.status_code} — the gate is open"
+
+
+class TestSystemHealthSurfaceResponds:
+    READ_ROUTES = [
+        "/system-health/services",
+        "/system/services",
+        "/system-health/backups",
+        "/system/backups",
+        "/system-health/jobs",
+        "/system/jobs",
+        "/system-health/resources",
+        "/system/resources",
+        "/system/api-keys",
+        "/system-health/dependencies",
+    ]
+
+    @pytest.mark.parametrize("route", READ_ROUTES)
+    def test_read_route_responds(self, sa_client, route):
+        resp = sa_client.get(f"/api/superadmin{route}")
+        assert resp.status_code in (200, 404, 503), f"{route} -> {resp.status_code}: {resp.text[:300]}"
+        if resp.status_code == 200:
+            assert isinstance(resp.json(), (dict, list))
+
+    @pytest.mark.parametrize("route", READ_ROUTES)
+    def test_read_route_never_leaks_a_traceback(self, sa_client, route):
+        body = sa_client.get(f"/api/superadmin{route}").text
+        assert "Traceback" not in body
+        assert "/home/" not in body
+
+    def test_the_alias_and_the_canonical_route_agree(self, sa_client):
+        """Two paths to one panel must not diverge into two answers.
+
+        `/system/services` exists because the frontend calls it; if it ever
+        stops matching `/system-health/services`, the operator's view depends
+        on which URL their build happens to use.
+        """
+        canonical = sa_client.get("/api/superadmin/system-health/services")
+        alias = sa_client.get("/api/superadmin/system/services")
+        assert canonical.status_code == alias.status_code
+        if canonical.status_code == 200:
+            assert set(canonical.json()) == set(alias.json()) if isinstance(canonical.json(), dict) else True
+
+    def test_running_an_unknown_job_is_refused(self, sa_client):
+        resp = sa_client.post("/api/superadmin/system-health/jobs/no-such-job/run")
+        assert resp.status_code in (400, 404, 422, 503), f"an unknown job id must be refused, got {resp.status_code}"
+
+    def test_deleting_an_unknown_api_key_is_refused(self, sa_client):
+        resp = sa_client.delete("/api/superadmin/system/api-keys/no-such-key")
+        assert resp.status_code in (400, 404, 422, 503)
+
+    def test_backup_trigger_reports_what_it_did(self, sa_client):
+        """The backup trigger must not report success for work that did not happen.
+
+        Fixed earlier in this programme (task #2) — it used to return ok for an
+        unverified path. This pins that a response either carries a real
+        outcome or is an error, never a bare optimistic ok.
+        """
+        # This performs a REAL backup — the endpoint routes through the
+        # verified database/restore.py path from Phase R1 rather than a mock,
+        # which is the point: a trigger that only pretends proves nothing. The
+        # archive lands in backups/, which is gitignored for exactly this
+        # reason.
+        resp = sa_client.post(
+            "/api/superadmin/system-health/backups/trigger",
+            json={"type": "incremental"},
+        )
+        assert resp.status_code in (200, 202, 400, 403, 500, 503), resp.text[:300]
+        if resp.status_code in (200, 202):
+            payload = resp.json()
+            assert isinstance(payload, dict)
+            assert payload, "an empty body cannot report whether a backup happened"

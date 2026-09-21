@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.auth import TokenPayload
 
-from ._shared import RefundBody, _log_superadmin_action, _require_superadmin
+from ._shared import RefundBody, _get_config_store, _log_superadmin_action, _require_superadmin
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +158,75 @@ async def refund_payment(payment_id: str, body: RefundBody, user: TokenPayload =
     from api.billing import process_refund
 
     return await process_refund(payment_id=payment_id, reason=body.reason, user=user)
+
+
+# ── Refund policy ─────────────────────────────────────────────────────────────
+# Where a creator's money comes from when a sale is refunded after it has already
+# been paid out. Three answers are defensible and the choice is the operator's,
+# so it is a setting rather than a constant. See monetization/refund_policy.py.
+
+
+@router.get("/financial/refund-policy")
+async def get_refund_policy(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Return the refund policy in force plus every option and what it means.
+
+    The option descriptions come from monetization.refund_policy rather than the
+    frontend, so the wording that explains where money goes has one source.
+    """
+    from monetization.refund_policy import describe_policies, resolve_refund_policy
+
+    store = _get_config_store()
+    policy = resolve_refund_policy(store=store) if store is not None else resolve_refund_policy()
+    return {
+        "policy": policy.value,
+        "options": describe_policies(),
+        "applies_to": "refunds of sales that have already been settled by a payout",
+        "note": (
+            "Changing this affects new refunds only. The policy applied to a "
+            "refund is recorded on that refund and is never re-derived."
+        ),
+    }
+
+
+@router.put("/financial/refund-policy")
+async def set_refund_policy(body: dict, user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Set the refund policy.
+
+    Refuses anything that is not one of the three policies, and refuses when the
+    store could not persist the change. Returning success for a setting that did
+    not save would leave the operator believing money is being handled one way
+    while it is handled another.
+    """
+    from monetization.refund_policy import REFUND_POLICY_KEY, RefundPolicy, describe_policies
+
+    raw = (body or {}).get("policy")
+    try:
+        policy = RefundPolicy(raw)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown refund policy {raw!r}. Expected one of {[p.value for p in RefundPolicy]}.",
+        ) from None
+
+    store = _get_config_store()
+    if store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Configuration store unavailable — refund policy not changed.",
+        )
+
+    actor = user if isinstance(user, str) else getattr(user, "sub", "unknown")
+    if not store.set(REFUND_POLICY_KEY, policy.value, changed_by=actor):
+        raise HTTPException(
+            status_code=503,
+            detail="Configuration store rejected the write — refund policy not changed.",
+        )
+
+    # Only audited once the write is known to have landed.
+    _log_superadmin_action(user, "refund_policy_change", f"policy={policy.value}")
+    logger.warning("Refund policy changed to %s by %s", policy.value, actor)
+
+    return {"policy": policy.value, "options": describe_policies()}
 
 
 @router.get("/financial/affiliates")
@@ -692,16 +761,28 @@ async def list_payouts(
                 total = q.count()
                 offset = (page - 1) * page_size
                 rows = q.order_by(WalletTransaction.created_at.desc()).offset(offset).limit(page_size).all()
+                # ``WalletTransaction`` has no ``metadata`` column. On a
+                # declarative model ``r.metadata`` is SQLAlchemy's MetaData
+                # object — truthy, so the ``if r.metadata`` guard never fired
+                # and ``.get()`` raised AttributeError on the first row. The
+                # outer except caught it and this endpoint returned an empty
+                # payout queue no matter how many payouts were pending.
+                #
+                # ``method`` and ``processed_at`` were never persisted by
+                # anything: payments/wallet.py writes transaction_id, type,
+                # amount, balance_after, currency, reference, status and notes.
+                # Reporting the columns that exist rather than inventing two.
                 payouts = [
                     {
                         "id": str(r.id),
+                        "transaction_id": r.transaction_id,
                         "user_id": str(r.user_id) if r.user_id else None,
                         "amount": float(r.amount or 0),
                         "currency": r.currency or "USD",
                         "status": r.status or "pending",
-                        "method": r.metadata.get("method", "bank_transfer") if r.metadata else "bank_transfer",
+                        "reference": r.reference,
+                        "notes": r.notes,
                         "created_at": r.created_at.isoformat() if r.created_at else None,
-                        "processed_at": r.metadata.get("processed_at") if r.metadata else None,
                     }
                     for r in rows
                 ]
@@ -723,20 +804,22 @@ async def get_fee_config(user: TokenPayload = Depends(_require_superadmin)) -> d
             return {"fees": fees}
     except Exception as exc:
         logger.debug("fee_config config_manager: %s", exc)
-    # Fallback: read from DB Configuration table
+    # Fallback: read from the DB `configurations` table.
+    #
+    # This used to hand-roll its own query against Configuration.key/.value —
+    # neither of which is a column (they are config_key/config_value). Building
+    # that query raised AttributeError *inside* db_manager.session(), whose
+    # `except Exception` books any error as a DATABASE failure; five of those
+    # tripped the circuit breaker and took /api/health, /health/ready and
+    # /health/deep to 503. api.db_store already owns this table correctly —
+    # right column names, JSON coding, and a plain SessionLocal() that cannot
+    # feed the breaker — so go through it instead of re-deriving the mapping.
     try:
-        from database.connection import get_db_manager
+        from api.db_store import db_get
 
-        mgr = get_db_manager()
-        if mgr:
-            with mgr.session() as db:
-                from database.models import Configuration
-
-                row = db.query(Configuration).filter(Configuration.key == "fee_config").first()
-                if row and row.value:
-                    import json as _json
-
-                    return {"fees": _json.loads(row.value) if isinstance(row.value, str) else row.value}
+        fees = db_get("fee_config")
+        if fees:
+            return {"fees": fees}
     except Exception as exc:
         logger.warning("fee_config db: %s", exc)
     return {
@@ -755,23 +838,25 @@ async def get_fee_config(user: TokenPayload = Depends(_require_superadmin)) -> d
 async def update_fee_config(body: dict, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     """Update platform fee configuration."""
     _log_superadmin_action(user, "fee_config_update", str(body))
+    # Same table, same reason as the reader above. The hand-rolled version was
+    # doubly broken on write: Configuration(key=..., value=...) raises TypeError
+    # because neither is a column, and `environment` is NOT NULL and was never
+    # set, so the INSERT could not have succeeded either way. db_set handles all
+    # of that.
+    saved = False
     try:
-        from database.connection import get_db_manager
-        import json as _json
+        from api.db_store import db_set
 
-        mgr = get_db_manager()
-        if mgr:
-            with mgr.session() as db:
-                from database.models import Configuration
-
-                row = db.query(Configuration).filter(Configuration.key == "fee_config").first()
-                if row:
-                    row.value = _json.dumps(body)
-                    row.updated_at = datetime.now(timezone.utc)
-                else:
-                    row = Configuration(key="fee_config", value=_json.dumps(body))
-                    db.add(row)
-                db.commit()
+        saved = db_set("fee_config", body, changed_by=getattr(user, "sub", "superadmin"))
     except Exception as exc:
         logger.warning("fee_config update: %s", exc)
+
+    if not saved:
+        # Reporting ok=True on a failed write told the operator their fee change
+        # was live when it had not been stored at all. On a money-moving system
+        # that is the wrong way to be wrong: say so and let the caller retry.
+        raise HTTPException(
+            status_code=503,
+            detail="Fee configuration could not be persisted — not applied.",
+        )
     return {"ok": True, "fees": body}

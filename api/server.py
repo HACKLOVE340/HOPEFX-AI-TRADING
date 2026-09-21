@@ -17,6 +17,7 @@ import contextlib
 from infrastructure.health import HealthStatus, get_health_checker
 from infrastructure.logging import get_logger
 from infrastructure.metrics import get_metrics_registry
+from api.error_details import safe_error
 
 logger = get_logger(__name__)
 
@@ -166,12 +167,12 @@ def create_api_app(trading_app=None) -> Any | None:
             "Set ALLOWED_ORIGINS=https://app.yourdomain.com before deploying."
         )
         _sys.exit(1)
-    _ALLOWED_SYMBOLS = frozenset(
-        os.getenv(
-            "ALLOWED_SYMBOLS",
-            "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF",
-        ).split(","),
-    )
+    # Imported, not repeated. The literal that used to live here omitted ETHUSD
+    # while api/auth.py's included it, so the order routes and
+    # validate_order_symbol() enforced two different instrument lists.
+    from api.auth import DEFAULT_ALLOWED_SYMBOLS, parse_allowed_symbols
+
+    _ALLOWED_SYMBOLS = parse_allowed_symbols(os.getenv("ALLOWED_SYMBOLS", DEFAULT_ALLOWED_SYMBOLS))
     _MAX_QTY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
     # ── Health checker resolved before lifespan ───────────────────────────────
@@ -301,6 +302,16 @@ def create_api_app(trading_app=None) -> Any | None:
 
     _register_probe_routes(app, trading_app, health_checker)
     _register_trading_routes(app, trading_app, _get_current_user, _require_trader, _ALLOWED_SYMBOLS, _MAX_QTY)
+
+    # The dedicated trading router owns the paper-trading controls and the
+    # authenticated trading API under /api/trading. Keep it mounted alongside
+    # the legacy /api/v1 routes so existing clients remain compatible.
+    from api.trading import router as trading_router
+
+    app.include_router(trading_router)
+    from api.superadmin.ai_operations import router as ai_operations_router
+
+    app.include_router(ai_operations_router)
     _register_brain_routes(app, trading_app, _get_current_user, _require_admin)
     _register_system_routes(app, trading_app, _require_admin)
 
@@ -407,7 +418,7 @@ def _register_probe_routes(app, trading_app, health_checker):
             return JSONResponse(content=data, status_code=200 if data.get("engine_healthy") else 503)
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("invariants health endpoint error: %s", exc)
-            return JSONResponse(content={"ok": False, "error": str(exc)}, status_code=503)
+            return JSONResponse(content={"ok": False, "error": safe_error(exc)}, status_code=503)
 
 
 def _register_account_routes(app: Any, trading_app: Any, get_current_user: Any) -> None:

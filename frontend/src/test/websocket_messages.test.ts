@@ -191,7 +191,7 @@ describe('position_update messages', () => {
     handleMessage(JSON.stringify({ type: 'position_update', data: makePos() }));
     handleMessage(JSON.stringify({ type: 'position_update', data: { ...makePos(), unrealized_pnl: 500 } }));
     expect(useStore.getState().positions).toHaveLength(1);
-    expect(useStore.getState().positions[0].unrealized_pnl).toBe(500);
+    expect(useStore.getState().positions[0]?.unrealized_pnl).toBe(500);
   });
 
   it('multiple different positions', () => {
@@ -202,7 +202,7 @@ describe('position_update messages', () => {
 
   it('position side is stored', () => {
     handleMessage(JSON.stringify({ type: 'position_update', data: { ...makePos(), side: 'short' } }));
-    expect(useStore.getState().positions[0].side).toBe('short');
+    expect(useStore.getState().positions[0]?.side).toBe('short');
   });
 });
 
@@ -220,7 +220,7 @@ describe('position_close messages', () => {
     handleMessage(JSON.stringify({ type: 'position_update', data: { ...makePos(), id: 'p2' } }));
     handleMessage(JSON.stringify({ type: 'position_close', data: { id: 'p1' } }));
     expect(useStore.getState().positions).toHaveLength(1);
-    expect(useStore.getState().positions[0].id).toBe('p2');
+    expect(useStore.getState().positions[0]?.id).toBe('p2');
   });
 
   it('close non-existent id is safe', () => {
@@ -241,17 +241,17 @@ describe('signal messages', () => {
   it('signal is prepended', () => {
     handleMessage(JSON.stringify({ type: 'signal', data: { ...makeSig(), id: 's1', model: 'first' } }));
     handleMessage(JSON.stringify({ type: 'signal', data: { ...makeSig(), id: 's2', model: 'second' } }));
-    expect(useStore.getState().signals[0].model).toBe('second');
+    expect(useStore.getState().signals[0]?.model).toBe('second');
   });
 
   it('signal confidence stored', () => {
     handleMessage(JSON.stringify({ type: 'signal', data: { ...makeSig(), confidence: 0.92 } }));
-    expect(useStore.getState().signals[0].confidence).toBe(0.92);
+    expect(useStore.getState().signals[0]?.confidence).toBe(0.92);
   });
 
   it('signal direction stored', () => {
     handleMessage(JSON.stringify({ type: 'signal', data: { ...makeSig(), direction: 'short' } }));
-    expect(useStore.getState().signals[0].direction).toBe('short');
+    expect(useStore.getState().signals[0]?.direction).toBe('short');
   });
 
   it('10 signals stored', () => {
@@ -511,12 +511,12 @@ describe('news_item messages', () => {
   it('news items are prepended (newest first)', () => {
     handleMessage(JSON.stringify({ type: 'news_item', data: { ...makeNewsItem(), title: 'first' } }));
     handleMessage(JSON.stringify({ type: 'news_item', data: { ...makeNewsItem(), title: 'second' } }));
-    expect(useStore.getState().newsItems[0].title).toBe('second');
+    expect(useStore.getState().newsItems[0]?.title).toBe('second');
   });
 
   it('sentiment_label stored correctly', () => {
     handleMessage(JSON.stringify({ type: 'news_item', data: makeNewsItem() }));
-    expect(useStore.getState().newsItems[0].sentiment_label).toBe('bullish');
+    expect(useStore.getState().newsItems[0]?.sentiment_label).toBe('bullish');
   });
 
   it('capped at 50 items', () => {

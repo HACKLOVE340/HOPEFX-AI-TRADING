@@ -20,6 +20,7 @@ import { isSuperAdmin } from '../../lib/subscription';
 import { useVoice } from '../../hooks/useVoice';
 import { parseVoiceCommand, describeIntent, type VoiceIntent } from '../../lib/voiceCommands';
 import { tradingApi } from '../../hooks/useApi';
+import { describeSubmitFailure } from '../../lib/utils';
 import { useToast } from '../Toast';
 
 const VoiceTradingPanel: React.FC = () => {
@@ -92,9 +93,15 @@ const VoiceTradingPanel: React.FC = () => {
       }
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status;
+      // F2-01: the old fallback said "Command failed. Nothing was executed." —
+      // out loud, and on a timeout it is a flat assertion of something we do
+      // not know. For a trade it invites a duplicate; for the kill switch it
+      // tells the operator trading is still running when it may already have
+      // been halted, which is the more dangerous direction of the two.
+      const what = pending.kind === 'kill_switch' ? 'kill switch' : 'order';
       const msg = status === 403
         ? 'Rejected by the server risk gate.'
-        : 'Command failed. Nothing was executed.';
+        : describeSubmitFailure(e, what).message;
       toast.error(msg);
       voice.speak(msg);
     } finally {
@@ -109,7 +116,7 @@ const VoiceTradingPanel: React.FC = () => {
   if (!voice.sttSupported) {
     return (
       <div style={panelStyle}>
-        <div style={{ color: '#94a3b8', fontSize: 13 }}>
+        <div style={{ color: 'var(--text-dim)', fontSize: 'var(--fs-body)'}}>
           🎙️ Voice trading is unavailable — this browser has no speech recognition.
         </div>
       </div>
@@ -119,12 +126,12 @@ const VoiceTradingPanel: React.FC = () => {
   return (
     <div style={panelStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: '#fca5a5' }}>🎙️ Voice Trading</span>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 800, color: '#fca5a5' }}>🎙️ Voice Trading</span>
         <span style={{ fontSize: 10, fontWeight: 800, color: '#fca5a5', background: '#450a0a', border: '1px solid #dc2626', borderRadius: 6, padding: '1px 7px' }}>
           SUPER ADMIN
         </span>
       </div>
-      <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px', lineHeight: 1.5 }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
         Say e.g. <em>“buy 1 lot gold”</em>, <em>“sell 0.5 XAUUSD”</em>, <em>“what's my P&amp;L”</em>,
         or <em>“kill switch”</em>. Trades and the kill switch always ask for confirmation before anything runs.
       </p>
@@ -133,16 +140,16 @@ const VoiceTradingPanel: React.FC = () => {
           type="button"
           onClick={() => (voice.listening ? voice.stopListening() : voice.startListening(onFinal))}
           style={{
-            background: voice.listening ? '#dc2626' : '#1e293b',
+            background: voice.listening ? '#dc2626' : 'var(--raised)',
             border: `1px solid ${voice.listening ? '#ef4444' : '#334155'}`,
-            borderRadius: 9, color: voice.listening ? '#fff' : '#e2e8f0',
-            cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '9px 16px',
+            borderRadius: 9, color: voice.listening ? '#fff' : 'var(--text)',
+            cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 700, padding: '9px 16px',
           }}
         >
           {voice.listening ? '⏹ Stop' : '🎤 Speak command'}
         </button>
         {voice.transcript && (
-          <span style={{ fontSize: 13, color: '#94a3b8', fontStyle: 'italic' }}>“{voice.transcript}”</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontStyle: 'italic' }}>“{voice.transcript}”</span>
         )}
       </div>
 
@@ -159,17 +166,17 @@ const VoiceTradingPanel: React.FC = () => {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#0d1421', border: '1px solid #334155', borderRadius: 14,
+              background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 14,
               padding: 24, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
             }}
           >
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#f1f5f9', marginBottom: 8 }}>
+            <div style={{ fontSize: 'var(--fs-value)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 8 }}>
               {pending.kind === 'kill_switch' ? '⚠️ Confirm kill switch' : 'Confirm trade'}
             </div>
-            {heard && <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Heard: “{heard}”</div>}
+            {heard && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>Heard: “{heard}”</div>}
             <div style={{
               fontSize: 16, fontWeight: 800,
-              color: pending.kind === 'kill_switch' ? '#fca5a5' : '#60a5fa',
+              color: pending.kind === 'kill_switch' ? '#fca5a5' : 'var(--link)',
               background: '#0f1e35', border: '1px solid #1e3a5f', borderRadius: 9, padding: '12px 14px', marginBottom: 16,
             }}>
               {describeIntent(pending)}
@@ -179,7 +186,7 @@ const VoiceTradingPanel: React.FC = () => {
                 type="button"
                 onClick={cancel}
                 disabled={busy}
-                style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 9, color: '#94a3b8', cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '9px 18px' }}
+                style={{ background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 9, color: 'var(--text-dim)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 700, padding: '9px 18px' }}
               >
                 Cancel
               </button>
@@ -190,7 +197,7 @@ const VoiceTradingPanel: React.FC = () => {
                 style={{
                   background: pending.kind === 'kill_switch' ? '#dc2626' : '#3b82f6',
                   border: 'none', borderRadius: 9, color: '#fff', cursor: busy ? 'wait' : 'pointer',
-                  fontSize: 13, fontWeight: 800, padding: '9px 18px',
+                  fontSize: 'var(--fs-body)', fontWeight: 800, padding: '9px 18px',
                 }}
               >
                 {busy ? '…' : pending.kind === 'kill_switch' ? 'Activate kill switch' : 'Place order'}
@@ -204,7 +211,7 @@ const VoiceTradingPanel: React.FC = () => {
 };
 
 const panelStyle: React.CSSProperties = {
-  background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: 16,
+  background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16,
 };
 
 function fmtNum(v: number | undefined): string {

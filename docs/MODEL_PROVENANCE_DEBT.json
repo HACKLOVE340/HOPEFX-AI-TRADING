@@ -1,0 +1,27 @@
+{
+ "_comment": "Model-provenance debt, ratcheted. `ungated_loaders` are ml/ modules that call a model loader and reach no integrity check; `unlisted_artifacts` are committed model binaries no baseline records. Both lists may only SHRINK: scripts/model_provenance_report.py --check refuses a new entry in either. It deliberately does NOT block on the two MISMATCH artifacts \u2014 whether to regenerate the manifest, restore the bytes or investigate is an owner decision (MASTER_OUTSTANDING A7/A8), and a gate that blocked every commit until it was made would be this repository deciding it by attrition. Nor does it block on the twelve existing ungated loaders: a fail-closed check on ml/inference_engine.py would refuse a model that loads today and halt live inference. What it refuses is the THIRTEENTH. A file that leaves a list must be DELETED from it rather than left behind \u2014 an entry describing nothing is how a ratchet stops being one.",
+ "_measured": "2026-09-13",
+ "ungated_loaders": [
+  "ml/advanced_ai.py",
+  "ml/explainability.py",
+  "ml/inference_engine.py",
+  "ml/live_inference.py",
+  "ml/models/base.py",
+  "ml/models/lstm_predictor.py",
+  "ml/pipeline.py",
+  "ml/regime.py",
+  "ml/regime_conditional.py",
+  "ml/rl_agent.py",
+  "ml/robust_predictor.py",
+  "ml/training.py"
+ ],
+ "unlisted_artifacts": [
+  "ml/rl_models/nuclear_decision_ppo.zip",
+  "ml/rl_models/nuclear_decision_vecnorm.pkl",
+  "ml/saved_models/GCF/feature_scaler.pkl",
+  "ml/saved_models/GCF/random_forest_model.pkl",
+  "ml/saved_models/XAU_USD/feature_scaler.pkl",
+  "ml/saved_models/XAU_USD/random_forest_model.pkl",
+  "ml/saved_models/rl/hopefx_ppo.zip"
+ ]
+}

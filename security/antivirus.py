@@ -53,6 +53,7 @@ import logging
 import math
 import os
 import re
+import socket
 import threading
 import time
 from datetime import datetime, timezone
@@ -397,10 +398,13 @@ rule SuspiciousImport {
         _socket_path = os.getenv("CLAMD_SOCKET", "/var/run/clamav/clamd.ctl")
         _tcp_host = os.getenv("CLAMD_HOST", "127.0.0.1")
         _tcp_port = int(os.getenv("CLAMD_PORT", "3310"))
-        for attempt in [
-            lambda: clamd.ClamdUnixSocket(_socket_path),
-            lambda: clamd.ClamdNetworkSocket(host=_tcp_host, port=_tcp_port),
-        ]:
+        attempts = []
+        # Unix-domain sockets don't exist on Windows (socket.AF_UNIX is absent);
+        # attempting one there raises a confusing AttributeError, so skip it.
+        if hasattr(socket, "AF_UNIX"):
+            attempts.append(lambda: clamd.ClamdUnixSocket(_socket_path))
+        attempts.append(lambda: clamd.ClamdNetworkSocket(host=_tcp_host, port=_tcp_port))
+        for attempt in attempts:
             try:
                 cd = attempt()
                 cd.ping()

@@ -8,6 +8,8 @@ import {
   ConfirmDialog, Input,
 } from './ui';
 import { extractApiError } from '../../lib/utils';
+import { ActionBanner } from '../../components/ActionBanner';
+import { AlertTriangle, BarChart3, ClipboardList, OctagonAlert, Shield, Zap } from 'lucide-react';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -31,10 +33,10 @@ interface NuclearLogEntry {
 }
 
 const ACTION_COLORS: Record<string, string> = {
-  halt:             '#f87171',
-  resume:           '#4ade80',
-  hedge_activate:   '#fbbf24',
-  hedge_deactivate: '#94a3b8',
+  halt:             'var(--loss)',
+  resume:           'var(--gain)',
+  hedge_activate:   'var(--warn)',
+  hedge_deactivate: 'var(--text-dim)',
   risk_override:    '#f97316',
 };
 
@@ -45,10 +47,11 @@ const NuclearControlsSection: React.FC = () => {
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
+  const [msgOk, setMsgOk] = useState(true);
   const [haltReason, setHaltReason] = useState('');
   const [hedgeRatio, setHedgeRatio] = useState('1.0');
   const [riskFraction, setRiskFraction] = useState('0.5');
-  const [confirm, setConfirm]   = useState<{ action: string; label: string; danger?: boolean } | null>(null);
+  const [confirm, setConfirm]   = useState<{ action: string; label: string; message?: string; danger?: boolean } | null>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -74,26 +77,49 @@ const NuclearControlsSection: React.FC = () => {
   usePolling(load, 15_000);
 
   const act = async (action: string) => {
+    // Validate BEFORE setBusy, so an early return cannot leave the button spinning.
+    // The inputs carry min/max attributes, but those do not constrain a pasted or
+    // programmatic value, and an empty field parses to NaN — which was previously
+    // sent straight to the API.
+    if (action === 'hedge_activate') {
+      const ratio = parseFloat(hedgeRatio);
+      if (!Number.isFinite(ratio) || ratio <= 0 || ratio > 1) {
+        setMsgOk(false); setMsg('Hedge ratio must be between 0 and 1.'); setConfirm(null); return;
+      }
+    }
+    if (action === 'risk_override') {
+      const frac = parseFloat(riskFraction);
+      if (!Number.isFinite(frac) || frac <= 0 || frac > 1) {
+        setMsgOk(false); setMsg('Max risk fraction must be between 0 and 1.'); setConfirm(null); return;
+      }
+    }
+
     setBusy(action); setMsg('');
     try {
       if (action === 'halt') {
         await superadminApi.nuclearHalt(haltReason || 'Superadmin emergency halt');
+        setMsgOk(true);
         setMsg('Emergency halt activated — all trading stopped');
       } else if (action === 'resume') {
         await superadminApi.nuclearResume();
+        setMsgOk(true);
         setMsg('Trading resumed');
       } else if (action === 'hedge_activate') {
         await superadminApi.activateHedge({ hedge_ratio: parseFloat(hedgeRatio), instrument: 'XAUUSD' });
+        setMsgOk(true);
         setMsg(`Hedge activated at ${hedgeRatio}x ratio`);
       } else if (action === 'hedge_deactivate') {
         await superadminApi.deactivateHedge();
+        setMsgOk(true);
         setMsg('Hedge deactivated');
       } else if (action === 'risk_override') {
         await superadminApi.maxRiskOverride({ max_risk_fraction: parseFloat(riskFraction), reason: 'Superadmin override' });
+        setMsgOk(true);
         setMsg(`Max risk set to ${(parseFloat(riskFraction) * 100).toFixed(0)}%`);
       }
       await load();
     } catch (e: unknown) {
+      setMsgOk(false);
       setMsg(extractApiError(e, `Action "${action}" failed`));
     } finally { setBusy(null); setConfirm(null); }
   };
@@ -109,9 +135,9 @@ const NuclearControlsSection: React.FC = () => {
       {confirm && (
         <ConfirmDialog
           title={confirm.label}
-          message={confirm.danger
+          message={confirm.message ?? (confirm.danger
             ? 'This will immediately halt ALL trading activity across the entire platform. Are you absolutely sure?'
-            : 'Confirm this action?'}
+            : 'Confirm this action?')}
           confirmLabel={confirm.label}
           danger={confirm.danger}
           onConfirm={() => act(confirm.action)}
@@ -119,29 +145,18 @@ const NuclearControlsSection: React.FC = () => {
         />
       )}
 
-      {msg && (
-        <div style={{
-          background: msg.includes('fail') || msg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(74,222,128,0.1)',
-          border: `1px solid ${msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80'}`,
-          borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13,
-          color: msg.includes('fail') || msg.includes('error') ? '#f87171' : '#4ade80',
-          display: 'flex', justifyContent: 'space-between',
-        }}>
-          {msg}
-          <button onClick={() => setMsg('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>✕</button>
-        </div>
-      )}
+      <ActionBanner message={msg} ok={msgOk} onDismiss={() => setMsg('')} />
 
       {/* Status KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
         <KpiTile label="Platform Status" value={halted ? 'HALTED' : 'RUNNING'} icon={halted ? '🛑' : '✅'} accent={halted ? '#ef4444' : '#22c55e'} />
-        <KpiTile label="Kill Switch" value={status?.kill_switch_active ? 'ACTIVE' : 'INACTIVE'} icon="⚡" accent={status?.kill_switch_active ? '#ef4444' : '#22c55e'} />
-        <KpiTile label="Hedge" value={status?.hedge_active ? `${((status.hedge_ratio ?? 0) * 100).toFixed(0)}%` : 'OFF'} icon="🛡️" accent={status?.hedge_active ? '#fbbf24' : '#475569'} />
-        <KpiTile label="Risk Override" value={status?.risk_override ? `${((status.max_risk_fraction ?? 1) * 100).toFixed(0)}%` : 'NORMAL'} icon="⚠️" accent={status?.risk_override ? '#f97316' : '#475569'} />
+        <KpiTile label="Kill Switch" value={status?.kill_switch_active ? 'ACTIVE' : 'INACTIVE'} icon={<Zap size={18} aria-hidden />} accent={status?.kill_switch_active ? '#ef4444' : '#22c55e'} />
+        <KpiTile label="Hedge" value={status?.hedge_active ? `${((status.hedge_ratio ?? 0) * 100).toFixed(0)}%` : 'OFF'} icon={<Shield size={18} aria-hidden />} accent={status?.hedge_active ? '#fbbf24' : '#475569'} />
+        <KpiTile label="Risk Override" value={status?.risk_override ? `${((status.max_risk_fraction ?? 1) * 100).toFixed(0)}%` : 'NORMAL'} icon={<AlertTriangle size={18} aria-hidden />} accent={status?.risk_override ? '#f97316' : '#475569'} />
       </div>
 
       {/* Emergency Halt */}
-      <SectionCard title="Emergency Halt" icon="🛑" accent="#ef4444"
+      <SectionCard title="Emergency Halt" icon={<OctagonAlert size={18} aria-hidden />} accent="#ef4444"
         subtitle={halted ? `Halted: ${status?.halt_reason ?? 'unknown reason'}` : 'Immediately stops all trading platform-wide'}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 240 }}>
@@ -172,14 +187,14 @@ const NuclearControlsSection: React.FC = () => {
           )}
         </div>
         {halted && status?.halted_at && (
-          <div style={{ marginTop: 12, fontSize: 12, color: '#f87171' }}>
+          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--loss)' }}>
             Halted at {fmtDate(status.halted_at)} — reason: {status.halt_reason ?? 'not specified'}
           </div>
         )}
       </SectionCard>
 
       {/* Hedge Activation */}
-      <SectionCard title="Emergency Hedge" icon="🛡️" accent="#fbbf24"
+      <SectionCard title="Emergency Hedge" icon={<Shield size={18} aria-hidden />} accent="#fbbf24"
         subtitle="Activate a counter-position hedge to neutralise open exposure">
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ width: 160 }}>
@@ -195,14 +210,25 @@ const NuclearControlsSection: React.FC = () => {
           {!status?.hedge_active ? (
             <ActionBtn
               label="Activate Hedge"
-              onClick={() => act('hedge_activate')}
+              onClick={() => setConfirm({
+                action: 'hedge_activate',
+                label: `Activate ${hedgeRatio}x hedge`,
+                message: `This opens counter-positions in XAUUSD across the platform at a ${hedgeRatio}x ratio.`,
+              })}
               loading={busy === 'hedge_activate'}
               accent="#fbbf24"
             />
           ) : (
             <ActionBtn
               label="Deactivate Hedge"
-              onClick={() => act('hedge_deactivate')}
+              onClick={() => setConfirm({
+                action: 'hedge_deactivate',
+                label: 'Deactivate hedge',
+                // Closing the hedge re-exposes every open position — arguably as
+                // consequential as the halt, and it was one unguarded click.
+                message: 'This closes the hedge. Every open position is immediately re-exposed to market risk.',
+                danger: true,
+              })}
               loading={busy === 'hedge_deactivate'}
               accent="#94a3b8"
             />
@@ -211,7 +237,7 @@ const NuclearControlsSection: React.FC = () => {
       </SectionCard>
 
       {/* Max Risk Override */}
-      <SectionCard title="Max Risk Override" icon="⚠️" accent="#f97316"
+      <SectionCard title="Max Risk Override" icon={<AlertTriangle size={18} aria-hidden />} accent="#f97316"
         subtitle="Override the platform-wide maximum risk fraction for all new positions">
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ width: 200 }}>
@@ -225,7 +251,12 @@ const NuclearControlsSection: React.FC = () => {
           </div>
           <ActionBtn
             label="Apply Override"
-            onClick={() => act('risk_override')}
+            onClick={() => setConfirm({
+              action: 'risk_override',
+              label: `Set max risk to ${(parseFloat(riskFraction) * 100 || 0).toFixed(0)}%`,
+              message: `This changes the maximum risk fraction for ALL new positions platform-wide.`,
+              danger: parseFloat(riskFraction) > 0.5,
+            })}
             loading={busy === 'risk_override'}
             accent="#f97316"
           />
@@ -238,31 +269,31 @@ const NuclearControlsSection: React.FC = () => {
       </SectionCard>
 
       {/* Nuclear Log */}
-      <SectionCard title="Nuclear Action Log" icon="📋" accent="#64748b"
+      <SectionCard title="Nuclear Action Log" icon={<ClipboardList size={18} aria-hidden />} accent="#64748b"
         subtitle="Immutable log of all emergency actions">
         {log.length === 0 ? (
-          <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No nuclear actions recorded</div>
+          <div style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-body)', textAlign: 'center', padding: 24 }}>No nuclear actions recorded</div>
         ) : (
           <div>
             {log.slice(0, 50).map((entry, i) => (
               <div key={i} style={{
                 display: 'flex', alignItems: 'flex-start', gap: 12,
-                padding: '10px 0', borderBottom: '1px solid #0f172a',
+                padding: '10px 0', borderBottom: '1px solid var(--hairline)',
               }}>
                 <div style={{
                   width: 8, height: 8, borderRadius: '50%', marginTop: 5, flexShrink: 0,
-                  background: ACTION_COLORS[entry.action] ?? '#64748b',
+                  background: ACTION_COLORS[entry.action] ?? 'var(--text-muted)',
                 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: ACTION_COLORS[entry.action] ?? '#94a3b8', textTransform: 'uppercase' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: ACTION_COLORS[entry.action] ?? 'var(--text-dim)', textTransform: 'uppercase' }}>
                       {entry.action.replace(/_/g, ' ')}
                     </span>
-                    <span style={{ fontSize: 11, color: '#475569' }}>{entry.actor}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{entry.actor}</span>
                   </div>
-                  {entry.reason && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{entry.reason}</div>}
+                  {entry.reason && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{entry.reason}</div>}
                 </div>
-                <div style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(entry.timestamp)}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fmtDate(entry.timestamp)}</div>
               </div>
             ))}
           </div>
@@ -281,6 +312,10 @@ const PropFirmBreachPanel: React.FC = () => {
   const [breaches, setBreaches] = useState<Array<Record<string, unknown>>>([]);
   const [drawdown, setDrawdown] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading]   = useState(false);
+  // "No breaches" and "we could not check" are different answers, and only one of
+  // them means it is safe to look away. This panel asserted the first when the
+  // fetch failed.
+  const [loadErr, setLoadErr]   = useState('');
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -293,9 +328,20 @@ const PropFirmBreachPanel: React.FC = () => {
         superadminApi.drawdownStats(),
       ]);
       if (!mountedRef.current) return;
-      if (b.status === 'fulfilled') setBreaches(b.value.data.breaches ?? b.value.data ?? []);
+      // Promise.allSettled never rejects, so the outer catch only fires on a real
+      // bug — the per-promise rejections were dropped silently, which is what made
+      // a failed breach fetch render as "no breaches".
+      if (b.status === 'fulfilled') {
+        setBreaches(b.value.data.breaches ?? b.value.data ?? []);
+        setLoadErr('');
+      } else {
+        setLoadErr('Breach data unavailable — this list may be incomplete.');
+      }
       if (d.status === 'fulfilled') setDrawdown(d.value.data);
-    } catch { /* non-fatal */ }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setLoadErr(extractApiError(err, 'Breach data unavailable — this list may be incomplete.'));
+    }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -305,10 +351,10 @@ const PropFirmBreachPanel: React.FC = () => {
     s === 'disqualified' ? '#dc2626' : s === 'breach' ? '#ef4444' : '#f59e0b';
 
   return (
-    <SectionCard title="Prop Firm Breach Tracker" icon="📊" accent="#f59e0b">
+    <SectionCard title="Prop Firm Breach Tracker" icon={<BarChart3 size={18} aria-hidden />} accent="#f59e0b">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 13, color: '#64748b' }}>Real-time prop firm rule violation monitoring</div>
-        <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: 12 }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Real-time prop firm rule violation monitoring</div>
+        <button onClick={load} disabled={loading} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
           {loading ? '…' : '↻'}
         </button>
       </div>
@@ -321,16 +367,25 @@ const PropFirmBreachPanel: React.FC = () => {
             { label: 'Accounts in DD', value: String(drawdown.accounts_in_drawdown ?? 0), color: '#94a3b8' },
             { label: 'Near Limit', value: String(drawdown.accounts_near_limit ?? 0), color: '#ef4444' },
           ].map(m => (
-            <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+            <div key={m.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: m.color }}>{m.value}</div>
-              <div style={{ fontSize: 10, color: '#475569', marginTop: 2, textTransform: 'uppercase' }}>{m.label}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2, textTransform: 'uppercase' }}>{m.label}</div>
             </div>
           ))}
         </div>
       )}
 
-      {breaches.length === 0 && !loading && (
-        <div style={{ textAlign: 'center', color: '#475569', fontSize: 13, padding: '16px 0' }}>
+      {loadErr && (
+        <div style={{
+          background: 'rgba(248,113,113,0.1)', border: '1px solid var(--loss)', borderRadius: 8,
+          padding: '10px 14px', marginBottom: 12, fontSize: 'var(--fs-body)', color: 'var(--loss)',
+        }} role="alert">
+          ⚠️ {loadErr}
+        </div>
+      )}
+
+      {breaches.length === 0 && !loading && !loadErr && (
+        <div style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: 'var(--fs-body)', padding: '16px 0' }}>
           ✅ No active prop firm breaches detected
         </div>
       )}
@@ -342,23 +397,23 @@ const PropFirmBreachPanel: React.FC = () => {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{String(b.username ?? b.user_id ?? '')}</span>
-              <span style={{ fontSize: 11, color: '#64748b', marginLeft: 8 }}>{String(b.breach_type ?? '').replace(/_/g, ' ')}</span>
+              <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)' }}>{String(b.username ?? b.user_id ?? '')}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{String(b.breach_type ?? '').replace(/_/g, ' ')}</span>
             </div>
             <span style={{ fontSize: 11, fontWeight: 700, color: severityColor(String(b.severity ?? '')), textTransform: 'uppercase' }}>
               {String(b.severity ?? '')}
             </span>
           </div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
             Threshold: {String(b.threshold ?? '')} | Actual: {String(b.actual_value ?? '')}
           </div>
-          <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{String(b.detected_at ?? '')}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{String(b.detected_at ?? '')}</div>
         </div>
       ))}
 
       {/* Prop firm modes info */}
-      <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8, background: '#0f172a', border: '1px solid #1e293b' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>Supported Prop Firm Modes</div>
+      <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>Supported Prop Firm Modes</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 6 }}>
           {[
             { name: 'FTMO Standard', dd: '10%', daily: '5%', target: '10%' },
@@ -366,9 +421,9 @@ const PropFirmBreachPanel: React.FC = () => {
             { name: 'Goat Funded Standard', dd: '10%', daily: '5%', target: '8%' },
             { name: 'Goat Funded Swing', dd: '15%', daily: '—', target: '8%' },
           ].map(f => (
-            <div key={f.name} style={{ padding: '8px 10px', borderRadius: 6, background: '#1e293b' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>{f.name}</div>
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>DD: {f.dd} | Daily: {f.daily} | Target: {f.target}</div>
+            <div key={f.name} style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--raised)' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)' }}>{f.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>DD: {f.dd} | Daily: {f.daily} | Target: {f.target}</div>
             </div>
           ))}
         </div>

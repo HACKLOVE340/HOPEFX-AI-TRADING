@@ -106,14 +106,14 @@ def verify_replica_lag(lag_seconds: float, max_lag_seconds: float) -> list[Viola
     return []
 
 
-def verify_rollup_matches_source(rollup_total: float, source_total: float, tol: float = 0.01,
-                                 name: str = "rollup") -> list[Violation]:
+def verify_rollup_matches_source(
+    rollup_total: float, source_total: float, tol: float = 0.01, name: str = "rollup"
+) -> list[Violation]:
     """A derived aggregate (billing/analytics rollup) must reconcile with its source."""
     if not (_is_finite_number(rollup_total) and _is_finite_number(source_total)):
         return [_v(_RULE, CRITICAL, f"{name} reconciliation values non-finite")]
     if abs(rollup_total - source_total) > tol:
-        return [_v(_RULE, CONSTITUTIONAL,
-                   f"{name} {rollup_total} disagrees with source {source_total}")]
+        return [_v(_RULE, CONSTITUTIONAL, f"{name} {rollup_total} disagrees with source {source_total}")]
     return []
 
 
@@ -140,8 +140,13 @@ def verify_money_precision(column: str, sql_type: str) -> list[Violation]:
     binary floats silently lose cents (master-registry #66)."""
     t = str(sql_type or "").upper()
     if any(bad in t for bad in ("FLOAT", "REAL", "DOUBLE")):
-        return [_v(_RULE, CONSTITUTIONAL,
-                   f"monetary column {column!r} is {sql_type!r} — use NUMERIC/DECIMAL, not binary float")]
+        return [
+            _v(
+                _RULE,
+                CONSTITUTIONAL,
+                f"monetary column {column!r} is {sql_type!r} — use NUMERIC/DECIMAL, not binary float",
+            )
+        ]
     return []
 
 

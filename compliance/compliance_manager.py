@@ -154,6 +154,26 @@ class ComplianceManager:
     def log_trade(self, user_id: str, trade_data: dict):
         self._log_audit("ORDER", user_id, "trade_executed", trade_data)
 
+    def log_ai_call(self, entry: dict):
+        """Record one AI gateway model call in the tamper-evident chain.
+
+        The gateway kept its own 500-entry in-memory list and nothing else, so
+        a restart erased the record of every model call, its cost, and who made
+        it -- while spec §6 promised exportable regulatory-grade logs.
+
+        It writes *here* rather than to a table of its own so there is one
+        sequence and one hash chain. Two independent writers on `audit_log`
+        would each maintain their own `sequence_number`, and `verify_integrity`
+        would then report a violation on a log nobody had tampered with -- the
+        precise failure the deepcopy in `compliance/auditor.py` was added to
+        stop, arriving by a different route.
+
+        `entry` holds a prompt SHA-256, never the prompt: the gateway fingerprints
+        before it hands the record over, and this must not become the layer that
+        starts retaining prompt text.
+        """
+        self._log_audit("AI_GATEWAY", str(entry.get("operator") or "unknown"), "model_call", entry)
+
     # ── Audit log ─────────────────────────────────────────────────────────────
 
     def _log_audit(self, category: str, actor: str, action: str, data: dict):

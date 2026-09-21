@@ -24,6 +24,7 @@ Persistence strategy (in priority order):
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 
@@ -52,8 +53,34 @@ DEFAULT_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD"]
 
 
 def _reset_watchlists() -> None:
-    """Clear in-memory state. Used by tests to prevent cross-test leakage."""
+    """Clear watchlist state — in-memory **and** the `watchlists` table.
+
+    Clearing only `_watchlists` left the DB rows behind, which is not "cross-test
+    leakage prevented" whenever a database is reachable: a test that adds a
+    symbol for a fixed user id and asserts 201 Created passed on a database that
+    had never seen it and returned 409 on every run after. Tests like that are
+    green in CI (fresh database each time) and fail for anyone running twice.
+
+    Only ever called from tests — hence the module-private name — but it has to
+    reset both backends or it does not do what its name says.
+    """
     _watchlists.clear()
+
+    session = _get_session()
+    if session is None:
+        return
+    try:
+        from database.models import WatchlistEntry
+
+        session.query(WatchlistEntry).delete()
+        session.commit()
+    except Exception as exc:
+        logger.debug("watchlist reset: could not clear DB rows (%s)", exc)
+        with contextlib.suppress(Exception):
+            session.rollback()
+    finally:
+        with contextlib.suppress(Exception):
+            session.close()
 
 
 # ── DB session helper ─────────────────────────────────────────────────────────

@@ -69,7 +69,57 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
   const [state, setState] = useState<DialogState>({ open: false, opts: DEFAULT_OPTS });
   const resolverRef = useRef<Resolver | null>(null);
 
+  // F8-01: the dialog declares aria-modal="true" and its backdrop blocks the
+  // mouse, but the keyboard walked straight out of it. `autoFocus` on the
+  // confirm button moved focus in; nothing kept it there, and nothing put it
+  // back afterwards.
+  //
+  // On a money path that is not merely an accessibility gap: with focus back on
+  // the submit button behind the dialog, Enter re-submits the form. That is the
+  // mechanism behind F2-02 — this fixes the cause, that fixed the consequence.
+  const dialogRef  = useRef<HTMLDivElement | null>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+
+  const focusables = () =>
+    Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    ).filter((el) => !el.hasAttribute('disabled'));
+
+  const onKeyDownTrap = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+    const items = focusables();
+    const first = items[0];
+    const last  = items[items.length - 1];
+    if (!first || !last) return;
+    const active = document.activeElement as HTMLElement | null;
+
+    if (e.shiftKey && (active === first || !dialogRef.current?.contains(active))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (active === last || !dialogRef.current?.contains(active))) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
+    // F2-02: `resolverRef` is one slot. A second confirm() used to overwrite the
+    // first resolver, leaving that promise never settled — and every caller
+    // does `const ok = await confirm(...)` before setting its busy flag, so the
+    // displaced caller hung forever and its `finally` never ran. A submit
+    // button disabled while a confirmation is pending stayed disabled for the
+    // life of the page.
+    //
+    // Settle it `false`: nobody is looking at a dialog that has been replaced,
+    // and the only safe answer to a confirmation nobody saw is no.
+    resolverRef.current?.(false);
+    // Remember where focus came from so it can go back (F8-01). Only on the
+    // first open — a displaced confirmation must not overwrite the original.
+    if (!restoreRef.current) {
+      restoreRef.current = document.activeElement as HTMLElement | null;
+    }
     setState({ open: true, opts });
     return new Promise<boolean>(resolve => { resolverRef.current = resolve; });
   }, []);
@@ -78,6 +128,11 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
     setState(s => ({ ...s, open: false }));
     resolverRef.current?.(value);
     resolverRef.current = null;
+    // Focus goes back where it came from. Without this it falls to <body>, and
+    // the next keystroke goes nowhere.
+    const restore = restoreRef.current;
+    restoreRef.current = null;
+    if (restore?.isConnected) restore.focus();
   }, []);
 
   const { opts } = state;
@@ -100,15 +155,19 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
             background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
             animation: 'fadeIn 0.15s ease',
           }}
+          ref={dialogRef}
           onClick={e => { if (e.target === e.currentTarget) resolve(false); }}
-          onKeyDown={e => { if (e.key === 'Escape') resolve(false); }}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { resolve(false); return; }
+            onKeyDownTrap(e);
+          }}
         >
           <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
             @keyframes slideUp { from { transform: translateY(12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }`}
           </style>
 
           <div style={{
-            background: '#0d1421', border: '1px solid #1e293b',
+            background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 14, padding: '28px 28px 24px',
             maxWidth: 420, width: '90%',
             boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
@@ -124,12 +183,12 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
               {variant === 'danger' ? '🗑' : variant === 'warning' ? '⚠️' : '❓'}
             </div>
 
-            <h2 id="confirm-title" style={{ fontSize: 17, fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>
+            <h2 id="confirm-title" style={{ fontSize: 'var(--fs-title)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' }}>
               {opts.title}
             </h2>
 
             {opts.description && (
-              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 24px', lineHeight: 1.6 }}>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 24px', lineHeight: 1.6 }}>
                 {opts.description}
               </p>
             )}
@@ -139,9 +198,9 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                 autoFocus
                 onClick={() => resolve(false)}
                 style={{
-                  background: 'transparent', border: '1px solid #334155',
-                  borderRadius: 8, color: '#94a3b8', cursor: 'pointer',
-                  fontSize: 13, fontWeight: 600, padding: '9px 18px',
+                  background: 'transparent', border: '1px solid var(--border-strong)',
+                  borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
+                  fontSize: 'var(--fs-body)', fontWeight: 600, padding: '9px 18px',
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#475569'; (e.currentTarget as HTMLButtonElement).style.color = '#f1f5f9'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#334155'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
@@ -154,7 +213,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                 style={{
                   ...btnStyle,
                   borderRadius: 8, cursor: 'pointer',
-                  fontSize: 13, fontWeight: 700, padding: '9px 18px',
+                  fontSize: 'var(--fs-body)', fontWeight: 700, padding: '9px 18px',
                 }}
               >
                 {opts.confirmLabel ?? 'Confirm'}

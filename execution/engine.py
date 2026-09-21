@@ -38,6 +38,8 @@ UTC = timezone.utc
 from enum import Enum
 from typing import Any
 
+from execution.broker_call import call_broker
+
 # ── Live-mode safety constants ─────────────────────────────────────────────────
 # Set LIVE_MODE_CONFIRMED=true in the environment to enable live order execution.
 # Without this flag, any broker that is NOT paper trading will refuse to execute.
@@ -67,6 +69,7 @@ except Exception:  # harness is optional
             if fatal:
                 raise
             logger.warning("silent failure in %s", _label, exc_info=True)
+
 
 # Optional Sentry
 try:
@@ -681,7 +684,34 @@ class ExecutionEngine:
         try:
             from data_layer.orchestrator import orchestrator
 
-            if orchestrator._started and not orchestrator.is_safe_to_trade():
+            # No `_started` conjunct. It used to read
+            #     if orchestrator._started and not orchestrator.is_safe_to_trade()
+            # which made the whole gate a no-op whenever the data layer was not
+            # running — and that is the *normal degraded state*, not a rare one.
+            # core/startup_helpers.py starts the orchestrator "(non-fatal)":
+            # it catches both TimeoutError and bare Exception, logs at warning,
+            # and returns, after which the app serves and executes orders.
+            # `_started = True` is the last line of start(), so a failure in any
+            # of the ten feed-startup steps leaves it False permanently with no
+            # retry. is_safe_to_trade() reported unsafe and the caller discarded
+            # the answer (F84), bypassing the blackout window, the no-tick check,
+            # the confidence floor and the dead-feed check.
+            #
+            # Every sibling call site fails closed, and one says so in a comment:
+            # ml/inference_engine.py logs "failing CLOSED (not safe)";
+            # execution/hopefx_engine.py:392 has no _started guard at all;
+            # data_layer/orchestrator.py: "a missing tick must NOT be treated as
+            # safe to trade."
+            try:
+                _safe = orchestrator.is_safe_to_trade()
+            except Exception as _dl_exc:
+                # An orchestrator that cannot answer has not said yes.
+                logger.error(
+                    "Data-layer safety check failed — BLOCKING order (fail closed): %s",
+                    _dl_exc,
+                )
+                _safe = False
+            if not _safe:
                 await self._inc_blocks()
                 return self._blocked_report(request, "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)", t0)
 
@@ -918,8 +948,7 @@ class ExecutionEngine:
         if self._broker is None:
             return None
         try:
-            loop = asyncio.get_running_loop()
-            account = await loop.run_in_executor(None, self._broker.get_account_info)
+            account = await call_broker(self._broker.get_account_info)
             if account is None:
                 # Broker returned no account data — cannot verify margin; block.
                 msg = "[MARGIN_CHECK_FAILED] Broker returned no account info — blocking order (fail-closed)"
@@ -988,8 +1017,7 @@ class ExecutionEngine:
             return None
         notional = price * float(request.quantity)
         try:
-            loop = asyncio.get_running_loop()
-            account = await loop.run_in_executor(None, self._broker.get_account_info)
+            account = await call_broker(self._broker.get_account_info)
             if account is None:
                 msg = "[LEVERAGE_CHECK_FAILED] Broker returned no account info — blocking order (fail-closed)"
                 logger.error(msg)
@@ -1320,7 +1348,6 @@ class ExecutionEngine:
         # Run synchronous broker call in thread pool, protected by the broker
         # circuit breaker. If the broker has been failing, the breaker opens
         # and rejects the call immediately rather than blocking for a timeout.
-        loop = asyncio.get_running_loop()
         try:
             from resilience.service_circuit_breakers import broker_breaker, CircuitBreakerOpenError as _CBOpen
         except ImportError:
@@ -1354,10 +1381,7 @@ class ExecutionEngine:
                 # Could not introspect place_order signature — fall back to
                 # calling it without client_order_id. Benign; log at debug.
                 logger.debug("place_order signature introspection failed: %s", _sig_err)
-            return await loop.run_in_executor(
-                None,
-                lambda: self._broker.place_order(**_po_kwargs),
-            )
+            return await call_broker(self._broker.place_order, **_po_kwargs)
 
         if broker_breaker is not None:
             try:

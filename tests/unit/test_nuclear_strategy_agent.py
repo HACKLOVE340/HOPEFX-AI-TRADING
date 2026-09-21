@@ -1387,17 +1387,37 @@ class TestGetNuclearAgent:
         assert agent._symbol == "EUR_USD"
         _mod._agent_instance = None  # cleanup
 
-    def test_second_call_ignores_symbol(self):
+    def test_second_call_with_a_different_symbol_is_refused(self):
+        """The running agent must not be swapped — and the caller must be told.
+
+        This asserted `agent2._symbol == "XAU_USD"`, pinning the defect as
+        intended behaviour: a caller asking for BTC_USD was handed the XAU_USD
+        agent and given no indication. `/agent/start` passes a request-supplied
+        symbol here and then reported `{"status": "started", "symbol": <the
+        requested one>}` — confirming an instrument it was not trading.
+
+        The invariant that matters is unchanged and still asserted below: the
+        running agent is not replaced. What changed is that the mismatch raises
+        instead of being answered wrongly.
+        """
         import nuclear.nuclear_agent as _mod
 
         _mod._agent_instance = None
         from nuclear.nuclear_agent import get_nuclear_agent
 
-        get_nuclear_agent(symbol="XAU_USD")
-        agent2 = get_nuclear_agent(symbol="BTC_USD")
-        # Singleton already created — symbol must not change
-        assert agent2._symbol == "XAU_USD"
-        _mod._agent_instance = None  # cleanup
+        try:
+            first = get_nuclear_agent(symbol="XAU_USD")
+
+            with pytest.raises(ValueError, match="BTC_USD"):
+                get_nuclear_agent(symbol="BTC_USD")
+
+            # The running agent is untouched.
+            assert _mod._agent_instance is first
+            assert first._symbol == "XAU_USD"
+            # And a bare call still returns whatever is running.
+            assert get_nuclear_agent() is first
+        finally:
+            _mod._agent_instance = None
 
 
 # ===========================================================================

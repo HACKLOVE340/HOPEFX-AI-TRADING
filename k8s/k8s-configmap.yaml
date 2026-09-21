@@ -34,6 +34,18 @@ data:
   BROKER_TYPE: "oanda"
   INITIAL_BALANCE: "100000"
 
+  # Safety gates — these MUST be explicit in production to prevent silent
+  # defaults from weakening invariant enforcement or trading on drifted models.
+  # CRITICAL: HOPEFX_INVARIANT_MODE must be "enforce" when BROKER_TYPE != "paper".
+  HOPEFX_INVARIANT_MODE: "enforce"
+  # CRITICAL: DRIFT_BLOCK=true halts ML inference when feature distribution drifts
+  # outside training bounds (Constitutional Rule 19 & 20).
+  DRIFT_BLOCK: "true"
+  DRIFT_Z_THRESHOLD: "3.0"
+  # Block inference when the saved model is older than MODEL_MAX_AGE_DAYS.
+  STALE_MODEL_BLOCK: "true"
+  MODEL_MAX_AGE_DAYS: "30"
+
   # ML thresholds
   ML_MIN_TRADE_PROB: "0.58"
 

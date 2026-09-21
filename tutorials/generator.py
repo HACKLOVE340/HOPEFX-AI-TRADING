@@ -168,7 +168,7 @@ def _chapter_narration(heading: str, title: str) -> str:
 
 @dataclass
 class RenderResult:
-    status: str           # rendered | manifest_ready | render_deps_missing | provider_key_missing | error
+    status: str  # rendered | manifest_ready | render_deps_missing | provider_key_missing | error
     video_url: str | None
     manifest_path: str | None
     detail: str = ""

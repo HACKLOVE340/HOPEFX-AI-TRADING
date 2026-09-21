@@ -52,8 +52,14 @@ class FakeSession:
 
 # ── ALPACA ────────────────────────────────────────────────────────────────────
 _ALPACA_FILL = {
-    "id": "a-1", "symbol": "AAPL", "side": "buy", "type": "market", "qty": "10",
-    "status": "filled", "filled_qty": "10", "filled_avg_price": "190.5",
+    "id": "a-1",
+    "symbol": "AAPL",
+    "side": "buy",
+    "type": "market",
+    "qty": "10",
+    "status": "filled",
+    "filled_qty": "10",
+    "filled_avg_price": "190.5",
     "created_at": "2026-01-01T00:00:00Z",
 }
 
@@ -103,9 +109,16 @@ def _install_fake_ccxt(monkeypatch):
 
         def create_order(self, symbol, type_, side, amount, price=None, params=None):
             return {
-                "id": "c-1", "symbol": symbol, "side": side, "type": type_,
-                "amount": amount, "price": price, "status": "closed",
-                "filled": amount, "average": 64000.0, "timestamp": 1700000000000,
+                "id": "c-1",
+                "symbol": symbol,
+                "side": side,
+                "type": type_,
+                "amount": amount,
+                "price": price,
+                "status": "closed",
+                "filled": amount,
+                "average": 64000.0,
+                "timestamp": 1700000000000,
             }
 
     fake = types.ModuleType("ccxt")

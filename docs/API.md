@@ -73,11 +73,29 @@ curl http://localhost:8000/api/status \
 | POST | `/api/auth/logout` | JWT | Invalidate token |
 | GET | `/api/auth/me` | JWT | Current user profile |
 | POST | `/api/auth/register` | None | Create account |
-| POST | `/api/auth/2fa/enable` | JWT | Enable TOTP 2FA (Professional+) |
-| POST | `/api/auth/2fa/verify` | JWT | Verify TOTP code |
+| POST | `/api/auth/2fa/setup` | JWT | Generate TOTP secret (returns `provisioning_uri`) |
+| POST | `/api/auth/2fa/confirm` | JWT | Activate 2FA with a valid code |
 | POST | `/api/auth/2fa/disable` | JWT | Disable 2FA |
-| POST | `/api/auth/password/change` | JWT | Change password |
-| POST | `/api/auth/password/reset` | None | Request password reset |
+| POST | `/api/auth/change-password` | JWT | Change password (`api/settings_extended.py`) |
+| POST | `/api/auth/forgot-password` | None | Request a password-reset link |
+| POST | `/api/auth/reset-password` | None | Set a new password with the emailed token |
+| POST | `/api/auth/logout-all` | JWT | Revoke every session |
+| GET | `/api/auth/sessions` | JWT | List active sessions |
+| DELETE | `/api/auth/sessions/{session_id}` | JWT | Revoke one session |
+| GET | `/api/auth/verify-email` | None | Verify an email address from its link |
+| POST | `/api/auth/resend-verification` | None | Re-send the verification email |
+| GET | `/api/auth/csrf-token` | None | Issue the CSRF token the SPA echoes as `X-CSRF-Token` |
+
+A second, separate TOTP implementation is mounted at `/api/2fa`
+(`api/two_factor.py`): `POST /setup`, `POST /verify`, `POST /disable`,
+`GET /backup-codes`, `POST /backup-codes/regenerate`, `GET /status`. Backup
+codes live only on that surface. The rows above were `/2fa/enable` and
+`/2fa/verify`, which exist under neither prefix — see docs/SECURITY.md.
+The password rows were `/api/auth/password/change` and
+`/api/auth/password/reset`, which also do not exist; the table above is now
+the full set of routes `auth/router.py` registers, plus the change-password
+endpoint that lives in `api/settings_extended.py`.
+
 
 ---
 
@@ -263,21 +281,34 @@ curl -X DELETE http://localhost:8000/api/risk/halt \
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/monetization/pricing` | None | All subscription tiers |
-| GET | `/api/monetization/pricing/{tier}` | None | Specific tier details |
-| POST | `/api/monetization/subscribe` | JWT | Create subscription |
-| GET | `/api/monetization/subscription/me` | JWT | Current subscription status |
-| GET | `/api/monetization/subscription/{user_id}` | JWT | User subscription |
-| POST | `/api/monetization/subscription/{id}/cancel` | JWT | Cancel subscription |
-| GET | `/api/monetization/subscription/{user_id}/limits` | JWT | Feature limits |
-| POST | `/api/monetization/activate-code` | JWT | Activate license key |
-| GET | `/api/monetization/validate-code/{code}` | JWT | Validate license key |
-| GET | `/api/monetization/invoices/{user_id}` | JWT | List invoices |
-| GET | `/api/monetization/invoices/{id}/pdf` | JWT | Download invoice PDF |
+| GET | `/api/monetization/pricing` | JWT | All subscription tiers |
+| GET | `/api/monetization/pricing/{tier}` | JWT | Specific tier details |
+| POST | `/api/monetization/subscribe` | JWT | Subscribe the caller to a plan |
+| GET | `/api/billing/subscription` | JWT | The caller's current subscription |
+| GET | `/api/monetization/subscription/{user_id}` | JWT | Subscription — self or staff |
+| GET | `/api/monetization/subscription/{user_id}/limits` | JWT | Feature limits — self or staff |
+| POST | `/api/monetization/subscription/{subscription_id}/cancel` | JWT | Cancel — subscriber or staff |
+| POST | `/api/monetization/license/validate` | JWT | Validate a subscription license key and report entitlements |
+| POST | `/api/monetization/activate-code` | JWT | Redeem an access code onto the caller |
+| GET | `/api/monetization/validate-code/{code}` | JWT | Check an access code without redeeming it |
+| GET | `/api/billing/invoices` | JWT | List the caller's invoices |
+| GET | `/api/billing/invoices/{invoice_id}` | JWT | Invoice detail |
 | POST | `/api/monetization/affiliate/signup` | JWT | Join affiliate program |
-| GET | `/api/monetization/affiliate/dashboard` | JWT | Affiliate earnings |
+| GET | `/api/monetization/affiliate/{user_id}` | JWT | Affiliate account — self or staff |
 | POST | `/api/billing/affiliate/generate-link` | JWT | Get referral link |
-| POST | `/api/monetization/stripe/webhook` | Stripe | Stripe event receiver |
+| POST | `/api/monetization/webhook/stripe` | Stripe signature | Stripe event receiver |
+
+Paths above were re-read from the routers rather than carried forward. Six rows
+in the previous version of this table named routes that do not exist:
+`/api/monetization/subscription/me`, `/api/monetization/invoices/{user_id}`,
+`/api/monetization/invoices/{id}/pdf`, `/api/monetization/affiliate/dashboard`,
+`/api/monetization/subscription/{id}/cancel` (the path parameter is
+`subscription_id`), and `/api/monetization/stripe/webhook` (the real path is
+`/webhook/stripe`). The pricing endpoints were also listed as `Auth: None`;
+both require a JWT — an unauthenticated `GET /api/monetization/pricing`
+answers 401. A doc that under-states an endpoint's auth is worse than a
+missing doc, since the obvious way to "make the code match" is to remove the
+dependency.
 
 ---
 

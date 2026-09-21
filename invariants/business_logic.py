@@ -29,8 +29,7 @@ from invariants.constitution import (
 _RULE = "No State Corruption"
 
 
-def verify_workflow_transition(from_state: str, to_state: str,
-                               allowed: Mapping[str, Iterable[str]]) -> list[Violation]:
+def verify_workflow_transition(from_state: str, to_state: str, allowed: Mapping[str, Iterable[str]]) -> list[Violation]:
     """A business workflow may only follow declared state transitions."""
     valid = set(allowed.get(from_state, ()))
     if from_state != to_state and to_state not in valid:
@@ -38,8 +37,7 @@ def verify_workflow_transition(from_state: str, to_state: str,
     return []
 
 
-def verify_quantity_conserved(before: float, after: float, expected_delta: float,
-                              tol: float = 0.0) -> list[Violation]:
+def verify_quantity_conserved(before: float, after: float, expected_delta: float, tol: float = 0.0) -> list[Violation]:
     """A conserved quantity must change by exactly the expected delta."""
     if not all(_is_finite_number(x) for x in (before, after, expected_delta)):
         return [_v("No Data Corruption", CRITICAL, "quantity components non-finite")]
@@ -97,8 +95,7 @@ def verify_cross_service_agreement(values: Mapping[str, Any], name: str = "value
     """A value reported by multiple services must agree across all of them."""
     distinct = {repr(v) for v in values.values()}
     if len(distinct) > 1:
-        return [_v(_RULE, CONSTITUTIONAL,
-                   f"cross-service disagreement on {name}: {dict(values)}")]
+        return [_v(_RULE, CONSTITUTIONAL, f"cross-service disagreement on {name}: {dict(values)}")]
     return []
 
 
@@ -107,7 +104,9 @@ def verify_no_partial_commit(steps_committed: Iterable[bool]) -> list[Violation]
     states = list(steps_committed)
     if states and any(states) and not all(states):
         committed = sum(states)
-        return [_v(_RULE, CONSTITUTIONAL, f"partial commit: {committed}/{len(states)} steps committed (atomicity broken)")]
+        return [
+            _v(_RULE, CONSTITUTIONAL, f"partial commit: {committed}/{len(states)} steps committed (atomicity broken)")
+        ]
     return []
 
 

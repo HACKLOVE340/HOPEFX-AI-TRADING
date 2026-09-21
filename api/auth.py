@@ -55,16 +55,36 @@ _ROLE_RANK: dict = {
     "admin": 3,
     "superadmin": 4,
 }
+# Derived rather than hardcoded so it cannot drift if the hierarchy changes.
+_LOWEST_ROLE: str = min(_ROLE_RANK, key=lambda r: _ROLE_RANK[r])
+
 # Stable per-role dependency callables — same object identity on every call,
 # required for FastAPI dependency_overrides to work correctly in tests.
 _ROLE_DEPS: dict = {}
 
-ALLOWED_SYMBOLS = frozenset(
-    os.getenv(
-        "ALLOWED_SYMBOLS",
-        "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,ETHUSD,AUDUSD,USDCHF",
-    ).split(","),
-)
+# The one default instrument allowlist. `api/server.py` imports this rather
+# than repeating the literal: it previously carried its own copy that omitted
+# ETHUSD, so with no env var set the order routes and validate_order_symbol()
+# disagreed about whether ETH/USD existed. `.env.example` must also list the
+# same set — a deployment copies that file, and its copy was the one the live
+# site was running, which is why the terminal offered ETH/USD in the symbol
+# dropdown and then answered "Symbol 'ETHUSD' is not in the permitted
+# instrument list." Kept in sync by tests/unit/test_instrument_allowlist_agrees.py.
+DEFAULT_ALLOWED_SYMBOLS = "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,ETHUSD,AUDUSD,USDCHF"
+
+
+def parse_allowed_symbols(raw: str | None) -> frozenset[str]:
+    """Parse an ALLOWED_SYMBOLS value into a canonical set.
+
+    Entries are stripped and upper-cased, and blanks dropped. Without the
+    strip, the natural way to write the variable — ``XAUUSD, ETHUSD`` with a
+    space after the comma — produced the member ``" ETHUSD"``, which no
+    canonicalised symbol can ever equal, silently disabling the instrument.
+    """
+    return frozenset(s.strip().upper() for s in (raw or "").split(",") if s.strip())
+
+
+ALLOWED_SYMBOLS = parse_allowed_symbols(os.getenv("ALLOWED_SYMBOLS", DEFAULT_ALLOWED_SYMBOLS))
 MAX_ORDER_QUANTITY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
 
@@ -78,13 +98,19 @@ class TokenPayload(BaseModel):
     """
 
     sub: str  # user_id (UUID string)
-    role: str = "user"
+    # Defaults to the LOWEST-ranked role, not "user". Every token this service
+    # issues carries an explicit role, so this default only applies to a token
+    # that omits the claim — and such a token should get least privilege. With
+    # "user" it outranked "starter", so a malformed or legacy token was granted
+    # more than a real starter-tier customer.
+    role: str = _LOWEST_ROLE
     exp: int | None = None
     iat: int | None = None
     jti: str | None = None  # JWT ID — used for blacklist revocation on logout
     type: str | None = None  # "access" discriminator checked by _decode_token
     email: str | None = None
     username: str | None = None
+    two_factor_verified: bool = False  # True only when TOTP 2FA was completed at login
 
 
 def _get_jwt_secret() -> str:
@@ -342,6 +368,21 @@ def require_kyc(
     Test / embedded apps wire no compliance_manager (it stays None), so they
     still pass through.
 
+    Fail-open vs fail-closed
+    ------------------------
+    Passing through on a missing manager is a development convenience that must
+    not survive into production: this dependency also guards fiat withdrawal, so
+    a compliance manager that failed to wire (bad config, import error, partial
+    startup) would silently disable identity checks on money leaving the
+    platform, with nothing in the response to indicate it.
+
+    In production the absence of a compliance manager is therefore a hard
+    failure. Same shape as ``_verify_webhook_hmac`` in api/payments.py: reject in
+    production, allow in dev only when nothing is wired at all. Set
+    ``HOPEFX_REQUIRE_KYC_STRICT=true`` to get production behaviour elsewhere, or
+    ``false`` to opt out in a non-production deployment that genuinely has no
+    compliance layer.
+
     Usage:
         @router.post("/order")
         async def place_order(user: TokenPayload = Depends(require_kyc)):
@@ -351,20 +392,44 @@ def require_kyc(
     if user.role in ("admin", "superadmin"):
         return user
 
+    _strict_default = "true" if os.getenv("APP_ENV", "development").lower() == "production" else "false"
+    _strict = os.getenv("HOPEFX_REQUIRE_KYC_STRICT", _strict_default).lower() in ("true", "1", "yes")
+
+    def _unavailable(reason: str) -> None:
+        """Handle 'we cannot tell whether this user passed KYC'."""
+        if _strict:
+            logger.critical(
+                "KYC enforcement unavailable (%s) — REJECTING request for user=%s. "
+                "A compliance manager must be wired in production.",
+                reason,
+                user.sub,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Identity verification is temporarily unavailable. Please try again shortly.",
+            )
+        logger.warning("KYC enforcement skipped (%s) — permitted outside production only.", reason)
+
     try:
         from core.app_state import app_state as _global_app_state
+    except ImportError as exc:
+        _unavailable(f"app_state import failed: {exc}")
+        return user
 
-        # Prefer the compliance_manager wired onto THIS request's app state
-        # (app.py exposes app_state at app.state.app_state); fall back to the
-        # process-wide singleton. Enforce only when a manager is present.
-        _state = getattr(getattr(request, "app", None), "state", None)
-        _app_state = getattr(_state, "app_state", None) or _global_app_state
-        cm = getattr(_app_state, "compliance_manager", None)
-        if cm is not None and not cm.is_kyc_approved(user.sub):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="KYC verification required before trading. Please complete identity verification.",
-            )
-    except ImportError:
-        ...  # nosec B110
+    # Prefer the compliance_manager wired onto THIS request's app state
+    # (app.py exposes app_state at app.state.app_state); fall back to the
+    # process-wide singleton.
+    _state = getattr(getattr(request, "app", None), "state", None)
+    _app_state = getattr(_state, "app_state", None) or _global_app_state
+    cm = getattr(_app_state, "compliance_manager", None)
+
+    if cm is None:
+        _unavailable("no compliance_manager wired")
+        return user
+
+    if not cm.is_kyc_approved(user.sub):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="KYC verification required before trading. Please complete identity verification.",
+        )
     return user

@@ -37,6 +37,7 @@ from pydantic import BaseModel
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -81,7 +82,7 @@ async def _probe_database() -> dict[str, Any]:
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         return {"status": "ok", "latency_ms": latency_ms, "detail": "SELECT 1 succeeded"}
     except Exception as exc:
-        return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": safe_error(exc)}
 
 
 async def _probe_redis() -> dict[str, Any]:
@@ -91,7 +92,19 @@ async def _probe_redis() -> dict[str, Any]:
 
         rc = get_sync_redis_client()
         if rc is None:
-            return {"status": "error", "latency_ms": 0, "detail": "Redis client not initialised"}
+            # Naming the client matters: this probe tests the SYNC client, which
+            # has no circuit breaker, while infrastructure/health_engine.py
+            # probes the ASYNC one, which does. The two can legitimately
+            # disagree — an open breaker makes the async client unavailable
+            # while the sync client still connects — and neither page used to
+            # say which it had tested, so the contradiction looked like a bug in
+            # whichever page the operator happened to trust less.
+            return {
+                "status": "error",
+                "latency_ms": 0,
+                "client": "sync",
+                "detail": "sync Redis client unavailable — the redis package is missing or the URL is unset",
+            }
         pong = rc.ping()
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         mode = get_connection_mode()
@@ -114,7 +127,7 @@ async def _probe_redis() -> dict[str, Any]:
             "mode": mode,
         }
     except Exception as exc:
-        return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": safe_error(exc)}
 
 
 async def _probe_broker() -> dict[str, Any]:
@@ -196,7 +209,11 @@ async def _probe_ml_engine() -> dict[str, Any]:
             "detail": f"predictor ready={ready}",
         }
     except Exception as exc:
-        return {"status": "warning", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": safe_error(exc),
+        }
 
 
 async def _probe_trading_engine() -> dict[str, Any]:
@@ -252,7 +269,11 @@ async def _probe_self_healer() -> dict[str, Any]:
             "baseline_files": baseline,
         }
     except Exception as exc:
-        return {"status": "warning", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": safe_error(exc),
+        }
 
 
 async def _probe_websocket_server() -> dict[str, Any]:
@@ -297,7 +318,11 @@ async def _probe_otel_tracing() -> dict[str, Any]:
             "sampling_rate": _SAMPLING_RATE,
         }
     except Exception as exc:
-        return {"status": "warning", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": safe_error(exc),
+        }
 
 
 async def _probe_data_feed() -> dict[str, Any]:
@@ -311,8 +336,19 @@ async def _probe_data_feed() -> dict[str, Any]:
             if tick:
                 import json
 
+                from core.account_metrics import tick_age_seconds
+
                 data = json.loads(tick) if isinstance(tick, str | bytes) else {}
-                age_s = time.time() - float(data.get("ts", data.get("timestamp", time.time())))
+                # Was: float(data.get("ts", data.get("timestamp", time.time())))
+                # — a missing timestamp defaulted to *now*, giving age 0.0 and a
+                # green light for a tick that carried no time at all.
+                age_s = tick_age_seconds(data.get("ts", data.get("timestamp")))
+                if age_s is None:
+                    return {
+                        "status": "warning",
+                        "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                        "detail": "Tick found but it carries no usable timestamp",
+                    }
                 status = "ok" if age_s < 60 else "warning"
                 return {
                     "status": status,
@@ -361,7 +397,11 @@ async def _probe_risk_manager() -> dict[str, Any]:
             "detail": f"risk_manager active={active}",
         }
     except Exception as exc:
-        return {"status": "warning", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {
+            "status": "warning",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+            "detail": safe_error(exc),
+        }
 
 
 async def _probe_kill_switch() -> dict[str, Any]:
@@ -378,7 +418,7 @@ async def _probe_kill_switch() -> dict[str, Any]:
             "kill_switch_active": active,
         }
     except Exception as exc:
-        return {"status": "ok", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
+        return {"status": "ok", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": safe_error(exc)}
 
 
 async def _probe_env_vars() -> dict[str, Any]:
@@ -416,34 +456,17 @@ async def _probe_env_vars() -> dict[str, Any]:
 
 
 async def _probe_celery() -> dict[str, Any]:
-    """Check Celery worker availability via Redis broker ping."""
-    t0 = time.perf_counter()
-    try:
-        from celery_app import celery_app
+    """Delegates to the shared probe in infrastructure/service_probes.py.
 
-        inspect = celery_app.control.inspect(timeout=3.0)
-        stats = inspect.stats()
-        if stats:
-            worker_count = len(stats)
-            return {
-                "status": "ok",
-                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-                "detail": f"workers={worker_count} active",
-                "worker_count": worker_count,
-                "workers": list(stats.keys()),
-            }
-        return {
-            "status": "warning",
-            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": "No Celery workers responded",
-            "worker_count": 0,
-        }
-    except Exception as exc:
-        return {
-            "status": "warning",
-            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": f"Celery inspect failed: {exc}",
-        }
+    Three pages each carried their own version of this check with different
+    timeouts and execution models, and reported DOWN / WARNING / OK for the same
+    broker within twelve minutes. The failing ones were right: the Redis broker
+    closes connections idle for 300s, so the first write to a reaped socket
+    fails instantly. The shared probe retries once on exactly that.
+    """
+    from infrastructure.service_probes import probe_celery
+
+    return await probe_celery()
 
 
 async def _probe_event_bus() -> dict[str, Any]:
@@ -463,7 +486,7 @@ async def _probe_event_bus() -> dict[str, Any]:
         return {
             "status": "warning",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
+            "detail": safe_error(exc),
         }
 
 
@@ -487,7 +510,7 @@ async def _probe_config_store() -> dict[str, Any]:
         return {
             "status": "error",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
+            "detail": safe_error(exc),
         }
 
 
@@ -547,7 +570,7 @@ async def _probe_signal_engine() -> dict[str, Any]:
         return {
             "status": "warning",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
+            "detail": safe_error(exc),
         }
 
 
@@ -568,7 +591,7 @@ async def _probe_api_server() -> dict[str, Any]:
         return {
             "status": "error",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
+            "detail": safe_error(exc),
         }
 
 
@@ -687,7 +710,7 @@ async def get_reliability_status(
         except TimeoutError:
             results_raw[name] = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
         except Exception as exc:
-            results_raw[name] = {"status": "error", "latency_ms": 0, "detail": str(exc)}
+            results_raw[name] = {"status": "error", "latency_ms": 0, "detail": safe_error(exc)}
 
     now = _utcnow().isoformat()
     components = []
@@ -739,8 +762,23 @@ async def get_reliability_status(
 async def get_component_health(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
-    """Per-component health with labels and descriptions."""
-    return {"components": [{"name": name, "label": label} for name, label in _COMPONENT_LABELS.items()]}
+    """Per-component health with labels and descriptions.
+
+    It used to return ``{"name", "label"}`` and nothing else — a catalogue of
+    names, despite the route being called *components*, the handler
+    ``get_component_health`` and the docstring promising health. The Components
+    tab of the Reliability page prefers this endpoint over the status snapshot,
+    so every card read ``comp.status`` (undefined → the error icon and red
+    background), ``comp.latency_ms`` (undefined → a bare "ms") and
+    ``comp.detail`` (undefined → blank).
+
+    The result: all eighteen components displayed as hard failures with no
+    detail, on the same page whose Health Engine tab — reading a different
+    endpoint over the same probes — correctly showed 13 OK, 4 warning, 1 error.
+    Two views of one system contradicting each other, with the alarming one
+    being the view that had no data.
+    """
+    return await get_reliability_status(user)
 
 
 @router.post("/reliability/probe")
@@ -760,7 +798,7 @@ async def run_probe(
     except TimeoutError:
         result = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
     except Exception as exc:
-        result = {"status": "error", "latency_ms": 0, "detail": str(exc)}
+        result = {"status": "error", "latency_ms": 0, "detail": safe_error(exc)}
 
     return {
         "component": body.component,
@@ -782,7 +820,7 @@ async def get_recent_traces(
         spans = list(_SPAN_BUFFER)[-limit:]
         return {"count": len(spans), "spans": list(reversed(spans))}
     except Exception as exc:
-        return {"count": 0, "spans": [], "error": str(exc)}
+        return {"count": 0, "spans": [], "error": safe_error(exc)}
 
 
 @router.post("/reliability/trace/test")
@@ -834,7 +872,7 @@ async def emit_test_trace(
             "message": "End-to-end test trace emitted",
         }
     except Exception as exc:
-        return {"error": str(exc), "timestamp": _utcnow().isoformat()}
+        return {"error": safe_error(exc), "timestamp": _utcnow().isoformat()}
 
 
 @router.get("/reliability/validate/{setting_key}")
@@ -864,7 +902,7 @@ async def validate_setting_persisted(
         else:
             results["redis"] = {"found": False, "error": "Redis unavailable"}
     except Exception as exc:
-        results["redis"] = {"found": False, "error": str(exc)}
+        results["redis"] = {"found": False, "error": safe_error(exc)}
 
     # Check config store
     try:
@@ -873,7 +911,7 @@ async def validate_setting_persisted(
         val = config_store.get(setting_key)
         results["config_store"] = {"found": val is not None, "value": val}
     except Exception as exc:
-        results["config_store"] = {"found": False, "error": str(exc)}
+        results["config_store"] = {"found": False, "error": safe_error(exc)}
 
     results["consistent"] = results.get("redis", {}).get("found", False) or results.get("config_store", {}).get(
         "found", False
@@ -898,11 +936,58 @@ async def get_env_audit(
         "trading": ["TRADING_MODE", "BROKER_DEFAULT", "INITIAL_BALANCE"],
         "security": ["ALLOWED_ORIGINS", "CSRF_SECRET"],
     }
+    # An unset variable that has a working default is not a fault, and the page
+    # rendered every one of them as a red "MISSING". SECRET_KEY and
+    # DB_MAX_OVERFLOW showed that way on a healthy deployment:
+    # DB_MAX_OVERFLOW defaults to 20 in database/async_connection.py, and
+    # SECRET_KEY is read only by security_service.py, which nothing in the
+    # codebase imports. Neither absence affects anything.
+    #
+    # `effect` says what actually happens when the variable is unset, so an
+    # operator can tell "you must set this" from "this has a default" without
+    # reading the source.
+    _REQUIRED = {"SECURITY_JWT_SECRET", "DATABASE_URL"}
+    _DEFAULTS = {
+        "DB_POOL_SIZE": "10",
+        "DB_MAX_OVERFLOW": "20",
+        "OTEL_SERVICE_NAME": "hopefx-trading",
+        "OTEL_SAMPLING_RATE": "1.0",
+        "PROMETHEUS_PORT": "9090",
+        "TRADING_MODE": "paper",
+        "BROKER_DEFAULT": "paper",
+        "ML_MODEL_DIR": "ml/saved_models",
+    }
+    _UNUSED = {
+        # Read only by security_service.py, which nothing imports.
+        # detect-secrets' keyword detector sees `"SECRET_KEY": "<string>"` and
+        # assumes the string is the key. It is the explanation of why the
+        # variable is inert — no value is read or stored here.
+        "SECRET_KEY": "read only by security_service.py, which is not imported anywhere",  # pragma: allowlist secret
+    }
+
     result: dict[str, Any] = {}
     for group, keys in env_groups.items():
-        result[group] = {
-            k: {"set": bool(os.getenv(k)), "required": k in ["SECURITY_JWT_SECRET", "DATABASE_URL"]} for k in keys
-        }
+        entries: dict[str, Any] = {}
+        for k in keys:
+            is_set = bool(os.getenv(k))
+            required = k in _REQUIRED
+            if is_set:
+                effect = "set"
+            elif required:
+                effect = "REQUIRED — the application cannot run without it"
+            elif k in _UNUSED:
+                effect = f"no effect — {_UNUSED[k]}"
+            elif k in _DEFAULTS:
+                effect = f"optional — defaults to {_DEFAULTS[k]}"
+            else:
+                effect = "optional — the feature it configures is disabled"
+            entries[k] = {
+                "set": is_set,
+                "required": required,
+                "severity": "error" if (required and not is_set) else ("ok" if is_set else "info"),
+                "effect": effect,
+            }
+        result[group] = entries
     return {"groups": result, "checked_at": _utcnow().isoformat()}
 
 
@@ -927,7 +1012,7 @@ async def get_route_inventory(
                 )
         return {"total": len(routes), "routes": sorted(routes, key=lambda r: r["path"])}
     except Exception as exc:
-        return {"total": 0, "routes": [], "error": str(exc)}
+        return {"total": 0, "routes": [], "error": safe_error(exc)}
 
 
 @router.post("/reliability/self-test")
@@ -958,7 +1043,7 @@ async def run_self_test(
                 "test": name,
                 "passed": False,
                 "status": "error",
-                "detail": str(exc),
+                "detail": safe_error(exc),
                 "duration_ms": round((time.perf_counter() - t) * 1000, 2),
             }
 
@@ -1029,7 +1114,7 @@ async def validate_toggle_persisted(
         else:
             results["layers"]["redis"] = {"found": False, "error": "Redis unavailable"}
     except Exception as exc:
-        results["layers"]["redis"] = {"found": False, "error": str(exc)}
+        results["layers"]["redis"] = {"found": False, "error": safe_error(exc)}
 
     # Layer 2: Core config store
     try:
@@ -1042,7 +1127,7 @@ async def validate_toggle_persisted(
             "match": val == expected or (val is not None and str(val) == str(expected)),
         }
     except Exception as exc:
-        results["layers"]["config_store"] = {"found": False, "error": str(exc)}
+        results["layers"]["config_store"] = {"found": False, "error": safe_error(exc)}
 
     # Layer 3: Live app_state (for engine-level settings)
     try:

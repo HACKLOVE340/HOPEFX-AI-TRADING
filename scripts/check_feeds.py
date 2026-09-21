@@ -58,11 +58,11 @@ def _reachable(url: str, timeout: float = 6.0) -> tuple[bool, str]:
 
 # feed: (label, host_to_probe, env_keys, required)
 FEEDS = [
-    ("Macro / FRED",      "https://api.stlouisfed.org",      ("FRED_API_KEY",),                                  False),
-    ("Gold spot",         "https://www.gold-api.com",        ("GOLDAPI_IO_KEY", "METALS_API_KEY"),               True),
-    ("OHLCV / MTF",       "https://api.twelvedata.com",      ("TWELVE_DATA_API_KEY", "ALPHA_VANTAGE_KEY"),       True),
-    ("News / sentiment",  "https://finnhub.io",              ("FINNHUB_API_KEY",),                               False),
-    ("Broker (OANDA)",    "https://api-fxpractice.oanda.com", ("OANDA_API_TOKEN",),                              False),
+    ("Macro / FRED", "https://api.stlouisfed.org", ("FRED_API_KEY",), False),
+    ("Gold spot", "https://www.gold-api.com", ("GOLDAPI_IO_KEY", "METALS_API_KEY"), True),
+    ("OHLCV / MTF", "https://api.twelvedata.com", ("TWELVE_DATA_API_KEY", "ALPHA_VANTAGE_KEY"), True),
+    ("News / sentiment", "https://finnhub.io", ("FINNHUB_API_KEY",), False),
+    ("Broker (OANDA)", "https://api-fxpractice.oanda.com", ("OANDA_API_TOKEN",), False),
 ]
 
 
@@ -74,7 +74,11 @@ def _check_macro_offline() -> str:
         if len(macro_store) == 0:
             macro_store.load_defaults()
         n = len(macro_store)
-        return f"offline CSV fallback OK ({n} series: {', '.join(list(macro_store._series)[:6])})" if n else "no offline data"
+        return (
+            f"offline CSV fallback OK ({n} series: {', '.join(list(macro_store._series)[:6])})"
+            if n
+            else "no offline data"
+        )
     except Exception as e:
         return f"offline check failed: {type(e).__name__}"
 
@@ -93,9 +97,7 @@ def main() -> int:
         green = key_ok and reach_ok
         if required and not green:
             all_required_ok = False
-        status = "✅ live" if green else ("⚠️ " + (
-            "no key" if not key_ok else f"blocked ({reach_msg})"
-        ))
+        status = "✅ live" if green else ("⚠️ " + ("no key" if not key_ok else f"blocked ({reach_msg})"))
         tag = "" if required else " (optional)"
         print(f"  {label:<20}{'set' if key_ok else '—':<8}{reach_msg:<14}{status}{tag}")
 

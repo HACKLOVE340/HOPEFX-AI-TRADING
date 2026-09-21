@@ -74,6 +74,7 @@ def test_full_signal_paper_fill_position_tracked(tmp_path):
         account_equity=100_000.0,
         volatility=signal["volatility"],
         existing_positions=[],
+        data_quality=1.0,
     )
 
     assert result.approved is True
@@ -118,6 +119,7 @@ def test_risk_rejection_blocks_trade(tmp_path):
         account_equity=100_000.0,
         volatility=0.10,
         existing_positions=[],
+        data_quality=1.0,
     )
 
     assert result.approved is False
@@ -197,6 +199,7 @@ def test_kill_switch_blocks_trade(tmp_path):
         account_equity=100_000.0,
         volatility=0.10,
         existing_positions=[],
+        data_quality=1.0,
     )
 
     assert result.approved is False
@@ -222,6 +225,7 @@ def test_ml_probability_used_in_kelly(tmp_path):
         account_equity=100_000.0,
         volatility=0.05,
         existing_positions=[],
+        data_quality=1.0,
     )
 
     rm._last_signal_probability = 0.35
@@ -234,6 +238,7 @@ def test_ml_probability_used_in_kelly(tmp_path):
         account_equity=100_000.0,
         volatility=0.05,
         existing_positions=[],
+        data_quality=1.0,
     )
 
     # Both should be approved; high-probability signal should produce >= size

@@ -55,6 +55,17 @@ function aliasRank(alias: PlanAlias): number {
   return PLAN_RANK[normalisePlan(alias)];
 }
 
+/**
+ * Rank of any plan string, normalising aliases and unknown values first.
+ *
+ * Use this rather than indexing PLAN_RANK directly with a `string` — Settings
+ * kept its own untyped copy of the table specifically to avoid that friction,
+ * which is how a second source of truth got created.
+ */
+export function planRank(plan: string | null | undefined): number {
+  return PLAN_RANK[normalisePlan(plan ?? 'free')];
+}
+
 export const ROLE_RANK: Record<UserRole, number> = {
   user:       0,
   trader:     1,
@@ -101,6 +112,7 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   geopolitical:   'professional',   // geopolitical risk intelligence
   'ai-strategy':  'professional',
   'copy-trading': 'professional',
+  'strategy-builder': 'professional',   // no-code builder; api/nocode.py enforces the same gate
   'prop-firm':    'professional',
   correlation:    'professional',
   indicators:          'professional',
@@ -122,20 +134,14 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   'elite':        'elite',   // Elite Hub: dedicated support, custom dev, account manager
 };
 
-/** Routes that require admin or above */
-export const ADMIN_ONLY_ROUTES = new Set([
-  '/admin',
-  '/audit',
-  '/security',
-  '/auto-heal',
-  '/whitelabel',
-]);
-
-/** Routes that require superadmin only */
-export const SUPERADMIN_ONLY_ROUTES = new Set([
-  '/superadmin',
-  '/master-control',
-]);
+// ADMIN_ONLY_ROUTES / SUPERADMIN_ONLY_ROUTES were removed (audit #71).
+//
+// They were exported and never imported anywhere, and they had already drifted:
+// App.tsx gates seven routes with adminOnly() — including /observability and
+// /ml-ops, which these sets never listed. A second, stale copy of the routing
+// rules is worse than none, because the next reader cannot tell which one is
+// authoritative. App.tsx's adminOnly()/superAdminOnly() wrappers are the single
+// source of truth; nav visibility comes from navConfig.
 
 // ── Role predicates ───────────────────────────────────────────────────────────
 
@@ -205,14 +211,10 @@ export const PLAN_COLORS: Record<Plan, string> = {
   elite:        '#f59e0b',
 };
 
-/** Monthly prices in USD — matches backend monetization/pricing.py */
-export const PLAN_PRICES: Record<Plan, number> = {
-  free:         0,
-  starter:      1800,
-  professional: 4500,
-  enterprise:   7500,
-  elite:        10000,
-};
+// PLAN_PRICES was removed (audit #59). It was exported and never read — a
+// fourth copy of the price table with nothing keeping it in step with
+// api/billing.py::_PLANS, which is canonical. Prices reach the UI from
+// GET /billing/plans; the amount charged is resolved server-side.
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   user:       'User',

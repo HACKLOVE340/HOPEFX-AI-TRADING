@@ -12,7 +12,37 @@ on:
 permissions:
   contents: read
 
+# Superseded runs are cancelled on feature branches and PRs; main is left alone
+# because its runs are the release record. This block previously keyed the group
+# on github.sha, giving every commit its own group — so it collided with nothing
+# and superseded nothing, and every push queued another complete pipeline.
+concurrency:
+  group: codacy-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
+  # Exists only so the scan job can gate on a secret. `secrets` is unavailable
+  # in a job-level `if`, but `needs` is, and a step *can* read a secret into an
+  # output.
+  token-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      has_token: ${{ steps.probe.outputs.has_token }}
+    steps:
+      - id: probe
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+        run: |
+          if [ -n "$CODACY_PROJECT_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "CODACY_PROJECT_TOKEN is not set — skipping the Codacy scan."
+          fi
+
   codacy-security-scan:
     permissions:
       contents: read
@@ -21,14 +51,22 @@ jobs:
     name: Codacy Security Scan
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # continue-on-error: the Codacy action requires CODACY_PROJECT_TOKEN to be
-    # set in repo secrets (Settings → Secrets → Actions).  Until the token is
-    # configured the action fails immediately; this prevents that from blocking
-    # other CI checks.
+    # The action requires CODACY_PROJECT_TOKEN (Settings → Secrets → Actions) and
+    # fails immediately without it. The job used to run anyway and swallow that
+    # failure via continue-on-error, so every push checked out the repository and
+    # started the action to reach a foregone conclusion.
+    #
+    # The guard must come through `needs`, not `secrets` directly: the secrets
+    # context is not available in a job-level `if`, so `secrets.X != ''` there
+    # evaluates as '' != '' and skips the job unconditionally — token or not.
+    needs: token-check
+    if: needs.token-check.outputs.has_token == 'true'
+    # Still non-blocking when it does run: the scan reports findings, it does not
+    # gate. pr-quality-gate below is the job in this file with teeth.
     continue-on-error: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
@@ -46,8 +84,8 @@ jobs:
           max-allowed-issues: 2147483647
 
       - name: Upload SARIF results file
-        # Pinned to SHA for supply-chain safety (tag: v3)
-        uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699  # v3.35.1
+        # Pinned to SHA for supply-chain safety (tag: v4.37.3)
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
         if: always() && hashFiles('results.sarif') != ''
         with:
           sarif_file: results.sarif
@@ -66,18 +104,18 @@ jobs:
     name: PR Quality Gate (ruff + bandit on changed files)
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
 
       - name: Install lint tools
-        run: pip install "ruff>=0.9.0,<0.10.0" bandit[toml]
+        run: pip install "ruff>=0.9.0" bandit[toml]
 
       - name: Get changed Python files
         id: changed
@@ -93,7 +131,12 @@ jobs:
               BASE="HEAD~1"
             fi
           fi
-          FILES=$(git diff --name-only "$BASE" "$HEAD" -- '*.py' | \
+          # --diff-filter=d drops DELETED paths. Without it this list contains
+          # files the PR removed, and both ruff and bandit exit 1 with
+          # "E902 No such file or directory" on a path that is gone — so any PR
+          # that deletes a Python file fails the gate for having deleted it.
+          # (Hit by this PR removing the shadowing `websocket/` package, S13-02a.)
+          FILES=$(git diff --name-only --diff-filter=d "$BASE" "$HEAD" -- '*.py' | \
             grep -v '^tests/' | \
             grep -v '^alembic/' | \
             grep -v '^examples/' | \

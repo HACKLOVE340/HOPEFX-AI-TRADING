@@ -51,8 +51,14 @@ def test_connector_imports_and_conforms(mod, cls):
 def test_market_order_result_normalises_any_order_shape():
     """from_order maps both id/average_price and order_id/average_fill_price shapes."""
     o = Order(
-        id="X1", symbol="BTCUSD", side=OrderSide.BUY, type=OrderType.MARKET,
-        quantity=0.5, status=OrderStatus.FILLED, filled_quantity=0.5, average_price=64000.0,
+        id="X1",
+        symbol="BTCUSD",
+        side=OrderSide.BUY,
+        type=OrderType.MARKET,
+        quantity=0.5,
+        status=OrderStatus.FILLED,
+        filled_quantity=0.5,
+        average_price=64000.0,
     )
     r = MarketOrderResult.from_order(o)
     assert r.order_id == "X1"
@@ -76,8 +82,14 @@ def test_place_market_order_adapter_normalises_and_accepts_str_side():
         def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **k):
             assert side is OrderSide.BUY and order_type is OrderType.MARKET
             return Order(
-                id="D1", symbol=symbol, side=side, type=order_type, quantity=quantity,
-                status=OrderStatus.FILLED, filled_quantity=quantity, average_price=100.0,
+                id="D1",
+                symbol=symbol,
+                side=side,
+                type=order_type,
+                quantity=quantity,
+                status=OrderStatus.FILLED,
+                filled_quantity=quantity,
+                average_price=100.0,
             )
 
         async def cancel_order(self, oid):

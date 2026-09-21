@@ -7,16 +7,23 @@
  *   POST /api/kyc/upload          — upload document file (multipart)
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { kycApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
+import { CreditCard, Globe2, Hourglass, IdCard, Lock, Search, Settings, ShieldCheck, Timer, Trash2, User } from 'lucide-react';
 
-type KYCStatus = 'not_started' | 'pending' | 'under_review' | 'approved' | 'rejected';
+/**
+ * `unknown` is not a server status — it is the client's answer when it could not
+ * ask (F6-01). The catch below used to construct `{ status: 'not_started' }`,
+ * so a failed load rendered a specific compliance claim: a user under review was
+ * told they had not begun, and the obvious response to that is to upload
+ * everything again.
+ */
+type KYCStatus = 'not_started' | 'pending' | 'under_review' | 'approved' | 'rejected' | 'unknown';
 
 interface KYCState {
   status: KYCStatus;
@@ -27,12 +34,13 @@ interface KYCState {
 }
 
 const STATUS_CONFIG: Record<KYCStatus, {
-  label: string; color: string; bg: string; border: string; icon: string;
+  label: string; color: string; bg: string; border: string; icon: React.ReactNode;
   badgeVariant: 'success' | 'warning' | 'info' | 'danger' | 'neutral';
 }> = {
+  unknown:      { label: 'Status unavailable', color: '#ffb800', bg: '#78350f22', border: '#92400e', icon: '?', badgeVariant: 'warning' },
   not_started:  { label: 'Not Started',  color: '#94a3b8', bg: '#1e293b22', border: '#334155', icon: '○', badgeVariant: 'neutral' },
-  pending:      { label: 'Pending',       color: '#f59e0b', bg: '#78350f22', border: '#92400e', icon: '⏳', badgeVariant: 'warning' },
-  under_review: { label: 'Under Review',  color: '#60a5fa', bg: '#1e3a5f22', border: '#1d4ed8', icon: '🔍', badgeVariant: 'info' },
+  pending:      { label: 'Pending',       color: '#f59e0b', bg: '#78350f22', border: '#92400e', icon: <Hourglass size={16} aria-hidden />, badgeVariant: 'warning' },
+  under_review: { label: 'Under Review',  color: '#60a5fa', bg: '#1e3a5f22', border: '#1d4ed8', icon: <Search size={16} aria-hidden />, badgeVariant: 'info' },
   approved:     { label: 'Approved',      color: '#4ade80', bg: '#14532d22', border: '#166534', icon: '✓', badgeVariant: 'success' },
   rejected:     { label: 'Rejected',      color: '#f87171', bg: '#450a0a22', border: '#7f1d1d', icon: '✕', badgeVariant: 'danger' },
 };
@@ -45,6 +53,26 @@ const DOC_TYPES = [
   { id: 'selfie',           label: 'Selfie with ID',     desc: 'Clear photo of you holding your ID' },
 ];
 
+/**
+ * What the page has always told users it needs: a government-issued ID AND
+ * proof of address. The submit button only ever checked that *something* had
+ * been uploaded, so a single selfie satisfied it — the request went to review
+ * and came back rejected, with the requirement stated on screen the whole time.
+ */
+const IDENTITY_DOC_IDS = ['passport', 'national_id', 'drivers_license'];
+const PROOF_OF_ADDRESS_ID = 'proof_of_address';
+
+function missingRequiredDocs(uploaded: string[]): string[] {
+  const missing: string[] = [];
+  if (!uploaded.some(d => IDENTITY_DOC_IDS.includes(d))) {
+    missing.push('a government-issued ID (passport, national ID, or driver\'s licence)');
+  }
+  if (!uploaded.includes(PROOF_OF_ADDRESS_ID)) {
+    missing.push('proof of address');
+  }
+  return missing;
+}
+
 const STEPS = [
   { id: 1, label: 'Upload Documents' },
   { id: 2, label: 'Submit for Review' },
@@ -54,6 +82,9 @@ const STEPS = [
 function getStep(status: KYCStatus): number {
   if (status === 'approved') return 3;
   if (status === 'under_review' || status === 'pending') return 2;
+  // 0 = no step highlighted. `unknown` means the status could not be loaded, so
+  // placing the user at step 1 would assert they are at the beginning (F6-01).
+  if (status === 'unknown') return 0;
   return 1;
 }
 
@@ -69,20 +100,20 @@ const StepIndicator: React.FC<{ status: KYCStatus }> = ({ status }) => {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
-                background: done ? '#166534' : active ? '#1d4ed8' : '#1e293b',
-                border: `2px solid ${done ? '#4ade80' : active ? '#3b82f6' : '#334155'}`,
+                background: done ? '#166534' : active ? '#1d4ed8' : 'var(--raised)',
+                border: `2px solid ${done ? 'var(--gain)' : active ? '#3b82f6' : '#334155'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 700,
-                color: done ? '#4ade80' : active ? '#93c5fd' : '#475569',
+                fontSize: 'var(--fs-body)', fontWeight: 700,
+                color: done ? 'var(--gain)' : active ? '#93c5fd' : 'var(--text-faint)',
               }}>
                 {done ? '✓' : step.id}
               </div>
-              <span style={{ fontSize: 11, color: active ? '#93c5fd' : done ? '#4ade80' : '#475569', fontWeight: active ? 600 : 400, textAlign: 'center' }}>
+              <span style={{ fontSize: 11, color: active ? '#93c5fd' : done ? 'var(--gain)' : 'var(--text-faint)', fontWeight: active ? 600 : 400, textAlign: 'center' }}>
                 {step.label}
               </span>
             </div>
             {idx < STEPS.length - 1 && (
-              <div style={{ height: 2, flex: 1, marginBottom: 18, background: done ? '#166534' : '#1e293b' }} />
+              <div style={{ height: 2, flex: 1, marginBottom: 18, background: done ? '#166534' : 'var(--raised)' }} />
             )}
           </React.Fragment>
         );
@@ -129,7 +160,9 @@ const KYCPage: React.FC = () => {
     } catch {
       if (!mountedRef.current) return;
       setError('Failed to load KYC status. Please refresh.');
-      setKycState({ status: 'not_started', submitted_at: null, reviewed_at: null, rejection_reason: null, documents: [] });
+      // F6-01: do NOT fabricate 'not_started' here. We did not reach the server,
+      // so we know nothing about this user's verification state.
+      setKycState({ status: 'unknown', submitted_at: null, reviewed_at: null, rejection_reason: null, documents: [] });
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -171,9 +204,10 @@ const KYCPage: React.FC = () => {
     setSubmitMsg('');
     setSubmitOk(false);
     try {
-      const form = new FormData();
-      uploadedDocs.forEach(d => form.append('document_types[]', d));
-      await kycApi.submit(form);
+      // No body: the server derives the document list from what it stored.
+      // Sending document_types[] from the browser was a client-supplied claim
+      // about which documents exist, on a compliance flow (audit #58).
+      await kycApi.submit();
       setSubmitMsg('Documents submitted. Review typically takes 1–2 business days.');
       setSubmitOk(true);
       await loadStatus();
@@ -183,15 +217,18 @@ const KYCPage: React.FC = () => {
     } finally { setSubmitting(false); }
   };
 
-  const status = kycState?.status ?? 'not_started';
+  const status: KYCStatus = kycState?.status ?? 'unknown';
   const cfg    = STATUS_CONFIG[status];
   const canSubmit = status === 'not_started' || status === 'rejected';
+  // Enforce what the page already promises, rather than accepting one document
+  // and letting the review come back rejected.
+  const missing = missingRequiredDocs(uploadedDocs);
+  const canSubmitDocs = missing.length === 0;
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Identity Verification (KYC)"
-        icon="🪪"
+        icon={IdCard}
         subtitle="Complete verification to unlock full trading features and higher withdrawal limits."
         breadcrumbs={[
           { label: 'Home',    href: '/home' },
@@ -208,20 +245,20 @@ const KYCPage: React.FC = () => {
             onClick={loadStatus}
             disabled={loading}
             style={{
-              background: 'transparent', border: '1px solid #334155',
-              borderRadius: 8, color: '#94a3b8', cursor: 'pointer',
+              background: 'transparent', border: '1px solid var(--border-strong)',
+              borderRadius: 8, color: 'var(--text-dim)', cursor: 'pointer',
               fontSize: 12, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
             {loading ? <Spinner size="sm" /> : '↻'} Refresh
           </button>
         }
-      />
+    >
 
       {error && <ErrorBanner message={error} style={{ marginBottom: 20 }} />}
 
       {loading && !kycState ? (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, gap: 12, color: '#64748b' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, gap: 12, color: 'var(--text-muted)' }}>
           <Spinner size="md" /> Loading KYC status…
         </div>
       ) : (
@@ -243,28 +280,35 @@ const KYCPage: React.FC = () => {
                 <div style={{ fontSize: 18, fontWeight: 700, color: cfg.color }}>{cfg.label}</div>
                 <div style={{ display: 'flex', gap: 20, marginTop: 6, flexWrap: 'wrap' }}>
                   {kycState?.submitted_at && (
-                    <span style={{ fontSize: 12, color: '#64748b' }}>
-                      Submitted: <strong style={{ color: '#94a3b8' }}>{new Date(kycState.submitted_at).toLocaleDateString()}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      Submitted: <strong style={{ color: 'var(--text-dim)' }}>{new Date(kycState.submitted_at).toLocaleDateString()}</strong>
                     </span>
                   )}
                   {kycState?.reviewed_at && (
-                    <span style={{ fontSize: 12, color: '#64748b' }}>
-                      Reviewed: <strong style={{ color: '#94a3b8' }}>{new Date(kycState.reviewed_at).toLocaleDateString()}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      Reviewed: <strong style={{ color: 'var(--text-dim)' }}>{new Date(kycState.reviewed_at).toLocaleDateString()}</strong>
                     </span>
                   )}
                 </div>
                 {status === 'approved' && (
-                  <p style={{ fontSize: 13, color: '#4ade80', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 'var(--fs-body)', color: 'var(--gain)', margin: '8px 0 0' }}>
                     Your identity has been verified. All trading features are unlocked.
                   </p>
                 )}
                 {status === 'under_review' && (
-                  <p style={{ fontSize: 13, color: '#60a5fa', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 'var(--fs-body)', color: 'var(--link)', margin: '8px 0 0' }}>
                     Your documents are under review. This typically takes 1–2 business days.
                   </p>
                 )}
+                {status === 'unknown' && (
+                  <p style={{ fontSize: 'var(--fs-body)', color: '#ffb800', margin: '8px 0 0' }}>
+                    We couldn&apos;t reach the verification service, so we don&apos;t know
+                    where your application stands. Nothing has changed — refresh to try
+                    again, and don&apos;t re-submit documents until this loads.
+                  </p>
+                )}
                 {status === 'pending' && (
-                  <p style={{ fontSize: 13, color: '#f59e0b', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 'var(--fs-body)', color: '#f59e0b', margin: '8px 0 0' }}>
                     Submission received. Our compliance team will begin review shortly.
                   </p>
                 )}
@@ -272,17 +316,17 @@ const KYCPage: React.FC = () => {
             </div>
             {status === 'rejected' && kycState?.rejection_reason && (
               <div style={{ marginTop: 16, background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px' }}>
-                <div style={{ fontSize: 12, color: '#f87171', fontWeight: 700, marginBottom: 4 }}>Rejection Reason</div>
-                <div style={{ fontSize: 13, color: '#fca5a5', lineHeight: 1.5 }}>{kycState.rejection_reason}</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>Please re-upload corrected documents and resubmit.</div>
+                <div style={{ fontSize: 12, color: 'var(--loss)', fontWeight: 700, marginBottom: 4 }}>Rejection Reason</div>
+                <div style={{ fontSize: 'var(--fs-body)', color: '#fca5a5', lineHeight: 1.5 }}>{kycState.rejection_reason}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Please re-upload corrected documents and resubmit.</div>
               </div>
             )}
           </div>
 
           {/* Previously uploaded docs */}
           {(kycState?.documents ?? []).length > 0 && (
-            <div style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: '18px 22px', marginBottom: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 22px', marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>📄</span> Submitted Documents
               </h3>
               {kycState!.documents.map((doc, i) => {
@@ -292,12 +336,12 @@ const KYCPage: React.FC = () => {
                   <div key={doc.type} style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     padding: '10px 0',
-                    borderBottom: i < kycState!.documents.length - 1 ? '1px solid #1e293b' : 'none',
+                    borderBottom: i < kycState!.documents.length - 1 ? '1px solid var(--border)' : 'none',
                   }}>
                     <div>
-                      <span style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 500 }}>{docLabel}</span>
+                      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-strong)', fontWeight: 500 }}>{docLabel}</span>
                       {doc.uploaded_at && (
-                        <span style={{ fontSize: 11, color: '#475569', marginLeft: 10 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 10 }}>
                           {new Date(doc.uploaded_at).toLocaleDateString()}
                         </span>
                       )}
@@ -313,11 +357,11 @@ const KYCPage: React.FC = () => {
 
           {/* Upload form */}
           {canSubmit && (
-            <div style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12, padding: '22px 24px', marginBottom: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '22px 24px', marginBottom: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>📤</span> Upload Documents
               </h3>
-              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 20px', lineHeight: 1.5 }}>
+              <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 0 20px', lineHeight: 1.5 }}>
                 Upload at least a government-issued ID and proof of address. Files must be JPG, PNG, or PDF under 10 MB.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -327,17 +371,17 @@ const KYCPage: React.FC = () => {
                   const err        = uploadErrors[doc.id];
                   return (
                     <div key={doc.id} style={{
-                      background: isUploaded ? '#05200e' : '#111827',
+                      background: isUploaded ? '#05200e' : 'var(--raised)',
                       border: `1px solid ${isUploaded ? '#166534' : err ? '#7f1d1d' : '#1e293b'}`,
                       borderRadius: 10, padding: '14px 16px',
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div>
-                          <label style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{doc.label}</label>
-                          <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{doc.desc}</div>
+                          <label id={`kyc-doc-${doc.id}-label`} style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-strong)' }}>{doc.label}</label>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{doc.desc}</div>
                         </div>
                         {isUploaded && (
-                          <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 700, background: '#14532d', border: '1px solid #166534', borderRadius: 6, padding: '2px 8px', flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, color: 'var(--gain)', fontWeight: 700, background: '#14532d', border: '1px solid #166534', borderRadius: 6, padding: '2px 8px', flexShrink: 0 }}>
                             ✓ Uploaded
                           </span>
                         )}
@@ -345,6 +389,10 @@ const KYCPage: React.FC = () => {
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input
                           type="file"
+                          // Every row's picker is otherwise identical: without the
+                          // document's own title there is no way to tell which
+                          // one you are about to upload a passport into.
+                          aria-labelledby={`kyc-doc-${doc.id}-label`}
                           accept=".jpg,.jpeg,.png,.pdf"
                           ref={el => { fileRefs.current[doc.id] = el; }}
                           onChange={e => { if (e.target.files?.[0]) handleFileSelect(doc.id, e.target.files[0]); }}
@@ -353,8 +401,8 @@ const KYCPage: React.FC = () => {
                         <button
                           onClick={() => fileRefs.current[doc.id]?.click()}
                           style={{
-                            background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
-                            color: hasFile ? '#f1f5f9' : '#64748b', cursor: 'pointer',
+                            background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8,
+                            color: hasFile ? 'var(--text-strong)' : 'var(--text-muted)', cursor: 'pointer',
                             fontSize: 12, padding: '8px 14px', flex: 1, textAlign: 'left',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}
@@ -365,9 +413,9 @@ const KYCPage: React.FC = () => {
                           onClick={() => handleUpload(doc.id)}
                           disabled={!hasFile || uploading === doc.id}
                           style={{
-                            background: hasFile ? '#1d4ed8' : '#1e293b',
+                            background: hasFile ? '#1d4ed8' : 'var(--raised)',
                             border: `1px solid ${hasFile ? '#3b82f6' : '#334155'}`,
-                            borderRadius: 8, color: hasFile ? '#93c5fd' : '#475569',
+                            borderRadius: 8, color: hasFile ? '#93c5fd' : 'var(--text-faint)',
                             cursor: hasFile ? 'pointer' : 'not-allowed',
                             fontSize: 12, fontWeight: 600, padding: '8px 16px',
                             display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
@@ -376,7 +424,7 @@ const KYCPage: React.FC = () => {
                           {uploading === doc.id ? <Spinner size="sm" /> : '↑'} Upload
                         </button>
                       </div>
-                      {err && <div style={{ fontSize: 11, color: '#f87171', marginTop: 6 }}>{err}</div>}
+                      {err && <div style={{ fontSize: 11, color: 'var(--loss)', marginTop: 6 }}>{err}</div>}
                     </div>
                   );
                 })}
@@ -386,21 +434,30 @@ const KYCPage: React.FC = () => {
                 <div style={{
                   background: submitOk ? '#052e16' : '#450a0a',
                   border: `1px solid ${submitOk ? '#166534' : '#7f1d1d'}`,
-                  borderRadius: 8, color: submitOk ? '#4ade80' : '#f87171',
-                  fontSize: 13, padding: '12px 16px', margin: '18px 0 0', lineHeight: 1.5,
+                  borderRadius: 8, color: submitOk ? 'var(--gain)' : 'var(--loss)',
+                  fontSize: 'var(--fs-body)', padding: '12px 16px', margin: '18px 0 0', lineHeight: 1.5,
                 }}>
                   {submitMsg}
                 </div>
               )}
 
+              {missing.length > 0 && uploadedDocs.length > 0 && (
+                <div style={{
+                  background: '#1e1b0b', border: '1px solid #78350f', borderRadius: 8,
+                  color: 'var(--warn)', fontSize: 'var(--fs-body)', padding: '12px 16px', margin: '18px 0 0', lineHeight: 1.5,
+                }}>
+                  Still needed before you can submit: {missing.join(' and ')}.
+                </div>
+              )}
+
               <button
                 onClick={handleSubmit}
-                disabled={submitting || uploadedDocs.length === 0}
+                disabled={submitting || !canSubmitDocs}
                 style={{
-                  background: uploadedDocs.length > 0 ? '#1d4ed8' : '#1e293b',
-                  border: `1px solid ${uploadedDocs.length > 0 ? '#3b82f6' : '#334155'}`,
-                  borderRadius: 10, color: uploadedDocs.length > 0 ? '#fff' : '#475569',
-                  cursor: uploadedDocs.length > 0 ? 'pointer' : 'not-allowed',
+                  background: canSubmitDocs ? '#1d4ed8' : 'var(--raised)',
+                  border: `1px solid ${canSubmitDocs ? '#3b82f6' : '#334155'}`,
+                  borderRadius: 10, color: canSubmitDocs ? '#fff' : 'var(--text-faint)',
+                  cursor: canSubmitDocs ? 'pointer' : 'not-allowed',
                   fontSize: 14, fontWeight: 700, padding: '13px 28px',
                   marginTop: 18, width: '100%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -414,28 +471,28 @@ const KYCPage: React.FC = () => {
           {/* Info grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 28 }}>
             {[
-              { icon: '🔒', title: 'AES-256 Encrypted',  body: 'All documents are encrypted at rest and in transit.' },
-              { icon: '⏱️', title: '1–2 Business Days',  body: 'Most verifications are completed within 48 hours.' },
-              { icon: '🌍', title: '180+ Countries',      body: 'We accept IDs from 180+ countries and territories.' },
-              { icon: '🗑️', title: 'GDPR Compliant',     body: 'Documents are retained only as required by regulation.' },
+              { icon: <Lock size={16} aria-hidden />, title: 'AES-256 Encrypted',  body: 'All documents are encrypted at rest and in transit.' },
+              { icon: <Timer size={16} aria-hidden />, title: '1–2 Business Days',  body: 'Most verifications are completed within 48 hours.' },
+              { icon: <Globe2 size={16} aria-hidden />, title: '180+ Countries',      body: 'We accept IDs from 180+ countries and territories.' },
+              { icon: <Trash2 size={16} aria-hidden />, title: 'GDPR Compliant',     body: 'Documents are retained only as required by regulation.' },
             ].map(({ icon, title, body }) => (
-              <div key={title} style={{ background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10, padding: '14px 16px' }}>
+              <div key={title} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
                 <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{title}</div>
-                <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>{body}</div>
+                <div style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 4 }}>{title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{body}</div>
               </div>
             ))}
           </div>
 
           <CrossLinkBar title="Related" style={{ marginTop: 20 }} links={[
-            { label: 'Profile',   href: '/profile',            icon: '👤', color: '#60a5fa' },
-            { label: 'Security',  href: '/settings?tab=security', icon: '🔐', color: '#f87171' },
-            { label: 'Wallet',    href: '/wallet',             icon: '💳', color: '#4ade80' },
-            { label: 'Settings',  href: '/settings',           icon: '⚙️', color: '#94a3b8' },
+            { label: 'Profile',   href: '/profile',            icon: User, color: '#60a5fa' },
+            { label: 'Security',  href: '/settings?tab=security', icon: ShieldCheck, color: '#f87171' },
+            { label: 'Wallet',    href: '/wallet',             icon: CreditCard, color: '#4ade80' },
+            { label: 'Settings',  href: '/settings',           icon: Settings, color: '#94a3b8' },
           ]} />
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

@@ -28,6 +28,7 @@ from fastapi.responses import StreamingResponse
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -178,7 +179,7 @@ async def _build_report_data(report_type: str, period: str) -> tuple[list[str], 
     except Exception as exc:
         logger.warning("Report build error (%s): %s", report_type, exc)
         headers = ["error"]
-        rows = [[str(exc)]]
+        rows = [[safe_error(exc)]]
 
     return headers, rows
 

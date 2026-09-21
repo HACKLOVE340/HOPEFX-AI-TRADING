@@ -3,6 +3,7 @@
  */
 
 import React from 'react';
+import { AlertTriangle, Info } from 'lucide-react';
 
 type Level = 'error' | 'warning' | 'info' | 'success';
 
@@ -14,11 +15,11 @@ export interface ErrorBannerProps {
   className?: string;
 }
 
-const LEVEL_STYLES: Record<Level, { bg: string; border: string; color: string; icon: string }> = {
-  error:   { bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)', color: '#f87171', icon: '✕' },
-  warning: { bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.3)',  color: '#fbbf24', icon: '⚠' },
-  info:    { bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.3)',  color: '#60a5fa', icon: 'ℹ' },
-  success: { bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.3)',  color: '#4ade80', icon: '✓' },
+const LEVEL_STYLES: Record<Level, { bg: string; border: string; color: string; icon: React.ReactNode }> = {
+  error:   { bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.3)', color: 'var(--loss)', icon: '✕' },
+  warning: { bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.3)',  color: 'var(--warn)', icon: <AlertTriangle size={16} aria-hidden /> },
+  info:    { bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.3)',  color: 'var(--link)', icon: <Info size={16} aria-hidden /> },
+  success: { bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.3)',  color: 'var(--gain)', icon: '✓' },
 };
 
 export const ErrorBanner: React.FC<ErrorBannerProps> = ({
@@ -40,7 +41,7 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({
         borderRadius: 8,
         color: ls.color,
         display: 'flex',
-        fontSize: 13,
+        fontSize: 'var(--fs-body)',
         gap: 8,
         padding: '10px 14px',
         ...style,

@@ -58,6 +58,35 @@ def _get_app_state() -> Any:
         return None
 
 
+async def _user_broker(user: Any) -> Any:
+    """The caller's own trading account, or None when it cannot be isolated.
+
+    Three handlers in this module read positions and balances straight off
+    ``app_state.broker`` — the shared process-wide engine — so a portfolio
+    summary, a positions list and a factor risk report were all computed over
+    every user's book combined. There was no ownership filter anywhere in this
+    file.
+
+    Returns ``None`` rather than the shared broker when the account is not
+    isolated (a live single-account venue). The callers already treat a missing
+    broker as "no data", which is the correct answer to "what is in *your*
+    portfolio" when the platform cannot tell one user's holdings from another's.
+    """
+    try:
+        from core.account_registry import get_account_registry
+
+        user_id = str(getattr(user, "sub", "") or "")
+        resolution = await get_account_registry().resolve(user_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("portfolio: could not resolve an account for the caller: %s", exc)
+        return None
+
+    if not resolution.isolated:
+        logger.debug("portfolio: no isolated account for user=%s (%s)", user_id, resolution.reason)
+        return None
+    return resolution.broker
+
+
 def _get_factor_engine() -> Any:
     s = _get_app_state()
     if s is not None:
@@ -439,7 +468,9 @@ async def factor_risk_report(
                 positions[sym] = float(pos_data.get("market_value", 0.0))
             total_pnl = float(summary.get("total_pnl", 0.0))
         elif s is not None:
-            broker = getattr(s, "broker", None)
+            # Was app_state.broker — the shared engine's book, so every user's
+            # factor report was computed over everybody's positions.
+            broker = await _user_broker(_user)
             if broker is not None and hasattr(broker, "get_positions"):
                 for p in await broker.get_positions():
                     sym = getattr(p, "symbol", "")
@@ -499,8 +530,7 @@ async def portfolio_summary(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Return portfolio equity, P&L, and rebalancer weights as a single summary."""
-    s = _get_app_state()
-    broker = getattr(s, "broker", None) if s else None
+    broker = await _user_broker(user)
 
     equity = 0.0
     balance = 0.0
@@ -551,8 +581,7 @@ async def portfolio_positions(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Return open positions list with market values and rebalancer target weights."""
-    s = _get_app_state()
-    broker = getattr(s, "broker", None) if s else None
+    broker = await _user_broker(user)
 
     positions_list: list[dict[str, Any]] = []
     try:

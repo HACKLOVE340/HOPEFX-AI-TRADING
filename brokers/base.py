@@ -274,9 +274,43 @@ class Position:
         )
 
 
+def closing_side(position: "Position") -> "OrderSide":
+    """The side that flattens *position*.
+
+    Four adapters wrote this inline as::
+
+        close_side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
+
+    and `Position.__post_init__` normalises `side` to an `OrderSide`, so that
+    comparison put an enum member against a string and was False for every
+    position ever constructed. The dead branch's `else` ran every time: closing
+    a SHORT bought, which is right, and closing a LONG *also* bought, which
+    doubled the position instead of flattening it.
+
+    Reading the normalised value is the fix; a single named function is so the
+    four adapters cannot drift apart again, and so the behaviour has somewhere
+    to be tested. See `tests/unit/test_closing_a_long_sells_it.py`.
+    """
+    return OrderSide.SELL if position.side == OrderSide.BUY else OrderSide.BUY
+
+
 @dataclass
 class AccountInfo:
-    """Account information"""
+    """Account information.
+
+    **This is the only AccountInfo type.** ``brokers/oanda.py`` previously
+    defined a second dataclass of the same name with ``nav`` instead of
+    ``equity`` and no dict accessors; because the live money path reads account
+    info with ``.get("equity")`` (``risk/manager.py`` ``assess_risk``,
+    ``api/ws_live.py`` equity broadcaster), wiring the async OANDA broker made
+    every pre-trade risk assessment raise ``AttributeError`` — swallowed and
+    reported as a risk-limit block. Do not reintroduce a broker-local variant;
+    add optional fields here instead.
+
+    ``equity`` is the mark-to-market account value (OANDA calls it NAV): it
+    includes unrealised P&L on open positions. Drawdown gates must use it
+    rather than ``balance``, which excludes floating losses.
+    """
 
     balance: float
     equity: float
@@ -284,11 +318,28 @@ class AccountInfo:
     margin_available: float
     positions_count: int
     timestamp: datetime | None = None
+    # Optional venue metadata — defaulted so every existing constructor keeps
+    # working, and so brokers that report them do not have to drop the data.
+    account_id: str = ""
+    currency: str = "USD"
+    unrealized_pnl: float = 0.0
+
+    @property
+    def nav(self) -> float:
+        """Alias for :attr:`equity` — OANDA's name for the same quantity."""
+        return self.equity
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
 
     def get(self, key: str, default: Any = None) -> Any:
+        """Dict-style read used across the live path.
+
+        Note this is ``getattr``-based, so a **missing field returns the
+        caller's default**. Callers must not pass a plausible-looking default
+        for a value they cannot safely fabricate — notably account equity,
+        where a default would be sized against as if it were real.
+        """
         return getattr(self, key, default)
 
 
@@ -311,6 +362,13 @@ class MarketOrderResult:
     commission: float = 0.0
     slippage: float = 0.0
     raw: Any = None
+    # False when a stop_loss/take_profit was supplied by the caller but NOT
+    # placed with the broker. The base adapter cannot attach brackets at market
+    # entry, and silently returning success for a stop that does not exist is
+    # how a trader ends up believing they are protected. Callers that accepted a
+    # bracket from a user MUST surface this. See docs/audit F151.
+    brackets_applied: bool = True
+    brackets_requested: bool = False
 
     @property
     def fill_price(self) -> float:
@@ -520,9 +578,16 @@ class BrokerConnector(ABC):
         connector without bracket support never raises on extra kwargs.
         """
         side_enum = side if isinstance(side, OrderSide) else OrderSide(str(side).upper())
-        if stop_loss is not None or take_profit is not None:
-            logger.debug(
-                "%s.place_market_order: bracket SL/TP not applied at entry (per-broker); SL=%s TP=%s",
+        _brackets_requested = stop_loss is not None or take_profit is not None
+        if _brackets_requested:
+            # WARNING, not DEBUG: the caller asked for a stop and is not getting
+            # one. At DEBUG this was invisible at the default log level, so a
+            # user-entered stop-loss was accepted by the UI, forwarded by the
+            # API, discarded here, and the order still returned 201 Created.
+            logger.warning(
+                "%s.place_market_order: bracket SL/TP NOT placed with the broker "
+                "(no bracket support in this adapter); SL=%s TP=%s — the position "
+                "is UNPROTECTED unless a stop is placed separately.",
                 self.name,
                 stop_loss,
                 take_profit,
@@ -539,7 +604,11 @@ class BrokerConnector(ABC):
             result = await result
         if result is None:
             raise RuntimeError(f"{self.name}: market order rejected (place_order returned None)")
-        return MarketOrderResult.from_order(result)
+        normalised = MarketOrderResult.from_order(result)
+        # Record truthfully whether the caller's bracket made it to the broker.
+        normalised.brackets_requested = _brackets_requested
+        normalised.brackets_applied = not _brackets_requested
+        return normalised
 
     def is_connected(self) -> bool:
         """

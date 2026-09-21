@@ -1,0 +1,114 @@
+# HOPEFX-AI-TRADING — Auto-deploy to a VPS over SSH
+# =============================================================================
+# On every push to main (and on manual dispatch), SSH into the VPS, pull the
+# latest main, and run deployments/deploy.sh (docker compose build + up + health
+# check).
+#
+# One-time setup on GitHub → Settings → Secrets and variables → Actions:
+#   VPS_HOST      your.server.ip.or.hostname
+#   VPS_USER      the deploy user (e.g. deploy)
+#   VPS_SSH_KEY   the PRIVATE SSH key whose public half is in the VPS's
+#                 ~/.ssh/authorized_keys for VPS_USER
+#   VPS_APP_DIR   absolute path to the cloned repo on the VPS
+#                 (e.g. /home/deploy/HOPEFX-AI-TRADING)
+#   VPS_PORT      (optional) SSH port; defaults to 22
+#
+# See deployments/DEPLOY_VPS.md for the full one-time server setup.
+# =============================================================================
+name: Deploy to VPS
+
+# Runs AFTER the CI workflow finishes on main, and only when it succeeded.
+#
+# This fired on `push: branches: [main]` with no gate of any kind — no `needs:`,
+# no `workflow_run:` — so the only thing between a push and `docker compose up`
+# on the production VPS was the push itself (F96). A deploy that cannot observe
+# a red build is not gated, it is automatic.
+#
+# `workflow_run` does not support `paths-ignore`, so the docs-only skip that
+# used to live here is gone: a documentation-only push to main that passes CI
+# will now redeploy. That is idempotent — the deploy resets to the same commit
+# and rebuilds — and costs a few minutes of runner time and the concurrency
+# lock. Deploying unverified code costs more.
+#
+# NOTE: this couples deployment to CI actually running. While GitHub Actions is
+# unavailable at the account level (F95 — runs end in startup_failure with no
+# runner assigned), no CI run completes, so no deploy is triggered. Nothing
+# regresses today, because deploy.yml is not running either; when billing is
+# restored, both come back together and in the right order.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+# Never run two deploys at once; let an in-flight deploy finish.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: SSH deploy
+    runs-on: ubuntu-latest
+    # Only deploy if the required secrets exist (skips cleanly before VPS_HOST is
+    # configured, instead of failing red on every push). `secrets.*` cannot be
+    # referenced in a job-level `if:` (GitHub Actions restriction — see
+    # actions/runner#520), so the secret is piped through a job-level `env:` and
+    # checked in the step's `if:` instead, which DOES support the env context.
+    # Two conditions, and both are load-bearing.
+    #
+    # `workflow_run` fires on COMPLETION, which includes failure and
+    # cancellation — without the conclusion check the trigger would read as a
+    # gate while deploying red builds, which is worse than no gate because it
+    # looks like one. A manual `workflow_dispatch` has no `workflow_run`
+    # context, so it is allowed through explicitly.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+    steps:
+      - name: Deploy over SSH
+        if: ${{ env.VPS_HOST != '' }}
+        # Pinned to the commit `v1.2.5` pointed at on 2026-09-14, not to the tag.
+        # A tag is mutable, and this step receives VPS_SSH_KEY — the private deploy
+        # key for the production VPS — so whoever can move the tag can read the key.
+        # Verified before pinning: `git ls-remote --tags` returns one ref for v1.2.5
+        # with no `^{}` peel, so the tag is lightweight and this IS the commit; the
+        # object was then fetched and confirmed to be a commit carrying action.yml.
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 30m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.VPS_APP_DIR }}"
+            echo "[ci] fetching latest main..."
+            git fetch --all --prune
+            # Record any drift before discarding it. `reset --hard` is the right
+            # call — the server must match the commit being deployed — but doing
+            # it silently means edits made directly on the box vanish with no
+            # trace. This has already bitten once: a deploy was blocked by 39
+            # locally-modified tracked files, and a reset would have destroyed
+            # them unrecorded. Costs nothing when the tree is clean.
+            if ! git diff --quiet HEAD 2>/dev/null; then
+              drift="/tmp/hopefx-drift-$(date -u +%Y%m%d-%H%M%S).patch"
+              if ! git diff --binary HEAD > "$drift"; then
+                echo "[ci] ERROR: could not preserve server drift; refusing destructive reset"
+                exit 1
+              fi
+              echo "[ci] WARNING: server had local modifications; saved to $drift"
+              echo "[ci]          restore with: git apply -3 $drift"
+              git status --porcelain | head -40
+            fi
+            git reset --hard origin/main
+            echo "[ci] running deploy script..."
+            bash deployments/deploy.sh

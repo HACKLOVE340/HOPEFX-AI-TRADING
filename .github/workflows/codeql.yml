@@ -20,6 +20,14 @@ on:
 permissions:
   contents: read
 
+# Superseded runs are cancelled on feature branches and PRs; main is left alone
+# because its runs are the release record. This block previously keyed the group
+# on github.sha, giving every commit its own group — so it collided with nothing
+# and superseded nothing, and every push queued another complete pipeline.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
@@ -39,26 +47,42 @@ jobs:
         include:
         - language: python
           build-mode: none
+        # `actions` analyses the workflow files themselves. It is here because
+        # main already has an /language:actions configuration registered, so
+        # analysing python alone made every pull request report
+        #
+        #     1 configuration present on refs/heads/main was not found:
+        #     /language:actions
+        #
+        # and conclude `failure` — regardless of whether it found anything. A
+        # check that is red on every PR is a check nobody reads, which is how a
+        # backlog of real alerts went unnoticed.
+        #
+        # Adding it makes PR and main analyse the same set, so the check turns
+        # on findings again. It also means workflow files are scanned before
+        # they merge rather than only afterwards.
+        - language: actions
+          build-mode: none
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       with:
         persist-credentials: false
 
     - name: Initialize CodeQL
-      # Pinned to SHA for supply-chain safety (tag: v3)
-      uses: github/codeql-action/init@5c8a8a642e79153f5d047b10ec1cba1d1cc65699  # v3.35.1
+      # Pinned to SHA for supply-chain safety (tag: v4.37.3)
+      uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
       continue-on-error: true
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
 
     - name: Perform CodeQL Analysis
-      # Pinned to SHA for supply-chain safety (tag: v3)
+      # Pinned to SHA for supply-chain safety (tag: v4.37.3)
       # continue-on-error: repos without GitHub Advanced Security (GHAS) will
       # fail the SARIF upload step; this prevents that from blocking CI.
-      uses: github/codeql-action/analyze@5c8a8a642e79153f5d047b10ec1cba1d1cc65699  # v3.35.1
+      uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
       continue-on-error: true
       with:
         category: "/language:${{matrix.language}}"

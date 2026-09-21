@@ -15,16 +15,139 @@ Register with:
     register_page_routes(app)
 """
 
+import asyncio
 import logging
+import os
+import re
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
 
 _TEMPLATES = Path(__file__).parent.parent / "templates"
+
+# Shape of a servable static asset path, e.g. "assets/index-a1b2c3.js",
+# "favicon.svg", "images/logo.png".
+#
+# Every segment must begin with an alphanumeric. That single rule is what makes
+# traversal unspellable: "." and ".." can never BE a segment, so there is no
+# input that climbs out of the build directory for the confinement check to
+# catch. Backslashes, NUL, and a leading "/" are excluded by the character
+# class.
+_ASSET_PATH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]*(?:/[A-Za-z0-9][A-Za-z0-9_.\-]*)*")
+
+# Length bound applied before matching, so a pathological URL never reaches the
+# regex or the filesystem. Comfortably above any real Vite asset path.
+_MAX_ASSET_PATH_LEN = 255
+
+
+# ── Caching ───────────────────────────────────────────────────────────────────
+#
+# Vite emits content-hashed filenames — `app-analytics-DUbayt-I.js`. The hash
+# changes whenever the contents change, so the file at a given URL is immutable
+# by construction and can be cached for as long as the browser will keep it.
+#
+# Nothing was setting Cache-Control, so the browser fell back to revalidating
+# on every navigation: roughly fifteen conditional requests, each a full round
+# trip, before any page could paint. On a distant VPS that is most of the
+# perceived load time even when every response is a 304.
+#
+# index.html is the opposite case and must never be cached — it is the document
+# that names the current hashed bundles. Caching it pins the browser to a stale
+# build after a deploy, and the assets it references may no longer exist.
+_IMMUTABLE_CACHE = "public, max-age=31536000, immutable"
+_NO_CACHE = "no-cache, no-store, must-revalidate"
+
+_INDEX_CACHE_HEADERS = {"Cache-Control": _NO_CACHE}
+
+# Vite's content hash: `<name>-<hash>.<ext>`, where the hash is 8 characters of
+# the base64url alphabet. Only files carrying one are safe to treat as immutable.
+#
+# Deliberately not a regex. The obvious pattern for this —
+# `.+-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$` — is quadratic, because `.+` and the
+# character class can both match '-' and have to be split between them: on a
+# non-matching input of "-a" repeated, 4 k chars took 10 ms, 8 k took 39 ms,
+# 16 k took 163 ms. `_CachingStaticFiles` calls this with the raw request path
+# and no length bound, so that was reachable from a URL.
+#
+# The scan below is a single pass with no backtracking.
+_HASH_LEN = 8
+_HASH_ALPHABET = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+
+
+def _has_content_hash(name: str) -> bool:
+    """True when *name* ends in Vite's `-<8-char hash>.<ext>` form."""
+    stem, dot, ext = name.rpartition(".")
+    if not dot or not ext or not ext.isalnum():
+        return False
+    # Room for at least one name character, the separator, and the hash.
+    if len(stem) < _HASH_LEN + 2:
+        return False
+    if stem[-(_HASH_LEN + 1)] != "-":
+        return False
+    return all(c in _HASH_ALPHABET for c in stem[-_HASH_LEN:])
+
+
+def _asset_cache_headers(rel_path: str) -> dict[str, str]:
+    """Immutable for content-hashed files, revalidate for everything else."""
+    name = rel_path.rsplit("/", 1)[-1]
+    if name == "index.html":
+        return {"Cache-Control": _NO_CACHE}
+    if _has_content_hash(name):
+        return {"Cache-Control": _IMMUTABLE_CACHE}
+    # No hash in the name (favicon.ico, manifest.json, robots.txt): the URL is
+    # stable across deploys, so it has to be revalidated to pick up changes.
+    return {"Cache-Control": "public, max-age=0, must-revalidate"}
+
+
+class _CachingStaticFiles(StaticFiles):
+    """StaticFiles that applies the same cache policy as the catch-all above.
+
+    The mount serves most asset requests in practice; without this the policy
+    would only apply on the catch-all's fallback path, which is not where the
+    hot requests go.
+    """
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):  # type: ignore[override]
+        response = super().file_response(full_path, stat_result, scope, status_code=status_code)
+        rel = scope.get("path", "").lstrip("/")
+        for header, value in _asset_cache_headers(rel).items():
+            response.headers[header] = value
+        return response
+
+
+@lru_cache(maxsize=512)
+def _slashed_paths(route_count: int, app_id: int) -> frozenset[str]:
+    """Every registered path, flattened. Cached per (route count, app identity).
+
+    A plain ``for route in app.routes`` walk does not see API routes: with this
+    FastAPI version, ``app.routes`` holds opaque ``_IncludedRouter`` wrappers
+    for each included router rather than flat ``APIRoute`` instances. The v1
+    alias registration in core/router_registry.py hit the same thing and
+    silently created zero aliases until it switched to ``iter_api_routes``.
+    """
+    from core.router_registry import iter_api_routes
+
+    app = _APP_BY_ID.get(app_id)
+    if app is None:
+        return frozenset()
+    return frozenset(r.path for r in iter_api_routes(app.routes))
+
+
+_APP_BY_ID: dict[int, FastAPI] = {}
+
+
+def _slashed_route_exists(app: FastAPI, path: str) -> bool:
+    """True when *path* (which ends in '/') is a real registered route."""
+    _APP_BY_ID[id(app)] = app
+    try:
+        return path in _slashed_paths(len(app.routes), id(app))
+    except Exception:  # nosec B110 — a redirect aid must never break a request
+        return False
 
 
 def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
@@ -58,7 +181,7 @@ def register_page_routes(app: FastAPI) -> None:
         ]
         for _p in _ico_candidates:
             if _p.exists():
-                return Response(content=_p.read_bytes(), media_type="image/x-icon")
+                return Response(content=await asyncio.to_thread(_p.read_bytes), media_type="image/x-icon")
         # Minimal 1×1 transparent ICO (46 bytes) — avoids 404 noise in logs
         _ico_bytes = (
             b"\x00\x00\x01\x00\x01\x00\x01\x01\x00\x00\x01\x00\x18\x00"
@@ -131,6 +254,32 @@ def register_page_routes(app: FastAPI) -> None:
 
     if _frontend_dist.exists() and (_frontend_dist / "index.html").exists():
         _index_html = _frontend_dist / "index.html"
+        # Resolved once here so the catch-all below can confine every asset
+        # lookup to this directory without re-resolving on each request.
+        _frontend_dist_resolved = _frontend_dist.resolve()
+
+        # ── Legacy GodMode dashboard — mounted BEFORE the catch-all ──────────
+        #
+        # This mount used to be registered after `_spa_catchall`, and Starlette
+        # matches routes in registration order, so `/{full_path:path}` claimed
+        # every /godmode/* request before the mount could see it. The catch-all
+        # does list "godmode/" among its passthrough prefixes, but as the long
+        # comment down there already explains for the /api case, returning 404
+        # from a route that has *matched* does not hand the request onward —
+        # the response ends it. Net effect: GET /godmode/ answered
+        # `{"detail": "No route for GET /godmode/"}` in exactly the deployment
+        # that has both UIs built, which is the Docker/production one.
+        #
+        # Registering it here makes the mount win, and leaves the catch-all's
+        # "godmode" passthrough entry as the correct answer for the case where
+        # dashboard/dist was never built and no mount exists.
+        if _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
+            app.mount(
+                "/godmode",
+                StaticFiles(directory=str(_dashboard_dist), html=True),
+                name="godmode_dashboard",
+            )
+            logger.info("GodMode dashboard mounted at /godmode/ (dashboard/dist/)")
 
         # ── SPA catch-all: serve index.html for every React Router path ──────
         #
@@ -254,33 +403,138 @@ def register_page_routes(app: FastAPI) -> None:
                 "mobile/",
                 "favicon.ico",
             )
-            if any(
-                full_path == p or full_path.startswith(p + "/") or full_path.startswith(p)
-                for p in _passthrough_prefixes
-            ):
-                return Response(status_code=404)
-            # Serve real static assets (JS/CSS/images) from the build output
-            _asset = _frontend_dist / full_path
-            if _asset.exists() and _asset.is_file():
-                return FileResponse(str(_asset))
+
+            # A bare name in the list above — "kyc", "mobile", "godmode" — is both
+            # an API namespace and an SPA page name, and the list cannot tell
+            # them apart. `full_path == p` therefore 404'd `/kyc` even though no
+            # route claims it: measured, `/kyc` has zero exact routes and zero
+            # sub-routes in this configuration, so the only thing refusing it was
+            # the string. A user following a KYC verification email got
+            # `{"detail":"No route for GET /kyc"}` on a regulatory gate (F198).
+            #
+            # Sub-paths still pass through on the prefix — `/kyc/webhooks/sumsub`
+            # must reach Sumsub's handler whether or not it is registered in this
+            # configuration, because answering a provider webhook with the SPA
+            # shell is worse than 404ing it. Only the EXACT bare path now asks
+            # the route table, and it passes through only when something really
+            # claims it. `/mobile` does (a Mount), so it still passes through;
+            # `/kyc` does not, so it reaches the page.
+            #
+            # The third clause `full_path.startswith(p)` is gone: it matched
+            # "kycsomething" and "mobilephones" as server paths too.
+            def _claimed_by_a_real_route(path: str) -> bool:
+                target = "/" + path
+                return any(
+                    getattr(route, "path", None) == target or str(getattr(route, "path", "")).startswith(target + "/")
+                    for route in app.routes
+                    if getattr(route, "endpoint", None) is not _spa_catchall
+                )
+
+            def _is_server_path(p: str) -> bool:
+                # The list holds two shapes — "api/" already carries its
+                # separator, "kyc" does not — so the sub-path test has to
+                # normalise. Appending "/" unconditionally builds "api//" and
+                # stops matching /api/anything, which returned the SPA shell for
+                # every unknown API path; caught by
+                # test_an_api_404_carries_a_body_naming_the_route.
+                sub = p if p.endswith("/") else p + "/"
+                if full_path.startswith(sub):
+                    return True
+                return full_path == p.rstrip("/") and _claimed_by_a_real_route(p.rstrip("/"))
+
+            if any(_is_server_path(p) for p in _passthrough_prefixes):
+                # Restore the trailing-slash redirect this route otherwise eats.
+                #
+                # The comment here used to say returning 404 "passes through so
+                # Starlette tries the next matching route". It does not: this
+                # route has already matched, and returning a response ends the
+                # request. Starlette's automatic redirect for a path whose only
+                # registered form carries a trailing slash runs *after* no route
+                # matched, so a catch-all that matches everything disables it.
+                #
+                # Concretely: /api/notifications 404s while
+                # /api/notifications/ returns 200. api/notifications.py declares
+                # the route at both "" and "/" specifically to avoid this, and
+                # that mitigation does not survive router inclusion — both
+                # declarations end up registered as /api/notifications/, so the
+                # bare form has no route at all. The same holds for /api/admin,
+                # /api/alerts, /api/dom and /api/superadmin.
+                #
+                # Redirecting here fixes every such endpoint, including ones
+                # added later, instead of patching one router at a time.
+                if request.method == "GET" and _slashed_route_exists(request.app, "/" + full_path + "/"):
+                    _qs = request.url.query
+                    return RedirectResponse(
+                        url="/" + full_path + "/" + (f"?{_qs}" if _qs else ""),
+                        status_code=307,
+                    )
+                # Say what was not found.
+                #
+                # This returned a bodiless 404, and the frontend's
+                # `extractApiError` has an explicit branch for exactly that:
+                #     // For 404 with no body, return the fallback rather than
+                #     // the raw Axios message
+                # so every missing endpoint surfaced as whatever generic string
+                # the calling page happened to pass — "Could not load
+                # notifications", "Could not load your subscription", "Failed to
+                # load balance." Three panels, three different messages, one
+                # cause, and nothing on screen or in the network tab that named
+                # it. A whole endpoint family can go missing — a feature flag
+                # off, a router that failed to import, a prefix renamed — and it
+                # is indistinguishable from a server error or a bad session.
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "detail": f"No route for {request.method} /{full_path}",
+                        "path": f"/{full_path}",
+                        "method": request.method,
+                    },
+                )
+            # Serve real static assets (JS/CSS/images) from the build output.
+            #
+            # `full_path` is the raw catch-all segment. `Path / "x"` applies no
+            # traversal check of its own, and the passthrough list above only
+            # screens known route prefixes, so nothing here stopped a segment
+            # climbing out of the build directory.
+            #
+            # Two independent guards, in the order the rest of the codebase uses
+            # (security/antivirus.py, api/backtesting.py, ml/online_learner.py):
+            #
+            #   1. Allowlist. Every segment must begin with an alphanumeric, so
+            #      "." and ".." cannot BE a segment — traversal is unspellable
+            #      rather than merely detected. No backslashes, no NUL, no
+            #      leading "/". The path is then rebuilt from the match output,
+            #      so the tainted string never reaches path construction.
+            #   2. Confinement. Resolve and prove the result is still inside the
+            #      build output, in case the allowlist is ever loosened.
+            #
+            # A path failing either check is not an asset, so it falls through
+            # to index.html like any other unknown route — the response does not
+            # distinguish "escaped" from "not found".
+            _is_asset = False
+            _asset: Path | None = None
+            _m = _ASSET_PATH_RE.fullmatch(full_path) if len(full_path) <= _MAX_ASSET_PATH_LEN else None
+            if _m is not None:
+                _safe_rel: str = _m.group(0)  # untainted — output of a pattern match
+                try:
+                    _asset = Path(os.path.join(str(_frontend_dist_resolved), _safe_rel)).resolve()
+                    _asset.relative_to(_frontend_dist_resolved)
+                    _is_asset = _asset.is_file()
+                except (ValueError, OSError):
+                    _is_asset = False
+            if _is_asset and _asset is not None:
+                return FileResponse(str(_asset), headers=_asset_cache_headers(_safe_rel))
             # Everything else is a React Router path → serve index.html
-            return FileResponse(str(_index_html))
+            return FileResponse(str(_index_html), headers=_INDEX_CACHE_HEADERS)
 
         app.mount(
             "/",
-            StaticFiles(directory=str(_frontend_dist), html=True),
+            _CachingStaticFiles(directory=str(_frontend_dist), html=True),
             name="frontend_spa",
         )
         logger.info("Main React app mounted at / (static/)")
-
-        # Also expose legacy GodMode at /godmode/ if it exists
-        if _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
-            app.mount(
-                "/godmode",
-                StaticFiles(directory=str(_dashboard_dist), html=True),
-                name="godmode_dashboard",
-            )
-            logger.info("GodMode dashboard mounted at /godmode/ (dashboard/dist/)")
+        # The GodMode mount is registered further up, before the catch-all —
+        # putting it here left it unreachable.
 
     elif _dashboard_dist.exists() and (_dashboard_dist / "index.html").exists():
         # Fallback: only legacy dashboard is built

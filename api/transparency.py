@@ -11,13 +11,21 @@ Connected to: transparency/engine.py, core/decision/HOPEFXDecisionEngine.py
 
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from api.auth import TokenPayload, require_role
+from api.error_details import safe_error
 
+UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/transparency", tags=["Transparency"])
+_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _get_transparency_engine():
@@ -27,9 +35,9 @@ def _get_transparency_engine():
 
         engine = getattr(app_state, "transparency_engine", None)
         if engine is None:
-            from transparency.engine import TransparencyEngine
+            from transparency.engine import ExecutionTransparencyEngine
 
-            engine = TransparencyEngine()
+            engine = ExecutionTransparencyEngine()
             app_state.transparency_engine = engine
         return engine
     except Exception:
@@ -114,9 +122,17 @@ async def explain_trade(trade_id: str):
 async def get_audit_log(
     limit: int = Query(50, ge=1, le=500),
     action_type: str | None = Query(None),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """
     Retrieve the audit log of all system actions (trades, config changes, risk events).
+
+    Admin-only. The rest of this router is deliberately public — decisions,
+    per-trade explanations, aggregate stats and the client statement exist so a
+    client or auditor can verify the system's behaviour without an account. The
+    audit log is a different kind of record: it carries config changes and risk
+    events, i.e. operator actions rather than published trading conduct, so it
+    is gated even though its neighbours are not.
     """
     try:
         from core.app_state import app_state
@@ -136,14 +152,8 @@ async def get_audit_log(
     return {"entries": entries, "total": len(audit_log) if audit_log else 0}
 
 
-@router.get("/stats")
-async def get_transparency_stats():
-    """
-    Get aggregate statistics about decision quality and model performance.
-    """
-    store = _get_decision_store()
-    decisions = list(store) if store else []
-
+def _compute_stats(decisions: list) -> dict[str, Any]:
+    """Aggregate decision-quality stats from a list of decision dicts."""
     total = len(decisions)
     if total == 0:
         return {
@@ -173,3 +183,84 @@ async def get_transparency_stats():
         "pending": total - resolved - skips,
         "skipped": skips,
     }
+
+
+@router.get("/stats")
+async def get_transparency_stats():
+    """Aggregate statistics about decision quality and model performance."""
+    store = _get_decision_store()
+    return _compute_stats(list(store) if store else [])
+
+
+# ── Client audit statement (institutional transparency #9) ──────────────────────
+def _active_model_summary() -> dict[str, Any]:
+    """Active model + its honest OOS metrics, read from the committed registry.
+
+    Degrades to an ``error`` field rather than raising — a statement endpoint must
+    never 500 because one section is unavailable.
+    """
+    md = _ROOT / "ml" / "saved_models"
+    try:
+        reg = json.loads((md / "registry.json").read_text())
+        active = reg.get("active_version")
+        v = reg.get("versions", {}).get(active, {})
+        return {
+            "active_version": active,
+            "horizon": v.get("horizon"),
+            "oos_accuracy": v.get("oos_accuracy"),
+            "oos_n": v.get("oos_n") or v.get("n_trades"),
+            "oos_significant": v.get("oos_significant"),
+            "sharpe_gate_passed": v.get("sharpe_gate_passed"),
+            "sha256": (v.get("sha256") or "")[:12],
+        }
+    except (OSError, ValueError) as exc:
+        return {"error": f"model registry unavailable: {exc}"}
+
+
+@router.get("/statement")
+async def client_statement() -> dict[str, Any]:
+    """One auditable client statement bundling the controls a client/auditor wants:
+    invariant-enforcement posture, the active model + its honest metrics, decision
+    transparency stats, and audit-trail availability. Every section is best-effort
+    and self-describing so the document is always returned.
+    """
+    statement: dict[str, Any] = {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "disclaimer": (
+            "Paper-trading / research statement. Model edge is statistically "
+            "significant but below the production bar; not investment advice."
+        ),
+    }
+
+    # 1. Safety / governance posture (always available — pure in-process).
+    try:
+        from invariants.enforcement import status as _inv_status
+
+        s = _inv_status()
+        statement["governance"] = {
+            "invariant_mode": s.get("mode"),
+            "blocking_enabled": s.get("blocking_enabled"),
+            "enforced_checks": s.get("enforce_kinds"),
+            "engine_healthy": s.get("engine_healthy"),
+            "checker_errors": s.get("counters", {}).get("checker_errors"),
+        }
+    except Exception as exc:  # never let one section sink the statement
+        statement["governance"] = {"error": safe_error(exc)}
+
+    # 2. Active model + honest metrics.
+    statement["model"] = _active_model_summary()
+
+    # 3. Decision transparency (defensive — needs app state / decision store).
+    try:
+        store = _get_decision_store()
+        decisions = list(store) if store else []
+        statement["decisions"] = _compute_stats(decisions)
+    except Exception as exc:
+        statement["decisions"] = {"available": False, "reason": safe_error(exc)}
+
+    # 4. Audit-trail availability.
+    statement["audit_trail"] = {
+        "decision_log": "decisions" in statement and "error" not in statement.get("decisions", {}),
+        "hash_chain": "verified in CI (scripts/runtime_invariant_check.py)",
+    }
+    return statement

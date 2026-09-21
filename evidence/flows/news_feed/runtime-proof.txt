@@ -1,0 +1,24 @@
+# news feed runtime proof
+# captured: 2026-08-19T08:30:35Z
+# revision: 9d375ba8406c6eb3ed05fb4d576bff30711c2b4f
+#
+# READ THIS BEFORE THE EMPTY LISTS BELOW.
+# No news API keys are configured in this environment. The correct result
+# is therefore an empty article list produced by a WORKING manager, which
+# is not distinguishable over HTTP from the empty list a MISSING manager
+# used to produce. The in-process section below is what separates them.
+
+## GET /api/news/latest?limit=5
+{"symbol":"XAU_USD","articles":[],"total":0}
+## GET /api/news/feed?limit=5
+{"articles":[],"total":0}
+## GET /api/news/nuclear-score
+{"symbol":"XAUUSD","score":0,"max_score":0,"alert":false,"articles_analyzed":0,"timestamp":"2026-08-19T08:30:35.966521+00:00"}
+
+## In-process: the manager now resolves (this is what was broken)
+_get_news_manager() -> NewsFeedManager    (was None before this change)
+adapters constructed : ['FinnhubFeed', 'FMPFeed', 'NewsDataFeed', 'AlphaVantageNewsFeed', 'NewsAPIFeed']
+adapters configured  : []
+
+Server log occurrences of 'News manager init failed': 0
+0 (it was logged on every request before)

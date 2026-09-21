@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# HOPEFX - override for running behind Caddy (or any external reverse proxy)
+# ---------------------------------------------------------------------------
+# Use this when something OTHER than the bundled nginx terminates TLS on
+# ports 80/443 - Caddy, Traefik, a host nginx, or a cloud load balancer.
+#
+#   docker compose -f docker-compose.yml -f deployments/docker-compose.caddy.yml up -d
+#
+# Tip: set this once so plain `docker compose` picks both files up automatically
+# and you do not have to repeat the -f flags:
+#
+#   echo 'COMPOSE_FILE=docker-compose.yml:deployments/docker-compose.caddy.yml' >> .env
+#
+# WHY THIS EXISTS
+# The bundled nginx service publishes 80:80 and 443:443. If Caddy is already
+# listening there, nginx cannot start and Docker reports:
+#
+#   failed to set up container networking: driver failed programming external
+#   connectivity on endpoint hopefx-ai-trading-nginx-1: failed to bind host
+#   port 0.0.0.0:80/tcp: address already in use
+#
+# The bundled nginx would also fail on its own even without the clash, because
+# nginx/nginx.conf hard-requires a certbot-issued
+# /etc/letsencrypt/live/$HOPEFX_DOMAIN/fullchain.pem. With Caddy handling
+# certificates automatically, none of that applies.
+#
+# HOW IT WORKS
+# Assigning nginx to a profile that is never activated is the supported Compose
+# way to exclude an inherited service - a plain override cannot delete one.
+# Nothing starts it unless you explicitly pass --profile bundled-nginx.
+#
+# WHAT YOUR PROXY MUST DO
+# app publishes 8000, so point Caddy at it. Minimal Caddyfile:
+#
+#   your-domain.com {
+#       reverse_proxy localhost:8000
+#   }
+#
+# Health endpoint for proxy/uptime checks: /api/health/live
+# (/api/health/ready also exists if you want readiness rather than liveness.)
+#
+# WebSockets: the app serves /ws/live and /ws/public. Caddy's reverse_proxy
+# upgrades WebSocket connections automatically, so no extra config is needed -
+# unlike nginx, which requires explicit Upgrade/Connection headers.
+# ---------------------------------------------------------------------------
+services:
+  nginx:
+    profiles:
+      - bundled-nginx

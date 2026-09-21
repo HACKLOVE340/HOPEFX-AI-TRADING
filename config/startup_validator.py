@@ -26,6 +26,7 @@ Env-var name alignment (canonical names used throughout the codebase):
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import sys
@@ -49,6 +50,39 @@ def _jwt_secret_value() -> str:
 
 def _env(name: str) -> str:
     return os.getenv(name, "").strip()
+
+
+# The prefixes a placeholder in .env.example can carry. These are values the
+# validator rejects, not values it uses, so the placeholder hook exempts them the
+# same way it exempts its own detection regex.
+#
+# Only CHANGE_ME was checked at first, which missed
+# ``JWT_SECRET_KEY=change-me-in-production-min-32-chars``: a different spelling
+# of the same idea, in the same file, for a JWT signing key. Neither the
+# validator nor the generator recognised it, so it shipped verbatim into every
+# generated .env. Matching is case-insensitive and covers the separator
+# variants, because the point is the intent, not the punctuation.
+_PLACEHOLDER_PREFIXES = ("CHANGE_ME", "CHANGE-ME", "CHANGEME")  # healer: ignore
+
+
+def is_placeholder(value: str) -> bool:
+    """True when *value* is an unreplaced .env.example placeholder.
+
+    Ten validators in this file needed this check and nine of them had it,
+    written out longhand as ``elif is_placeholder(val)``. The tenth —
+    ``_validate_crypto_webhook_secret`` — tested only for empty and for length,
+    and ``CHANGE_ME_generate_64_char_hex_secret`` is 37 characters, so it
+    cleared the length floor and passed.
+
+    That secret verifies crypto payment webhook signatures. A production
+    deployment could run with the literal placeholder as its value, and
+    ``.env.example`` is in the public repository, so the "secret" was printed in
+    the source tree. Nothing reported it, because the one copy of the check that
+    mattered was the one that had been left out.
+
+    Shared now, so a validator either calls it or visibly does not.
+    """
+    return value.strip().upper().startswith(_PLACEHOLDER_PREFIXES)
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +110,7 @@ def _validate_jwt(errors: list[str]) -> None:
         errors.append(
             f"TOO_SHORT SECURITY_JWT_SECRET (got {len(jwt_val)} chars, need >=32)",
         )
-    elif jwt_val.startswith("CHANGE_ME"):
+    elif is_placeholder(jwt_val):
         errors.append(
             "INSECURE SECURITY_JWT_SECRET: placeholder value detected — "
             "replace with a real random secret before deploying",
@@ -96,7 +130,11 @@ def _validate_database(errors: list[str]) -> None:
         errors.append(
             "MISSING  DB_PASSWORD: required when DB_HOST is set without DATABASE_URL",
         )
-    if db_pass and len(db_pass) < 12:
+    if db_pass and is_placeholder(db_pass):
+        errors.append(
+            "INSECURE DB_PASSWORD: placeholder value — replace before deploying",
+        )
+    elif db_pass and len(db_pass) < 12:
         errors.append(
             f"TOO_SHORT DB_PASSWORD (got {len(db_pass)} chars, need >=12)",
         )
@@ -131,6 +169,15 @@ def _validate_redis(errors: list[str]) -> None:
             "MISSING  REDIS_PASSWORD: Redis runs without authentication in production. "
             "Set REDIS_PASSWORD to a strong random value (e.g. openssl rand -hex 32).",
         )
+    elif is_placeholder(redis_password):
+        # docker-compose.yml interpolates this into --requirepass and into every
+        # REDIS_URL, so a placeholder here is not a warning about a future
+        # mistake — it *is* the password Redis is running with, published in
+        # .env.example.
+        errors.append(
+            "INSECURE REDIS_PASSWORD: placeholder value — this becomes Redis's actual "
+            "password via docker-compose. Replace with e.g. openssl rand -hex 32.",
+        )
 
 
 def _validate_encryption_key(errors: list[str]) -> None:
@@ -144,9 +191,108 @@ def _validate_encryption_key(errors: list[str]) -> None:
         errors.append(
             f"TOO_SHORT CONFIG_ENCRYPTION_KEY (got {len(enc_key)} chars, need >=32)",
         )
-    elif enc_key.startswith("CHANGE_ME"):
+    elif is_placeholder(enc_key):
         errors.append(
             "INSECURE CONFIG_ENCRYPTION_KEY: placeholder value — replace before deploying",
+        )
+
+
+# ---------------------------------------------------------------------------
+# The published-placeholder sweep (F99)
+# ---------------------------------------------------------------------------
+#
+# `is_placeholder` fixed the *tenth* copy of a check that had been written out
+# nine times. It did not fix the shape that produced it: a secret is guarded
+# only if somebody remembered to write a validator for it. Eight placeholders
+# in `.env.example` had no validator at all, and two of them mattered:
+#
+#   DB_ENCRYPTION_KEY   — the placeholder is not valid base64, so
+#                         database/encryption.py logged an error and returned
+#                         None, which is its documented *dev/CI* fallback:
+#                         field-level encryption silently off, app boots fine.
+#   BOOTSTRAP_SUPERADMIN_PASSWORD
+#                       — scripts/bootstrap_prod.py requires >= 12 characters
+#                         and the placeholder is 45, so it cleared the floor
+#                         exactly the way CHANGE_ME_generate_64_char_hex_secret
+#                         cleared the webhook secret's 32-character floor. The
+#                         superadmin account would be seeded with a password
+#                         printed in the public repository.
+#
+# So the guard is a table rather than a tenth, eleventh and twelfth hand-written
+# validator. Every variable below is rejected when its value is a placeholder.
+# The check is *presence-conditional*: it never requires the variable, so
+# adding one here cannot break a deployment that does not use the feature. It
+# only refuses to start with a value whose plaintext is published.
+#
+# tests/unit/test_placeholder_secrets_are_rejected.py reads `.env.example` and
+# requires every placeholder in it to be either listed here or listed in
+# PLACEHOLDER_NOT_A_SECRET with a reason. A new placeholder that is in neither
+# fails that test. It used to `pytest.skip` when the validator did not know a
+# variable — which skipped precisely the case the test existed to catch.
+PLACEHOLDER_GUARDED: tuple[str, ...] = (
+    # Seeded login credentials — scripts/bootstrap_prod.py and
+    # scripts/bootstrap_dev.py create real accounts from these.
+    "BOOTSTRAP_SUPERADMIN_PASSWORD",
+    "BOOTSTRAP_ADMIN_PASSWORD",
+    "BOOTSTRAP_TRADER_PASSWORD",
+    # Field-level DB encryption key — database/encryption.py.
+    "DB_ENCRYPTION_KEY",
+    # Datastore credentials.
+    "POSTGRES_PASSWORD",
+    # Monitoring UI that renders live trading data.
+    "GRAFANA_ADMIN_PASSWORD",
+    # Exchange credentials — brokers/bybit_connector.py authenticates with them.
+    "BYBIT_API_KEY",
+    "BYBIT_API_SECRET",
+)
+
+# Placeholders in `.env.example` that are deliberately *not* secrets. Empty
+# today, and kept so the test has somewhere to point at other than a skip: a
+# variable belongs here only with a reason a reviewer can check.
+PLACEHOLDER_NOT_A_SECRET: dict[str, str] = {}
+
+
+def _validate_published_placeholders(errors: list[str]) -> None:
+    """Reject any guarded variable whose value is still a published placeholder.
+
+    Presence-conditional by design: an unset variable is not this check's
+    business, so the sweep can cover credentials a given deployment does not
+    use without demanding they be configured.
+    """
+    for name in PLACEHOLDER_GUARDED:
+        value = _env(name)
+        if value and is_placeholder(value):
+            errors.append(
+                f"INSECURE {name}: placeholder value from .env.example detected. "
+                "Its plaintext is published in the repository — generate a real value before deploying",
+            )
+
+
+def _validate_db_encryption_key_shape(errors: list[str]) -> None:
+    """A DB_ENCRYPTION_KEY that is set but unusable must not boot.
+
+    database/encryption.py falls back to storing plaintext when it cannot load
+    a key. That fallback is correct for dev and CI, where no key is set at all.
+    A key that *is* set and does not decode to 32 bytes is a misconfiguration,
+    and letting it degrade to the dev fallback writes user data to the database
+    in the clear while the log line scrolls past.
+    """
+    raw = _env("DB_ENCRYPTION_KEY")
+    if not raw or is_placeholder(raw):
+        return  # absent is the documented fallback; placeholder is reported above
+    try:
+        decoded = base64.urlsafe_b64decode(raw + "==")
+    except Exception:
+        errors.append(
+            "INVALID  DB_ENCRYPTION_KEY: not valid base64. Field-level encryption would be "
+            'silently disabled. Generate with: python -c "import base64,os; '
+            'print(base64.urlsafe_b64encode(os.urandom(32)).decode())"',
+        )
+        return
+    if len(decoded) != 32:
+        errors.append(
+            f"INVALID  DB_ENCRYPTION_KEY: decodes to {len(decoded)} bytes, must be exactly 32 "
+            "(AES-256). Field-level encryption would be silently disabled.",
         )
 
 
@@ -200,7 +346,7 @@ def _validate_kill_switch_token(errors: list[str]) -> None:
         errors.append(
             f"TOO_SHORT HOPEFX_KILL_SWITCH_TOKEN (got {len(ks_token)} chars, need >=32)",
         )
-    elif ks_token.startswith("CHANGE_ME"):
+    elif is_placeholder(ks_token):
         errors.append(
             "INSECURE HOPEFX_KILL_SWITCH_TOKEN: placeholder value — replace before deploying",
         )
@@ -209,20 +355,35 @@ def _validate_kill_switch_token(errors: list[str]) -> None:
 def _validate_llm_backend(errors: list[str]) -> None:
     """Validate LLM backend config; warn (not error) when API key is absent."""
     llm_backend = (_env("LLM_BACKEND") or "anthropic").lower()
-    valid_backends = {"anthropic", "openai"}
+    # google and ollama were absent, so no third vendor could be selected even
+    # by environment -- which made the fallback chain in ai/gateway/chain.py
+    # unreachable past its second leg. ollama is the optional local backend and
+    # is never a default (plan Part 1A.5).
+    #
+    # The OpenAI-compatible vendors (Moonshot/Kimi, Qwen, DeepSeek, Mistral,
+    # Groq, xAI, OpenRouter, Together) come from the same table that drives
+    # their adapters and credentials. Listing them again here is how a vendor
+    # ends up callable by the gateway and rejected by startup validation.
+    from ai.gateway.vendors import OPENAI_COMPATIBLE
+
+    key_map = {
+        "anthropic": ("ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys"),
+        "openai": ("OPENAI_API_KEY", "https://platform.openai.com/api-keys"),
+        "google": ("GOOGLE_API_KEY", "https://aistudio.google.com/app/apikey"),
+        # Local inference authenticates by reachability, not by key.
+        "ollama": ("OLLAMA_BASE_URL", "https://ollama.com/download"),
+        **{name: (v.key_env, v.console_url) for name, v in OPENAI_COMPATIBLE.items()},
+    }
+    valid_backends = set(key_map)
 
     if llm_backend not in valid_backends:
         errors.append(
             f"INVALID  LLM_BACKEND={llm_backend!r}: must be one of "
             f"{sorted(valid_backends)}. "
-            "Set LLM_BACKEND=anthropic (default) or LLM_BACKEND=openai."
+            "Set LLM_BACKEND=anthropic (default), openai, google, or ollama."
         )
         return
 
-    key_map = {
-        "anthropic": ("ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys"),
-        "openai": ("OPENAI_API_KEY", "https://platform.openai.com/api-keys"),
-    }
     env_name, url = key_map[llm_backend]
     api_key = _env(env_name)
 
@@ -240,7 +401,7 @@ def _validate_llm_backend(errors: list[str]) -> None:
                 env_name,
                 url,
             )
-    elif api_key.startswith("CHANGE_ME"):
+    elif is_placeholder(api_key):
         errors.append(f"INSECURE {env_name}: placeholder value detected — replace with a real key from {url}")
 
 
@@ -250,6 +411,11 @@ def _validate_crypto_webhook_secret(errors: list[str]) -> None:
     if not secret:
         errors.append(
             "MISSING  CRYPTO_WEBHOOK_SECRET — crypto payment webhooks will be rejected in production. "
+            'Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"'
+        )
+    elif is_placeholder(secret):
+        errors.append(
+            "INSECURE CRYPTO_WEBHOOK_SECRET: placeholder value — replace before deploying. "
             'Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"'
         )
     elif len(secret) < 32:
@@ -306,7 +472,7 @@ def _validate_finnhub(errors: list[str]) -> None:
                 "dates, actual vs forecast values) will not be available. "
                 "Set FINNHUB_API_KEY to a valid Finnhub API key to enable live data."
             )
-    elif key.startswith("CHANGE_ME"):
+    elif is_placeholder(key):
         errors.append(
             "INSECURE FINNHUB_API_KEY: placeholder value detected — "
             "replace with a real Finnhub API key from https://finnhub.io/dashboard"
@@ -371,7 +537,7 @@ def _validate_stripe(errors: list[str]) -> None:
                 "STRIPE_SECRET_KEY not set — Stripe payment endpoints will raise "
                 "until configured. Set to sk_live_... for production."
             )
-    elif key.startswith("CHANGE_ME"):
+    elif is_placeholder(key):
         errors.append("INSECURE STRIPE_SECRET_KEY: placeholder value — replace with a real Stripe key.")
     elif not key.startswith(("sk_live_", "sk_test_")):
         errors.append(f"INVALID  STRIPE_SECRET_KEY: expected sk_live_... or sk_test_... prefix, got {key[:12]!r}...")
@@ -392,7 +558,7 @@ def _validate_stripe(errors: list[str]) -> None:
                 "STRIPE_WEBHOOK_SECRET not set — Stripe webhook signature verification "
                 "is disabled. Set to whsec_... from your Stripe dashboard."
             )
-    elif webhook.startswith("CHANGE_ME"):
+    elif is_placeholder(webhook):
         errors.append("INSECURE STRIPE_WEBHOOK_SECRET: placeholder value — replace with the real whsec_... value.")
 
 
@@ -482,6 +648,8 @@ def validate_environment(*, strict: bool = True) -> None:
         _validate_argocd_webhook(errors)
         _validate_cors_wildcard(errors)
         _validate_crypto_webhook_secret(errors)
+        _validate_published_placeholders(errors)
+        _validate_db_encryption_key_shape(errors)
 
     _validate_broker(errors, dev_mode)
     _validate_trading_mode(errors)

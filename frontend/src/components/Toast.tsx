@@ -16,6 +16,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useVoice } from '../hooks/useVoice';
 import { useVoiceAlerts } from '../lib/voicePrefs';
+import { AlertTriangle, Info } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,11 +64,11 @@ export function useToast(): ToastContextValue {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const VARIANT_STYLES: Record<ToastVariant, { bg: string; border: string; icon: string; color: string }> = {
-  success: { bg: '#052e16', border: '#166534', icon: '✓', color: '#4ade80' },
-  error:   { bg: '#450a0a', border: '#7f1d1d', icon: '✕', color: '#f87171' },
-  warning: { bg: '#431407', border: '#92400e', icon: '⚠', color: '#fb923c' },
-  info:    { bg: '#0c1a2e', border: '#1d4ed8', icon: 'ℹ', color: '#60a5fa' },
+const VARIANT_STYLES: Record<ToastVariant, { bg: string; border: string; icon: React.ReactNode; color: string }> = {
+  success: { bg: '#052e16', border: '#166534', icon: '✓', color: 'var(--gain)' },
+  error:   { bg: '#450a0a', border: '#7f1d1d', icon: '✕', color: 'var(--loss)' },
+  warning: { bg: '#431407', border: '#92400e', icon: <AlertTriangle size={16} aria-hidden />, color: '#fb923c' },
+  info:    { bg: '#0c1a2e', border: '#1d4ed8', icon: <Info size={16} aria-hidden />, color: 'var(--link)' },
 };
 
 // ── Single toast item ─────────────────────────────────────────────────────────
@@ -124,7 +125,7 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
 
       {/* Message */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: '#f1f5f9', lineHeight: 1.45, wordBreak: 'break-word' }}>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-strong)', lineHeight: 1.45, wordBreak: 'break-word' }}>
           {item.message}
         </div>
         {item.action && (
@@ -146,7 +147,7 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
         onClick={dismiss}
         aria-label="Dismiss"
         style={{
-          background: 'transparent', border: 'none', color: '#475569',
+          background: 'transparent', border: 'none', color: 'var(--text-faint)',
           cursor: 'pointer', fontSize: 14, padding: '0 2px', flexShrink: 0,
           lineHeight: 1, marginTop: 1,
         }}
@@ -162,11 +163,21 @@ const ToastCard: React.FC<{ item: ToastItem; onRemove: (id: string) => void }> =
 // ── Container ─────────────────────────────────────────────────────────────────
 
 export const ToastContainer: React.FC = () => {
+  // Both hooks unconditionally, before any early return.
+  //
+  // This read `useContext(ToastContext)`, returned null if it was absent, and
+  // only then called `useContext(ToastListContext)`. React identifies hooks by
+  // call order, so the hook count changed between renders — 1 when the toast
+  // context was missing, 2 once it appeared — and React throws "Rendered more
+  // hooks than during the previous render." Reachable whenever the provider
+  // mounts after this component, or its value starts undefined.
+  //
+  // Found by eslint react-hooks/rules-of-hooks; nothing else in this project
+  // was positioned to see it.
   const ctx = useContext(ToastContext);
-  if (!ctx) return null;
-  // Access internal toasts via a separate internal context
   const toasts = useContext(ToastListContext);
-  if (!toasts) return null;
+
+  if (!ctx || !toasts) return null;
 
   return (
     <div

@@ -13,6 +13,7 @@ All sub-routers are mounted here.  External code that does::
 continues to work without changes.
 """
 
+import asyncio
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 
@@ -80,6 +81,7 @@ from .reporting import router as _reporting_router
 from .risk_management import router as _risk_management_router
 from .security_infra import router as _security_infra_router
 from .system_health import router as _system_health_router
+from .trading_oversight import router as _trading_oversight_router
 from .whitelabel import router as _whitelabel_router
 
 router = APIRouter(prefix="/api/superadmin", tags=["SuperAdmin"])
@@ -95,7 +97,7 @@ async def superadmin_dashboard(user: TokenPayload = Depends(_require_superadmin)
     """
     path = _TEMPLATES_DIR / "admin" / "superadmin.html"
     if path.exists():
-        return HTMLResponse(content=path.read_text(encoding="utf-8"))
+        return HTMLResponse(content=await asyncio.to_thread(path.read_text, encoding="utf-8"))
     # Fallback: redirect to the React SPA which renders SuperAdminDashboard
     from fastapi.responses import RedirectResponse
 
@@ -127,4 +129,5 @@ router.include_router(_reporting_router)
 router.include_router(_risk_management_router)
 router.include_router(_security_infra_router)
 router.include_router(_system_health_router)
+router.include_router(_trading_oversight_router)
 router.include_router(_whitelabel_router)

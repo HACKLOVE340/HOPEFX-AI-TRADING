@@ -15,6 +15,8 @@
  *   GET  /api/data-layer/macro         — MacroResponse (via useMacro hook)
  */
 
+import { CalendarDays } from 'lucide-react';
+import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calendarApi } from '../hooks/useApi';
@@ -67,6 +69,22 @@ const FLAG: Record<string, string> = {
   AU: '🇦🇺', NZ: '🇳🇿', CH: '🇨🇭', CN: '🇨🇳',
 };
 
+/**
+ * Minutes until an event, computed now.
+ *
+ * The API's `minutes_until` is a snapshot from the moment of the fetch. The page
+ * re-renders every 30 s, but re-rendering a constant changes nothing — the
+ * countdown sat on whatever it said when the data arrived, so "3m" could still
+ * read "3m" an hour after the release. Deriving it from `scheduled_time` makes
+ * the re-render meaningful. Falls back to the server's value if the timestamp
+ * is unparseable.
+ */
+function minutesUntil(ev: { scheduled_time: string; minutes_until: number }): number {
+  const at = Date.parse(ev.scheduled_time);
+  if (!Number.isFinite(at)) return ev.minutes_until;
+  return Math.round((at - Date.now()) / 60_000);
+}
+
 function formatCountdown(minutes: number): string {
   if (minutes <= 0) return 'Now';
   if (minutes < 60) return `${minutes}m`;
@@ -91,24 +109,25 @@ function formatDate(iso: string): string {
 const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = ({ event: ev, onPlanTrade }) => {
   const color = IMPORTANCE_COLOR[ev.importance] ?? '#64748b';
   const flag  = FLAG[ev.country] ?? '🌐';
+  const mins  = minutesUntil(ev);
   const isHighImpact = ev.importance === 'high' || ev.importance === 'critical';
 
   return (
     <div style={{ ...s.eventRow, borderLeft: `3px solid ${color}` }}>
       <div style={s.eventTime}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{formatTime(ev.scheduled_time)}</div>
-        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{formatCountdown(ev.minutes_until)}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{formatTime(ev.scheduled_time)}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{formatCountdown(mins)}</div>
       </div>
 
       <div style={s.eventMain}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>{flag}</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{ev.title}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{ev.title}</span>
           {ev.currency && <span style={s.currencyBadge}>{ev.currency}</span>}
         </div>
-        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
           {IMPORTANCE_LABEL[ev.importance]}
-          {ev.minutes_until <= 60 && ev.minutes_until > 0 && (
+          {mins <= 60 && mins > 0 && (
             <span style={{ color: '#f97316', marginLeft: 8 }}>⚠ Approaching</span>
           )}
         </div>
@@ -130,12 +149,31 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
         {ev.actual !== null && (
           <div style={s.dataItem}>
             <span style={s.dataLabel}>Actual</span>
-            <span style={{
-              ...s.dataValue,
-              color: ev.forecast !== null
-                ? ev.actual > ev.forecast ? '#4ade80' : '#f87171'
-                : '#f1f5f9',
-            }}>{ev.actual}</span>
+            {/* Direction vs forecast, not a verdict. Green-for-higher assumed
+                every indicator is bullish when it rises, which is wrong for
+                unemployment, jobless claims and most inflation prints — the
+                page was calling a bad number good. Whether a beat is bullish
+                depends on the indicator, so show the comparison and leave the
+                reading to the trader. */}
+            <span
+              style={{ ...s.dataValue, color: 'var(--text-strong)' }}
+              title={
+                ev.forecast === null
+                  ? undefined
+                  : ev.actual > ev.forecast
+                    ? `Above forecast (${ev.forecast})`
+                    : ev.actual < ev.forecast
+                      ? `Below forecast (${ev.forecast})`
+                      : `In line with forecast (${ev.forecast})`
+              }
+            >
+              {ev.actual}
+              {ev.forecast !== null && ev.actual !== ev.forecast && (
+                <span style={{ color: 'var(--text-dim)', marginLeft: 4, fontSize: 11 }}>
+                  {ev.actual > ev.forecast ? '▲' : '▼'}
+                </span>
+              )}
+            </span>
           </div>
         )}
         {isHighImpact && onPlanTrade && (
@@ -144,7 +182,7 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
             style={{
               padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
               background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-              color: '#60a5fa', fontSize: 10, fontWeight: 700, fontFamily: 'inherit',
+              color: 'var(--link)', fontSize: 10, fontWeight: 700, fontFamily: 'inherit',
               whiteSpace: 'nowrap',
             }}
             title="Navigate to Trade page to plan a trade around this event"
@@ -244,41 +282,40 @@ const EconomicCalendar: React.FC = () => {
   }, {});
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>📅 Economic Calendar</h1>
-          <p style={s.subtitle}>Upcoming market-moving events. Red = high impact on gold/USD.</p>
-        </div>
-
-        {/* Auto-pause toggle */}
+    <PageShell
+      width="wide"
+      icon={CalendarDays}
+      title="Economic Calendar"
+      subtitle="Upcoming market-moving events. Red = high impact on gold/USD."
+      actions={<>{/* Auto-pause toggle */}
         <div style={s.autoPauseCard}>
-          <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 4 }}>Auto-pause trading</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', marginBottom: 4 }}>Auto-pause trading</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
               onClick={handleToggleAutoPause}
               disabled={savingPause}
               style={{
                 ...s.toggleBtn,
-                background: autoPause.enabled ? '#166534' : '#334155',
-                color:      autoPause.enabled ? '#4ade80' : '#94a3b8',
+                background: autoPause.enabled ? '#166534' : 'var(--surface-hover)',
+                color:      autoPause.enabled ? 'var(--gain)' : 'var(--text-dim)',
                 opacity:    savingPause ? 0.6 : 1,
               }}
             >
               {autoPause.enabled ? '⏸ ON' : '▶ OFF'}
             </button>
-            <span style={{ fontSize: 12, color: '#64748b' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               {autoPause.enabled
                 ? `Pauses ${autoPause.minutes_before}min before ${autoPause.min_importance}+ events`
                 : 'Enable to auto-pause before high-impact events'}
             </span>
           </div>
           {pauseErr && (
-            <div style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>{pauseErr}</div>
+            <div style={{ fontSize: 12, color: 'var(--loss)', marginTop: 6 }}>{pauseErr}</div>
           )}
-        </div>
-      </div>
+        </div></>}
+    >
+      {/* Header */}
+
 
       {/* Blackout banner */}
       {macro?.is_blackout && (
@@ -286,7 +323,7 @@ const EconomicCalendar: React.FC = () => {
           background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8,
           padding: '10px 16px', marginBottom: 16,
           display: 'flex', alignItems: 'center', gap: 10,
-          color: '#f87171', fontSize: 13, fontWeight: 600,
+          color: 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600,
         }}>
           🔴 Trading Blackout Active — high-impact event imminent. Order submission is paused.
           {macro.impact_score != null && (
@@ -333,10 +370,10 @@ const EconomicCalendar: React.FC = () => {
           ) : events.length === 0 ? (
             <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
               <div style={{ fontSize: 36 }}>📅</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>No events found</div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>Try adjusting your filters or check back later.</div>
+              <div style={{ fontSize: 'var(--fs-value)', fontWeight: 600, color: 'var(--text-dim)' }}>No events found</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Try adjusting your filters or check back later.</div>
               <button onClick={() => navigate('/trade')}
-                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: '#60a5fa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: 'var(--link)', fontSize: 'var(--fs-body)', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
                 ⚡ Go to Trade
               </button>
             </div>
@@ -359,7 +396,7 @@ const EconomicCalendar: React.FC = () => {
           <MacroCalendar />
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -368,25 +405,25 @@ const EconomicCalendar: React.FC = () => {
 const s: Record<string, React.CSSProperties> = {
   page:          { padding: 24, maxWidth: 960, margin: '0 auto' },
   header:        { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 16 },
-  title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
-  subtitle:      { fontSize: 14, color: '#64748b', margin: 0 },
-  autoPauseCard: { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 16px', minWidth: 260 },
-  toggleBtn:     { border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 14px', fontWeight: 700, fontSize: 13 },
+  title:         { fontSize: 24, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 6px' },
+  subtitle:      { fontSize: 14, color: 'var(--text-muted)', margin: 0 },
+  autoPauseCard: { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10, padding: '12px 16px', minWidth: 260 },
+  toggleBtn:     { border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 14px', fontWeight: 700, fontSize: 'var(--fs-body)'},
   tabs:          { display: 'flex', gap: 8, marginBottom: 20 },
-  tab:           { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
-  tabActive:     { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
+  tab:           { background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 16px', fontSize: 'var(--fs-body)'},
+  tabActive:     { background: '#1e3a5f', border: '1px solid #3b82f6', color: 'var(--link)' },
   dayGroup:      { marginBottom: 24 },
-  dayHeader:     { fontSize: 13, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #1e293b' },
-  eventRow:      { display: 'flex', alignItems: 'center', gap: 16, background: '#1e293b', borderRadius: 8, padding: '12px 16px', marginBottom: 6 },
+  dayHeader:     { fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border)' },
+  eventRow:      { display: 'flex', alignItems: 'center', gap: 16, background: 'var(--raised)', borderRadius: 8, padding: '12px 16px', marginBottom: 6 },
   eventTime:     { minWidth: 60, textAlign: 'center' },
   eventMain:     { flex: 1 },
   eventData:     { display: 'flex', gap: 16 },
   dataItem:      { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 60 },
-  dataLabel:     { fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 },
-  dataValue:     { fontSize: 14, fontWeight: 600, color: '#f1f5f9', marginTop: 2 },
-  currencyBadge: { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '1px 6px' },
-  empty:         { textAlign: 'center', color: '#475569', padding: 40 },
-  errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: '#f87171', fontSize: 14, marginBottom: 16 },
+  dataLabel:     { fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dataValue:     { fontSize: 14, fontWeight: 600, color: 'var(--text-strong)', marginTop: 2 },
+  currencyBadge: { background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 4, color: 'var(--text-dim)', fontSize: 11, padding: '1px 6px' },
+  empty:         { textAlign: 'center', color: 'var(--text-faint)', padding: 40 },
+  errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: 'var(--loss)', fontSize: 14, marginBottom: 16 },
 };
 
 export default EconomicCalendar;

@@ -25,11 +25,17 @@ import os
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
 _reconciler_task: asyncio.Task | None = None
+
+# Spellings of a position side that `database.models.Position.side` actually
+# holds. It is a free-text String(10); `database/repositories/position_repository.py`
+# nets quantity with a case for "long" and a case for "buy", which is the
+# evidence that both are written. Compared case-insensitively — see `_calc_pnl`.
+_LONG_SIDES = frozenset({"buy", "long"})
+_SHORT_SIDES = frozenset({"sell", "short"})
 
 # How many consecutive mismatches for the same symbol before escalating to ERROR
 _MISMATCH_ALERT_THRESHOLD = 3
@@ -112,14 +118,28 @@ class PositionReconciler:
         if not db_positions:
             return
 
-        # Fetch broker positions if available
-        broker_positions: ClassVar[dict] = {}
+        # Fetch broker positions if available. Keep fetch success separate from
+        # mapping truthiness: an honest empty broker book must detect DB-only
+        # positions, while a failed fetch must remain an unknown state.
+        broker_positions: dict = {}
+        broker_snapshot_available = False
         if self._broker and hasattr(self._broker, "get_positions"):
             try:
                 raw = self._broker.get_positions()
                 if asyncio.iscoroutine(raw):
                     raw = await raw
-                broker_positions = {p.get("symbol", p): p for p in (raw or [])}
+                if raw is None:
+                    raise RuntimeError("broker returned no position snapshot")
+                broker_positions = {}
+                for position in raw or []:
+                    if isinstance(position, dict):  # noqa: SIM108 — explicit branch is audit-critical
+                        symbol = position.get("symbol")
+                    else:
+                        symbol = getattr(position, "symbol", None)
+
+                    if symbol:
+                        broker_positions[str(symbol)] = position
+                broker_snapshot_available = True
             except Exception as exc:
                 logger.warning("Could not fetch broker positions: %s", exc)
 
@@ -150,7 +170,7 @@ class PositionReconciler:
                     updated += 1
 
             # ── Drift detection ───────────────────────────────────────────────
-            if broker_positions:
+            if broker_snapshot_available:
                 if pos.symbol not in broker_positions:
                     self._mismatches += 1
                     self._consecutive_mismatches[pos.symbol] = self._consecutive_mismatches.get(pos.symbol, 0) + 1
@@ -366,13 +386,16 @@ class PositionReconciler:
         # Notify via alert engine
         if self._alert_engine is not None:
             try:
+                # Positional: send_alert(level, message, data). The previous call
+                # passed title=, which is not a parameter, so every drift alert
+                # raised TypeError into the except below (F248).
                 await self._alert_engine.send_alert(
-                    title="⚠ Position Drift Detected",
-                    message=reason,
-                    level="critical",
+                    "critical",
+                    f"⚠ Position Drift Detected: {reason}",
+                    {"event": "position_drift", "reason": reason},
                 )
             except Exception as ae_exc:
-                logger.warning("Alert engine notification failed: %s", ae_exc)
+                logger.error("Alert engine notification failed: %s", ae_exc)
 
         # Instruct risk manager to halt if available
         try:
@@ -400,10 +423,44 @@ class PositionReconciler:
 
     @staticmethod
     def _calc_pnl(pos, current_price: float) -> float:
+        """Unrealized P&L for one open position.
+
+        This compared `pos.side == "buy"` and nothing else.
+        `database.models.Position.side` is a free-text `String(10)` holding more
+        than one spelling — the proof is in this repository, in SQL:
+        `database/repositories/position_repository.py:147` nets open quantity
+        with a case for `"long"` *and* a case for `"buy"`, because both are
+        written. So a long stored as `"long"` fell through to the short branch
+        and was priced with its sign inverted: a 2-unit long at 1900 marked at
+        1950 reconciled as **-$100** instead of +$100.
+
+        That number is not only displayed. `_reconcile_once` writes it back with
+        `db_pos.unrealized_pnl = pnl` and broadcasts it over the WebSocket.
+
+        The alias sets are stated here rather than imported. `brokers/base.py`
+        holds the same two sets as `_SIDE_BUY_ALIASES` / `_SIDE_SELL_ALIASES`,
+        and importing them would execute `brokers/__init__.py` — the whole
+        broker package, optional-SDK guards and all — for a string comparison,
+        and invert the core-to-brokers dependency. Three encodings of one fact
+        is one too many; see MASTER_OUTSTANDING A9.
+        """
         qty = pos.quantity or 0.0
         entry = pos.entry_price or 0.0
-        if pos.side == "buy":
+        side = str(pos.side or "").strip().lower()
+
+        if side in _LONG_SIDES:
             return (current_price - entry) * qty
+        if side not in _SHORT_SIDES:
+            # Still returns a number — the caller writes one to the database
+            # either way — but never picks a direction in silence, which is how
+            # "long" stayed inverted without anyone noticing.
+            logger.error(
+                "RECONCILE: position side %r is not a recognised long or short spelling; "
+                "pricing it as a short. Known: %s / %s",
+                pos.side,
+                sorted(_LONG_SIDES),
+                sorted(_SHORT_SIDES),
+            )
         return (entry - current_price) * qty
 
     @property

@@ -38,38 +38,105 @@ cd HOPEFX-AI-TRADING
 #### 3. Configure Environment
 
 ```bash
-# Copy environment template
-cp .env.example .env
-
-# Edit with production values
-nano .env
+python3 scripts/bootstrap_env.py --domain your-domain.com
 ```
 
-**Required environment variables:**
+This writes `.env` (mode 0600) from `.env.example` with a freshly generated value
+for every secret, and prints the superadmin, admin, trader and Grafana passwords
+once — **save them before you close the terminal.**
+
+Do not copy `.env.example` by hand. It ships fourteen `CHANGE_ME_*` placeholders,
+and startup validation rejects every one of them in production. A missed
+placeholder does not announce itself; the deploy stops with
+
+```
+dependency failed to start: container hopefx-ai-trading-app-1 is unhealthy
+```
+
+which is `sys.exit(1)` inside startup validation, seen from outside the
+container. To read the actual reason:
+
 ```bash
-# Security (CRITICAL - Generate unique values!)
-CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-CONFIG_SALT=$(python -c "import secrets; print(secrets.token_hex(16))")
-
-# Database
-POSTGRES_PASSWORD=$(python -c "import secrets; print(secrets.token_hex(16))")
-POSTGRES_USER=hopefx_admin
-
-# Application
-APP_ENV=production
+docker compose logs app | grep -A 20 "STARTUP VALIDATION FAILED"
 ```
+
+Three of those placeholders also have to agree with each other —
+`DATABASE_URL`, `POSTGRES_PASSWORD` and `DB_PASSWORD` are one credential written
+three times — which is the part hand-editing tends to get wrong in a way that
+only shows up as a database the app cannot log in to. The generator handles it.
+
+### `.env` is the only file the containers read
+
+Every service in `docker-compose.yml` declares `env_file: .env`, which always
+resolves to `.env` next to the compose file. **That is not the same thing as the
+`--env-file` command-line flag**, which only replaces the file used for `${VAR}`
+substitution *inside* the compose file.
+
+Conflating the two fails silently. Generate secrets to some other path, start the
+stack with `--env-file` pointing at it, and every container comes up holding
+whatever the old `.env` contained. Nothing reports a problem — the deploy simply
+behaves as though the new values were never written, because for the containers
+they were not.
+
+So run the generator with its default output. It warns if you send it elsewhere.
+
+Useful flags:
+
+```bash
+# regenerate over an existing .env (keeps a timestamped backup)
+#
+# ONLY on a deployment that has never started. --force mints a NEW
+# POSTGRES_PASSWORD, and Postgres applies that variable exactly once, when it
+# initialises an empty data volume. Once the volume exists it keeps the password
+# it was created with, so regenerating leaves the app presenting a password the
+# database has never heard of:
+#
+#     FATAL:  password authentication failed for user "hopefx"
+#
+# If the stack has already run, either recreate the volume (destroys the data)
+# or keep the .env you have. Do not regenerate to "start clean" — that is what
+# breaks it.
+python3 scripts/bootstrap_env.py --domain your-domain.com --force
+
+# only the ~28 variables a production deploy requires, as bare NAME=VALUE
+# lines — for hosting control panels whose environment editor takes one
+# Name/Value pair per row and imports comment lines as variables named '#'
+python3 scripts/bootstrap_env.py --domain your-domain.com --minimal
+
+# NAME=VALUE lines only, full variable set
+python3 scripts/bootstrap_env.py --domain your-domain.com --no-comments
+```
+
+If a hosting panel manages the environment for you, paste the `--minimal` output
+into it **and** make sure the panel is what writes `.env` — otherwise a stale
+`.env` on disk silently wins over everything you typed into the panel.
+
+Things the generator deliberately leaves for you, because they come from
+third-party accounts you set up after the platform is running:
+
+| Variable | Needed for |
+|----------|-----------|
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Billing. Set both, then `FEATURE_BILLING_SUBSCRIPTION=true` and restart. It ships **off** — left on with no webhook secret, startup validation hard-fails and the deploy never comes up. |
+| `OANDA_API_KEY`, `OANDA_ACCOUNT_ID` | Live/practice OANDA execution. Paper trading works without them. |
+| `FINNHUB_API_KEY` | Live economic calendar. Falls back to a hardcoded schedule. |
+| `ANTHROPIC_API_KEY` | AI chat. Stub responses without it. |
+
+None of these block startup.
 
 #### 4. Build and Start
 
 ```bash
 # Build images
-docker-compose build
+docker compose build
 
 # Start services
-docker-compose up -d
+docker compose up -d
+
+# Seed the superadmin account (uses BOOTSTRAP_SUPERADMIN_* from .env)
+docker compose exec app python3 scripts/bootstrap_prod.py
 
 # Check logs
-docker-compose logs -f hopefx-app
+docker compose logs -f app
 ```
 
 #### 5. Verify Deployment
@@ -95,8 +162,10 @@ open http://localhost:8000/docs
 # Update system
 sudo apt-get update && sudo apt-get upgrade -y
 
-# Install dependencies
-sudo apt-get install -y python3.10 python3.10-venv python3-pip redis-server postgresql
+# Install dependencies. 3.12 is not a preference: the committed model
+# artifacts under ml/saved_models/ are pickled by CI on 3.12, and a
+# different interpreter here loads them at your own risk.
+sudo apt-get install -y python3.12 python3.12-venv python3.12-dev python3-pip redis-server postgresql
 ```
 
 #### 2. Create Application User
@@ -118,7 +187,7 @@ cd /opt/hopefx-ai-trading
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git .
 
 # Create virtual environment
-python3.10 -m venv venv
+python3.12 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
@@ -278,29 +347,55 @@ sudo iotop
 
 ## Backup Strategy
 
+> **A backup that has never been restored is not a backup.** The restore
+> procedure, and what to do when a backup refuses to verify, is
+> [`docs/runbooks/database-restore.md`](docs/runbooks/database-restore.md).
+> Walk it once before you need it.
+
 ### 1. Database Backups
+
+The application already takes verified snapshots on a schedule —
+`celery_app.database_backup` runs `database/backup.py` every 24 hours and then
+`database/restore.py::verify_backup` on what it wrote, reporting `unverified`
+rather than `ok` when the artefact cannot be restored. **Prefer that.** The
+script below exists for hosts that do not run the Celery worker.
 
 ```bash
 # Create backup script
 cat > /opt/hopefx-ai-trading/backup.sh << 'EOF'
 #!/bin/bash
+# `pipefail` is load-bearing, not style. Without it `pg_dump | gzip` reports
+# GZIP's exit status, so a failed dump exits 0 and writes a ~20-byte file while
+# the script prints "Backup completed". Verified by running it.
+set -euo pipefail
+
 BACKUP_DIR="/opt/hopefx-ai-trading/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
+DUMP="$BACKUP_DIR/db_$DATE.sql.gz"
 
 # Backup PostgreSQL
-pg_dump -U hopefx_admin hopefx_trading | gzip > $BACKUP_DIR/db_$DATE.sql.gz
+pg_dump -U hopefx_admin hopefx_trading | gzip > "$DUMP"
+
+# Verify it is restorable BEFORE trusting it or rotating anything away.
+# Exits non-zero on an empty, truncated, unrecognised or contentless dump.
+cd /opt/hopefx-ai-trading
+python -m database.restore --verify "$DUMP"
 
 # Backup configuration
-tar -czf $BACKUP_DIR/config_$DATE.tar.gz .env credentials/
+tar -czf "$BACKUP_DIR/config_$DATE.tar.gz" .env credentials/
 
-# Keep only last 30 days
-find $BACKUP_DIR -name "*.gz" -mtime +30 -delete
+# Keep only last 30 days — after verification, never before
+find "$BACKUP_DIR" -name "*.gz" -mtime +30 -delete
 
-echo "Backup completed: $DATE"
+echo "Backup verified and completed: $DATE"
 EOF
 
 chmod +x /opt/hopefx-ai-trading/backup.sh
 ```
+
+**Check the cron output, not just the file listing.** A directory full of `.gz`
+files is not evidence of a working backup; a non-zero exit from the verify step
+is evidence of a broken one.
 
 ### 2. Automated Backups
 

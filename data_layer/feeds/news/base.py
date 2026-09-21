@@ -132,6 +132,9 @@ class NewsFeedBase(ABC):
                 # DNS / connection-refused errors are permanent for this session;
                 # retrying will not help until the host is reachable again.
                 exc_str = str(exc)
+                # str(TimeoutError()) is "" — fall back to the type name so the
+                # log line is never blank ("... HTTP error attempt=3:  — retry").
+                exc_display = exc_str or type(exc).__name__
                 is_permanent = isinstance(exc, aiohttp.ClientConnectorError) and (
                     "Could not contact DNS servers" in exc_str
                     or "Name or service not known" in exc_str
@@ -145,7 +148,7 @@ class NewsFeedBase(ABC):
                     logger.debug(
                         "%s permanent error (%s) — skipping retries",
                         self.name.value,
-                        exc,
+                        exc_display,
                     )
                     raise
                 wait = backoff + random.uniform(0, 0.5)  # nosec B311 - retry jitter, not cryptographic
@@ -153,7 +156,7 @@ class NewsFeedBase(ABC):
                     "%s HTTP error attempt=%d: %s — retry %.1fs",
                     self.name.value,
                     attempt + 1,
-                    exc,
+                    exc_display,
                     wait,
                 )
                 if attempt < 3:

@@ -9,6 +9,7 @@ Extended coverage for core/position_reconciler.py.
 
 from __future__ import annotations
 
+import logging
 from contextlib import contextmanager
 from datetime import timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -151,6 +152,22 @@ async def test_reconcile_once_skips_when_price_none():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_detects_empty_broker_snapshot():
+    """A successful empty broker snapshot is evidence of a DB-only position."""
+    pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = []
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1950.0):
+            await r._reconcile_once()
+
+    assert r._mismatches == 1
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_detects_missing_broker_position():
     """Mismatch detected when DB has XAUUSD but broker only has EURUSD."""
     pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
@@ -184,6 +201,22 @@ async def test_reconcile_once_no_mismatch_when_broker_matches():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_accepts_object_broker_positions():
+    pos = _make_db_position(symbol="EURUSD", side="buy", qty=10000.0, entry=1.08)
+    broker_pos = MagicMock(symbol="EURUSD", quantity=10000.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = [broker_pos]
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1.09):
+            await r._reconcile_once()
+
+    assert r._mismatches == 0
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_async_broker_positions():
     pos = _make_db_position(symbol="EURUSD", side="buy", qty=10000.0, entry=1.08)
     mock_broker = MagicMock()
@@ -199,7 +232,37 @@ async def test_reconcile_once_async_broker_positions():
 
 
 @pytest.mark.asyncio
-async def test_reconcile_once_broker_exception():
+async def test_reconcile_once_null_broker_snapshot_is_blind(caplog):
+    """A null broker response is treated as unavailable, not an empty book."""
+    pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
+    mock_broker = MagicMock()
+    mock_broker.get_positions.return_value = None
+
+    r = _make_reconciler(db_positions=[pos], broker=mock_broker)
+
+    with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
+        with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1950.0):
+            with patch.object(r, "_trigger_drift_halt", new_callable=AsyncMock) as halt:
+                with caplog.at_level(logging.WARNING, logger="core.position_reconciler"):
+                    await r._reconcile_once()
+
+    assert halt.await_count == 0
+    assert r._mismatches == 0
+    assert any("Could not fetch broker positions" in rec.message for rec in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_reconcile_once_broker_exception(caplog):
+    """A broker outage must leave reconciliation *blind*, not *confident*.
+
+    This asserted only "does not raise" (S12-01). Not raising is the least
+    interesting property here — what matters is that a failed broker fetch
+    cannot be mistaken for agreement between the DB and the broker. With no
+    broker data the reconciler must:
+      * not invent a drift halt (we have nothing to compare against), and
+      * say out loud that it could not see the broker, so a silent outage
+        cannot masquerade as a clean cycle.
+    """
     pos = _make_db_position(symbol="XAUUSD", side="buy", qty=1.0, entry=1900.0)
     mock_broker = MagicMock()
     mock_broker.get_positions.side_effect = RuntimeError("broker error")
@@ -208,7 +271,16 @@ async def test_reconcile_once_broker_exception():
 
     with patch.dict("sys.modules", {"database.models": MagicMock(Position=MagicMock())}):
         with patch.object(r, "_get_price", new_callable=AsyncMock, return_value=1950.0):
-            await r._reconcile_once()  # must not raise
+            with patch.object(r, "_trigger_drift_halt", new_callable=AsyncMock) as halt:
+                with caplog.at_level(logging.WARNING, logger="core.position_reconciler"):
+                    await r._reconcile_once()
+
+    assert halt.await_count == 0, "a broker outage must not be reported as position drift"
+    assert r._mismatches == 0, "missing broker data is not a mismatch"
+    assert any("Could not fetch broker positions" in rec.message for rec in caplog.records), (
+        "a broker fetch failure must be logged — otherwise a blind reconciliation "
+        "cycle is indistinguishable from a clean one"
+    )
 
 
 # ── _reconcile_once — consecutive mismatch alert ─────────────────────────────
@@ -279,16 +351,35 @@ async def test_get_price_yfinance_exception():
 
 @pytest.mark.asyncio
 async def test_trigger_drift_halt_no_alert_engine():
+    """Losing the alert channel must not cost us the halt.
+
+    This asserted only "does not raise" (S12-01), which would have passed even
+    if the missing alert engine caused the function to bail out before halting.
+    The whole point of a drift halt is that the DB and the broker disagree about
+    real positions — trading must stop whether or not anyone can be paged.
+    """
     r = _make_reconciler()
-    await r._trigger_drift_halt(
-        symbol="XAUUSD",
-        db_qty=10.0,
-        broker_qty=1.0,
-        qty_diff=9.0,
-        db_value=19000.0,
-        broker_value=1900.0,
-        value_diff=17100.0,
-    )  # must not raise
+    assert r._alert_engine is None  # precondition for this test
+
+    rm = MagicMock()
+    fake_state = MagicMock()
+    fake_state.risk_manager = rm
+
+    with patch.dict("sys.modules", {"core.app_state": MagicMock(app_state=fake_state)}):
+        await r._trigger_drift_halt(
+            symbol="XAUUSD",
+            db_qty=10.0,
+            broker_qty=1.0,
+            qty_diff=9.0,
+            db_value=19000.0,
+            broker_value=1900.0,
+            value_diff=17100.0,
+        )
+
+    assert "XAUUSD" in r._halted_symbols, "symbol was not recorded as halted"
+    rm._halt_trading.assert_called_once()
+    reason = rm._halt_trading.call_args.args[0]
+    assert "XAUUSD" in reason and "drift" in reason.lower()
 
 
 @pytest.mark.asyncio

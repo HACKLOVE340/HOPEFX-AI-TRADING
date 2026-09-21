@@ -12,20 +12,20 @@
  *   GET /api/pnl/open-positions  — current open positions
  */
 
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { PageShell } from '../components/system/PageShell';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, CrossLinkBar } from '../components';
+import { CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
 import {
-  TrendingUp, TrendingDown, Activity, Shield,
-  Clock, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
+  Activity, AlertTriangle, ChevronLeft, ChevronRight, Clock, Download, RefreshCw, Shield, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { pnlApi } from '../hooks/useApi';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
-import { fmtPrice, fmtPctRaw, fmtDateTime, extractApiError } from '../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtDateTime, extractApiError, positionSide } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ interface FillEntry {
   order_id:       string;
   signal_id:      string;
   symbol:         string;
-  direction:      string;
+  direction?:     string;
   quantity:       number;
   fill_price:     number;
   expected_price: number;
@@ -63,7 +63,12 @@ interface FillEntry {
 
 interface OpenPosition {
   symbol:         string;
-  direction:      string;
+  /**
+   * Optional: the API omits it on some endpoints, which is what made
+   * `pos.direction.toLowerCase()` a crash vector (audit #40). Declaring it
+   * required did not make the server send it.
+   */
+  direction?:     string;
   quantity:       number;
   entry_price:    number;
   current_price:  number | null;
@@ -114,8 +119,13 @@ const COLOR_CLASSES: Record<CardColor, string> = {
   purple: 'bg-purple-500/10 text-purple-400',
 };
 
+/**
+ * A headline P&L figure. Given `to`, the card drills into the page that
+ * explains it; without `to` it stays inert rather than becoming an empty tab
+ * stop for keyboard users. See audit F187.
+ */
 function StatCard({
-  label, value, sub, icon: Icon, color = 'amber', warn = false,
+  label, value, sub, icon: Icon, color = 'amber', warn = false, to, toHint,
 }: {
   label: string;
   value: string;
@@ -123,18 +133,37 @@ function StatCard({
   icon: React.ElementType;
   color?: CardColor;
   warn?: boolean;
+  to?: string;
+  toHint?: string;
 }) {
-  return (
-    <div className={`bg-[#0d1421] rounded-lg border p-5 ${warn ? 'border-amber-500/40' : 'border-[#1e2d3d]'}`}>
+  const cls = `bg-[var(--surface)] rounded-lg border p-5 ${warn ? 'border-amber-500/40' : 'border-[var(--border)]'}`;
+  const body = (
+    <>
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-slate-400">{label}</span>
         <div className={`p-2 rounded-lg ${COLOR_CLASSES[color]}`}>
-          <Icon className="w-4 h-4" />
+          <Icon className="w-4 h-4" aria-hidden />
         </div>
       </div>
       <div className="text-2xl font-bold text-slate-100">{value}</div>
       {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
-    </div>
+    </>
+  );
+
+  if (!to) return <div className={cls}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`${label}: ${value}${toHint ? ` — open ${toHint}` : ''}`}
+      title={`${value}${toHint ? ` — open ${toHint}` : ''}`}
+      className={`${cls} block no-underline cursor-pointer transition-colors duration-150
+                  hover:border-[var(--border-strong)] hover:bg-[var(--raised)] focus-visible:outline-none
+                  focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2
+                  focus-visible:ring-offset-[var(--bg)]`}
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -153,7 +182,10 @@ function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
   const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
   const rafRef       = useRef<number>(0);
 
-  const up    = data.length >= 2 && data[data.length - 1].v >= data[0].v;
+  // `data.length >= 2` does not narrow data[n] for the compiler (audit #38).
+  const sparkLast  = data[data.length - 1];
+  const sparkFirst = data[0];
+  const up = sparkLast !== undefined && sparkFirst !== undefined && sparkLast.v >= sparkFirst.v;
   const color = up ? '#00e676' : '#ff1744';
 
   useEffect(() => {
@@ -197,7 +229,7 @@ function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, [color]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [color]);
 
   useEffect(() => {
     if (!seriesRef.current || data.length < 2) return;
@@ -261,7 +293,7 @@ function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
       chartApiRef.current = null;
       seriesRef.current   = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!seriesRef.current || data.length < 2) return;
@@ -287,7 +319,7 @@ const LiveEquityBadge: React.FC<{ equity: number | undefined }> = ({ equity }) =
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
         background: flash !== 'transparent' ? flash : 'rgba(0,230,118,0.08)',
-        color: '#00e676', border: '1px solid rgba(0,230,118,0.2)',
+        color: 'var(--bull)', border: '1px solid rgba(0,230,118,0.2)',
         transition: 'background 0.4s ease',
       }}
     >
@@ -314,8 +346,11 @@ const TradeHistogram: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
     count: 0,
   }));
   for (const v of values) {
-    const idx = Math.min(Math.floor((v - min) / binSize), BINS - 1);
-    bins[idx]!.count++;
+    const idx = Math.min(Math.max(Math.floor((v - min) / binSize), 0), BINS - 1);
+    // The audit cites this exact line: `bins[idx]!.count` read as safe because
+    // noUncheckedIndexedAccess was off, so the assertion passed review (#38).
+    const bin = bins[idx];
+    if (bin) bin.count++;
   }
   const maxCount = Math.max(...bins.map((b) => b.count), 1);
   const W = 400; const H = 60;
@@ -348,23 +383,42 @@ const TradeHistogram: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
   );
 };
 
-// ── MAE/MFE analysis ──────────────────────────────────────────────────────────
+// ── Execution quality ─────────────────────────────────────────────────────────
 
-const MAEMFEPanel: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
+/**
+ * Fill-quality statistics.
+ *
+ * Sign convention, from execution/hopefx_engine.py: a long fill is
+ * `(fill - ask) / ask` and a short is `(bid - fill) / bid`, so in both
+ * directions POSITIVE slippage means a worse fill and NEGATIVE means price
+ * improvement.
+ *
+ * This panel had it backwards. `Math.min(...)` — the most negative value, i.e.
+ * the BEST fill of the set — was labelled "MAE (worst slippage)" and warned when
+ * it dropped below -5, so the page raised a warning on the best execution it had
+ * achieved while calling the worst one favourable. The stat card and the
+ * histogram elsewhere on this page already used the correct convention, so the
+ * two halves contradicted each other on the same screen.
+ *
+ * Renamed as well: MAE/MFE conventionally mean Maximum Adverse/Favourable
+ * Excursion of an open position, which is a different measurement entirely.
+ * These are fill-quality extremes.
+ */
+const ExecutionQualityPanel: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
   if (fills.length === 0) return null;
 
   const slippages = fills.map((f) => f.slippage_bps);
   const latencies = fills.map((f) => f.latency_ms);
 
-  const mae = Math.min(...slippages);  // worst adverse slippage
-  const mfe = Math.max(...slippages);  // best favorable slippage
+  const worstSlip = Math.max(...slippages);  // most positive = most adverse
+  const bestSlip  = Math.min(...slippages);  // most negative = best improvement
   const avgSlip = slippages.reduce((a, b) => a + b, 0) / slippages.length;
   const avgLat  = latencies.reduce((a, b) => a + b, 0) / latencies.length;
   const p95Lat  = [...latencies].sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)] ?? 0;
 
   const metrics = [
-    { label: 'MAE (worst slippage)', value: `${mae.toFixed(2)} bps`, warn: mae < -5 },
-    { label: 'MFE (best slippage)',  value: `${mfe.toFixed(2)} bps`, warn: false },
+    { label: 'Worst fill',           value: `${worstSlip.toFixed(2)} bps`, warn: worstSlip > 5 },
+    { label: 'Best fill',            value: `${bestSlip.toFixed(2)} bps`,  warn: false },
     { label: 'Avg Slippage',         value: `${avgSlip.toFixed(2)} bps`, warn: avgSlip > 3 },
     { label: 'Avg Latency',          value: `${avgLat.toFixed(1)} ms`, warn: avgLat > 100 },
     { label: 'P95 Latency',          value: `${p95Lat.toFixed(1)} ms`, warn: p95Lat > 200 },
@@ -374,9 +428,9 @@ const MAEMFEPanel: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {metrics.map(({ label, value, warn }) => (
-        <div key={label} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0a0f1a] border border-[#1e2d3d]">
+        <div key={label} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0a0f1a] border border-[var(--border)]">
           <span className="text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-          <span className={`text-[14px] font-bold tabular-nums ${warn ? 'text-[#ff1744]' : 'text-slate-200'}`}>{value}</span>
+          <span className={`text-[14px] font-bold tabular-nums ${warn ? 'text-[var(--bear)]' : 'text-slate-200'}`}>{value}</span>
         </div>
       ))}
     </div>
@@ -390,6 +444,8 @@ const PnLDashboard: React.FC = () => {
 
   const [page, setPage]         = useState(0);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [exporting, setExporting]     = useState(false);
+  const [exportErr, setExportErr]     = useState<string | null>(null);
 
   // ── Summary ────────────────────────────────────────────────────────────────
   const summaryQ = useQuery<PnLSummary>({
@@ -458,44 +514,102 @@ const PnLDashboard: React.FC = () => {
   const summary   = summaryQ.data ?? null;
   const fills     = fillsQ.data ?? [];
   const positions = positionsQ.data ?? [];
-  const equityData = (equityQ.data ?? []).map((p) => ({
-    ts: p.timestamp ? new Date(p.timestamp).toLocaleDateString() : '',
-    v:  p.equity,
-  }));
-  const ddData = (drawdownQ.data ?? []).map((p) => ({
-    ts: p.timestamp ? new Date(p.timestamp).toLocaleDateString() : '',
-    dd: p.drawdown_pct,
-  }));
+  // Pass the raw ISO timestamp straight through (audit #50).
+  //
+  // These used to be formatted with toLocaleDateString() and then immediately
+  // re-parsed by toUT() via new Date(). Two losses, both silent:
+  //
+  //  1. Time-of-day was discarded, so every intraday equity point collapsed
+  //     onto the same x-value and the curve lost all intraday shape.
+  //  2. It was locale-dependent. In en-GB and most of Europe and Africa —
+  //     which this platform serves — toLocaleDateString() yields "31/07/2026",
+  //     and new Date() returns Invalid Date for that. NaN timestamps render a
+  //     blank chart.
+  //
+  // toUT() already accepts ISO strings and unix numbers, so the round-trip was
+  // pure loss. Points with no timestamp are dropped rather than mapped to '',
+  // which produced NaN times that lightweight-charts silently misplaces.
+  const equityData = (equityQ.data ?? [])
+    .filter((p) => p.timestamp)
+    .map((p) => ({ ts: p.timestamp, v: p.equity }));
+  const ddData = (drawdownQ.data ?? [])
+    .filter((p) => p.timestamp)
+    .map((p) => ({ ts: p.timestamp, dd: p.drawdown_pct }));
   const totalFills = summary?.total_fills ?? 0;
   const totalPages = Math.ceil(totalFills / PAGE_SIZE);
   const isLoading  = summaryQ.isLoading || fillsQ.isLoading;
   const error      = summaryQ.error ?? fillsQ.error ?? positionsQ.error;
 
-  return (
-    <div className="page-content space-y-4 sm:space-y-6">
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExporting(true);
+    setExportErr(null);
+    try {
+      const res = await pnlApi.export(format);
+      const blob = new Blob([res.data as BlobPart], {
+        type: format === 'csv' ? 'text/csv' : 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pnl-export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setExportErr(extractApiError(e, 'Export failed.'));
+    }
+    setExporting(false);
+  };
 
-      <PageHeader
-        title="P&L Dashboard"
-        icon="💹"
-        subtitle="Real fills from the live engine — no synthetic data"
-        breadcrumbs={[
+  return (
+    <PageShell
+      title="P&L breakdown"
+      icon={TrendingUp}
+      subtitle="Real fills from the live engine — no synthetic data"
+      breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Analytics', href: '/performance' },
           { label: 'P&L Dashboard' },
         ]}
-        actions={
+      actions={
           <div className="flex items-center gap-2 flex-wrap">
             <LiveEquityBadge equity={summary?.equity} />
-            <Link to="/performance" className="flex items-center gap-1 px-3 py-1.5 text-[#4ade80] rounded-lg text-xs font-semibold" style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', textDecoration: 'none' }}>📈 Performance</Link>
-            <Link to="/tca"         className="flex items-center gap-1 px-3 py-1.5 text-[#a78bfa] rounded-lg text-xs font-semibold" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', textDecoration: 'none' }}>📊 TCA</Link>
-            <Link to="/journal"     className="flex items-center gap-1 px-3 py-1.5 text-[#60a5fa] rounded-lg text-xs font-semibold" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', textDecoration: 'none' }}>📓 Journal</Link>
-            <button onClick={handleRefresh} disabled={isLoading} className="flex items-center gap-2 px-3 py-1.5 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-xs transition-colors disabled:opacity-50">
-              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+            {/* /pnl/export is served by the backend and had no caller
+                anywhere in the SPA (audit F185). */}
+            <button
+              onClick={() => void handleExport('csv')}
+              disabled={exporting}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3.5 text-xs
+                         font-semibold text-slate-300 ring-1 ring-inset ring-[var(--border)] cursor-pointer
+                         transition-colors duration-150 hover:bg-[#243447]
+                         disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none
+                         focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={isLoading}
+              aria-label={lastUpdated ? `Refresh — last updated ${lastUpdated}` : 'Refresh P&L data'}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[var(--border)] px-3.5
+                         text-xs text-slate-300 cursor-pointer transition-colors duration-150
+                         hover:bg-[#243447] disabled:cursor-not-allowed disabled:opacity-50
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} aria-hidden />
               {lastUpdated ? `Updated ${lastUpdated}` : 'Refresh'}
             </button>
           </div>
         }
-      />
+      width="standard"
+    >
+
+
+
+      {exportErr && (
+        <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300
+                                   ring-1 ring-inset ring-red-500/30">{exportErr}</p>
+      )}
 
       {/* Error */}
       {error && (
@@ -517,6 +631,8 @@ const PnLDashboard: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           label="Equity"
+          to="/portfolio"
+          toHint="Portfolio"
           value={summary ? fmtUSD(summary.equity) : '—'}
           sub={summary ? `Started ${fmtUSD(summary.starting_equity)}` : undefined}
           icon={TrendingUp}
@@ -524,6 +640,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Total Return"
+          to="/performance"
+          toHint="performance detail"
           value={summary ? fmtPctRaw(summary.total_return_pct) : '—'}
           sub={summary ? `${summary.total_fills} fills` : undefined}
           icon={Activity}
@@ -531,6 +649,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Sharpe Ratio"
+          to="/performance"
+          toHint="risk-adjusted performance"
           value={summary?.sharpe_ratio != null ? fmtNum(summary.sharpe_ratio, 3) : '—'}
           sub={
             summary?.sharpe_ratio == null
@@ -547,6 +667,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Max Drawdown"
+          to="/performance"
+          toHint="the drawdown curve"
           value={summary ? `${fmtNum(summary.max_drawdown_pct, 2)}%` : '—'}
           sub={summary ? `Current: ${fmtNum(summary.current_drawdown_pct, 2)}%` : undefined}
           icon={TrendingDown}
@@ -555,6 +677,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Win Rate"
+          to="/journal"
+          toHint="the trades behind it"
           value={summary?.win_rate != null ? `${fmtNum(summary.win_rate, 1)}%` : '—'}
           sub={summary?.win_rate == null ? 'Need 30+ fills' : `${summary.total_fills} fills`}
           icon={Shield}
@@ -562,6 +686,8 @@ const PnLDashboard: React.FC = () => {
         />
         <StatCard
           label="Open Positions"
+          to="/portfolio"
+          toHint="your positions"
           value={summary ? String(summary.open_positions) : '—'}
           sub="Live"
           icon={Activity}
@@ -585,7 +711,7 @@ const PnLDashboard: React.FC = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] p-4">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-200">Equity Curve</h3>
             <span className="text-xs text-slate-500">Account currency</span>
@@ -600,7 +726,7 @@ const PnLDashboard: React.FC = () => {
           )}
           {!equityQ.isLoading && !equityQ.isError && <EquitySparkline data={equityData} />}
         </div>
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] p-4">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-200">Drawdown Curve</h3>
             <span className="text-xs text-slate-500">% from peak equity</span>
@@ -619,14 +745,14 @@ const PnLDashboard: React.FC = () => {
 
       {/* Open positions */}
       {positions.length > 0 && (
-        <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#1e2d3d]">
+        <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] overflow-hidden">
+          <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="font-semibold text-slate-200">Open Positions ({positions.length})</h3>
           </div>
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-sm min-w-[640px]">
               <thead>
-                <tr className="text-xs text-slate-500 uppercase border-b border-[#1e2d3d]">
+                <tr className="text-xs text-slate-500 uppercase border-b border-[var(--border)]">
                   {['Symbol', 'Direction', 'Qty', 'Entry', 'Current', 'Unrealised P&L', 'SL', 'TP', 'Opened'].map((h) => (
                     <th key={h} className="px-3 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
                   ))}
@@ -634,15 +760,17 @@ const PnLDashboard: React.FC = () => {
               </thead>
               <tbody>
                 {positions.map((pos, i) => {
-                  const isLong = pos.direction.toLowerCase().includes('long') || pos.direction.toLowerCase() === 'buy';
+                  const side = positionSide(pos);
                   return (
-                    <tr key={i} className="border-b border-[#1e2d3d]/50 hover:bg-[#1e2d3d]/30">
+                    <tr key={i} className="border-b border-[var(--border)]/50 hover:bg-[var(--border)]/30">
                       <td className="px-4 py-3 font-mono text-amber-400">{pos.symbol}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          isLong ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                          side === null ? 'bg-slate-500/20 text-slate-400'
+                            : side === 'long' ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-red-500/20 text-red-400'
                         }`}>
-                          {pos.direction.toUpperCase()}
+                          {side ? side.toUpperCase() : '—'}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-mono">{fmtNum(pos.quantity, 4)}</td>
@@ -668,8 +796,8 @@ const PnLDashboard: React.FC = () => {
       )}
 
       {/* Auditable trade log */}
-      <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#1e2d3d] flex items-center justify-between">
+      <div className="bg-[var(--surface)] rounded-lg border border-[var(--border)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-slate-200">Auditable Trade Log</h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -699,7 +827,7 @@ const PnLDashboard: React.FC = () => {
             <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
               <table className="w-full text-sm min-w-[700px]">
                 <thead>
-                  <tr className="text-xs text-slate-500 uppercase border-b border-[#1e2d3d]">
+                  <tr className="text-xs text-slate-500 uppercase border-b border-[var(--border)]">
                     {['Time', 'Symbol', 'Dir', 'Qty', 'Fill Price', 'Expected', 'Slippage', 'Latency', 'Broker', 'Fill ID'].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
@@ -707,16 +835,18 @@ const PnLDashboard: React.FC = () => {
                 </thead>
                 <tbody>
                   {fills.map((f) => (
-                    <tr key={f.fill_id} className="border-b border-[#1e2d3d]/50 hover:bg-[#1e2d3d]/30">
+                    <tr key={f.fill_id} className="border-b border-[var(--border)]/50 hover:bg-[var(--border)]/30">
                       <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                         {fmtDateTime(f.filled_at)}
                       </td>
                       <td className="px-4 py-3 font-mono text-amber-400">{f.symbol}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          f.direction === 'long' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                          positionSide(f) === null ? 'bg-slate-500/20 text-slate-400'
+                            : positionSide(f) === 'long' ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-red-500/20 text-red-400'
                         }`}>
-                          {f.direction.toUpperCase()}
+                          {positionSide(f)?.toUpperCase() ?? '—'}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-mono">{fmtNum(f.quantity, 4)}</td>
@@ -745,13 +875,13 @@ const PnLDashboard: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-5 py-3 border-t border-[#1e2d3d] flex items-center justify-between text-sm text-slate-400">
+              <div className="px-5 py-3 border-t border-[var(--border)] flex items-center justify-between text-sm text-slate-400">
                 <span>Page {page + 1} of {totalPages}</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage((p) => Math.max(0, p - 1))}
                     disabled={page === 0}
-                    className="p-1.5 rounded hover:bg-[#1e2d3d] disabled:opacity-30"
+                    className="p-1.5 rounded hover:bg-[var(--border)] disabled:opacity-30"
                     aria-label="Previous page"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -759,7 +889,7 @@ const PnLDashboard: React.FC = () => {
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
-                    className="p-1.5 rounded hover:bg-[#1e2d3d] disabled:opacity-30"
+                    className="p-1.5 rounded hover:bg-[var(--border)] disabled:opacity-30"
                     aria-label="Next page"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -772,15 +902,15 @@ const PnLDashboard: React.FC = () => {
 
         {/* MAE/MFE analysis */}
         {fills.length > 0 && (
-          <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <h3 className="text-[13px] font-semibold text-slate-200 mb-3">MAE / MFE Analysis</h3>
-            <MAEMFEPanel fills={fills} />
+            <ExecutionQualityPanel fills={fills} />
           </div>
         )}
 
         {/* Trade distribution histogram */}
         {fills.length >= 5 && (
-          <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <h3 className="text-[13px] font-semibold text-slate-200 mb-3">Trade Distribution</h3>
             <TradeHistogram fills={fills} />
           </div>
@@ -795,7 +925,7 @@ const PnLDashboard: React.FC = () => {
           { label: '🛡️ Prop Tracker',  href: '/prop-firm',       color: '#f97316' },
         ]}/>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

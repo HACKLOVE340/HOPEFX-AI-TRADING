@@ -16,13 +16,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
+import { PageShell } from '../components/system/PageShell';
+import { RelatedPages } from '../components';
+import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, ClipboardList, CreditCard, Receipt, Send, ShieldCheck, Star, Wallet as WalletIcon } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Spinner } from '../components/Spinner';
-import { extractApiError, fmtPnl } from '../lib/utils';
+import { DataAge } from '../components/ui/DataAge';
+import { extractApiError, fmtPnl, describeSubmitFailure } from '../lib/utils';
+import { useConfirm } from '../components/ConfirmDialog';
 
 
 
@@ -42,7 +46,13 @@ interface Subscription {
   status: string;
   renewal_date: string | null;
   price_monthly: number | null;
-  features: string[];
+  /**
+   * Optional because the API omits it for some tiers. It was declared as a
+   * required `string[]`, so `subscription.features.length` type-checked and
+   * crashed the Subscription tab at runtime — the audit's root cause: `strict`
+   * can only enforce what the types claim.
+   */
+  features?: string[];
 }
 
 interface PaymentMethod {
@@ -58,11 +68,11 @@ const TYPE_ICON: Record<string, string> = {
   deposit: '↓', withdrawal: '↑', subscription: '🔄', copy_fee: '📊', refund: '↩',
 };
 const TYPE_COLOR: Record<string, string> = {
-  deposit: '#4ade80', withdrawal: '#f87171', subscription: '#94a3b8',
-  copy_fee: '#fbbf24', refund: '#60a5fa',
+  deposit: 'var(--gain)', withdrawal: 'var(--loss)', subscription: 'var(--text-dim)',
+  copy_fee: 'var(--warn)', refund: 'var(--link)',
 };
 const STATUS_COLOR: Record<string, string> = {
-  completed: '#4ade80', pending: '#fbbf24', failed: '#f87171',
+  completed: 'var(--gain)', pending: 'var(--warn)', failed: 'var(--loss)',
 };
 
 type WalletTab = 'overview' | 'transactions' | 'subscriptions' | 'payment-methods';
@@ -84,7 +94,11 @@ const AmountForm: React.FC<{
     }
     setBusy(true); setMsg('');
     try { await onConfirm(amount); }
-    catch (e) { setMsg(extractApiError(e, `${mode === 'deposit' ? 'Deposit' : 'Withdrawal'} failed.`)); }
+    // F2-01: "Deposit failed" on a timeout is a claim about money we cannot
+    // make. Today these endpoints persist nothing, so the cost is low — but
+    // that is a property of the current backend, not of this message, and it
+    // becomes wrong the moment a real processor is wired in.
+    catch (e) { setMsg(describeSubmitFailure(e, mode === 'deposit' ? 'deposit' : 'withdrawal').message); }
     finally { setBusy(false); }
   };
 
@@ -93,10 +107,10 @@ const AmountForm: React.FC<{
       <h3 className="text-slate-100 text-base font-semibold mb-4 mt-0">
         {mode === 'deposit' ? 'Deposit Funds' : 'Withdraw Funds'}
       </h3>
-      <label className="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">
+      <label id="wallet-amount-usd-label" htmlFor="wallet-amount-usd" className="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">
         Amount (USD)
       </label>
-      <input
+      <input id="wallet-amount-usd" aria-labelledby="wallet-amount-usd-label"
         type="number"
         min="1"
         value={amount}
@@ -146,11 +160,17 @@ const AmountForm: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Wallet: React.FC = () => {
+  const confirm = useConfirm();
   const [tab, setTab]                   = useState<WalletTab>('overview');
   const [balance, setBalance]           = useState(0);
   const [frozen, setFrozen]             = useState(0);
   const [pendingBal, setPendingBal]     = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(true);
+  // When the balance was read. It is fetched once on mount and never refreshed,
+  // so without this the figure below reads as current no matter how long the
+  // page has been open (S10-05). Wallet subscribes to no socket, so this is the
+  // only freshness signal available to it.
+  const [balanceAt, setBalanceAt]       = useState<number | null>(null);
   const [balanceErr, setBalanceErr]     = useState('');
   const [transactions, setTxs]          = useState<Transaction[]>([]);
   const [txLoading, setTxLoading]       = useState(true);
@@ -175,7 +195,7 @@ const Wallet: React.FC = () => {
 
     api.get<{ balance: number; frozen: number; pending: number }>(
       '/billing/balance', { signal: ctrl.signal })
-      .then(r => { setBalance(r.data?.balance ?? 0); setFrozen(r.data?.frozen ?? 0); setPendingBal(r.data?.pending ?? 0); })
+      .then(r => { setBalance(r.data?.balance ?? 0); setFrozen(r.data?.frozen ?? 0); setPendingBal(r.data?.pending ?? 0); setBalanceAt(Date.now()); })
       .catch(e => { if ((e as {name?:string}).name !== 'CanceledError') setBalanceErr(extractApiError(e, 'Failed to load balance.')); })
       .finally(() => { if (mountedRef.current) setBalanceLoading(false); });
 
@@ -199,44 +219,84 @@ const Wallet: React.FC = () => {
     return () => ctrl.abort();
   }, []);
 
+  /**
+   * Fiat deposit.
+   *
+   * `POST /payments/deposit` returns wire instructions and a `DEP-…` reference,
+   * and — per its own docstring — persists nothing: no wallet_transactions row,
+   * no balance change. The old code discarded that response, announced "Deposit
+   * of $X initiated." and then refetched the balance, which cannot have moved.
+   * So the user was told money was on its way, shown an unchanged balance, and
+   * never given the reference they must quote on the transfer.
+   *
+   * Surface what the server actually said instead.
+   */
   const handleDeposit = useCallback(async (amount: string) => {
-    await api.post('/payments/deposit', { amount: parseFloat(amount) });
-    setActionMsg(`Deposit of $${amount} initiated.`);
+    const r = await api.post<{
+      reference?: string;
+      message?: string;
+      client_secret?: string;
+      instructions?: { bank_name?: string; account_number?: string; routing_number?: string };
+    }>('/payments/deposit', { amount: parseFloat(amount) });
+
+    const inst = r.data?.instructions;
+    const ref = r.data?.reference ?? '—';
+    setActionMsg(
+      inst
+        ? `To complete this deposit, transfer $${amount} to ${inst.bank_name ?? 'the settlement bank'}` +
+          ` · Acct ${inst.account_number ?? '—'} · Routing ${inst.routing_number ?? '—'}` +
+          ` · quote reference ${ref}. Your balance updates once the transfer is received.`
+        : r.data?.message ?? `Deposit reference ${ref} created. Your balance is unchanged until funds arrive.`,
+    );
     setActionMode(null);
-    // Refresh balance. Functional updates so the callback doesn't close over
-    // balance/frozen/pendingBal — keeps the memoised callback stable.
-    const r = await api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance');
-    setBalance(prev => r.data?.balance ?? prev);
-    setFrozen(prev => r.data?.frozen ?? prev);
-    setPendingBal(prev => r.data?.pending ?? prev);
+    // No balance refetch: this endpoint records nothing, so re-reading the
+    // balance would only redraw the same number and imply something happened.
   }, []);
 
+  /**
+   * Fiat withdrawal.
+   *
+   * Also not persisted — the reference exists only in the response body, and
+   * nothing is queued for disbursement. "Withdrawal of $X submitted." claimed
+   * otherwise, so say what is actually true.
+   */
   const handleWithdraw = useCallback(async (amount: string) => {
-    await api.post('/payments/withdraw', { amount: parseFloat(amount) });
-    setActionMsg(`Withdrawal of $${amount} submitted.`);
+    const r = await api.post<{ reference?: string; estimated_arrival?: string }>(
+      '/payments/withdraw', { amount: parseFloat(amount) },
+    );
+    const ref = r.data?.reference ?? '—';
+    setActionMsg(
+      `Withdrawal request received — reference ${ref}` +
+      `${r.data?.estimated_arrival ? ` (estimated ${r.data.estimated_arrival})` : ''}. ` +
+      'Your available balance is unchanged until the payout is processed; ' +
+      'quote this reference if you contact support about it.',
+    );
     setActionMode(null);
-    const r = await api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance');
-    setBalance(prev => r.data?.balance ?? prev);
-    setFrozen(prev => r.data?.frozen ?? prev);
-    setPendingBal(prev => r.data?.pending ?? prev);
   }, []);
 
   const totalDeposited = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
   const totalWithdrawn = Math.abs(transactions.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0));
   const totalFees      = Math.abs(transactions.filter(t => ['subscription','copy_fee'].includes(t.type)).reduce((s, t) => s + t.amount, 0));
 
-  const TABS: { id: WalletTab; label: string; icon: string }[] = [
-    { id: 'overview',         label: 'Overview',         icon: '📊' },
-    { id: 'transactions',     label: 'Transactions',     icon: '📋' },
-    { id: 'subscriptions',    label: 'Subscription',     icon: '⭐' },
-    { id: 'payment-methods',  label: 'Payment Methods',  icon: '💳' },
+  // /billing/transactions reads Stripe charges and subscription events only — it
+  // has no withdrawal source at all, and no deposit source unless Stripe is
+  // configured. So these two totals are structurally $0.00 for anyone who used
+  // the Deposit/Withdraw buttons above. Report "—" rather than a confident zero
+  // that reads as "you have never deposited".
+  const hasDepositRows    = transactions.some(t => t.type === 'deposit');
+  const hasWithdrawalRows = transactions.some(t => t.type === 'withdrawal');
+
+  const TABS: { id: WalletTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview',         label: 'Overview',         icon: <BarChart3 size={16} aria-hidden /> },
+    { id: 'transactions',     label: 'Transactions',     icon: <ClipboardList size={16} aria-hidden /> },
+    { id: 'subscriptions',    label: 'Subscription',     icon: <Star size={16} aria-hidden /> },
+    { id: 'payment-methods',  label: 'Payment Methods',  icon: <CreditCard size={16} aria-hidden /> },
   ];
 
   return (
-    <div className="page-content">
-      <PageHeader
+    <PageShell width="wide"
         title="Wallet & Payments"
-        icon="💰"
+        icon={WalletIcon}
         subtitle="Manage your balance, transactions, subscriptions, and payment methods"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -255,7 +315,7 @@ const Wallet: React.FC = () => {
             </Link>
           </div>
         }
-      />
+    >
 
       <CrossLinkBar links={[
         { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
@@ -271,8 +331,13 @@ const Wallet: React.FC = () => {
       <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
+            {/* Audit #14: this figure is the BROKER account balance and "frozen"
+                is margin_used — GET /billing/balance reads both straight off the
+                broker (api/billing.py::get_balance). Calling it "Available
+                Balance" beside Deposit/Withdraw buttons presented paper-trading
+                equity as spendable cash. */}
             <div className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">
-              Available Balance
+              Trading Account Balance
             </div>
             {balanceLoading ? (
               <div className="flex items-center gap-3">
@@ -285,8 +350,12 @@ const Wallet: React.FC = () => {
                   ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-slate-500 text-xs mt-1.5 flex gap-3 flex-wrap">
-                  <span>Frozen: <span className="text-slate-400">${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
+                  <span>Margin used: <span className="text-slate-400">${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
                   <span>Pending: <span className="text-slate-400">${pendingBal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
+                </div>
+                <div className="text-slate-600 text-2xs mt-1 flex items-center gap-2 flex-wrap">
+                  <span>Reported by your connected broker — not a cash wallet balance.</span>
+                  <DataAge at={balanceAt} label="read" staleAfterMs={120_000} />
                 </div>
               </>
             )}
@@ -308,11 +377,13 @@ const Wallet: React.FC = () => {
         </div>
       </div>
 
-      {/* Action success message */}
+      {/* Action outcome. Deliberately informational, not green-for-success:
+          neither deposit nor withdrawal completes anything here, and a green
+          tick next to "your balance is unchanged" reads as a contradiction. */}
       {actionMsg && (
-        <div className="bg-green-950/40 border border-green-900 rounded-lg px-4 py-3 text-green-400 text-sm mb-4">
+        <div role="status" className="bg-blue-950/40 border border-blue-900 rounded-lg px-4 py-3 text-blue-200 text-sm mb-4">
           {actionMsg}
-          <button onClick={() => setActionMsg('')} className="ml-3 text-green-600 hover:text-green-400 bg-transparent border-0 cursor-pointer text-base leading-none">×</button>
+          <button onClick={() => setActionMsg('')} aria-label="Dismiss" className="ml-3 text-blue-400 hover:text-blue-200 bg-transparent border-0 cursor-pointer text-base leading-none">×</button>
         </div>
       )}
 
@@ -345,17 +416,30 @@ const Wallet: React.FC = () => {
 
       {/* ── Overview ── */}
       {tab === 'overview' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <MetricCard icon="↓" label="Total Deposited"
-            value={`$${totalDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
-            accent="green" />
-          <MetricCard icon="↑" label="Total Withdrawn"
-            value={`$${totalWithdrawn.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
-            accent="red" />
-          <MetricCard icon="💸" label="Total Fees Paid"
-            value={`$${totalFees.toFixed(2)}`}
-            accent="amber" />
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <MetricCard icon={<ArrowDownToLine size={14} strokeWidth={2} aria-hidden />} label="Total Deposited"
+              value={hasDepositRows
+                ? `$${totalDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                : '—'}
+              accent="green" />
+            <MetricCard icon={<ArrowUpFromLine size={14} strokeWidth={2} aria-hidden />} label="Total Withdrawn"
+              value={hasWithdrawalRows
+                ? `$${totalWithdrawn.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                : '—'}
+              accent="red" />
+            <MetricCard icon={<Send size={18} aria-hidden />} label="Total Fees Paid"
+              value={`$${totalFees.toFixed(2)}`}
+              accent="amber" />
+          </div>
+          {(!hasDepositRows || !hasWithdrawalRows) && (
+            <p className="text-slate-600 text-xs mt-3 mb-0">
+              Deposit and withdrawal totals cover transfers recorded by the payment
+              processor. Bank transfers made against a reference appear once they are
+              reconciled.
+            </p>
+          )}
+        </>
       )}
 
       {/* ── Transactions ── */}
@@ -366,7 +450,7 @@ const Wallet: React.FC = () => {
           )}
           {!txLoading && txErr && <ErrorBanner message={txErr} onDismiss={() => setTxErr('')} />}
           {!txLoading && !txErr && transactions.length === 0 && (
-            <EmptyState icon="📋" title="No transactions yet"
+            <EmptyState icon={ClipboardList} title="No transactions yet"
               description="Your deposits, withdrawals, and subscription payments will appear here." />
           )}
           {!txLoading && transactions.map(tx => (
@@ -374,7 +458,7 @@ const Wallet: React.FC = () => {
               className="flex items-center gap-3 sm:gap-4 bg-terminal-surface border border-terminal-border rounded-xl px-3 sm:px-4 py-3 mb-2 hover:border-slate-600 transition-colors">
               {/* Icon */}
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
-                style={{ background: `${TYPE_COLOR[tx.type] ?? '#94a3b8'}22`, color: TYPE_COLOR[tx.type] ?? '#94a3b8' }}>
+                style={{ background: `${TYPE_COLOR[tx.type] ?? 'var(--text-dim)'}22`, color: TYPE_COLOR[tx.type] ?? 'var(--text-dim)' }}>
                 {TYPE_ICON[tx.type] ?? '•'}
               </div>
               {/* Info */}
@@ -392,7 +476,7 @@ const Wallet: React.FC = () => {
                   {fmtPnl(tx.amount)}
                 </div>
                 <div className="text-2xs font-semibold capitalize mt-0.5"
-                  style={{ color: STATUS_COLOR[tx.status] ?? '#64748b' }}>
+                  style={{ color: STATUS_COLOR[tx.status] ?? 'var(--text-muted)' }}>
                   {tx.status}
                 </div>
               </div>
@@ -407,7 +491,7 @@ const Wallet: React.FC = () => {
           {subLoading && <div className="flex justify-center py-8"><Spinner size="md" /></div>}
           {!subLoading && subErr && <ErrorBanner message={subErr} onDismiss={() => setSubErr('')} />}
           {!subLoading && !subErr && !subscription && (
-            <EmptyState icon="⭐" title="No active subscription"
+            <EmptyState icon={Star} title="No active subscription"
               description="Subscribe to unlock AI signals, copy trading, and advanced analytics."
               action={
                 <Link to="/pricing"
@@ -441,9 +525,9 @@ const Wallet: React.FC = () => {
                   </div>
                 </div>
               </div>
-              {subscription.features.length > 0 && (
+              {(subscription.features?.length ?? 0) > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                  {subscription.features.map(f => (
+                  {subscription.features?.map(f => (
                     <div key={f} className="flex items-center gap-2 text-slate-400 text-sm">
                       <span className="text-green-400 flex-shrink-0">✓</span> {f}
                     </div>
@@ -458,7 +542,18 @@ const Wallet: React.FC = () => {
                 {subscription.status === 'active' && (
                   <button
                     onClick={async () => {
-                      if (!window.confirm('Cancel your subscription? You keep access until the end of the current billing period.')) return;
+                      // window.confirm is unstyled, unblockable by tests and
+                      // suppressible by the browser ("prevent additional
+                      // dialogs"), which would silently make this button dead.
+                      const ok = await confirm({
+                        title: 'Cancel your subscription?',
+                        description:
+                          'You keep access until the end of the current billing period. ' +
+                          'After that your account returns to the free tier.',
+                        confirmLabel: 'Cancel subscription',
+                        variant: 'danger',
+                      });
+                      if (!ok) return;
                       try {
                         await api.post('/billing/subscription/cancel');
                         const r = await api.get<Subscription>('/billing/subscription');
@@ -483,7 +578,7 @@ const Wallet: React.FC = () => {
           {pmLoading && <div className="flex justify-center py-8"><Spinner size="md" /></div>}
           {!pmLoading && pmErr && <ErrorBanner message={pmErr} onDismiss={() => setPmErr('')} />}
           {!pmLoading && !pmErr && paymentMethods.length === 0 && (
-            <EmptyState icon="💳" title="No payment methods saved"
+            <EmptyState icon={CreditCard} title="No payment methods saved"
               description="Add a card or crypto wallet to enable deposits and withdrawals." />
           )}
           {!pmLoading && !pmErr && paymentMethods.length > 0 && (
@@ -514,7 +609,11 @@ const Wallet: React.FC = () => {
             </div>
           )}
           {!pmLoading && (
-            <Link to="/checkout"
+            // /checkout is CryptoCheckout — a crypto *plan purchase* flow, not a
+            // payment-method form. "Add Payment Method" sent users to buy a
+            // subscription. Cards are attached via Stripe.js on the billing
+            // settings panel, which is where this now points.
+            <Link to="/settings?tab=billing"
               className="inline-block px-4 py-2.5 bg-blue-950 border border-blue-500/40 text-blue-400 rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-900/40 transition-colors no-underline">
               + Add Payment Method
             </Link>
@@ -529,7 +628,15 @@ const Wallet: React.FC = () => {
         { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
         { label: '⚙️ Settings', href: '/settings',   color: '#94a3b8' },
       ]} />
-    </div>
+      <RelatedPages
+        links={[
+          { to: '/portfolio', label: 'Portfolio',      hint: 'What the balance is invested in', icon: Briefcase },
+          { to: '/pnl',       label: 'P&L breakdown',  hint: 'How the balance changed',         icon: Receipt },
+          { to: '/upgrade',   label: 'Plan & billing', hint: 'Change your subscription',        icon: CreditCard },
+          { to: '/kyc',       label: 'Verification',   hint: 'Required before withdrawal',      icon: ShieldCheck },
+        ]}
+      />
+    </PageShell>
   );
 };
 

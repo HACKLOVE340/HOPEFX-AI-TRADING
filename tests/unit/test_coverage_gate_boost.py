@@ -692,6 +692,15 @@ class TestBacktestEngineCore:
         assert fill_price > 0
 
     def test_tc_model_commission_per_lot(self):
+        """Per-lot commission uses the instrument's real contract size.
+
+        This assertion previously read ``100_000`` units of **XAUUSD** for
+        ``$7`` — i.e. it encoded the FX standard lot for a gold symbol, locking
+        in audit finding S3-04. A gold contract is 100 oz, so 100,000 oz is
+        1,000 lots and costs $7,000; charging $7 understated gold commission by
+        1000x in every backtest. The assertion is corrected here rather than
+        the code being reverted to match it.
+        """
         from backtesting.engine import Order, OrderSide, OrderType, TickData, TransactionCostModel
 
         tc = TransactionCostModel(commission_per_lot=7.0)
@@ -702,10 +711,15 @@ class TestBacktestEngineCore:
             symbol="XAUUSD",
             side=OrderSide.BUY,
             order_type=OrderType.MARKET,
-            quantity=100_000.0,
+            quantity=100.0,
         )
-        _, commission, _ = tc.calculate_costs(order, tick, 100_000.0)
+        # 100 oz = exactly one gold lot.
+        _, commission, _ = tc.calculate_costs(order, tick, 100.0)
         assert commission == pytest.approx(7.0)
+
+        # And 1,000 lots costs 1,000x as much.
+        _, commission_large, _ = tc.calculate_costs(order, tick, 100_000.0)
+        assert commission_large == pytest.approx(7_000.0)
 
     def test_tc_model_commission_rate(self):
         from backtesting.engine import Order, OrderSide, OrderType, TickData, TransactionCostModel

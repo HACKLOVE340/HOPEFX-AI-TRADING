@@ -6,7 +6,7 @@
  */
 
 import React, {
-  useEffect, useRef, useCallback, useState, memo,
+  useEffect, useRef, useCallback, useMemo, useState, memo,
 } from 'react';
 import {
   createChart,
@@ -19,7 +19,6 @@ import {
   LineSeries,
   CrosshairMode,
   PriceScaleMode,
-  UTCTimestamp,
   CandlestickData,
   HistogramData,
   LineData,
@@ -32,8 +31,11 @@ import { useOHLCV } from '../hooks/useChartData';
 import { ohlcvLimitFor } from '../services/chart-api';
 import { ema, bollinger, rsi } from '../utils/indicators';
 import { COLORS, CHART_DIMS } from '../utils/design-tokens';
+import { fmtSpread } from '../../../lib/utils';
 import { formatPrice, formatTime } from '../utils/formatters';
-import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartClickContext } from '../types';
+import type { OHLCVBar, MLSignal, SupportResistanceLevel, ChartPattern, ChartClickContext } from '../types';
+import { toUTCSeconds as toUTC } from '../../../lib/chartTime';
+import { assessBars } from '../../../lib/barQuality';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -53,9 +55,6 @@ const INDICATORS: { key: IndicatorKey; label: string }[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toUTC(ts: number): UTCTimestamp {
-  return (ts > 1e10 ? Math.floor(ts / 1000) : ts) as UTCTimestamp;
-}
 
 function barToCandle(b: OHLCVBar): CandlestickData {
   return { time: toUTC(b.time), open: b.open, high: b.high, low: b.low, close: b.close };
@@ -95,7 +94,7 @@ const CrosshairBar = memo(({ info, bid, ask }: { info: CrosshairInfo | null; bid
         <>
           <span style={s.chLabel}>Bid <span style={{ ...s.chVal, color: COLORS.profit.base }}>{formatPrice(bid)}</span></span>
           <span style={s.chLabel}>Ask <span style={{ ...s.chVal, color: COLORS.loss.base }}>{formatPrice(ask)}</span></span>
-          <span style={s.chLabel}>Spread <span style={{ ...s.chVal, color: COLORS.neon.gold }}>{spread > 0 ? (spread * 100).toFixed(1) + ' pts' : '—'}</span></span>
+          <span style={s.chLabel}>Spread <span style={{ ...s.chVal, color: COLORS.neon.gold }}>{spread > 0 ? fmtSpread(spread) : '—'}</span></span>
         </>
       )}
     </div>
@@ -147,6 +146,8 @@ interface CoreChartProps {
   onChartReady?: (chart: IChartApi, series: ISeriesApi<'Candlestick'>) => void;
   signals?: MLSignal[];
   levels?: SupportResistanceLevel[];
+  /** Detected chart patterns, used to tell the bot what the click landed inside. */
+  patterns?: ChartPattern[];
   height?: number;
 }
 
@@ -155,6 +156,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
   onChartReady,
   signals = [],
   levels = [],
+  patterns = [],
   height = CHART_DIMS.mainHeight,
 }) => {
   const wrapperRef       = useRef<HTMLDivElement>(null);
@@ -190,6 +192,58 @@ const CoreChart: React.FC<CoreChartProps> = ({
   }, []);
 
   const { data: bars, isLoading, isError } = useOHLCV(symbol, timeframe, ohlcvLimitFor(timeframe));
+
+  // The click handler is registered once, inside the chart-init effect. Anything
+  // it reads from the closure is frozen at mount — which is how the analysis
+  // ended up pinned to a single instrument. These refs keep it current.
+  const symbolRef    = useRef(symbol);
+  const timeframeRef = useRef(timeframe);
+  const signalsRef   = useRef<MLSignal[]>(signals);
+  const levelsRef    = useRef<SupportResistanceLevel[]>(levels);
+  const patternsRef  = useRef<ChartPattern[]>(patterns);
+  useEffect(() => { symbolRef.current = symbol; }, [symbol]);
+  useEffect(() => { timeframeRef.current = timeframe; }, [timeframe]);
+  useEffect(() => { signalsRef.current = signals; }, [signals]);
+  useEffect(() => { levelsRef.current = levels; }, [levels]);
+  useEffect(() => { patternsRef.current = patterns; }, [patterns]);
+
+  // Nearest support/resistance to the clicked price, within 1% of it. Beyond
+  // that the "nearest" level is not near anything and saying so is better than
+  // attaching an irrelevant one.
+  const nearestLevelRef = useRef((clickPrice: number): SupportResistanceLevel | null => {
+    let best: SupportResistanceLevel | null = null;
+    let bestGap = Number.POSITIVE_INFINITY;
+    for (const l of levelsRef.current) {
+      const gap = Math.abs(l.price - clickPrice);
+      if (gap < bestGap) { bestGap = gap; best = l; }
+    }
+    return clickPrice > 0 && bestGap / clickPrice <= 0.01 ? best : null;
+  });
+
+  // A pattern whose span contains the clicked bar. No "nearest" fallback: a
+  // pattern the click is not inside is not the pattern the user asked about.
+  const nearestPatternRef = useRef((clickMs: number): ChartPattern | null => {
+    let best: ChartPattern | null = null;
+    for (const p of patternsRef.current) {
+      if (clickMs >= p.startTime && clickMs <= p.endTime) {
+        if (!best || p.confidence > best.confidence) best = p;
+      }
+    }
+    return best;
+  });
+
+  // Nearest ML signal to a clicked bar, within one hour. Populating this is what
+  // makes the bot's "ML FEATURE IMPORTANCE" panel render: it read
+  // `context.nearestSignal.features`, and this was hard-coded `null`.
+  const nearestSignalRef = useRef((clickMs: number): MLSignal | null => {
+    let best: MLSignal | null = null;
+    let bestGap = Number.POSITIVE_INFINITY;
+    for (const s of signalsRef.current) {
+      const gap = Math.abs(new Date(s.generated_at).getTime() - clickMs);
+      if (gap < bestGap) { bestGap = gap; best = s; }
+    }
+    return bestGap <= 3_600_000 ? best : null;
+  });
 
   // ── Chart initialisation ──────────────────────────────────────────────────
 
@@ -309,13 +363,19 @@ const CoreChart: React.FC<CoreChartProps> = ({
       const cd = param.seriesData.get(candle) as CandlestickData | undefined;
       if (!cd) return;
       const bar = barsRef.current.find((b) => toUTC(b.time) === cd.time) ?? null;
+      const clickTime = (cd.time as number) * 1000;
       const ctx: ChartClickContext = {
+        // Read from refs, not the closure: this callback is registered once when
+        // the chart is created, so closing over `symbol`/`timeframe` would pin
+        // the analysis to whatever was selected at mount.
+        symbol:         symbolRef.current,
+        timeframe:      timeframeRef.current,
         price:          cd.close,
-        time:           (cd.time as number) * 1000,
+        time:           clickTime,
         bar:            bar,
-        nearestSignal:  null,
-        nearestLevel:   null,
-        nearestPattern: null,
+        nearestSignal:  nearestSignalRef.current(clickTime),
+        nearestLevel:   nearestLevelRef.current(cd.close),
+        nearestPattern: nearestPatternRef.current(clickTime),
       };
       setCtx(ctx);
       onChartClick?.(ctx);
@@ -352,7 +412,20 @@ const CoreChart: React.FC<CoreChartProps> = ({
   // ── Load historical bars ──────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!bars || !candleRef.current || !volRef.current) return;
+    if (!candleRef.current || !volRef.current) return;
+
+    // Depend on `symbol` too: on a symbol switch, useOHLCV's data goes undefined
+    // while the new key loads. Without this branch the effect early-returned and
+    // the PREVIOUS symbol's candles stayed painted under the new symbol's label —
+    // so the picker changed but the chart looked frozen, and worse, showed one
+    // instrument's price action as another's. Clear the series so the chart is
+    // honestly empty until the selected symbol's bars arrive.
+    if (!bars || bars.length === 0) {
+      barsRef.current = [];
+      candleRef.current.setData([]);
+      volRef.current.setData([]);
+      return;
+    }
     barsRef.current = bars;
 
     const candles: CandlestickData[] = bars.map(barToCandle);
@@ -366,7 +439,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
     volRef.current.setData(volumes);
     chartRef.current?.timeScale().fitContent();
     chartRef.current?.timeScale().scrollToRealTime();
-  }, [bars]);
+  }, [bars, symbol]);
 
   // ── Live tick updates ─────────────────────────────────────────────────────
 
@@ -504,6 +577,15 @@ const CoreChart: React.FC<CoreChartProps> = ({
   const bid = liveTick?.bid ?? 0;
   const ask = liveTick?.ask ?? 0;
   const noData = !isLoading && (isError || !bars || bars.length === 0);
+  /*
+   * What the bars that DID arrive are worth. `noData` covers "nothing came";
+   * this covers "these are not candles" — measured on the daily series this
+   * chart can serve with no live feed, 62 of 500 bars have no body or no
+   * wicks. Derived rather than stored: it is a pure function of `bars`, and a
+   * second state to keep in step with them is a second thing to forget to
+   * clear. See `lib/barQuality.ts`.
+   */
+  const barNotice = useMemo(() => assessBars(bars ?? []).notice, [bars]);
 
   return (
     <div ref={wrapperRef} style={styles.wrapper}>
@@ -557,6 +639,13 @@ const CoreChart: React.FC<CoreChartProps> = ({
         )}
         <div ref={containerRef} style={{ width: '100%', height }} />
       </div>
+      {/* Beside the chart, not over it: these bars are still worth looking at,
+          and an overlay would hide the thing it describes. */}
+      {barNotice && !noData && (
+        <div role="status" style={{ padding: '2px 10px 6px', fontSize: 10, lineHeight: 1.4, color: 'var(--warn)' }}>
+          {barNotice}
+        </div>
+      )}
     </div>
   );
 };

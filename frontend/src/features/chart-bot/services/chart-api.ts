@@ -42,11 +42,17 @@ export interface OHLCVParams {
  */
 export function ohlcvLimitFor(timeframe: string): number {
   switch (timeframe) {
-    case '1d': return 8000;
-    case '1w': return 2000;
-    case '4h': return 2000;
-    case '1h': return 1500;
-    default:   return 1000;
+    case '1d': return 8000;   // ~31 years of trading days
+    case '1w': return 2000;   // ~38 years
+    // 4h and 1h were 2000 and 1500. Even after the backend was widened to
+    // Yahoo's 730-day maximum for hourly data, a 1500-bar limit would have
+    // clipped the response back to roughly 60 days — the same month the
+    // deployed chart showed. Both ends had to move; raising one alone changes
+    // nothing, which is worth stating because it is easy to "fix" only the
+    // server and conclude the limit is external.
+    case '4h': return 4500;   // 730d of 4h bars, with headroom
+    case '1h': return 13000;  // 730d of hourly bars for a ~23h/day market
+    default:   return 1000;   // 1m–30m are capped by the source, not by us
   }
 }
 
@@ -83,13 +89,93 @@ export async function fetchOHLCV(params: OHLCVParams): Promise<OHLCVBar[]> {
 
 // ─── Signals ──────────────────────────────────────────────────────────────────
 
+/**
+ * Map one wire signal onto MLSignal.
+ *
+ * The server and this module disagreed about the shape, and `as MLSignal[]`
+ * hid it — a cast asserts a shape, it does not produce one. `/api/signals`
+ * serialises `TradingSignal.to_dict()`, which emits:
+ *
+ *   direction: "buy" | "sell"        MLSignal wants "long" | "short" | "neutral"
+ *   risk_reward_ratio                MLSignal wants risk_reward
+ *   timestamp / expiry               MLSignal wants generated_at / expires_at
+ *   (no status, model, features, reasoning at all)
+ *
+ * Two visible consequences. `signal.status.toUpperCase()` threw
+ * "undefined is not an object (evaluating 'e.toUpperCase')", which is the error
+ * the SIGNAL FEED panel showed instead of any signals. And worse where it did
+ * render: `direction === 'long'` is false for "buy", and false again for
+ * 'neutral', so a BUY signal drew a red ▼ — a trading UI showing the opposite
+ * of the signal it received.
+ *
+ * Normalising here, at the boundary, means the component keeps one shape to
+ * reason about and an added or renamed server field degrades to a default
+ * instead of a blank panel.
+ */
+type WireSignal = Record<string, unknown>;
+
+const _DIRECTION: Record<string, MLSignal['direction']> = {
+  buy: 'long', long: 'long',
+  sell: 'short', short: 'short',
+  hold: 'neutral', neutral: 'neutral', flat: 'neutral',
+};
+
+const _STATUS: Record<string, MLSignal['status']> = {
+  active: 'active', open: 'active',
+  triggered: 'triggered', hit_tp: 'triggered', hit_sl: 'triggered',
+  expired: 'expired', cancelled: 'cancelled', canceled: 'cancelled',
+};
+
+const _REGIMES: MLSignal['regime'][] = [
+  'trending_bull', 'trending_bear', 'ranging', 'volatile', 'breakout', 'reversal',
+];
+
+function _num(v: unknown, fallback = 0): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function _str(v: unknown, fallback = ''): string {
+  return typeof v === 'string' && v ? v : fallback;
+}
+
+export function normaliseSignal(raw: WireSignal): MLSignal {
+  const expiresAt = _str(raw.expires_at) || _str(raw.expiry);
+  // No status on the wire: derive one, because "expired" and "active" render
+  // very differently and defaulting everything to active would show stale
+  // signals as live.
+  const expired = expiresAt ? Date.parse(expiresAt) < Date.now() : false;
+  const status =
+    _STATUS[_str(raw.status).toLowerCase()] ?? (expired ? 'expired' : 'active');
+
+  const regimeRaw = _str(raw.regime).toLowerCase() as MLSignal['regime'];
+
+  return {
+    id: _str(raw.id) || _str(raw.signal_id) || `${_str(raw.symbol, '?')}-${_str(raw.timestamp)}`,
+    symbol: _str(raw.symbol, '—'),
+    direction: _DIRECTION[_str(raw.direction).toLowerCase()] ?? 'neutral',
+    confidence: Math.max(0, Math.min(1, _num(raw.confidence))),
+    model: _str(raw.model) || _str(raw.strategy) || 'ensemble',
+    regime: _REGIMES.includes(regimeRaw) ? regimeRaw : 'ranging',
+    entry_price: _num(raw.entry_price ?? raw.price),
+    stop_loss: _num(raw.stop_loss),
+    take_profit: _num(raw.take_profit),
+    risk_reward: _num(raw.risk_reward ?? raw.risk_reward_ratio),
+    features: Array.isArray(raw.features) ? (raw.features as MLSignal['features']) : [],
+    generated_at: _str(raw.generated_at) || _str(raw.timestamp) || new Date().toISOString(),
+    expires_at: expiresAt,
+    status,
+    reasoning: _str(raw.reasoning) || _str(raw.rationale),
+  };
+}
+
 export async function fetchSignals(symbol: string, limit = 20): Promise<MLSignal[]> {
-  const res = await api.get<MLSignal[] | { signals?: MLSignal[]; data?: MLSignal[] }>(
+  const res = await api.get<WireSignal[] | { signals?: WireSignal[]; data?: WireSignal[] }>(
     `/signals?symbol=${encodeURIComponent(symbol)}&limit=${limit}`
   );
   const raw = res.data;
-  if (Array.isArray(raw)) return raw;
-  return raw.signals ?? raw.data ?? [];
+  const items: WireSignal[] = Array.isArray(raw) ? raw : (raw.signals ?? raw.data ?? []);
+  return items.map(normaliseSignal);
 }
 
 // ─── Sentiment ────────────────────────────────────────────────────────────────
@@ -118,10 +204,65 @@ export async function fetchNews(symbol = 'XAUUSD', limit = 15): Promise<NewsItem
 // ─── Risk ─────────────────────────────────────────────────────────────────────
 
 export async function fetchRiskMetrics(): Promise<RiskMetrics> {
-  const res = await api.get<RiskMetrics | { data?: RiskMetrics }>('/trading/risk');
-  const raw = res.data;
-  if ('cvar95' in raw) return raw as RiskMetrics;
-  return (raw as { data?: RiskMetrics }).data ?? buildDefaultRisk();
+  const res = await api.get<unknown>('/trading/risk');
+  return normaliseRisk(res.data);
+}
+
+/**
+ * Merge whatever the server sent over a complete default.
+ *
+ * This read:
+ *
+ *     if ('cvar95' in raw) return raw as RiskMetrics;
+ *     return (raw as { data?: RiskMetrics }).data ?? buildDefaultRisk();
+ *
+ * — a test for ONE field followed by a cast asserting all fifteen. TypeScript
+ * accepts it because `res.data` is untyped, so a response carrying `cvar95` but
+ * not `positionSizePct` type-checks and then throws in the component:
+ *
+ *     undefined is not an object (evaluating 'n.positionSizePct.toFixed')
+ *
+ * RiskHeatmap's `if (!risk)` guard cannot catch that — the object exists, it is
+ * just incomplete. Same shape as the audit-trail and ML-Ops defects: an
+ * interface describing a response the server does not actually send.
+ *
+ * Normalising instead of casting makes the component's contract true by
+ * construction, whatever the server returns.
+ */
+export function normaliseRisk(payload: unknown): RiskMetrics {
+  const defaults = buildDefaultRisk();
+
+  // Accept either the object itself or a { data: … } envelope.
+  const container = (payload ?? {}) as Record<string, unknown>;
+  const raw = (
+    'cvar95' in container ? container : ((container.data as Record<string, unknown> | undefined) ?? {})
+  ) as Record<string, unknown>;
+
+  const num = (key: keyof RiskMetrics): number => {
+    const value = Number(raw[key]);
+    // NaN/Infinity reach .toFixed() happily and render "NaN%", which reads as
+    // a real reading rather than missing data.
+    return Number.isFinite(value) ? value : (defaults[key] as number);
+  };
+
+  return {
+    ...defaults,
+    cvar95: num('cvar95'),
+    cvar99: num('cvar99'),
+    var95: num('var95'),
+    var99: num('var99'),
+    positionSizePct: num('positionSizePct'),
+    maxPositionSize: num('maxPositionSize'),
+    currentDrawdown: num('currentDrawdown'),
+    maxDrawdown: num('maxDrawdown'),
+    dailyLossLimit: num('dailyLossLimit'),
+    dailyLossUsed: num('dailyLossUsed'),
+    dataQualityScore: num('dataQualityScore'),
+    marginUtilisation: num('marginUtilisation'),
+    riskScore: num('riskScore'),
+    killSwitchActive: Boolean(raw.killSwitchActive ?? defaults.killSwitchActive),
+    killSwitchReason: (raw.killSwitchReason as string | null) ?? defaults.killSwitchReason,
+  };
 }
 
 function buildDefaultRisk(): RiskMetrics {

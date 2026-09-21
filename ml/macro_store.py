@@ -57,9 +57,34 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# How far past its last observation a daily series may be forward-filled.
+#
+# `.ffill()` with no limit carried the last value forward indefinitely. Measured
+# on the deployed data, which ends 2026-03-25, against August bars: the model
+# received vix=25.33, dxy=99.60 as *current* values, with no NaN and no gap to
+# indicate age. 142-day-old macro was scored as today's on every prediction.
+#
+# Shares the MacroStoreBridge default so one deployment cannot consider data
+# fresh in one place and stale in another.
+MACRO_MAX_AGE_DAYS = int(os.getenv("MACRO_MAX_AGE_DAYS", "7"))
+
+# What to do with observations past that horizon.
+#
+#   "abstain"     — leave them NaN. InferenceEngine._features_are_unusable
+#                   already abstains on any NaN feature (S4-02/S4-03), so this
+#                   routes staleness into an actuator that exists and is tested.
+#                   Not scoring is safe; scoring on fabricated macro is not.
+#   "passthrough" — the old unbounded forward-fill, for an operator who decides
+#                   deliberately to accept stale macro.
+#
+# Defaults to fail-closed. With FRED_API_KEY unset the bundled CSVs go stale and
+# the engine will abstain rather than score — which is the point.
+MACRO_STALE_POLICY = os.getenv("MACRO_STALE_POLICY", "abstain").strip().lower()
 
 # Default macro data directory (override via MACRO_DATA_DIR env var)
 _MACRO_DIR = Path(os.getenv("MACRO_DATA_DIR", "data/macro"))
@@ -94,6 +119,9 @@ class MacroStore:
     def __init__(self) -> None:
         # series_name → pd.Series(float, index=DatetimeIndex[daily])
         self._series: dict[str, pd.Series] = {}
+        # One stale-carry-forward warning per series. align_to_hourly runs on
+        # every prediction, so an unguarded warning here is a log flood.
+        self._stale_warned: dict[str, bool] = {}
 
     # ── Ingestion ─────────────────────────────────────────────────────────────
 
@@ -210,8 +238,17 @@ class MacroStore:
         aligned_cols: dict[str, pd.Series] = {}
         for name in names:
             if name not in self._series:
-                logger.debug("MacroStore: series %r not loaded — filling with 0", name)
-                aligned_cols[name] = pd.Series(0.0, index=ohlcv_h1.index)
+                # NaN, not 0.0. A VIX of 0.0 is not "no data" — it is the
+                # calmest reading possible, and _classify_macro reads it as
+                # LOW_VOL. The same fabrication was already fixed one layer up
+                # in analysis/chart_analysis.load_macro(); this is its source.
+                # NaN routes to the engine's existing abstain path instead.
+                logger.warning(
+                    "MacroStore: series %r requested but not loaded — emitting NaN (not 0.0, "
+                    "which would be a real reading rather than a missing one)",
+                    name,
+                )
+                aligned_cols[name] = pd.Series(np.nan, index=ohlcv_h1.index)
                 continue
 
             daily = self._series[name]
@@ -224,6 +261,35 @@ class MacroStore:
             combined_idx = idx.union(daily.index)
             reindexed = daily.reindex(combined_idx).ffill()
             aligned = reindexed.reindex(idx).fillna(0.0)
+
+            # Cap the carry-forward. Everything above is unchanged: leading bars
+            # (before the first observation) keep 0.0, because that is
+            # pre-history in a 58-year training set rather than a staleness
+            # claim, and NaN-ing it would make historical backtests abstain.
+            #
+            # A time-based cutoff rather than ffill(limit=N): `combined_idx` is
+            # the union of an hourly index and a daily one, so it is not
+            # uniformly spaced and a period count would not be an age.
+            if MACRO_STALE_POLICY != "passthrough" and not daily.empty:
+                cutoff = daily.index.max() + pd.Timedelta(days=MACRO_MAX_AGE_DAYS)
+                beyond = aligned.index > cutoff
+                if beyond.any():
+                    if not self._stale_warned.get(name):
+                        logger.warning(
+                            "MacroStore: %r last observed %s; %d bar(s) fall more than %d days past it "
+                            "and are NOT forward-filled (policy=%s). The engine will abstain rather "
+                            "than score on stale macro. Set FRED_API_KEY for live series, or "
+                            "MACRO_STALE_POLICY=passthrough to accept stale values deliberately.",
+                            name,
+                            daily.index.max().date(),
+                            int(beyond.sum()),
+                            MACRO_MAX_AGE_DAYS,
+                            MACRO_STALE_POLICY,
+                        )
+                        self._stale_warned[name] = True
+                    aligned = aligned.astype(float)
+                    aligned[beyond] = np.nan
+
             aligned_cols[name] = aligned
 
         result = pd.DataFrame(aligned_cols, index=ohlcv_h1.index)

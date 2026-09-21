@@ -18,15 +18,35 @@ POST /api/brain/chat               — free-form chat with the trading assistant
 from __future__ import annotations
 
 import logging
+import asyncio
 import os
+import time
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone as _tz
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user, require_role
+from core.ai_quota import ai_quota
+
+from strategies.strategy_execution_boundary import ExecutionScope
 
 logger = logging.getLogger(__name__)
+
+
+def _activation_scope() -> ExecutionScope:
+    """The scope this deployment actually activates at.
+
+    Derived from BROKER_TYPE rather than defaulted. The gate this feeds
+    (`StrategyExecutionBoundary`) previously took `ExecutionScope.RESEARCH` as
+    its default and short-circuited every check on it, so activation happened
+    under a scope no caller had chosen. Choosing here means the claim matches
+    what the registry then does -- it sets StrategyState.ACTIVE either way.
+    """
+    return ExecutionScope.PAPER if os.getenv("BROKER_TYPE", "paper").strip().lower() == "paper" else ExecutionScope.LIVE
+
 
 router = APIRouter(prefix="/api/brain", tags=["AI Brain"])
 
@@ -62,6 +82,57 @@ def _detect_llm_backend() -> tuple[str | None, str | None]:
     return None, None
 
 
+_NO_BACKEND_DETAIL = "No LLM backend configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL."
+
+
+def _configured_primary():
+    """The operator-configured primary leg, or None when unset/unreadable.
+
+    Never fatal: a config-store problem must degrade to the environment
+    defaults below, not take the LLM endpoints down.
+    """
+    try:
+        from ai.gateway.chain import resolve_chain
+
+        return resolve_chain("reasoning")[0]
+    except Exception as exc:  # a settings read must not break inference
+        logger.debug("brain: could not resolve the configured model chain: %s", exc)
+        return None
+
+
+def _detect_llm_runtime() -> tuple[str | None, str | None]:
+    """Return (backend, model) for the raw-LLM endpoints below.
+
+    This is the display/config-safe counterpart to ``_detect_llm_backend()``,
+    which returns (backend, api_key). The two were conflated once — health,
+    complete and embed unpacked the tuple as (backend, model), which sent the
+    raw API key to the browser as the "model" field and passed it as the model
+    name on OpenAI calls. Never return a secret from this function.
+
+    Ollama is a fallback for local deployments: used only when neither cloud
+    key is set but OLLAMA_BASE_URL is configured.
+    """
+    backend, _api_key = _detect_llm_backend()
+
+    # The superadmin's configured primary wins when it names the backend we
+    # actually have credentials for. Before this, Platform Configuration's
+    # provider/model fields were written to the config store and read by
+    # nothing -- an operator could set them, save, and change nothing (D8).
+    # `_detect_llm_backend` stays as the credential-driven bootstrap: it decides
+    # which backend is *reachable*, and the chain decides which model on it.
+    configured = _configured_primary()
+    if configured is not None and configured.provider == backend:
+        return backend, configured.model
+
+    if backend == "anthropic":
+        return "anthropic", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+    if backend == "openai":
+        return "openai", os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    if os.getenv("OLLAMA_BASE_URL"):
+        return "ollama", os.getenv("OLLAMA_MODEL", "llama3")
+    return None, None
+
+
 # ── Models ────────────────────────────────────────────────────────────────────
 
 
@@ -93,6 +164,7 @@ class DeployRequest(BaseModel):
     strategy_name: str
     strategy_code: str
     symbol: str = "XAU_USD"
+    timeframe: str = "H1"
     mode: str = "paper"
 
 
@@ -100,10 +172,17 @@ class DeployResponse(BaseModel):
     success: bool
     message: str
     strategy_id: str | None = None
+    status: str | None = None
+    validation_errors: list[str] | None = None
 
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
+    # A label for ONE of this user's conversations — a tab, a thread. It is not
+    # an identity and cannot select another user's history: the conversation key
+    # is (authenticated sub, this label). Deliberately no user/user_id/sub field
+    # here; an identity in the body is an identity the caller chooses.
+    session_id: str | None = Field(default=None, max_length=64)
 
 
 class ChatResponse(BaseModel):
@@ -208,7 +287,16 @@ async def deploy_strategy(
 ) -> DeployResponse:
     """
     Deploy a generated strategy to paper/live trading.
-    Stores the strategy code and registers it with the nocode builder.
+
+    Registers the strategy source with the DynamicStrategyRegistry — which
+    AST-safety-validates and compiles it in an isolated namespace — and then
+    activates it so it is actually available for live signal generation. This
+    performs a real, verifiable deployment: on success the returned
+    ``strategy_id`` is the registry version_id and the strategy is ACTIVE.
+
+    If validation/compilation fails, an HONEST ``success=False`` response is
+    returned with the validation errors — never a false "deployed" claim.
+
     Requires: role >= 'admin' (deploys to live trading infrastructure).
     """
     if not req.strategy_code.strip():
@@ -218,22 +306,69 @@ async def deploy_strategy(
         )
 
     try:
-        from nocode.builder import NoCodeStrategyBuilder
-
-        NoCodeStrategyBuilder()
-        strategy_id = f"ai_{req.strategy_name.lower().replace(' ', '_')}"
-        logger.info("Deploying AI strategy %s to %s mode", strategy_id, req.mode)
-        return DeployResponse(
-            success=True,
-            message=f"Strategy '{req.strategy_name}' deployed to {req.mode} trading.",
-            strategy_id=strategy_id,
-        )
+        from strategies.dynamic_registry import get_dynamic_registry
     except Exception as exc:
-        logger.warning("Deploy error: %s", exc, exc_info=True)
+        # Registry unavailable — do NOT claim a deployment happened.
+        logger.warning("Deploy: dynamic registry import failed: %s", exc, exc_info=True)
         return DeployResponse(
             success=False,
-            message="Deploy failed — check server logs",
+            message="Deployment infrastructure unavailable — strategy was NOT deployed. Check server logs.",
+            status="unavailable",
         )
+
+    registry = get_dynamic_registry()
+
+    # Phase 1: register (AST safety validation + isolated compilation).
+    try:
+        version_id = await registry.register_strategy(
+            name=req.strategy_name,
+            source_code=req.strategy_code,
+            symbol=req.symbol,
+            timeframe=req.timeframe,
+            author_id=user.sub,
+        )
+    except ValueError as verr:
+        # Validation/compilation rejected the strategy — return an honest failure
+        # rather than pretending it deployed.
+        logger.info("Deploy: strategy '%s' rejected by registry: %s", req.strategy_name, verr)
+        return DeployResponse(
+            success=False,
+            message=f"Strategy '{req.strategy_name}' failed validation and was NOT deployed.",
+            status="validation_failed",
+            validation_errors=[str(verr)],
+        )
+    except Exception as exc:
+        logger.warning("Deploy: registration error: %s", exc, exc_info=True)
+        return DeployResponse(
+            success=False,
+            message="Deploy failed during registration — strategy was NOT deployed. Check server logs.",
+            status="error",
+        )
+
+    # Phase 2: activate (atomic swap into the live active strategy set).
+    try:
+        await registry.activate_strategy(scope=_activation_scope(), version_id=version_id)
+    except Exception as exc:
+        # Registered/validated but activation failed — be honest about the
+        # partial state instead of reporting a successful deploy.
+        logger.warning("Deploy: activation error for %s: %s", version_id, exc, exc_info=True)
+        return DeployResponse(
+            success=False,
+            message=(
+                f"Strategy '{req.strategy_name}' validated and registered but activation FAILED — "
+                "it is NOT live. Check server logs."
+            ),
+            strategy_id=version_id,
+            status="validated_not_activated",
+        )
+
+    logger.info("Deployed AI strategy %s (version %s) to %s mode", req.strategy_name, version_id, req.mode)
+    return DeployResponse(
+        success=True,
+        message=f"Strategy '{req.strategy_name}' deployed and activated for {req.mode} trading.",
+        strategy_id=version_id,
+        status="active",
+    )
 
 
 def _keyless_chat_reply(message: str) -> str:
@@ -253,7 +388,10 @@ def _keyless_chat_reply(message: str) -> str:
     )
 
     if has("hello", "hi ", "hey", "good morning", "good afternoon") or m in {"hi", "hey"}:
-        return "Hi — I'm the HOPEFX assistant. Ask me about your account, open positions, signals, risk, or how to use the platform." + note
+        return (
+            "Hi — I'm the HOPEFX assistant. Ask me about your account, open positions, signals, risk, or how to use the platform."
+            + note
+        )
     if has("help", "what can you", "how do i", "commands"):
         return (
             "I can point you to:\n"
@@ -266,17 +404,32 @@ def _keyless_chat_reply(message: str) -> str:
             "• **AI strategies** → Brain → Generate Strategy" + note
         )
     if has("account", "balance", "equity", "margin", "p&l", "pnl", "profit"):
-        return "Your live account balance, equity, margin and P&L are on the **Dashboard → Account** panel, refreshed in real time." + note
+        return (
+            "Your live account balance, equity, margin and P&L are on the **Dashboard → Account** panel, refreshed in real time."
+            + note
+        )
     if has("position", "open trade", "my trades"):
-        return "Open positions, entry price, size and unrealised P&L are on the **Positions** page. Use the Risk page to manage exposure." + note
+        return (
+            "Open positions, entry price, size and unrealised P&L are on the **Positions** page. Use the Risk page to manage exposure."
+            + note
+        )
     if has("signal", "entry", "setup"):
         return "Active ML trade signals (direction, confidence, entry/stop/target) are on the **Signals** page." + note
     if has("price", "gold", "xau", "quote", "market"):
-        return "Live XAUUSD price and candles are on **Markets → XAUUSD**. Note: only the keyless gold feed is active unless you configure broker/feed API keys." + note
+        return (
+            "Live XAUUSD price and candles are on **Markets → XAUUSD**. Note: only the keyless gold feed is active unless you configure broker/feed API keys."
+            + note
+        )
     if has("risk", "kill switch", "drawdown", "stop"):
-        return "Risk limits, drawdown, VaR/CVaR and the kill switch are on the **Risk** page. The kill switch halts all new orders immediately." + note
+        return (
+            "Risk limits, drawdown, VaR/CVaR and the kill switch are on the **Risk** page. The kill switch halts all new orders immediately."
+            + note
+        )
     if has("strategy", "backtest"):
-        return "Generate and backtest AI strategies under **Brain → Generate Strategy**. Full strategy generation needs an LLM key (see below)." + note
+        return (
+            "Generate and backtest AI strategies under **Brain → Generate Strategy**. Full strategy generation needs an LLM key (see below)."
+            + note
+        )
     if has("news", "event", "calendar", "fomc", "nfp", "cpi"):
         return "Upcoming high-impact events (FOMC, NFP, jobless claims) are on the **Calendar** page." + note
     return (
@@ -285,42 +438,147 @@ def _keyless_chat_reply(message: str) -> str:
     )
 
 
+# ── Per-user chat conversations ───────────────────────────────────────────────
+#
+# This was ONE module-level `_chat_agent`, built on first use and reused for
+# every request in the worker. `LLMAgent` keeps the conversation on the
+# instance, and nothing about the caller chose which instance answered — so one
+# worker had one conversation, shared by everyone on it. Reproduced before the
+# fix by calling this endpoint with two identities and a recording backend:
+# user A's "my account number is 9137-SECRET-ALPHA" appeared verbatim in the
+# prompt sent on behalf of user B. On this platform that box holds balances,
+# positions and intent, so it is a confidentiality defect, not untidiness.
+#
+# Four properties the replacement has to hold at once:
+#
+#   * the key starts with the AUTHENTICATED subject. A session id is a label the
+#     client picks, so keying on it alone would let anyone read another user's
+#     conversation by guessing one — or by two clients both defaulting to the
+#     same string. `ChatRequest` carries no user field for the same reason: an
+#     identity in the body is an identity the caller chooses.
+#   * one request at a time per conversation. `LLMAgent.chat` appends the user
+#     turn, awaits the model, then appends the reply; two concurrent requests on
+#     one conversation interleave those appends and produce a history whose
+#     turns do not alternate. A lock per conversation, not a global one, so two
+#     users never wait on each other.
+#   * bounded. An agent per user per session, kept forever, is a memory leak
+#     with a user-controlled key. Least-recently-used eviction with a cap, plus
+#     an idle expiry, so an abandoned conversation does not hold a slot.
+#   * clearing affects one conversation. Evicting or resetting must never reach
+#     another user's entry.
+
+
+_CHAT_MAX_CONVERSATIONS = int(os.getenv("CHAT_MAX_CONVERSATIONS", "500"))
+_CHAT_IDLE_EXPIRY_S = float(os.getenv("CHAT_IDLE_EXPIRY_SECONDS", str(2 * 60 * 60)))
+
+
+@dataclass
+class _Conversation:
+    """One agent, the lock that serialises it, and when it was last used."""
+
+    agent: object
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    last_used: float = field(default_factory=time.monotonic)
+
+
+# Ordered by least-recently-used first, so eviction is `popitem(last=False)`.
+_chat_conversations: OrderedDict[tuple[str, str], _Conversation] = OrderedDict()
+# Guards the REGISTRY only (lookup, insert, evict) — never held across a model
+# call. The per-conversation lock is what serialises the model calls.
+_chat_registry_lock = asyncio.Lock()
+
+
+def _chat_key(user: TokenPayload, session_id: str | None) -> tuple[str, str]:
+    """The authenticated subject first; the client's session label second.
+
+    `sub` is the only part a caller cannot choose. Anything the client sends can
+    at most partition that user's own conversations.
+    """
+    sub = (user.sub or "").strip()
+    if not sub:
+        # No subject means no isolation is possible. Refuse rather than fall
+        # back to a shared conversation, which is the defect this replaced.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Chat requires an identified user.",
+        )
+    label = (session_id or "default").strip()[:64] or "default"
+    return (sub, label)
+
+
+def _expire_idle_conversations(now: float) -> None:
+    """Drop conversations untouched for longer than the idle window.
+
+    Caller holds `_chat_registry_lock`.
+    """
+    if _CHAT_IDLE_EXPIRY_S <= 0:
+        return
+    stale = [k for k, c in _chat_conversations.items() if now - c.last_used > _CHAT_IDLE_EXPIRY_S]
+    for k in stale:
+        _chat_conversations.pop(k, None)
+
+
+async def _get_conversation(key: tuple[str, str], make_agent) -> _Conversation:
+    """The conversation for one key, creating it if this is its first message."""
+    async with _chat_registry_lock:
+        now = time.monotonic()
+        _expire_idle_conversations(now)
+        convo = _chat_conversations.get(key)
+        if convo is None:
+            convo = _Conversation(agent=make_agent())
+            _chat_conversations[key] = convo
+        convo.last_used = now
+        _chat_conversations.move_to_end(key)
+        # Evict the least recently used, which is never the one just touched.
+        while len(_chat_conversations) > max(1, _CHAT_MAX_CONVERSATIONS):
+            _chat_conversations.popitem(last=False)
+        return convo
+
+
+def _reset_chat_agents_for_test() -> None:
+    """Drop every conversation. For tests only — never called by a route."""
+    _chat_conversations.clear()
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
-    user: TokenPayload = Depends(require_role("starter")),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> ChatResponse:
     """
     Free-form chat with the HOPEFX AI trading assistant.
 
-    Maintains per-process conversation history (LLMAgent is module-level
-    singleton per worker).  Requires role >= 'starter'.  When no LLM backend is
-    configured, falls back to a rule-based offline assistant instead of erroring.
+    Conversation history is kept per (authenticated user, session label), so a
+    user continues their own conversation across requests and never sees another
+    user's. Requires role >= 'starter'. When no LLM backend is configured, falls
+    back to a rule-based offline assistant instead of erroring.
     """
     backend, api_key = _detect_llm_backend()
 
     if not backend:
         return ChatResponse(reply=_keyless_chat_reply(req.message))
 
+    # Outside the try: a missing subject is a 401, not something to degrade into
+    # the offline assistant, and never a reason to answer from a shared agent.
+    key = _chat_key(user, req.session_id)
+
     try:
         from brain.llm_agent import LLMAgent
 
-        # Module-level singleton so conversation history persists across requests
-        # within the same worker process.
-        global _chat_agent
-        if "_chat_agent" not in globals() or _chat_agent is None:
-            _chat_agent = LLMAgent(api_key=api_key, backend=backend)
-
-        reply = await _chat_agent.chat(req.message)
+        convo = await _get_conversation(key, lambda: LLMAgent(api_key=api_key, backend=backend))
+        # One model call at a time within this conversation. `LLMAgent.chat`
+        # appends the user turn, awaits the model, then appends the reply;
+        # concurrent calls interleave those appends into a history whose turns
+        # do not alternate. The lock is per conversation, so two users never
+        # wait on each other.
+        async with convo.lock:
+            reply = await convo.agent.chat(req.message)
         return ChatResponse(reply=reply)
     except Exception as exc:
         # LLM backend errored (bad key, timeout, rate limit). Degrade to the
         # offline assistant so the user still gets a useful response.
         logger.warning("Chat agent error: %s — falling back to offline assistant", exc, exc_info=True)
         return ChatResponse(reply=_keyless_chat_reply(req.message))
-
-
-_chat_agent: object | None = None
 
 
 # ── Strategy history & management ─────────────────────────────────────────────
@@ -434,33 +692,31 @@ async def deactivate_strategy(
 async def brain_health(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
-    """Return the detected LLM backend and whether it is reachable."""
-    backend, model = _detect_llm_backend()
+    """Return the detected LLM backend and whether it is reachable.
+
+    Response never contains credentials — ``model`` is the model name only.
+    Probe failures return generic detail strings for the same reason.
+    """
+    backend, model = _detect_llm_runtime()
     available = backend is not None
     detail: str | None = None
 
-    if backend == "openai":
-        try:
-            import openai
+    # A real request, through the gateway's adapters -- this used to build the
+    # probe inline per vendor, which is the same duplication that let
+    # api/brain.py drift away from the chain the settings configure. An adapter
+    # for a vendor with no credential is simply absent, so "not configured" and
+    # "configured but unreachable" stay distinguishable.
+    if backend:
+        from ai.gateway.adapters import build_providers
 
-            openai.models.list()  # lightweight probe
-        except Exception as exc:
-            available = False
-            detail = str(exc)
-    elif backend == "ollama":
-        try:
-            import httpx
-
-            r = httpx.get(
-                f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/api/tags",
-                timeout=3,
-            )
-            available = r.status_code == 200
-        except Exception as exc:
-            available = False
-            detail = str(exc)
+        adapter = build_providers().get(backend)
+        if adapter is None:
+            available, detail = False, f"{backend} has no credential configured."
+        else:
+            available, probe_detail = await asyncio.to_thread(adapter.probe)
+            detail = probe_detail or None
     else:
-        detail = "No LLM backend configured. Set OPENAI_API_KEY or OLLAMA_BASE_URL."
+        detail = _NO_BACKEND_DETAIL
 
     return {
         "available": available,
@@ -488,57 +744,51 @@ class CompleteResponse(BaseModel):
 @router.post("/complete", response_model=CompleteResponse, summary="Raw LLM completion")
 async def brain_complete(
     body: CompleteRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> CompleteResponse:
-    """Send a raw prompt to the configured LLM backend and return the completion."""
-    backend, model = _detect_llm_backend()
+    """Send a raw prompt through the gateway and return the completion.
 
-    if backend == "openai":
-        try:
-            import openai
+    Every branch of this endpoint used to build a vendor request inline --
+    posting to api.anthropic.com, calling the `openai` SDK, posting to Ollama's
+    /api/generate -- which meant the platform's only model endpoint bypassed the
+    spend ceiling, the fall-through chain, the guardrails and the audit record
+    that `ai/gateway` exists to provide. One provider failure became a 502 with
+    no second leg tried and no trace of the attempt.
+    """
+    from ai.gateway.adapters import build_providers
+    from ai.gateway.client import (
+        BudgetExceeded,
+        GatewayClient,
+        ModelRequest,
+        NoProviderAvailable,
+    )
+    from ai.guardrails.output import GuardrailViolation
 
-            messages = []
-            if body.system:
-                messages.append({"role": "system", "content": body.system})
-            messages.append({"role": "user", "content": body.prompt})
-            resp = openai.chat.completions.create(
-                model=model or "gpt-4o-mini",
-                messages=messages,
-                max_tokens=body.max_tokens,
-                temperature=body.temperature,
-            )
-            return CompleteResponse(
-                text=resp.choices[0].message.content or "",
-                backend="openai",
-                model=model,
-                prompt_tokens=resp.usage.prompt_tokens if resp.usage else None,
-                completion_tokens=resp.usage.completion_tokens if resp.usage else None,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM backend error.") from exc
+    providers = build_providers()
+    if not providers:
+        raise HTTPException(status_code=503, detail=_NO_BACKEND_DETAIL)
 
-    if backend == "ollama":
-        try:
-            import httpx
+    client = GatewayClient(providers)
+    prompt = f"{body.system}\n\n{body.prompt}" if body.system else body.prompt
+    request = ModelRequest(role="reasoning", prompt=prompt, timeout_s=120.0)
 
-            base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            payload: dict = {"model": model, "prompt": body.prompt, "stream": False}
-            if body.system:
-                payload["system"] = body.system
-            r = httpx.post(f"{base}/api/generate", json=payload, timeout=120)
-            r.raise_for_status()
-            data = r.json()
-            return CompleteResponse(
-                text=data.get("response", ""),
-                backend="ollama",
-                model=model,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM backend error.") from exc
+    try:
+        response = await asyncio.to_thread(client.call_sync, request, operator=user.sub)
+    except GuardrailViolation as exc:
+        # A guardrail rejection is an ANSWER, not an outage: 400, and never
+        # retried on a second vendor.
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except BudgetExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from None
+    except NoProviderAvailable:
+        raise HTTPException(status_code=502, detail="LLM backend error.") from None
 
-    raise HTTPException(
-        status_code=503,
-        detail="No LLM backend configured. Set OPENAI_API_KEY or OLLAMA_BASE_URL.",
+    return CompleteResponse(
+        text=response.text,
+        backend=response.provider,
+        model=response.model,
+        prompt_tokens=response.tokens_in or None,
+        completion_tokens=response.tokens_out or None,
     )
 
 
@@ -556,55 +806,60 @@ class EmbedResponse(BaseModel):
 @router.post("/embed", response_model=EmbedResponse, summary="Generate text embeddings")
 async def brain_embed(
     body: EmbedRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> EmbedResponse:
-    """Generate embeddings for one or more texts using the configured LLM backend."""
+    """Generate embeddings for one or more texts, through the gateway.
+
+    This used to select a backend inline and hand-roll the fall-through:
+    "Anthropic has no embeddings API, so if OPENAI_API_KEY is set use OpenAI,
+    else if OLLAMA_BASE_URL is set use Ollama". That is a chain, written once
+    here and nowhere else, with no ceiling and no record of what it cost. The
+    gateway's `embedding` chain does the same thing as configuration -- a vendor
+    with no embeddings API reports a leg that cannot serve, and the next leg
+    answers.
+    """
+    from ai.gateway.adapters import build_providers
+    from ai.gateway.client import BudgetExceeded, GatewayClient, NoProviderAvailable
+    from ai.gateway.chain import resolve_chain
+    from ai.guardrails.output import GuardrailViolation
+
     texts = [body.input] if isinstance(body.input, str) else body.input
-    backend, model = _detect_llm_backend()
+    if not texts:
+        raise HTTPException(status_code=400, detail="Embedding needs at least one text.")
 
-    if backend == "openai":
-        try:
-            import openai
+    providers = build_providers()
+    if not providers:
+        raise HTTPException(status_code=503, detail=_NO_BACKEND_DETAIL)
 
-            embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-            resp = openai.embeddings.create(model=embed_model, input=texts)
-            vectors = [item.embedding for item in resp.data]
-            return EmbedResponse(
-                embeddings=vectors,
-                backend="openai",
-                model=embed_model,
-                dimensions=len(vectors[0]) if vectors else 0,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM embed error.") from exc
+    # A specific 503 beats a generic one here: "Anthropic is configured but has
+    # no embeddings API" is a different problem from "nothing is configured",
+    # and only one of them is fixed by setting ANTHROPIC_API_KEY. The old code
+    # said this with a hand-written if; the chain knows it.
+    if not any(leg.provider in providers for leg in resolve_chain("embedding")):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No configured provider offers an embeddings API — Anthropic has no embeddings API. "
+                "Set OPENAI_API_KEY, GOOGLE_API_KEY or OLLAMA_BASE_URL to enable embeddings."
+            ),
+        )
 
-    if backend == "ollama":
-        try:
-            import httpx
+    client = GatewayClient(providers)
+    try:
+        result = await asyncio.to_thread(client.embed_sync, texts, operator=user.sub)
+    except GuardrailViolation as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except BudgetExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from None
+    except NoProviderAvailable:
+        raise HTTPException(status_code=502, detail="LLM embed error.") from None
 
-            base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            embed_model = os.getenv("OLLAMA_EMBED_MODEL", model or "nomic-embed-text")
-            vectors = []
-            for text in texts:
-                r = httpx.post(
-                    f"{base}/api/embeddings",
-                    json={"model": embed_model, "prompt": text},
-                    timeout=30,
-                )
-                r.raise_for_status()
-                vectors.append(r.json().get("embedding", []))
-            return EmbedResponse(
-                embeddings=vectors,
-                backend="ollama",
-                model=embed_model,
-                dimensions=len(vectors[0]) if vectors else 0,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="LLM embed error.") from exc
-
-    raise HTTPException(
-        status_code=503,
-        detail="No LLM backend configured. Set OPENAI_API_KEY or OLLAMA_BASE_URL.",
+    served = next((leg for leg in resolve_chain("embedding") if leg.provider in providers), None)
+    return EmbedResponse(
+        embeddings=result.vectors,
+        backend=served.provider if served else None,
+        model=served.model if served else None,
+        dimensions=result.dimensions,
     )
 
 
@@ -643,7 +898,7 @@ class AnalyzeRequest(BaseModel):
 @router.post("/analyze", summary="Run AI analysis on a symbol/timeframe")
 async def analyze_market(
     req: AnalyzeRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(ai_quota(feature="chat")),
 ) -> dict:
     """
     Fetch recent OHLCV data and return structured market analysis:

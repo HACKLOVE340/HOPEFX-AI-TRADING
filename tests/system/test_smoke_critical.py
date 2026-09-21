@@ -214,6 +214,21 @@ class TestTCARecorder:
 
 
 class TestLeaderboardManager:
+    @pytest.fixture(autouse=True)
+    def _isolate_leaderboards(self):
+        """Clear leaderboard state around every test in this class.
+
+        A fresh LeaderboardManager() resets only its in-process fallback dict.
+        Scores actually live in a Redis sorted set keyed on the category, which
+        outlives the instance and the whole test run — so these tests passed
+        where no Redis was reachable and failed where one was, accumulating u1,
+        u2 and u3 from their siblings. Redis is the production path, so failing
+        there was the wrong way round.
+        """
+        self._mgr().clear()
+        yield
+        self._mgr().clear()
+
     def _mgr(self):
         from social.leaderboards import LeaderboardManager
 

@@ -9,9 +9,9 @@ cannot see.
 
 Checks performed
 ----------------
-1. Runtime route health      — HTTP-tests every registered FastAPI endpoint
+1. Runtime route health      — GETs every registered FastAPI GET endpoint
 2. SPA routing               — verifies /dashboard, /superadmin, etc. return 200 + HTML
-3. Import chain integrity    — subprocess-imports every package to catch broken imports
+3. Import chain integrity    — verifies every core package is importable, in-process
 4. Environment variable completeness — validates all required env vars are present
 5. Data feed health          — probes live data-feed endpoints / Redis streams
 6. Frontend build freshness  — checks static/index.html exists and is recent
@@ -47,6 +47,7 @@ import logging
 import os
 import re
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -67,9 +68,47 @@ _DIAG_HTTP_TIMEOUT: float = float(os.getenv("DIAG_HTTP_TIMEOUT", "10"))
 _FRONTEND_MAX_AGE_HOURS: int = int(os.getenv("DIAG_FRONTEND_MAX_AGE_HOURS", "24"))
 
 
-def _diag_import_timeout() -> int:
-    """Read DIAG_IMPORT_TIMEOUT at call time so tests can override it via env."""
-    return int(os.getenv("DIAG_IMPORT_TIMEOUT", "30"))
+def _diag_import_timeout() -> float:
+    """Total budget for the import-chain probe, read at call time so tests can
+    override it via env.
+
+    This used to be a *per package* timeout on a subprocess. It is now the
+    budget for the whole probe, which runs in one worker thread — see
+    ``_check_import_chain``.
+    """
+    return float(os.getenv("DIAG_IMPORT_TIMEOUT", "30"))
+
+
+def _diag_check_timeout() -> float:
+    """Hard per-check deadline.
+
+    ``run_full_diagnostic`` is awaited by the self-healer on the same event loop
+    that serves requests, so a check that never returns takes the application
+    with it. Every check gets this deadline; exceeding it is a finding, not a
+    hang.
+    """
+    return float(os.getenv("DIAG_CHECK_TIMEOUT", "60"))
+
+
+def _diag_route_budget() -> float:
+    """Total wall-clock budget for the route sweep, across all routes."""
+    return float(os.getenv("DIAG_ROUTE_BUDGET", "20"))
+
+
+# One thread, for the import probe only. A probe that wedges must cost exactly
+# one thread — never a growing pool — and must never be able to wedge the loop.
+_import_probe_executor: Any = None
+_import_probe_lock = threading.Lock()
+
+
+def _get_import_probe_executor() -> Any:
+    global _import_probe_executor
+    with _import_probe_lock:
+        if _import_probe_executor is None:
+            from concurrent.futures import ThreadPoolExecutor
+
+            _import_probe_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hopefx-diag-import")
+        return _import_probe_executor
 
 
 # SPA routes that must return 200 + HTML
@@ -113,6 +152,19 @@ _CORE_PACKAGES: list[str] = [
     "execution",
 ]
 
+# Endpoint families the frontend cannot work without, and the page that breaks
+# when one is absent. Checked by _check_route_families().
+_REQUIRED_ROUTE_FAMILIES: list[tuple[str, str]] = [
+    ("/api/auth", "login and session"),
+    ("/api/trading", "positions, orders, account"),
+    ("/api/billing", "Settings → Billing, Wallet balance"),
+    ("/api/notifications", "Notifications page"),
+    ("/api/signals", "Signal Feed and chart panel"),
+    ("/api/monetization", "Strategy Marketplace"),
+    ("/api/settings", "Settings pages"),
+    ("/api/health", "container health probe"),
+]
+
 # Log patterns → root cause + remediation
 _LOG_PATTERN_MAP: list[dict[str, Any]] = [
     {
@@ -144,7 +196,21 @@ _LOG_PATTERN_MAP: list[dict[str, Any]] = [
         "remediation": "Check SECRET_KEY consistency across pods; verify system clock sync",
     },
     {
-        "pattern": re.compile(r"NaN|inf.*value|division by zero", re.IGNORECASE),
+        # Word-bounded. This was `NaN|inf.*value|division by zero`, and
+        # `inf.*value` matches any line containing "INF" followed later by
+        # "value" — which every log line of the form
+        #     ... - INFO - [prometheus_monitoring.py:333] - ... sync value=15s
+        # satisfies. The deployed superadmin diagnostics page reported
+        #     log_pattern_numeric_error  ERROR  [690x] Numeric instability in
+        #     trading calculations
+        # against a system with no numeric problem at all: 690 ordinary INFO
+        # lines that happened to contain the word "value". Because the finding
+        # is graded high, every one of them was pushed to `alerts:critical` and
+        # queued for the self-healer to "fix".
+        "pattern": re.compile(
+            r"\bNaN\b|\bdivision by zero\b|\bZeroDivisionError\b|[-+]?\binf(?:inity)?\b",
+            re.IGNORECASE,
+        ),
         "category": "numeric_error",
         "severity": "high",
         "root_cause": "Numeric instability in trading calculations",
@@ -158,14 +224,18 @@ _LOG_PATTERN_MAP: list[dict[str, Any]] = [
         "remediation": "Replace shift(-N) with shift(+N) in all feature engineering code",
     },
     {
-        "pattern": re.compile(r"rate.?limit|429|too many requests", re.IGNORECASE),
+        # `429` unbounded matched any line containing those three digits in a
+        # row — a latency of 429 ms, a byte count, a port, a timestamp.
+        "pattern": re.compile(r"rate.?limit|\b429\b|too many requests", re.IGNORECASE),
         "category": "rate_limit",
         "severity": "medium",
         "root_cause": "Rate limiting triggered — possible abuse or misconfigured client",
         "remediation": "Review rate limit config; check for runaway retry loops",
     },
     {
-        "pattern": re.compile(r"memory.*error|MemoryError|OOM", re.IGNORECASE),
+        # `OOM` case-insensitively and unbounded is a substring of "room",
+        # "zoom", "boom" and "broom".
+        "pattern": re.compile(r"memory.*error|\bMemoryError\b|\bOOM\b|out of memory", re.IGNORECASE),
         "category": "memory_pressure",
         "severity": "critical",
         "root_cause": "Out-of-memory condition",
@@ -259,40 +329,70 @@ class DiagnosticsEngine:
         self._last_report: DiagnosticReport | None = None
         self._last_run_ts: float = 0.0
 
+    async def _run_check(self, name: str, coro: Any) -> list[DiagnosticResult]:
+        """Await one check under a hard deadline and normalise what it returns.
+
+        Two jobs, both of which used to be done twice — once in the parallel
+        branch and once in the serial one, with the serial branch quietly
+        dropping ``BaseException`` and neither branch imposing any deadline.
+        A check that never returns used to hang ``run_full_diagnostic``, which
+        the self-healer awaits on the request-serving loop.
+        """
+        deadline = _diag_check_timeout()
+        t0 = time.monotonic()
+        try:
+            result = await asyncio.wait_for(coro, timeout=deadline)
+        except TimeoutError:
+            return [
+                DiagnosticResult(
+                    check_name=name,
+                    status="error",
+                    message=f"Check '{name}' exceeded its {deadline:.0f}s deadline and was cancelled",
+                    remediation=(
+                        "Investigate what the check is waiting on. Raise DIAG_CHECK_TIMEOUT only "
+                        "once you know the wait is legitimate."
+                    ),
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
+        except Exception as exc:
+            return [
+                DiagnosticResult(
+                    check_name=name,
+                    status="error",
+                    message=f"Check '{name}' raised {type(exc).__name__}: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
+        if isinstance(result, list):
+            return result
+        if isinstance(result, DiagnosticResult):
+            return [result]
+        return []
+
     async def run_full_diagnostic(self, *, parallel: bool = True) -> DiagnosticReport:
         t0 = time.monotonic()
         report = DiagnosticReport()
-        checks = [
-            self._check_env_vars(),
-            self._check_import_chain(),
-            self._check_database(),
-            self._check_redis(),
-            self._check_frontend_build(),
-            self._check_route_health(),
-            self._check_spa_routing(),
-            self._check_auth_flow(),
-            self._check_data_feeds(),
-            self._check_log_patterns(),
+        checks: list[tuple[str, Any]] = [
+            ("env_vars", self._check_env_vars()),
+            ("import_chain", self._check_import_chain()),
+            ("database", self._check_database()),
+            ("redis", self._check_redis()),
+            ("frontend_build", self._check_frontend_build()),
+            ("route_health", self._check_route_health()),
+            ("spa_routing", self._check_spa_routing()),
+            ("auth_flow", self._check_auth_flow()),
+            ("data_feeds", self._check_data_feeds()),
+            ("log_patterns", self._check_log_patterns()),
+            ("route_families", self._check_route_families()),
+            ("model_registry", self._check_model_registry()),
         ]
         if parallel:
-            raw = await asyncio.gather(*checks, return_exceptions=True)
-            for r in raw:
-                if isinstance(r, Exception):
-                    report.results.append(DiagnosticResult(check_name="unknown", status="error", message=str(r)))
-                elif isinstance(r, list):
-                    report.results.extend(r)
-                elif isinstance(r, DiagnosticResult):
-                    report.results.append(r)
+            for batch in await asyncio.gather(*[self._run_check(n, c) for n, c in checks]):
+                report.results.extend(batch)
         else:
-            for coro in checks:
-                try:
-                    r = await coro
-                    if isinstance(r, list):
-                        report.results.extend(r)
-                    elif isinstance(r, DiagnosticResult):
-                        report.results.append(r)
-                except Exception as exc:
-                    report.results.append(DiagnosticResult(check_name="unknown", status="error", message=str(exc)))
+            for name, coro in checks:
+                report.results.extend(await self._run_check(name, coro))
         report.completed_at = datetime.now(UTC).isoformat()
         report.total_duration_ms = (time.monotonic() - t0) * 1000
         self._last_report = report
@@ -381,32 +481,91 @@ class DiagnosticsEngine:
     # ------------------------------------------------------------------
 
     async def _check_import_chain(self) -> list[DiagnosticResult]:
+        """Verify every core package imports — in this process, off the loop.
+
+        This check must never spawn a process, and the reason is not stylistic.
+        It used to answer the question by launching one fresh interpreter per
+        package (``sys.executable -c "import <pkg>"``) through
+        ``asyncio.create_subprocess_exec``, all ten concurrently, every
+        ``HEAL_DIAG_INTERVAL`` seconds (default 300) for the life of the
+        process. Three things were wrong with that, and together they took
+        production down:
+
+        1. ``asyncio.create_subprocess_exec`` performs the ``fork``/``exec``
+           **synchronously on the event loop thread**. It cannot be cancelled
+           and it cannot be timed out. The old ``wait_for`` wrapped only
+           ``proc.communicate()`` — the spawn itself was unguarded, so
+           ``DIAG_IMPORT_TIMEOUT`` protected the one part that was never the
+           problem. A SIGUSR1 stack dump from the wedged container named the
+           exact line::
+
+               File "asyncio/subprocess.py", line 224 in create_subprocess_exec
+               File "/app/security/diagnostics.py", line 390 in _test_import
+
+        2. ``_CORE_PACKAGES`` starts with ``app``. Each subprocess therefore
+           built a *second* copy of the entire application — FastAPI, the ML
+           stack, every module-level initialiser — and ten of them at once, in
+           a container already holding one. Forking a large-RSS process ten
+           times over is how a small VPS ends up thrashing, and a stalled
+           ``fork`` on the loop thread is a permanent wedge: ``/api/health/live``
+           never got to run, Docker's probe timed out with zero bytes, the
+           container went unhealthy, and nginx would not start behind it.
+
+        3. It was answering a question that a running process has already
+           answered. Every package here is imported by the app that is
+           executing this code; if one of them did not import, there would be
+           nothing to run the check.
+
+        So: packages already in ``sys.modules`` are reported as importing
+        cleanly, because they demonstrably did. Anything not yet loaded is
+        imported for real — in a single worker thread, under a total deadline,
+        so a slow or hanging import costs one thread and a warning instead of
+        the whole application.
+        """
         t0 = time.monotonic()
         broken: list[dict[str, str]] = []
         ok_count = 0
+        packages = list(_CORE_PACKAGES)
 
-        async def _test_import(pkg: str) -> tuple[str, bool, str]:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    sys.executable,
-                    "-c",
-                    f"import {pkg}",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=str(PROJECT_ROOT),
-                )
+        def _probe_all() -> list[tuple[str, bool, str]]:
+            import importlib
+
+            out: list[tuple[str, bool, str]] = []
+            for pkg in packages:
+                if pkg in sys.modules:
+                    out.append((pkg, True, ""))
+                    continue
                 try:
-                    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_diag_import_timeout())
-                    if proc.returncode == 0:
-                        return pkg, True, ""
-                    return pkg, False, stderr.decode(errors="replace").strip()[:300]
-                except TimeoutError:
-                    proc.kill()
-                    return pkg, False, "import timed out"
-            except Exception as exc:
-                return pkg, False, str(exc)
+                    importlib.import_module(pkg)
+                    out.append((pkg, True, ""))
+                except Exception as exc:
+                    out.append((pkg, False, f"{type(exc).__name__}: {exc}"[:300]))
+            return out
 
-        import_results = await asyncio.gather(*[_test_import(p) for p in _CORE_PACKAGES])
+        loop = asyncio.get_running_loop()
+        budget = _diag_import_timeout()
+        try:
+            import_results = await asyncio.wait_for(
+                loop.run_in_executor(_get_import_probe_executor(), _probe_all),
+                timeout=budget,
+            )
+        except TimeoutError:
+            # The worker thread is still running and will finish on its own.
+            # It is a single dedicated thread, so this cannot accumulate.
+            return [
+                DiagnosticResult(
+                    check_name="import_chain",
+                    status="warning",
+                    message=f"Import check did not finish within {budget:.0f}s",
+                    details={"packages": packages},
+                    remediation=(
+                        "A core package is slow or hanging on import. Raise DIAG_IMPORT_TIMEOUT "
+                        "if this is expected on a cold process, otherwise profile the import."
+                    ),
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
+
         for pkg, ok, err in import_results:
             if ok:
                 ok_count += 1
@@ -430,6 +589,148 @@ class DiagnosticsEngine:
                 check_name="import_chain",
                 status="ok",
                 message=f"All {ok_count} core packages import cleanly",
+                duration_ms=dur,
+            )
+        ]
+
+    # ------------------------------------------------------------------
+    # Check 2b: Endpoint families the UI depends on
+    # ------------------------------------------------------------------
+
+    async def _check_route_families(self) -> list[DiagnosticResult]:
+        """Verify every endpoint family the frontend needs is registered.
+
+        Routers here are registered inside ``try``/``except`` blocks and behind
+        feature flags, and a failure is a single ``logger.warning`` that nobody
+        reads. When a whole family goes missing — an import error, a flag left
+        off, a renamed prefix — every request under it 404s, and the pages that
+        depend on it show whatever generic message they happen to carry:
+        "Could not load your subscription", "Failed to load balance". Three
+        panels, three messages, one cause, and nothing that named it.
+
+        ``route_health`` does not cover this: it probes the routes that *are*
+        registered, so a family that is entirely absent is invisible to it —
+        there is nothing left to probe.
+        """
+        t0 = time.monotonic()
+        try:
+            from app import app as _app
+            from core.router_registry import iter_api_routes
+
+            registered = {r.path for r in iter_api_routes(_app.routes)}
+        except Exception as exc:
+            return [
+                DiagnosticResult(
+                    check_name="route_families",
+                    status="error",
+                    message=f"Could not read the route table: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
+
+        missing = [
+            f"{prefix} ({reason})"
+            for prefix, reason in _REQUIRED_ROUTE_FAMILIES
+            if not any(p.startswith(prefix) for p in registered)
+        ]
+        dur = (time.monotonic() - t0) * 1000
+        if missing:
+            return [
+                DiagnosticResult(
+                    check_name="route_families",
+                    status="critical",
+                    message=f"{len(missing)} endpoint famil(y/ies) are not registered",
+                    details={"missing": missing, "registered_count": len(registered)},
+                    remediation=(
+                        "Check the startup log for 'router not registered' warnings and the "
+                        "FEATURE_* flags in .env. Every page under a missing prefix will 404."
+                    ),
+                    duration_ms=dur,
+                )
+            ]
+        return [
+            DiagnosticResult(
+                check_name="route_families",
+                status="ok",
+                message=f"All {len(_REQUIRED_ROUTE_FAMILIES)} required endpoint families are registered",
+                duration_ms=dur,
+            )
+        ]
+
+    # ------------------------------------------------------------------
+    # Check 2c: Model registry consistency
+    # ------------------------------------------------------------------
+
+    async def _check_model_registry(self) -> list[DiagnosticResult]:
+        """Report contradictions between registry entries.
+
+        Per-entry ``verify()`` only asks whether a file still hashes to its
+        recorded digest, so it passes on a manifest where four names share one
+        artifact and claim two different out-of-sample accuracies — which is
+        what ships. The figure that disagrees belongs to the version serving
+        inference and is what the dashboard prints as model accuracy.
+        """
+        t0 = time.monotonic()
+        try:
+            from ml.model_registry import get_registry
+
+            loop = asyncio.get_running_loop()
+            audit = await asyncio.wait_for(loop.run_in_executor(None, get_registry().audit_manifest), timeout=15.0)
+        except Exception as exc:
+            return [
+                DiagnosticResult(
+                    check_name="model_registry",
+                    status="warning",
+                    message=f"Model registry audit unavailable: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
+
+        dur = (time.monotonic() - t0) * 1000
+        conflicts = audit.get("metric_conflicts", [])
+        missing = audit.get("missing_artifacts", [])
+        stale = audit.get("stale_metrics", [])
+        if conflicts or missing or stale:
+            serving = any(c.get("active_among_them") for c in conflicts)
+            parts: list[str] = []
+            if conflicts:
+                parts.append(
+                    f"{len(conflicts)} artifact(s) carry conflicting metrics"
+                    + (" — including the version serving inference" if serving else "")
+                )
+            if stale:
+                parts.append(
+                    f"{len(stale)} entr(y/ies) disagree with their artifact's own metadata "
+                    f"({', '.join(s['version'] for s in stale[:4])})"
+                )
+            if missing:
+                parts.append(f"{len(missing)} artifact file(s) missing ({', '.join(missing[:4])})")
+            return [
+                DiagnosticResult(
+                    check_name="model_registry",
+                    # The serving model's own metrics being in dispute is a
+                    # different severity from two retired entries disagreeing.
+                    status="critical" if serving else "error",
+                    message="; ".join(parts),
+                    details={
+                        "metric_conflicts": conflicts,
+                        "stale_metrics": stale,
+                        "missing_artifacts": missing,
+                    },
+                    remediation=(
+                        "The <stem>_meta.json beside each artifact is the measurement; a registry "
+                        "entry is a copy of it. Entries listed under stale_metrics describe a model "
+                        "that was overwritten in place — delete or re-register them. Do not average "
+                        "conflicting scores."
+                    ),
+                    duration_ms=dur,
+                )
+            ]
+        return [
+            DiagnosticResult(
+                check_name="model_registry",
+                status="ok",
+                message=f"All {audit.get('total_versions', 0)} registry entries are self-consistent",
                 duration_ms=dur,
             )
         ]
@@ -574,76 +875,64 @@ class DiagnosticsEngine:
     # ------------------------------------------------------------------
 
     async def _check_route_health(self) -> list[DiagnosticResult]:
+        """Probe registered routes for 5xx — read-only, GET only.
+
+        This used to POST ``{}`` to every registered POST route that was not on
+        a hand-maintained prefix blocklist, carrying ``X-Internal-Health-Check:
+        1`` so the CSRF middleware would let it through. On a system that moves
+        money that is not a health check, it is an unattended client issuing
+        writes: the blocklist named thirteen prefixes that existed when it was
+        written, so every route added afterwards was probed by default, and the
+        safe direction of that default is the wrong one. "Does this route
+        answer?" is a GET question; nothing about a POST's response code tells
+        you anything a GET does not, and the cost of being wrong is a side
+        effect in production.
+
+        The sweep is also bounded in wall-clock time. Fifty routes at
+        ``DIAG_HTTP_TIMEOUT`` each is over eight minutes of one check.
+        """
         t0 = time.monotonic()
 
-        # Only probe GET endpoints and a small set of POST endpoints that
-        # accept empty bodies or have known-safe minimal payloads.
-        # POST endpoints that require a request body (register, login, etc.)
-        # are excluded — probing them with {} generates 422 log noise and
-        # provides no signal beyond "the route exists".
-        _PROBE_GET_ONLY_PREFIXES: tuple[str, ...] = (
-            "/api/auth/register",
-            "/api/auth/login",
-            "/api/auth/resend-verification",
-            "/api/auth/forgot-password",
-            "/api/auth/reset-password",
-            "/api/auth/activate-free-tier",
-            "/api/auth/verify-email",
-            "/api/auth/refresh",
-            "/api/auth/logout",
-            "/api/auth/logout-all",
-            "/api/auth/2fa/",
-            "/api/trading/order",
-            "/api/trading/orders",
-        )
-
-        routes_to_test: list[tuple[str, str]] = [
-            ("GET", "/api/health/ready"),
-            ("GET", "/api/status"),
-            ("GET", "/api/auth/csrf-token"),
+        routes_to_test: list[str] = [
+            "/api/health/ready",
+            "/api/status",
+            "/api/auth/csrf-token",
         ]
         try:
             from app import app as _app
 
             for route in _app.routes:
                 path = getattr(route, "path", None)
-                methods = getattr(route, "methods", None)
-                if path and methods:
-                    for m in methods:
-                        if m == "GET":
-                            routes_to_test.append(("GET", path))
-                        elif m == "POST" and not any(path.startswith(p) for p in _PROBE_GET_ONLY_PREFIXES):
-                            routes_to_test.append(("POST", path))
+                methods = getattr(route, "methods", None) or ()
+                if path and "GET" in methods:
+                    routes_to_test.append(path)
         except Exception:  # nosec B110 — app not initialised yet; route list stays empty  # noqa: S110
             pass
-        routes_to_test = list(dict.fromkeys(routes_to_test))[:50]
+        routes_to_test = [p for p in dict.fromkeys(routes_to_test) if "{" not in p][:50]
         try:
             import httpx
 
             unhealthy: list[dict[str, Any]] = []
             ok_count = 0
-            # Internal health-check header allows loopback probes to bypass CSRF
-            # validation on POST/PUT/PATCH/DELETE endpoints without a browser session.
-            _internal_headers = {"X-Internal-Health-Check": "1"}
+            skipped = 0
+            budget = _diag_route_budget()
             async with httpx.AsyncClient(
                 base_url=_APP_BASE_URL, timeout=_DIAG_HTTP_TIMEOUT, follow_redirects=True
             ) as client:
-                for method, path in routes_to_test:
-                    if "{" in path:
-                        continue
+                for path in routes_to_test:
+                    if time.monotonic() - t0 > budget:
+                        skipped = len(routes_to_test) - (ok_count + len(unhealthy))
+                        break
                     try:
-                        if method == "GET":
-                            resp = await client.get(path)
-                        else:
-                            resp = await client.post(path, json={}, headers=_internal_headers)
+                        resp = await client.get(path)
                         if resp.status_code in (200, 201, 401, 403, 405, 422):
                             ok_count += 1
                         elif resp.status_code >= 500:
-                            unhealthy.append({"method": method, "path": path, "status": resp.status_code})
+                            unhealthy.append({"method": "GET", "path": path, "status": resp.status_code})
                     except httpx.ConnectError:
                         break
                     except Exception as exc:
-                        unhealthy.append({"method": method, "path": path, "error": str(exc)[:100]})
+                        unhealthy.append({"method": "GET", "path": path, "error": str(exc)[:100]})
             dur = (time.monotonic() - t0) * 1000
             if unhealthy:
                 return [
@@ -660,7 +949,11 @@ class DiagnosticsEngine:
                 DiagnosticResult(
                     check_name="route_health",
                     status="ok",
-                    message=f"All {ok_count} tested routes are alive",
+                    message=(
+                        f"All {ok_count} tested routes are alive"
+                        + (f" ({skipped} not reached within the {budget:.0f}s budget)" if skipped else "")
+                    ),
+                    details={"skipped": skipped} if skipped else {},
                     duration_ms=dur,
                 )
             ]
@@ -889,23 +1182,50 @@ class DiagnosticsEngine:
         try:
             loop = asyncio.get_running_loop()
 
-            def _probe_feed() -> tuple[bool, str]:
+            def _probe_feed() -> tuple[bool | None, str]:
+                """Returns (healthy, message). ``None`` means the snapshot did
+                not report health at all, which is a different finding from
+                "unhealthy" and must not be collapsed into it.
+
+                It was collapsed into it: this read ``status.get("healthy",
+                False)`` against a snapshot that has never contained a
+                ``healthy`` key, so the check reported "Data feed module
+                unhealthy" permanently and identically in every state. A default
+                that silently answers the question is worse than no default —
+                the panel showed a red warning nobody could act on, and a real
+                feed outage would have looked exactly the same.
+                """
                 try:
                     from data_feed import get_feed_status
 
                     status = get_feed_status()
-                    return status.get("healthy", False), status.get("message", "")
+                    if "healthy" not in status:
+                        return None, (
+                            f"Feed status snapshot has no 'healthy' field — keys present: {sorted(status)[:8]}"
+                        )
+                    return bool(status["healthy"]), str(status.get("message", ""))
                 except ImportError:
                     return True, "data_feed module not present (optional)"
                 except Exception as exc2:
                     return False, str(exc2)[:200]
 
             ok, msg = await loop.run_in_executor(None, _probe_feed)
+            if ok is None:
+                _status, _default = "error", "Data feed module did not report health"
+            elif ok:
+                _status, _default = "ok", "Data feed module healthy"
+            else:
+                _status, _default = "warning", "Data feed module unhealthy"
             results.append(
                 DiagnosticResult(
                     check_name="data_feeds_module",
-                    status="ok" if ok else "warning",
-                    message=msg or ("Data feed module healthy" if ok else "Data feed module unhealthy"),
+                    status=_status,
+                    message=msg or _default,
+                    remediation=(
+                        "get_feed_status() must return a 'healthy' boolean; see data_feed/multi_source_feed.py::status"
+                        if ok is None
+                        else ""
+                    ),
                     duration_ms=(time.monotonic() - t0) * 1000,
                 )
             )
@@ -1020,23 +1340,34 @@ class DiagnosticsEngine:
             if check == "frontend_build":
                 frontend_dir = PROJECT_ROOT / "frontend"
                 if frontend_dir.exists() and (frontend_dir / "package.json").exists():
-                    proc = await asyncio.create_subprocess_exec(
-                        "npm",
-                        "run",
-                        "build",
-                        cwd=str(frontend_dir),
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    try:
-                        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
-                        action["action"] = "npm run build"
-                        action["success"] = proc.returncode == 0
-                        if not action["success"]:
-                            action["error"] = stderr.decode(errors="replace")[:300]
-                    except TimeoutError:
-                        proc.kill()
-                        action["action"] = "npm run build (timed out)"
+                    # Spawned from a worker thread, not the event loop.
+                    # asyncio.create_subprocess_exec runs the fork/exec inline on
+                    # the loop thread, where it cannot be cancelled or timed out —
+                    # the same construct that wedged _check_import_chain. Here the
+                    # child is a full `npm run build`, so the fork is larger and
+                    # the window wider. subprocess.run's own timeout is enforced
+                    # by the worker, and the loop keeps serving throughout.
+                    import subprocess  # nosec B404 — fixed argv, no shell
+
+                    def _build() -> tuple[int, str]:
+                        try:
+                            completed = subprocess.run(  # nosec B603, B607 — fixed argv, shell=False
+                                ["npm", "run", "build"],
+                                cwd=str(frontend_dir),
+                                capture_output=True,
+                                timeout=120,
+                                check=False,
+                            )
+                            return completed.returncode, completed.stderr.decode(errors="replace")[:300]
+                        except subprocess.TimeoutExpired:
+                            return -1, "timed out"
+
+                    loop = asyncio.get_running_loop()
+                    rc, err = await loop.run_in_executor(None, _build)
+                    action["action"] = "npm run build" if rc != -1 else "npm run build (timed out)"
+                    action["success"] = rc == 0
+                    if rc != 0:
+                        action["error"] = err
             elif check == "import_chain":
                 # _CORE_PACKAGES contains internal project modules (api.auth,
                 # security.self_healer, core.router_registry, …).  Their top-level

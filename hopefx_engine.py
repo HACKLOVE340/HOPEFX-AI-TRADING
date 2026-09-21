@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import ClassVar
+from typing import Any, ClassVar
 import logging
 import os
 import signal
@@ -185,6 +185,46 @@ def validate_startup_environment() -> list[str]:
 
 
 # ── engine ────────────────────────────────────────────────────────────────────
+
+
+#: Router refusal reasons that mean "no venue was reachable" rather than "this
+#: order is not permitted". Everything else `SmartRouter` refuses is a POLICY
+#: denial and is terminal — see `_router_refusal_is_terminal`.
+#:
+#: Deliberately an allow-list of the transport cases, not a deny-list of the
+#: policy ones. A deny-list means a policy reason added to `smart_router.py`
+#: later is silently treated as a transport gap and overruled, which is exactly
+#: how this defect would come back.
+_ROUTER_TRANSPORT_GAPS: tuple[str, ...] = ("no_brokers_available",)
+
+
+def _router_refusal_is_terminal(reason: object) -> bool:
+    """Is this router refusal a policy denial that the caller must not overrule?
+
+    `SmartRouter.route_and_execute` returns ``status="rejected"`` for two
+    different kinds of thing, and the fallback path in `_execute_decision` used
+    to treat them identically — logging a warning and placing the order
+    directly:
+
+    * **Policy denials**, which must be terminal —
+      ``unauthorized:…`` (``enforce_order_authorization`` refused; the router
+      logs it at CRITICAL as "Router BLOCKED order"), ``spread_too_wide:…``,
+      ``sentiment_blackout:…``, ``macro_impact_blackout:…`` and
+      ``fia_throttle:…`` (the FIA 3.4 regulatory message throttle).
+    * **Transport gaps**, where nothing was transmitted and the pre-route gates
+      already passed to get there — ``no_brokers_available``.
+
+    `all_brokers_failed:…` and `timeout:…` are transport failures but NOT gaps:
+    a broker was reached, so an order may be in flight. They are terminal here
+    too, because sending another is the duplicate fill ROUTER-TO was fixed to
+    prevent. Recovering them needs order-identity reconciliation, not a retry.
+
+    An unknown or missing reason is terminal. Rule 3: fail closed on anything
+    that trades.
+    """
+    if not isinstance(reason, str) or not reason:
+        return True
+    return reason.strip().split(":", 1)[0] not in _ROUTER_TRANSPORT_GAPS
 
 
 class HopeFXEngine:
@@ -773,7 +813,7 @@ class HopeFXEngine:
             )
             # Publish breach event so monitoring / alerting picks it up.
             try:
-                from core.event_bus import event_bus as _eb
+                from core.event_bus import bus as _eb
 
                 await _eb.publish_breach(
                     {
@@ -851,16 +891,26 @@ class HopeFXEngine:
 
     async def _poll_symbol(self, symbol: str) -> None:
         try:
-            price_data = {}
+            price_data: Any = None
             if hasattr(self._broker, "get_price"):
-                price_data = self._broker.get_price(symbol) or {}
+                price_data = self._broker.get_price(symbol)
             elif hasattr(self._broker, "market_prices"):
                 price_data = self._broker.market_prices.get(symbol, {})
             if not price_data:
                 return
-            bid = float(price_data.get("bid", price_data.get("price", 0)))
-            ask = float(price_data.get("ask", bid))
+            # get_price() may return a scalar mid-price (float — e.g.
+            # MultiSourceFeed) or a bid/ask dict, depending on the broker/feed
+            # implementation. Handle both rather than assuming a dict.
+            if isinstance(price_data, (int, float)) and not isinstance(price_data, bool):
+                bid = ask = float(price_data)
+            elif isinstance(price_data, dict):
+                bid = float(price_data.get("bid", price_data.get("price", 0)))
+                ask = float(price_data.get("ask", bid))
+            else:
+                return
             mid = (bid + ask) / 2
+            if mid <= 0:
+                return
             await self._on_tick(symbol=symbol.replace("_", "/"), bid=bid, ask=ask, mid=mid)
         except Exception as exc:
             logger.debug("Poll symbol %s error: %s", symbol, exc)
@@ -1431,7 +1481,13 @@ class HopeFXEngine:
                 return
 
             from brokers.oanda_stream import OANDAStream
-            from brokers import OrderSide as _OrderSide
+
+            # MUST come from brokers.base — that is the enum OANDAStream
+            # compares against. `brokers.OrderSide` is a *separate* class whose
+            # members ('buy'/'sell') never equal base's ('BUY'/'SELL'), so
+            # importing it here made every BUY fall through to the sell branch
+            # and reach OANDA as negative units. See S13-03.
+            from brokers.base import OrderSide as _OrderSide
 
             if isinstance(self._broker, OANDAStream):
                 order_kwargs: dict = {
@@ -1498,14 +1554,39 @@ class HopeFXEngine:
                         sr_result.get("broker"),
                         sr_result.get("fill_price", price),
                     )
+                elif _router_refusal_is_terminal(sr_result.get("reason")):
+                    # A POLICY denial, not a transport gap. This branch used to
+                    # log a warning and then place the order directly anyway, so
+                    # `enforce_order_authorization` could log "Router BLOCKED
+                    # order" at CRITICAL and the order still reached the broker.
+                    # Five controls were bypassed this way: the authorization
+                    # token check, the spread guard, the news blackout, the
+                    # macro blackout and the FIA 3.4 regulatory throttle.
+                    logger.error(
+                        "SmartRouter REFUSED %s %s (%s) — policy denial is terminal, no order placed",
+                        side,
+                        symbol,
+                        sr_result.get("reason"),
+                    )
+                    return
                 else:
                     logger.warning(
-                        "SmartRouter rejected (%s) — falling back to direct order",
+                        "SmartRouter found no venue (%s) — falling back to direct order",
                         sr_result.get("reason"),
                     )
             except Exception as _sr_exc:
-                logger.warning("SmartRouter failed (%s) — direct order", _sr_exc)
+                # An exception can be raised after the order was transmitted, so
+                # the outcome is unknown. Sending another is the duplicate fill
+                # ROUTER-TO exists to prevent; refuse until it is reconciled.
+                logger.error(
+                    "SmartRouter raised mid-route for %s %s (%s) — outcome UNKNOWN, no order placed. "
+                    "Reconcile before retrying.",
+                    side,
+                    symbol,
+                    _sr_exc,
+                )
                 self._smart_router = None
+                return
 
             if not _used_smart_router:
                 _order_coro = self._broker.place_order(**order_kwargs)
@@ -1580,19 +1661,50 @@ class HopeFXEngine:
         except Exception as exc:
             logger.error("Order execution failed: %s", exc)
 
+    @staticmethod
+    def _acct_field(info: object, name: str, default: Any = 0.0) -> Any:
+        """Read *name* off an AccountInfo or a plain dict connector response."""
+        getter = getattr(info, "get", None)
+        if callable(getter):
+            try:
+                value = getter(name, default)
+                if value is not None:
+                    return value
+            except Exception as exc:
+                logger.debug("_acct_field: .get(%s) failed (%s) — trying attribute", name, exc)
+        value = getattr(info, name, default)
+        return default if value is None else value
+
     async def _update_equity(self) -> None:
         try:
             equity = balance = 0.0
             open_pos = 0
+            # `get_account_info` is `async def` on every broker. This used to
+            # call it without awaiting, so `info` was a coroutine and
+            # `info.get(...)` raised AttributeError — swallowed by the handler
+            # below and logged once per cycle at WARNING. Equity therefore never
+            # reached the risk manager, and since RiskManager.update_equity() is
+            # what recomputes drawdown and auto-halts on a breach, the drawdown
+            # circuit breaker could not trip however much the account lost.
+            # Three sibling calls in this file were already guarded; this one
+            # was not. See docs/HARDENING_BACKLOG.md S12-04b.
+            from execution.broker_call import call_broker
+
+            info = None
             if hasattr(self._broker, "get_account_info"):
-                info = self._broker.get_account_info()
-                equity = float(info.get("equity", 0))
-                balance = float(info.get("balance", equity))
-                open_pos = int(info.get("open_positions", 0))
+                info = await call_broker(self._broker.get_account_info)
             elif hasattr(self._broker, "get_account"):
-                info = self._broker.get_account()
-                equity = float(info.get("equity", 0))
-                balance = float(info.get("balance", equity))
+                info = await call_broker(self._broker.get_account)
+
+            if info is not None:
+                equity = float(self._acct_field(info, "equity", 0.0))
+                balance = float(self._acct_field(info, "balance", equity))
+                # AccountInfo calls it positions_count; dict connectors call it
+                # open_positions. AccountInfo.get() is getattr-based, so asking
+                # for the wrong name silently returns the default.
+                open_pos = int(
+                    self._acct_field(info, "open_positions", None) or self._acct_field(info, "positions_count", 0) or 0
+                )
             if equity > 0:
                 self._risk_manager.update_equity(equity)
                 self._trade_logger.log_equity(

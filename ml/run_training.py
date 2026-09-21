@@ -39,7 +39,9 @@ import pandas as pd
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-MODEL_DIR = os.getenv("ML_MODEL_DIR", "ml/saved_models")
+from ml.model_paths import model_dir as _resolve_model_dir
+
+MODEL_DIR = str(_resolve_model_dir())
 DEFAULT_SYMBOLS = os.getenv("ML_SYMBOLS", "XAU_USD").split(",")
 H1_CSV_DIR = os.getenv("ML_H1_CSV_DIR", "data")
 

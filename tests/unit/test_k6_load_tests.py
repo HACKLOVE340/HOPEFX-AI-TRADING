@@ -104,7 +104,7 @@ def test_threshold_defined(k6_source, threshold):
         "/api/trading/order",
         "/api/trading/positions",
         "/api/trading/account",
-        "/api/risk/status",
+        "/api/trading/risk",
         "/metrics",
         "/auth/login",
         "/ws/live",

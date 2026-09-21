@@ -8,12 +8,17 @@
 # Install this FIRST (CPU torch, ~200 MB), THEN the main file (which then finds
 # torch already satisfied and skips the CUDA wheels):
 #
-#     pip install -r requirements-cpu.txt
+#     pip install --index-url https://download.pytorch.org/whl/cpu -r requirements-cpu.txt
 #     pip install -r requirements.txt
 #
-# NOTE: uses --index-url (not --extra-index-url) so the CPU wheel is chosen
-# deterministically. This file lists ONLY torch, so pointing the index at the
-# PyTorch CPU repo is safe. GPU hosts: skip this; use the CUDA note in
+# NOTE: --index-url is passed on the COMMAND LINE (not as an in-file directive)
+# so the CPU wheel is still chosen deterministically. A prior version embedded
+# `--index-url https://download.pytorch.org/whl/cpu` directly in this file,
+# which is a well-known cause of GitHub's Dependabot dependency-graph parser
+# failing ("Dependency file checks have 1 error") — its pip resolver doesn't
+# handle a non-PyPI custom index declared inside the requirements file itself.
+# Moving it to the command line (matching the convention already used in the
+# equivalent comment in requirements.txt) fixes that while installing the
+# identical CPU wheel. GPU hosts: skip this; use the CUDA note in
 # requirements.txt instead.
---index-url https://download.pytorch.org/whl/cpu
 torch>=2.1.0

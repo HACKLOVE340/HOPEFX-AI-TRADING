@@ -17,10 +17,10 @@ vi.mock('../hooks/useWebSocket', () => ({
 
 vi.mock('../hooks/useApi', () => ({
   authApi: {
-    login:            vi.fn().mockResolvedValue({ data: { access_token: 'tok', token_type: 'bearer', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),
+    login:            vi.fn().mockResolvedValue({ data: { access_token: 'tok', token_type: 'bearer', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),  // pragma: allowlist secret — vitest mock, literal "tok"
     logout:           vi.fn().mockResolvedValue({ data: {} }),
     me:               vi.fn().mockResolvedValue({ data: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } }),
-    register:         vi.fn().mockResolvedValue({ data: { access_token: 'tok', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),
+    register:         vi.fn().mockResolvedValue({ data: { access_token: 'tok', user: { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' } } }),  // pragma: allowlist secret — vitest mock, literal "tok"
     activateFreeTier: vi.fn().mockResolvedValue({ data: {} }),
   },
   tradingApi: {
@@ -257,7 +257,7 @@ vi.mock('../hooks/useApi', () => ({
     updateUser:      vi.fn().mockResolvedValue({ data: {} }),
     banUser:         vi.fn().mockResolvedValue({ data: {} }),
     unbanUser:       vi.fn().mockResolvedValue({ data: {} }),
-    resetPassword:   vi.fn().mockResolvedValue({ data: {} }),
+    resetPassword:   vi.fn().mockResolvedValue({ data: {} }),  // pragma: allowlist secret — vitest mock, literal "tok"
     auditLog:        vi.fn().mockResolvedValue({ data: { events: [], total: 0 } }),
     auditExport:     vi.fn().mockResolvedValue({ data: {} }),
     platformConfig:  vi.fn().mockResolvedValue({ data: {} }),
@@ -359,9 +359,11 @@ describe('Register page', () => {
     expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument();
   });
 
-  it('shows starter plan badge by default', async () => {
+  it('shows no plan badge when the visitor did not come from a plan link', async () => {
+    // The page says "Create your free account". Defaulting the badge to
+    // "Starter — $1,800/mo" put a real price point directly under that.
     await renderRegister();
-    expect(screen.getByText(/starter/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\$1,800\/mo/)).not.toBeInTheDocument();
   });
 
   it('shows professional plan badge when ?plan=professional', async () => {
@@ -472,9 +474,13 @@ describe('Profile page', () => {
   it('renders profile username after load', async () => {
     await renderProfile();
     await waitFor(() => {
-      // Use querySelector since text may be split across elements
       const el = document.querySelector('h1');
       expect(el).toBeTruthy();
+      // F11: this used to stop at "an h1 exists", which passes on any page with
+      // a heading — including an error page, and including this one with the
+      // name deleted from the DOM (verified by mutation). The test's own name
+      // says "username", so assert the username.
+      expect(el?.textContent ?? '').toMatch(/Trader One|trader1/);
     }, { timeout: 3000 });
   });
 
@@ -556,10 +562,14 @@ describe('Watchlist page', () => {
     return wrap(<Watchlist />);
   }
 
-  it('renders Watchlist heading', async () => {
+  it('renders Watchlist as the page h1', async () => {
     await renderWatchlist();
-    // h1 contains emoji prefix: "👁️ Watchlist"
-    expect(screen.getByText(/watchlist/i)).toBeInTheDocument();
+    // The page must expose exactly one h1 for its document outline (F173).
+    // Queried by role rather than text: "watchlist" also appears in the table
+    // caption and the related-pages footer, so getByText is ambiguous.
+    const h1s = screen.getAllByRole('heading', { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]).toHaveTextContent(/watchlist/i);
   });
 
   it('renders Add symbol dropdown', async () => {
@@ -573,10 +583,9 @@ describe('Watchlist page', () => {
     expect(screen.getAllByText(/add symbol/i).length).toBeGreaterThan(0);
   });
 
-  it('renders Add button', async () => {
+  it('renders the Add button as an accessible control', async () => {
     await renderWatchlist();
-    // Button text is "+ Add"
-    expect(screen.getByText(/\+ add/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^add/i })).toBeInTheDocument();
   });
 
   it('shows empty state when watchlist is empty', async () => {
@@ -588,8 +597,7 @@ describe('Watchlist page', () => {
 
   it('Add button is disabled when no symbol selected', async () => {
     await renderWatchlist();
-    // Find button by text "+ Add"
-    const btn = screen.getByText(/\+ add/i).closest('button') as HTMLButtonElement;
+    const btn = screen.getByRole('button', { name: /^add/i }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
 
@@ -602,7 +610,7 @@ describe('Watchlist page', () => {
     if (nonEmpty) {
       fireEvent.change(select, { target: { value: nonEmpty.value } });
       await waitFor(() => {
-        const btn = screen.getByText(/\+ add/i).closest('button') as HTMLButtonElement;
+        const btn = screen.getByRole('button', { name: /^add/i }) as HTMLButtonElement;
         expect(btn.disabled).toBe(false);
       });
     } else {
@@ -717,9 +725,14 @@ describe('TradeJournal page', () => {
     return wrap(<TradeJournal />);
   }
 
-  it('renders Trade Journal heading', async () => {
+  it('renders the trade journal as the page h1', async () => {
     await renderTradeJournal();
-    expect(screen.getByText('Trade Journal')).toBeInTheDocument();
+    // Queried by role and case-insensitively: the title is sentence case
+    // ("Trade journal"), and asserting the exact string pinned the copy
+    // rather than the structure.
+    const h1s = screen.getAllByRole('heading', { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]).toHaveTextContent(/trade journal/i);
   });
 
   it('renders Trades tab', async () => {
@@ -759,7 +772,7 @@ describe('TradeJournal page', () => {
 
   it('switches to Mistakes tab', async () => {
     await renderTradeJournal();
-    fireEvent.click(screen.getAllByText(/mistakes/i)[0]);
+    fireEvent.click(screen.getAllByText(/mistakes/i)[0]!);
     await waitFor(() => {
       expect(screen.getAllByText(/no rule deviations/i).length).toBeGreaterThan(0);
     }, { timeout: 3000 });

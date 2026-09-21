@@ -78,9 +78,15 @@ def test_validate_flags_bad_limits():
 # ── enforcement facade ──────────────────────────────────────────────────────────────
 def test_enforce_risk_appetite_within_limits(monkeypatch):
     monkeypatch.setenv("HOPEFX_INVARIANT_MODE", "enforce")
-    state = {"daily_loss_pct": 0.01, "drawdown_pct": 0.03, "leverage": 5,
-             "portfolio_var": 10_000, "symbol_exposures": {"XAUUSD": 500_000},
-             "traded_symbol": "XAUUSD", "jurisdiction": "US"}
+    state = {
+        "daily_loss_pct": 0.01,
+        "drawdown_pct": 0.03,
+        "leverage": 5,
+        "portfolio_var": 10_000,
+        "symbol_exposures": {"XAUUSD": 500_000},
+        "traded_symbol": "XAUUSD",
+        "jurisdiction": "US",
+    }
     assert enf.enforce_risk_appetite(state, _GOOD_POLICY).violations == []
 
 
@@ -91,8 +97,8 @@ def test_enforce_risk_appetite_catches_breaches(monkeypatch):
     msgs = " ".join(v.message for v in r.violations)
     assert "daily loss" in msgs
     assert "leverage" in msgs
-    assert "MEME" in msgs        # prohibited symbol
-    assert "XX" in msgs          # blocked jurisdiction
+    assert "MEME" in msgs  # prohibited symbol
+    assert "XX" in msgs  # blocked jurisdiction
 
 
 def test_enforce_risk_appetite_jurisdiction_not_allowed(monkeypatch):

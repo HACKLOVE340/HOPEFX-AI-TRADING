@@ -62,6 +62,16 @@ class TwelveDataSource:
         self._use_quote = use_quote
         self._credits_exhausted: bool = False
 
+    def can_serve(self, symbol: str, cfg: dict[str, Any]) -> bool:
+        """Whether this source could price *symbol* at all — no I/O.
+
+        Both conditions are configuration, known before any request: an absent
+        API key disables the source entirely, and an absent
+        ``twelve_data_symbol`` disables it for this symbol. The caller uses this
+        to SKIP rather than fetch-and-fail.
+        """
+        return bool(self._api_key) and bool(cfg.get("twelve_data_symbol"))
+
     async def fetch(self, symbol: str, cfg: dict[str, Any]) -> float | None:
         """
         Return the latest price for *symbol* or None on failure.

@@ -46,6 +46,36 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+def inject_redis_password(url: str, password: str | None) -> str:
+    """Return *url* with *password* injected, or *url* unchanged.
+
+    The one implementation. This logic was copy-pasted into six modules —
+    cache/redis_client.py, brokers/paper_trading.py, kill_switch.py,
+    core/config_store.py, core/event_bus.py and
+    scripts/adopt_legacy_positions.py — and every copy was wrong the same way::
+
+        if password and "@" not in url.split("://", 1)[-1]:
+            <scheme>, <rest> = url.split("://", 1)
+
+    ``"".split("://", 1)`` is ``[""]``, one element, so unpacking it into two
+    names raises ``ValueError: not enough values to unpack``. The same holds for
+    any schemeless URL such as ``localhost:6379``. In ``get_sync_redis`` the
+    unpack sat outside the ``try``, so a function documented to "fall back
+    gracefully to None" raised instead — and in ``kill_switch.py`` it did so on
+    the component whose entire job is working when things are going wrong.
+
+    A URL with no ``://`` is returned untouched: there is nowhere to put the
+    credential, and refusing to guess beats raising.
+    """
+    if not password or not url or "://" not in url:
+        return url
+    scheme, _, rest = url.partition("://")
+    if "@" in rest:
+        return url  # a credential is already embedded
+    return f"{scheme}://:{password}@{rest}"
+
+
 # Module-level singletons — one client per process
 _redis_instance: Any | None = None
 _sentinel_instance: Any | None = None
@@ -53,12 +83,27 @@ _connection_mode: str = "none"  # "cluster" | "sentinel" | "direct" | "none"
 _last_health_check: float = 0.0
 _health_check_interval: float = float(os.getenv("REDIS_HEALTH_INTERVAL", "30"))
 
+# Why the most recent get_redis() returned None, as (code, human explanation).
+#
+# get_redis() can return None for reasons that need different fixes — the
+# circuit breaker being open, Redis not being configured, or being configured
+# but unreachable — and every caller reported all of them with one hard-coded
+# string. The Health Engine's Redis probe said "Redis client not initialised —
+# check REDIS_URL" while three other probes on other pages reported the same
+# Redis as healthy, because they use get_sync_redis(), which has no circuit
+# breaker. An operator comparing those pages had no way to tell that they were
+# testing different clients, let alone which answer to believe.
+_last_unavailable: tuple[str, str] = ("unknown", "No connection attempt has been made yet.")
+
 # Suppress repeated "no config" / "connection failed" log noise.
 # After the first warning we downgrade subsequent identical messages to DEBUG.
 _no_config_warned: bool = False
 _connect_failed_warned: bool = False
 # Emit the plaintext-TLS dev warning only once per process to avoid log flood.
 _tls_warning_emitted: bool = False
+# Separate latch: the private-destination note is an INFO explaining why a
+# plaintext production connection was allowed, not the plaintext warning.
+_tls_private_note_emitted: bool = False
 
 
 def _parse_hosts(hosts_str: str, default_port: int = 6379) -> list[tuple[str, int]]:
@@ -157,6 +202,42 @@ async def _try_sentinel(
         return None, None
 
 
+def is_private_redis_host(redis_url: str) -> bool:
+    """True when *redis_url* points somewhere that cannot leave the host or its
+    private network.
+
+    The TLS requirement exists so credentials never cross a network someone
+    could be listening on. A loopback address, an RFC-1918 address, or a
+    single-label hostname — a Docker Compose service name like ``redis``, which
+    has no public DNS meaning and resolves only on the container network — is
+    not that network. Requiring TLS there buys nothing and costs everything:
+    ``redis:7-alpine`` serves no TLS, so ``rediss://`` cannot connect either.
+
+    Anything with a routable hostname is still held to the rule.
+    """
+    from urllib.parse import urlparse
+
+    try:
+        host = (urlparse(redis_url).hostname or "").strip()
+    except (ValueError, AttributeError):
+        return False
+    if not host:
+        return False
+
+    if host in ("localhost", "127.0.0.1", "::1"):
+        return True
+
+    import ipaddress
+
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        # Not an IP. A name with no dot cannot be a public DNS name; it is a
+        # container/service name resolved by the private network's own DNS.
+        return "." not in host
+    return addr.is_loopback or addr.is_private or addr.is_link_local
+
+
 def _enforce_tls(redis_url: str) -> str:
     """
     Enforce TLS in production environments.
@@ -193,12 +274,30 @@ def _enforce_tls(redis_url: str) -> str:
         logger.info("Redis: REDIS_FORCE_TLS=true — upgraded URL to rediss://")
         return upgraded
 
-    if app_env == "production":
+    if app_env == "production" and not is_private_redis_host(redis_url):
         raise RuntimeError(
             "Redis TLS required in production: REDIS_URL must use rediss:// (not redis://). "
             "Update REDIS_URL to rediss://<host>:<port>/<db> or set REDIS_FORCE_TLS=true "
             "to auto-upgrade. This check prevents credentials from being sent in plaintext."
         )
+
+    if app_env == "production":
+        # Private destination: allowed, but said out loud. The shipped
+        # docker-compose.yml is exactly this case — APP_ENV defaults to
+        # production and REDIS_URL is redis://…@redis:6379/0 — and raising here
+        # made the stack unrunnable as configured: the tick writer failed to
+        # start, so ticks were never persisted or broadcast and prices froze in
+        # the UI. rediss:// was no escape either, since redis:7-alpine serves no
+        # TLS. Narrowed to destinations that can actually be eavesdropped.
+        global _tls_private_note_emitted
+        if not _tls_private_note_emitted:
+            logger.info(
+                "Redis: plaintext connection permitted in production — the destination in "
+                "REDIS_URL is loopback or private, so no credentials cross a routable network. "
+                "Use rediss:// if Redis ever moves to a different host."
+            )
+            _tls_private_note_emitted = True
+        return redis_url
 
     # Warn once per process — plaintext in non-production is allowed but notable.
     global _tls_warning_emitted
@@ -308,6 +407,24 @@ async def _try_direct(
         return None
 
 
+def _set_unavailable_reason(code: str, explanation: str) -> None:
+    global _last_unavailable
+    _last_unavailable = (code, explanation)
+
+
+def redis_unavailable_reason() -> tuple[str, str]:
+    """Why the async client is unavailable, as ``(code, explanation)``.
+
+    Codes: ``circuit_open`` | ``connect_failed`` | ``not_configured`` |
+    ``none_available`` | ``unknown``.
+
+    Health probes should report this instead of guessing. "check REDIS_URL" is
+    actively misleading when the URL is correct and the breaker has simply
+    tripped.
+    """
+    return _last_unavailable
+
+
 async def get_redis(
     *,
     db: int = 0,
@@ -329,6 +446,11 @@ async def get_redis(
         if _rb.is_open:
             logger.debug(
                 "get_redis: Redis circuit breaker OPEN — returning None. Retry in %.0fs.", _rb._seconds_until_probe()
+            )
+            _set_unavailable_reason(
+                "circuit_open",
+                "The Redis circuit breaker is OPEN after repeated failures; connection attempts are "
+                f"suspended for another {_rb._seconds_until_probe():.0f}s. The URL is not necessarily wrong.",
             )
             return None
     except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
@@ -375,14 +497,32 @@ async def get_redis(
             _no_config_warned = False
             return _redis_instance
 
-    if not _no_config_warned:
-        logger.warning(
-            "Redis: no connection configured (REDIS_CLUSTER_HOSTS / "
-            "REDIS_SENTINEL_HOSTS / REDIS_URL) — trying fakeredis fallback"
+    # "Configured but unreachable" and "not configured at all" are different
+    # faults with different fixes, and this used to report both as the second.
+    _configured = bool(cluster_hosts or sentinel_hosts or redis_url)
+    if _configured:
+        _set_unavailable_reason(
+            "connect_failed",
+            "Redis is configured but every connection attempt failed "
+            f"(mode tried: {'cluster' if cluster_hosts else 'sentinel' if sentinel_hosts else 'direct URL'}). "
+            "Check that the server is reachable and the credentials are correct.",
         )
-        _no_config_warned = True
+        if not _no_config_warned:
+            logger.warning("Redis: configured but unreachable — connection attempts failed. Falling back to fakeredis.")
+            _no_config_warned = True
     else:
-        logger.debug("Redis: still unconfigured — trying fakeredis (suppressed repeat)")
+        _set_unavailable_reason(
+            "not_configured",
+            "No Redis connection is configured. Set REDIS_URL (or REDIS_CLUSTER_HOSTS / REDIS_SENTINEL_HOSTS).",
+        )
+        if not _no_config_warned:
+            logger.warning(
+                "Redis: no connection configured (REDIS_CLUSTER_HOSTS / "
+                "REDIS_SENTINEL_HOSTS / REDIS_URL) — trying fakeredis fallback"
+            )
+            _no_config_warned = True
+        else:
+            logger.debug("Redis: still unconfigured — trying fakeredis (suppressed repeat)")
 
     # Async fakeredis fallback — keeps all cache-dependent code paths working
     # in development/CI environments without a real Redis server.
@@ -398,6 +538,10 @@ async def get_redis(
         pass
 
     _connection_mode = "none"
+    _set_unavailable_reason(
+        "none_available",
+        f"{_last_unavailable[1]} The fakeredis fallback is also unavailable (pip install fakeredis).",
+    )
     return None
 
 
@@ -591,10 +735,14 @@ def get_sync_redis() -> Any | None:
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     password = os.getenv("REDIS_PASSWORD", "") or None
 
-    # Inject password when not already embedded in the URL.
-    if password and "@" not in redis_url.split("://", 1)[-1]:
-        scheme, rest = redis_url.split("://", 1)
-        redis_url = f"{scheme}://:{password}@{rest}"
+    if not redis_url.strip():
+        # An empty REDIS_URL is how a deployment says "no Redis", not an
+        # invitation to guess a default. Returning None is what every caller
+        # here already handles.
+        logger.debug("REDIS_URL is empty — treating this deployment as having no Redis")
+        return None
+
+    redis_url = inject_redis_password(redis_url, password)
 
     try:
         client = _redis_sync.Redis.from_url(

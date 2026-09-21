@@ -54,6 +54,19 @@ async def get_audit_log(
                         # created_at is the canonical timestamp; fall back to
                         # timestamp for rows written before the migration.
                         "created_at": _iso(r.created_at or r.timestamp),
+                        # The four below are NOT NULL on AuditLogEntry and were
+                        # simply not being returned, so the Audit Trail page
+                        # rendered blank Action / Resource / Status columns over
+                        # rows that carried all three. `action` and `category`
+                        # in particular are the entire point of an audit record:
+                        # without them the page reported "15 total admin actions"
+                        # and showed which user, at no time, doing nothing, to
+                        # nothing. `event_type` is nullable and is kept as the
+                        # fallback for `action` rather than replacing it.
+                        "actor": r.actor,
+                        "action": r.action or r.event_type or "",
+                        "category": r.category or "",
+                        "level": r.level or "",
                     }
                     for r in rows
                 ],
@@ -73,11 +86,26 @@ async def export_audit_log(user: TokenPayload = Depends(_require_superadmin)):
     import csv
     import io
 
-    result = await get_audit_log(page=1, limit=500, user=user)
+    # Pass every filter explicitly. Omitting user_id/event_type would leave them
+    # as raw Query(None) marker objects (Query(None) is truthy), so get_audit_log
+    # would filter the query by marker objects and the export would silently
+    # return an empty CSV.
+    result = await get_audit_log(page=1, limit=500, user_id=None, event_type=None, user=user)
     buf = io.StringIO()
     writer = csv.DictWriter(
         buf,
-        fieldnames=["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"],
+        fieldnames=[
+            "event_id",
+            "created_at",
+            "actor",
+            "user_id",
+            "action",
+            "event_type",
+            "category",
+            "level",
+            "ip_address",
+            "detail",
+        ],
     )
     writer.writeheader()
     writer.writerows(result["events"])

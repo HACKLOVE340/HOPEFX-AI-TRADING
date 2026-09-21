@@ -97,14 +97,16 @@ def verify_currency_consistent(amounts_currency: str, account_currency: str) -> 
     return []
 
 
-def verify_payment_reconciles(internal_amount: float, gateway_amount: float, tol: float = 0.01,
-                              ref: str = "") -> list[Violation]:
+def verify_payment_reconciles(
+    internal_amount: float, gateway_amount: float, tol: float = 0.01, ref: str = ""
+) -> list[Violation]:
     """An external gateway/PSP event must reconcile with the internal record."""
     if not (_is_finite_number(internal_amount) and _is_finite_number(gateway_amount)):
         return [_v("No Data Corruption", CRITICAL, "payment reconciliation values non-finite")]
     if abs(internal_amount - gateway_amount) > tol:
-        return [_v(_RULE, CONSTITUTIONAL,
-                   f"payment {ref} mismatch: internal {internal_amount} != gateway {gateway_amount}")]
+        return [
+            _v(_RULE, CONSTITUTIONAL, f"payment {ref} mismatch: internal {internal_amount} != gateway {gateway_amount}")
+        ]
     return []
 
 

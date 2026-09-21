@@ -29,22 +29,27 @@ import SubscriptionGate from './components/SubscriptionGate';
 import TrialBanner from './components/TrialBanner';
 import Sidebar from './components/sidebar/Sidebar';
 import AISupportWidget from './components/ai/AISupportWidget';
+import { PresenceAnywhereMount } from './hub/PresenceAnywhereMount';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ToastProvider } from './components/Toast';
 import { ConfirmDialogProvider } from './components/ConfirmDialog';
+import { KillSwitchHotkey } from './components/KillSwitchHotkey';
 import { CommandPalette } from './components/CommandPalette';
 import { useStore, selectIsAuth, useHasHydrated } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
 import { useBootstrapData } from './hooks/useOrchestratorData';
 import { getCsrfToken } from './hooks/useApi';
+import { isChunkLoadError, tryChunkReload } from './lib/chunkReload';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
+import { PageSurface } from './components/system/PageSurface';
+
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
 const Login                   = React.lazy(() => import('./pages/Login'));
 const Register                = React.lazy(() => import('./pages/Register'));
-const ForgotPassword          = React.lazy(() => import('./pages/ForgotPassword'));
-const ResetPassword           = React.lazy(() => import('./pages/ResetPassword'));
+const ForgotPassword          = React.lazy(() => import('./pages/ForgotPassword'));  // pragma: allowlist secret — page import, not a credential
+const ResetPassword           = React.lazy(() => import('./pages/ResetPassword'));  // pragma: allowlist secret — page import, not a credential
 const PrivacyPolicy           = React.lazy(() => import('./pages/PrivacyPolicy'));
 const Onboarding              = React.lazy(() => import('./pages/Onboarding'));
 const NotFound                = React.lazy(() => import('./pages/NotFound'));
@@ -53,10 +58,11 @@ const DocsPage                = React.lazy(() => import('./pages/DocsPage'));
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 const Dashboard        = React.lazy(() => import('./pages/Dashboard'));
-const TradingDashboard = React.lazy(() => import('./pages/TradingDashboard'));
 const TradingTerminal  = React.lazy(() => import('./pages/Trading'));
 const Trade            = React.lazy(() => import('./pages/Trade'));
 const Portfolio        = React.lazy(() => import('./pages/Portfolio'));
+const PositionDetail   = React.lazy(() => import('./pages/PositionDetail'));
+const Hub              = React.lazy(() => import('./pages/Hub'));
 const WatchlistPage    = React.lazy(() => import('./pages/Watchlist'));
 const EconomicCalendar = React.lazy(() => import('./pages/EconomicCalendar'));
 const PriceAlerts      = React.lazy(() => import('./pages/PriceAlerts'));
@@ -84,6 +90,9 @@ const ABTesting            = React.lazy(() => import('./pages/ABTesting'));
 const TCADashboard         = React.lazy(() => import('./pages/TCADashboard'));
 const PatternDetector      = React.lazy(() => import('./pages/PatternDetector'));
 const AIIntelligence       = React.lazy(() => import('./pages/AIIntelligence'));
+const AICore               = React.lazy(() => import('./pages/AICore'));
+const SupportConsole       = React.lazy(() => import('./pages/SupportConsole'));
+const Support              = React.lazy(() => import('./pages/Support'));
 
 // ── Community ─────────────────────────────────────────────────────────────────
 const Leaderboard  = React.lazy(() => import('./pages/Leaderboard'));
@@ -152,15 +161,15 @@ const queryClient = new QueryClient({
 const PageFallback: React.FC = () => (
   <div style={{
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    height: '100vh', background: 'var(--bg, #0f172a)',
+    height: '100vh', background: 'var(--bg, var(--surface))',
   }}>
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       <div style={{
-        width: 32, height: 32, border: '3px solid #334155',
+        width: 32, height: 32, border: '3px solid var(--border-strong)',
         borderTopColor: '#3b82f6', borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',
       }} />
-      <span style={{ fontSize: 13, color: '#475569' }}>Loading…</span>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Loading…</span>
     </div>
   </div>
 );
@@ -189,15 +198,29 @@ if (typeof window !== 'undefined') {
 // ── Error boundary ────────────────────────────────────────────────────────────
 const _IS_DEV = import.meta.env.DEV;
 
-interface EBState { hasError: boolean; message: string; stack?: string }
+interface EBState { hasError: boolean; message: string; stack?: string; isChunk?: boolean }
 class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
-  state: EBState = { hasError: false, message: '', stack: undefined };
+  state: EBState = { hasError: false, message: '', stack: undefined, isChunk: false };
 
   static getDerivedStateFromError(err: Error): EBState {
-    return { hasError: true, message: err.message, stack: err.stack };
+    const isChunk = isChunkLoadError(err);
+    return {
+      hasError: true,
+      isChunk,
+      message: isChunk
+        ? 'The app was updated to a new version. Reloading to get the latest — if this persists, click Retry.'
+        : err.message,
+      stack: err.stack,
+    };
   }
 
   componentDidCatch(err: Error, info: React.ErrorInfo) {
+    if (isChunkLoadError(err)) {
+      // Stale-build dynamic-import failure: try a one-time hard reload to fetch
+      // the new chunks. If we just reloaded, fall through to the error screen.
+      console.warn('[ErrorBoundary] Chunk load error — attempting reload:', err.message);
+      if (tryChunkReload()) return;
+    }
     console.error('[ErrorBoundary] Uncaught render error:', err, info.componentStack);
     // Forward to Sentry / monitoring if available
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -219,11 +242,11 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
       <div style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        background: '#080c14', color: '#e2e8f0', padding: 40, textAlign: 'center',
+        background: 'var(--bg)', color: 'var(--text)', padding: 40, textAlign: 'center',
         fontFamily: "'Inter', system-ui, sans-serif",
       }}>
         {/* Logo */}
-        <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 8 }}>
+        <div style={{ fontSize: 'var(--fs-hero)', fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 8 }}>
           HOPE<span style={{ color: '#3b82f6' }}>FX</span>
         </div>
 
@@ -236,18 +259,18 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
           ⚠
         </div>
 
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>
-          Something went wrong
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 8 }}>
+          {this.state.isChunk ? 'Updating to the latest version' : 'Something went wrong'}
         </h2>
-        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24, maxWidth: 420, lineHeight: 1.6 }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24, maxWidth: 420, lineHeight: 1.6 }}>
           {this.state.message || 'An unexpected error occurred. The page will reload when you click Retry.'}
         </p>
 
         {/* Stack trace — dev only */}
         {_IS_DEV && this.state.stack && (
           <pre style={{
-            background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 8,
-            color: '#94a3b8', fontSize: 11, lineHeight: 1.5, maxWidth: 640,
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
+            color: 'var(--text-dim)', fontSize: 11, lineHeight: 1.5, maxWidth: 640,
             maxHeight: 200, overflow: 'auto', padding: '12px 16px',
             textAlign: 'left', marginBottom: 24, whiteSpace: 'pre-wrap',
           }}>
@@ -276,6 +299,11 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
 const NoLiveFeedBanner: React.FC = () => {
   const status       = useStore((s) => s.wsStatus);
   const noLiveFeed   = useStore((s) => s.noLiveFeed);
+  // Client-observed staleness: the socket can stay OPEN while the server sends
+  // nothing, in which case `status` remains 'connected' and `noLiveFeed` stays
+  // false because the server never volunteered it. See S9-01 / S10-05.
+  const feedStale    = useStore((s) => s.feedStale);
+  const lastDataAt   = useStore((s) => s.lastDataAt);
   const noLiveFeedMsg = useStore((s) => s.noLiveFeedMsg);
   const isAuth       = useStore(selectIsAuth);
   const [dismissed, setDismissed]   = React.useState(false);
@@ -293,14 +321,22 @@ const NoLiveFeedBanner: React.FC = () => {
   // Show when: authenticated, attempted, and either WS is down OR server sent no_live_feed
   const showWsDown    = isAuth && attempted && status !== 'connected' && !dismissed;
   const showNoFeed    = isAuth && status === 'connected' && noLiveFeed && !dismissed;
-  if (!showWsDown && !showNoFeed) return null;
+  // Stale feed is NOT dismissible: unlike the others it means the prices on
+  // screen are of unknown age, which is exactly the state a trader must not be
+  // able to hide.
+  const showStale     = isAuth && status === 'connected' && feedStale;
+  if (!showWsDown && !showNoFeed && !showStale) return null;
 
   // Determine severity: connecting = amber, no_live_feed = amber, error/disconnected = amber
   // All states use amber — this is informational, not a critical error.
   const isConnecting = status === 'connecting';
 
+  const staleSeconds = lastDataAt ? Math.round((Date.now() - lastDataAt) / 1000) : null;
+
   const label =
-    showNoFeed
+    showStale
+      ? `Feed stalled — no update for ${staleSeconds ?? '?'}s. Prices shown are NOT live.`
+      : showNoFeed
       ? (noLiveFeedMsg ?? 'No live broker feed — connect a broker in Settings to receive real-time prices.')
       : isConnecting
         ? 'Connecting to live feed…'
@@ -339,7 +375,15 @@ const NoLiveFeedBanner: React.FC = () => {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const wrap = (el: React.ReactNode) => <ErrorBoundary>{el}</ErrorBoundary>;
+// Every route passes through PageSurface, which stamps data-density and
+// data-surface from the path. That is why a redesign of 72 pages did not need
+// 72 edits: density and palette are scoped token overrides declared once in
+// index.css, and this is the single place that chooses between them.
+const wrap = (el: React.ReactNode) => (
+  <ErrorBoundary>
+    <PageSurface>{el}</PageSurface>
+  </ErrorBoundary>
+);
 
 const gated = (featureKey: string, el: React.ReactNode) => (
   <AuthGuard>
@@ -390,7 +434,7 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({ onMenuOpen }) => (
       onClick={onMenuOpen}
       aria-label="Open navigation menu"
       style={{
-        background: 'transparent', border: 'none', color: '#94a3b8',
+        background: 'transparent', border: 'none', color: 'var(--text-dim)',
         cursor: 'pointer', padding: '8px', borderRadius: 6,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         minWidth: 44, minHeight: 44,
@@ -403,7 +447,7 @@ const MobileTopBar: React.FC<MobileTopBarProps> = ({ onMenuOpen }) => (
         <rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor" />
       </svg>
     </button>
-    <span style={{ fontSize: 17, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 }}>
+    <span style={{ fontSize: 'var(--fs-title)', fontWeight: 800, color: 'var(--text-strong)', letterSpacing: -0.5 }}>
       HOPE<span style={{ color: '#3b82f6' }}>FX</span>
     </span>
     {/* Right side spacer to keep title centred */}
@@ -511,10 +555,33 @@ const AppShell: React.FC = () => {
         <Suspense fallback={<PageFallback />}>
           <Routes>
             {/* Core */}
-            <Route path="/dashboard"    element={wrap(gated('dashboard',    <TradingDashboard />))} />
-            <Route path="/home"         element={wrap(gated('dashboard',    <Dashboard />))} />
+            {/* F209: the two dashboards were named backwards. `Dashboard`
+                (positions, P&L, risk, signals, 7 charts, 1 table) is the
+                trader's view and now owns the canonical /dashboard URL that
+                the sidebar, bookmarks and external links point at.
+                `TradingDashboard` is the engine-operator grid — microstructure,
+                order book, orchestrator health, ML internals — and moves to
+                /observability, which is named for exactly that and was
+                rendering 395 characters. /home redirects so nothing breaks. */}
+            <Route path="/dashboard"    element={wrap(gated('dashboard',    <Dashboard />))} />
+            <Route path="/home"         element={<Navigate to="/dashboard" replace />} />
             <Route path="/trade"        element={wrap(gated('trade',        <Trade />))} />
             <Route path="/portfolio"    element={wrap(gated('portfolio',    <Portfolio />))} />
+            {/* The first drill-down in the app. 87 routes and, until this one,
+                exactly one took a parameter — which is why a large product read
+                as a shallow one. Gated as portfolio: a position detail is
+                portfolio content. */}
+            <Route path="/positions/:id" element={wrap(gated('portfolio',    <PositionDetail />))} />
+
+            {/* Hubs. One component, five routes: the page behind a sidebar
+                entry, listing what used to be fifty more sidebar entries.
+                Content comes from navConfig, so a page cannot exist in the
+                app while being invisible in it. */}
+            <Route path="/ai"          element={wrap(<AuthGuard><Hub /></AuthGuard>)} />
+            <Route path="/analytics"   element={wrap(<AuthGuard><Hub /></AuthGuard>)} />
+            <Route path="/community"   element={wrap(<AuthGuard><Hub /></AuthGuard>)} />
+            <Route path="/account"     element={wrap(<AuthGuard><Hub /></AuthGuard>)} />
+            <Route path="/operations"  element={wrap(adminOnly(<Hub />))} />
             <Route path="/watchlist"    element={wrap(gated('watchlist',    <WatchlistPage />))} />
             <Route path="/calendar"     element={wrap(gated('calendar',     <EconomicCalendar />))} />
             <Route path="/alerts"       element={wrap(gated('alerts',       <PriceAlerts />))} />
@@ -590,6 +657,7 @@ const AppShell: React.FC = () => {
             <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"       element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
             <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
+            <Route path="/support"         element={wrap(<AuthGuard><Support /></AuthGuard>)} />
             <Route path="/kyc"             element={wrap(<AuthGuard><KYCPage /></AuthGuard>)} />
             <Route path="/chat"            element={wrap(<AuthGuard><ChatPage /></AuthGuard>)} />
             <Route path="/ai-assistant"    element={wrap(<AuthGuard><AIAssistant /></AuthGuard>)} />
@@ -603,9 +671,16 @@ const AppShell: React.FC = () => {
             <Route path="/backtest"     element={<Navigate to="/ai-strategy" replace />} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
+            {/* One page, not two components side by side. `Observability`
+                renders the engine grid inside its own shell now — as a fragment
+                here, the shell closed and its "Where to next" footer landed in
+                the middle of the page, with the whole microstructure grid
+                below it. */}
             <Route path="/observability" element={wrap(adminOnly(<Observability />))} />
             <Route path="/ml-ops"        element={wrap(adminOnly(<MLDashboard />))} />
-            <Route path="/strategy-builder" element={wrap(<StrategyBuilder />)} />
+            <Route path="/ai-core"       element={wrap(adminOnly(<AICore />))} />
+            <Route path="/support-console" element={wrap(adminOnly(<SupportConsole />))} />
+            <Route path="/strategy-builder" element={wrap(gated('strategy-builder', <StrategyBuilder />))} />
             <Route path="/transparency"  element={wrap(<Transparency />)} />
             <Route path="/news"          element={wrap(<NewsSentiment />)} />
             <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />
@@ -633,6 +708,12 @@ const AppShell: React.FC = () => {
       </div>
     </div>
     {isAuth && <AISupportWidget />}
+    {/* The AI presence, on every authenticated screen. Owner request,
+        2026-09-07. It renders nothing on /ai-core, which is already a
+        presence, and nothing at all when it cannot see the page: an assistant
+        overlay must never be the reason a trading page fails to render, and
+        must never claim to be watching something it cannot see. */}
+    {isAuth && <PresenceAnywhereMount />}
     </>
   );
 };
@@ -643,6 +724,11 @@ const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
     <ToastProvider>
       <ConfirmDialogProvider>
+        {/* S10-04: Shift+K halts trading from anywhere. Every other kill-switch
+            trigger lives in Settings or the superadmin panel, so a trader
+            watching a position run against them had to navigate away from the
+            trading screen to stop trading. Renders nothing; it only binds. */}
+        <KillSwitchHotkey />
         <BrowserRouter>
           <ErrorBoundary>
             <Suspense fallback={<PageFallback />}>
@@ -658,7 +744,11 @@ const App: React.FC = () => (
                 {/* /pricing = public marketing pricing page for unauthenticated visitors */}
                 {/* /upgrade = authenticated plan upgrade page (inside AppShell) */}
                 <Route path="/pricing"         element={<PricingPage />} />
-                <Route path="/docs"            element={<DocsPage />} />
+                {/* /docs is NOT registered here. It was, and this outer group
+                    matches first, so it shadowed the AppShell registration
+                    below and logged-in users never got the sidebar the comment
+                    there promises. AppShell's own /docs route sits above its 404
+                    fallback, so anonymous visitors still reach the page. */}
                 <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
                 <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
                 <Route path="/privacy"         element={<PrivacyPolicy />} />

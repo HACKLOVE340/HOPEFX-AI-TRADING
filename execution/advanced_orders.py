@@ -168,9 +168,17 @@ class OCOOrder:
     slippage: float = 0.0
     native_broker_support: bool = False
 
+    # Who submitted this order. api/advanced_orders.py is the only caller, and
+    # every endpoint there used to ignore the authenticated user entirely, so
+    # any trader could attach or cancel protective orders on another user's
+    # position and list everyone's active orders. The owner belongs on the
+    # order rather than in a side index that can drift out of step with it.
+    user_id: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "order_id": self.order_id,
+            "user_id": self.user_id,
             "type": AdvancedOrderType.OCO.value,
             "position_id": self.position_id,
             "symbol": self.symbol,
@@ -212,9 +220,17 @@ class TrailingStopOrder:
     activated: bool = False
     native_broker_support: bool = False
 
+    # Who submitted this order. api/advanced_orders.py is the only caller, and
+    # every endpoint there used to ignore the authenticated user entirely, so
+    # any trader could attach or cancel protective orders on another user's
+    # position and list everyone's active orders. The owner belongs on the
+    # order rather than in a side index that can drift out of step with it.
+    user_id: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "order_id": self.order_id,
+            "user_id": self.user_id,
             "type": AdvancedOrderType.TRAILING_STOP.value,
             "position_id": self.position_id,
             "symbol": self.symbol,
@@ -254,10 +270,22 @@ class StopLimitOrder:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     native_broker_support: bool = False
+    # Guards the "price past limit" warning so a resting order logs it once
+    # rather than on every monitor tick. Runtime bookkeeping, not order state,
+    # so it is deliberately absent from to_dict().
+    limit_warning_logged: bool = field(default=False, repr=False, compare=False)
+
+    # Who submitted this order. api/advanced_orders.py is the only caller, and
+    # every endpoint there used to ignore the authenticated user entirely, so
+    # any trader could attach or cancel protective orders on another user's
+    # position and list everyone's active orders. The owner belongs on the
+    # order rather than in a side index that can drift out of step with it.
+    user_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "order_id": self.order_id,
+            "user_id": self.user_id,
             "type": AdvancedOrderType.STOP_LIMIT.value,
             "position_id": self.position_id,
             "symbol": self.symbol,
@@ -485,6 +513,7 @@ class AdvancedOrderManager:
         quantity: float,
         stop_loss_price: float,
         take_profit_price: float,
+        user_id: str | None = None,
     ) -> str:
         """
         Submit an OCO (One-Cancels-the-Other) order.
@@ -503,6 +532,7 @@ class AdvancedOrderManager:
             quantity=quantity,
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
+            user_id=user_id,
         )
 
         # Try native broker OCO first
@@ -552,6 +582,7 @@ class AdvancedOrderManager:
         quantity: float,
         trail_distance_pips: float,
         activation_price: float | None = None,
+        user_id: str | None = None,
     ) -> str:
         """
         Submit a trailing stop order.
@@ -570,6 +601,7 @@ class AdvancedOrderManager:
             quantity=quantity,
             trail_distance_pips=trail_distance_pips,
             activation_price=activation_price,
+            user_id=user_id,
         )
 
         # Initialize with current price if available
@@ -628,6 +660,7 @@ class AdvancedOrderManager:
         stop_price: float,
         limit_price: float,
         expires_at: datetime | None = None,
+        user_id: str | None = None,
     ) -> str:
         """
         Submit a stop-limit order.
@@ -646,6 +679,7 @@ class AdvancedOrderManager:
             stop_price=stop_price,
             limit_price=limit_price,
             expires_at=expires_at,
+            user_id=user_id,
         )
 
         # Try native broker stop-limit
@@ -679,12 +713,18 @@ class AdvancedOrderManager:
 
     # ── Cancel ────────────────────────────────────────────────────────────────
 
-    async def cancel_order(self, order_id: str) -> bool:
-        """Cancel an active advanced order."""
+    async def cancel_order(self, order_id: str, user_id: str | None = None) -> bool:
+        """Cancel an active advanced order, optionally restricted to its owner.
+
+        Returns False — not an error — when the order belongs to someone else,
+        so a caller cannot tell "not yours" from "no such order".
+        """
         async with self._lock:
             # Check OCO orders
             if order_id in self._oco_orders:
                 order = self._oco_orders[order_id]
+                if not self._owned_by(order, user_id):
+                    return False
                 if order.state == AdvancedOrderState.ACTIVE:
                     order.state = AdvancedOrderState.CANCELLED
                     # Cancel broker orders if native
@@ -698,6 +738,8 @@ class AdvancedOrderManager:
             # Check trailing stop orders
             if order_id in self._trailing_orders:
                 order = self._trailing_orders[order_id]
+                if not self._owned_by(order, user_id):
+                    return False
                 if order.state == AdvancedOrderState.ACTIVE:
                     order.state = AdvancedOrderState.CANCELLED
                     if order.native_broker_support and self._adapter and order.broker_order_id:
@@ -707,6 +749,8 @@ class AdvancedOrderManager:
             # Check stop-limit orders
             if order_id in self._stop_limit_orders:
                 order = self._stop_limit_orders[order_id]
+                if not self._owned_by(order, user_id):
+                    return False
                 if order.state == AdvancedOrderState.ACTIVE:
                     order.state = AdvancedOrderState.CANCELLED
                     if order.native_broker_support and self._adapter and order.broker_order_id:
@@ -842,17 +886,23 @@ class AdvancedOrderManager:
 
                 # Check if stop price is reached
                 if not order.triggered:
-                    triggered = False
                     if order.side.upper() in ("BUY", "LONG"):
-                        if price >= order.stop_price:
-                            triggered = True
-                    elif price <= order.stop_price:
-                        triggered = True
+                        order.triggered = price >= order.stop_price
+                    else:
+                        order.triggered = price <= order.stop_price
 
-                    if triggered:
-                        order.triggered = True
-                        # Now check if limit price is achievable
-                        await self._execute_stop_limit(order, price)
+                # A triggered order stays live until it fills or expires, so it
+                # is re-attempted on every tick rather than only on the tick that
+                # triggered it. Execution was previously attempted inside the
+                # `if not order.triggered` branch above: an order that gapped
+                # straight past its limit logged "waiting" once and was then
+                # never looked at again, because `triggered` was already True.
+                # It stayed ACTIVE for ever, still listed by get_active_orders()
+                # as live protection, and could not fill even when price came
+                # back inside the limit — which is the gap this order type exists
+                # to handle.
+                if order.triggered:
+                    await self._execute_stop_limit(order, price)
 
     # ── Execution ─────────────────────────────────────────────────────────────
 
@@ -969,10 +1019,16 @@ class AdvancedOrderManager:
                         )
                         order.state = AdvancedOrderState.FAILED
                     await asyncio.sleep(_RETRY_DELAY_S)
-        elif not can_fill:
-            # Price moved past limit — order cannot be filled at desired price
+        elif not can_fill and not order.limit_warning_logged:
+            # Price moved past limit — the order rests until price comes back
+            # inside it or it expires. Logged once rather than on every monitor
+            # tick: the loop runs ~10x/second, so a resting order would otherwise
+            # emit hundreds of identical warnings a minute.
+            order.limit_warning_logged = True
             logger.warning(
-                "Stop-limit triggered but price %.5f past limit %.5f — waiting",
+                "Stop-limit %s triggered but price %.5f is past limit %.5f — "
+                "holding until price returns inside the limit or the order expires",
+                order.order_id,
                 price,
                 order.limit_price,
             )
@@ -1008,30 +1064,57 @@ class AdvancedOrderManager:
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
-    def get_order(self, order_id: str) -> dict[str, Any] | None:
-        """Get an order by ID."""
-        if order_id in self._oco_orders:
-            return self._oco_orders[order_id].to_dict()
-        if order_id in self._trailing_orders:
-            return self._trailing_orders[order_id].to_dict()
-        if order_id in self._stop_limit_orders:
-            return self._stop_limit_orders[order_id].to_dict()
+    def _owned_by(self, order: Any, user_id: str | None) -> bool:
+        """Whether *order* may be seen or acted on by *user_id*.
+
+        ``user_id=None`` means an internal caller with no user context (the
+        monitor loops, tests) and matches everything. A request-facing caller
+        must always pass one; ``api/advanced_orders.py`` does.
+
+        An order whose own ``user_id`` is None predates this field or was
+        created internally, and stays visible — this is an authorisation check,
+        not a migration.
+        """
+        if user_id is None:
+            return True
+        owner = getattr(order, "user_id", None)
+        return owner is None or owner == user_id
+
+    def get_order(self, order_id: str, user_id: str | None = None) -> dict[str, Any] | None:
+        """Get an order by ID, optionally restricted to its owner.
+
+        Returns None rather than raising when the order exists but belongs to
+        someone else, so the caller answers 404 and does not disclose which
+        order ids are real — the same choice ``api/alerts._get_owned_alert``
+        makes.
+        """
+        for store in (self._oco_orders, self._trailing_orders, self._stop_limit_orders):
+            order = store.get(order_id)
+            if order is not None:
+                return order.to_dict() if self._owned_by(order, user_id) else None
         return None
 
-    def get_active_orders(self, position_id: str | None = None) -> list[dict[str, Any]]:
-        """Get all active advanced orders, optionally filtered by position."""
+    def get_active_orders(
+        self,
+        position_id: str | None = None,
+        user_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Active advanced orders, optionally filtered by position and owner.
+
+        ``GET /api/orders/advanced/active`` used to call this with no owner and
+        return every user's orders — symbols, sizes and stop levels, which
+        disclose other traders' positions.
+        """
         orders: list[dict[str, Any]] = []
 
-        for o in self._oco_orders.values():
-            if o.state == AdvancedOrderState.ACTIVE and (position_id is None or o.position_id == position_id):
-                orders.append(o.to_dict())
-
-        for o in self._trailing_orders.values():
-            if o.state == AdvancedOrderState.ACTIVE and (position_id is None or o.position_id == position_id):
-                orders.append(o.to_dict())
-
-        for o in self._stop_limit_orders.values():
-            if o.state == AdvancedOrderState.ACTIVE and (position_id is None or o.position_id == position_id):
+        for store in (self._oco_orders, self._trailing_orders, self._stop_limit_orders):
+            for o in store.values():
+                if o.state != AdvancedOrderState.ACTIVE:
+                    continue
+                if position_id is not None and o.position_id != position_id:
+                    continue
+                if not self._owned_by(o, user_id):
+                    continue
                 orders.append(o.to_dict())
 
         return orders

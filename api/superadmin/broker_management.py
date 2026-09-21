@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, Query
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -269,6 +270,6 @@ async def update_broker_routing(
             config.update(body)
             rc.set(_BROKER_ROUTING_KEY, json.dumps(config), ex=86400 * 30)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
     _log_superadmin_action(user, "broker_routing_update", body)
     return {"ok": True}

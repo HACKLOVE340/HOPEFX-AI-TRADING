@@ -1,0 +1,7 @@
+{
+ "_comment": "Page components not yet built on components/system/PageShell.tsx, as of 2026-09-15. The one entry left is /terminal, off the shell by the owner\u2019s explicit decision rather than for want of work \u2014 see docs/audit/FRONTEND_HANDOVER.md. This list may only SHRINK. A page that reaches the shell must have its line DELETED \u2014 an entry that no longer describes anything is how a ratchet quietly stops being one. A page NOT on this list and not on the shell blocks: a new page is where new inconsistency arrives, and PageShell is one import. See scripts/frontend_page_shell_ratchet.py.",
+ "_total": 1,
+ "files": {
+  "frontend/src/pages/Trading.tsx": 1
+ }
+}

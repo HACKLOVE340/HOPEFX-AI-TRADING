@@ -1,0 +1,57 @@
+=== registry (was empty in production; now self-registering) ===
+registered breakers: ['oanda_primary']
+
+=== GET /superadmin/risk/circuit-breakers ===
+  {"name": "oanda_primary", "live": true, "state": "closed"}
+
+baseline                     state=closed  override=False order_allowed=True
+                             reason: None
+
+=== POST .../oanda_primary/open ===
+🔴 CIRCUIT BREAKER FORCE-OPENED by ops@hopefx.io: suspected feed corruption (was closed)
+SUPERADMIN [u-1] circuit_breaker_force_open {"name": "oanda_primary", "reason": "suspected feed corruption", "state_after": "open"}
+{
+  "ok": true,
+  "name": "oanda_primary",
+  "new_state": "open",
+  "new_orders_blocked": true,
+  "detail": "new orders are rejected; open positions were not flattened"
+}
+after force-open             state=open    override=True  order_allowed=False
+                             reason: Circuit breaker OPEN: MANUAL_HALT by ops@hopefx.io: suspected feed corruption
+
+=== POST .../oanda_primary/reset  (no live breach) ===
+🔧 CIRCUIT BREAKER RESET by ops@hopefx.io: incident closed (state open, recovery re-armed)
+SUPERADMIN [u-1] circuit_breaker_reset {"name": "oanda_primary", "reason": "incident closed", "state_after": "open"}
+{
+  "ok": true,
+  "name": "oanda_primary",
+  "new_state": "open",
+  "trading_resumed": false,
+  "detail": "manual hold lifted, but the breaker remains open on live risk state and will recover on its own cooldown"
+}
+after reset                  state=open    override=False order_allowed=False
+                             reason: Circuit breaker OPEN: MANUAL_HALT by ops@hopefx.io: suspected feed corruption
+
+=== reset DURING a live 20% drawdown (limit 10%) ===
+🔴 CIRCUIT BREAKER FORCE-OPENED by ops@hopefx.io: drawdown (was open)
+SUPERADMIN [u-1] circuit_breaker_force_open {"name": "oanda_primary", "reason": "drawdown", "state_after": "open"}
+🔧 CIRCUIT BREAKER RESET by ops@hopefx.io: operator clicked reset (state open, recovery re-armed)
+SUPERADMIN [u-1] circuit_breaker_reset {"name": "oanda_primary", "reason": "operator clicked reset", "state_after": "open"}
+{
+  "ok": true,
+  "name": "oanda_primary",
+  "new_state": "open",
+  "trading_resumed": false,
+  "detail": "manual hold lifted, but the breaker remains open on live risk state and will recover on its own cooldown"
+}
+after reset (breach live)    state=open    override=False order_allowed=False
+                             reason: Circuit breaker OPEN: MANUAL_HALT by ops@hopefx.io: drawdown
+
+=== POST .../not_a_real_breaker/open  (old fake-success path) ===
+{
+  "ok": false,
+  "name": "not_a_real_breaker",
+  "error": "No live circuit breaker named 'not_a_real_breaker' is registered",
+  "hint": "nothing was halted; use the kill switch to stop trading when no breaker is registered"
+}

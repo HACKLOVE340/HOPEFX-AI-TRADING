@@ -15,6 +15,7 @@ Extracted from app.py to keep the application entry point under 300 lines.
 from __future__ import annotations
 
 import logging
+import json as _json
 import os
 import sys
 import uuid
@@ -57,14 +58,32 @@ def _build_csp(allowed_origins: list[str]) -> str:
     # doesn't need it.  Keep unsafe-inline for styles (Tailwind + LWC inline styles).
     script_src = "'self'" if _is_production() else "'self' 'unsafe-inline'"
 
+    # Swagger UI fetches swagger-ui-bundle.js and swagger-ui.css from jsDelivr,
+    # and neither script-src nor style-src admitted it, so /docs rendered blank
+    # everywhere it exists — the failure visible only in the browser console
+    # (F200).
+    #
+    # Allowed exactly where the page is mounted, and nowhere else. `app.py` and
+    # `api/server.py` both set `docs_url=None if APP_ENV == "production"`, so
+    # production has no /docs to serve and gains nothing from the CDN;
+    # production's `script-src 'self'` is deliberately left untouched and is
+    # guarded by a test.
+    #
+    # Vendoring swagger-ui-dist is the usual answer and is the wrong trade here:
+    # `static/` is gitignored, so it would mean committing ~1.5 MB of vendor
+    # JavaScript to serve a page that does not exist in the environment the CSP
+    # is protecting. Development already permits 'unsafe-inline'; a pinned CDN
+    # is not the weakest link there.
+    docs_cdn = "" if _is_production() else " https://cdn.jsdelivr.net"
+
     # Production adds upgrade-insecure-requests to force HTTPS sub-resources
     upgrade = "upgrade-insecure-requests; " if _is_production() else ""
 
     return (
         f"{upgrade}"
         f"default-src 'self'; "
-        f"script-src {script_src}; "
-        f"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        f"script-src {script_src}{docs_cdn}; "
+        f"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com{docs_cdn}; "
         # QR code images for 2FA setup (api.qrserver.com), data URIs for LWC charts,
         # and OpenStreetMap tiles for the Security Operations attack map.
         f"img-src 'self' data: blob: https://api.qrserver.com https://*.tile.openstreetmap.org; "
@@ -83,6 +102,34 @@ def _build_csp(allowed_origins: list[str]) -> str:
         f"base-uri 'self'; "
         f"form-action 'self';"
     )
+
+
+# ── Response compression ──────────────────────────────────────────────────────
+
+
+def setup_compression(app: FastAPI) -> None:
+    """Gzip responses above a size floor.
+
+    The SPA ships ~2.8 MB of JavaScript across its chunks, the largest single
+    one being ~415 kB. Uncompressed that is the dominant cost of a cold page
+    load, and nothing was compressing it:
+
+    - The app itself had no compression middleware at all. Starlette's
+      `StaticFiles` does not gzip.
+    - docker-compose publishes the app on `8000:8000`, so anyone hitting the
+      host directly bypasses nginx entirely and gets the raw bytes.
+    - Even through nginx, `gzip_types` listed `application/javascript` but not
+      `text/javascript`, which is what nginx's own mime.types has mapped `.js`
+      to since 1.21.1. The JS chunks were falling outside the type list.
+
+    Registered ahead of the other middleware so it wraps their responses too.
+    The 1 kB floor skips payloads where the compression round-trip costs more
+    than it saves; small JSON API responses are unaffected either way.
+    """
+    from starlette.middleware.gzip import GZipMiddleware
+
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+    logger.info("Response compression enabled (gzip, min 1 kB)")
 
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
@@ -247,6 +294,261 @@ def setup_metrics_middleware(app: FastAPI) -> None:
         logger.warning("Metrics middleware not available: %s", exc)
 
 
+# ── Request body size cap ─────────────────────────────────────────────────────
+
+# nginx sets `client_max_body_size 10M`, which is the right place for this — but
+# it is the *only* place it was set, and nginx is not always in the path.
+# docker-compose publishes the app on `8000:8000`, so anyone reaching the host
+# directly bypasses nginx entirely; setup_compression() in this same file already
+# documents that exact bypass as the reason it compresses in-app rather than
+# relying on nginx's gzip. The same reasoning applies to body size: without an
+# app-level cap, a direct caller can post a body of any size and the worker will
+# buffer it (pre-launch finding Q-03).
+_MAX_BODY_BYTES: int = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(10 * 1024 * 1024)))
+
+# Uploads legitimately carry the largest bodies in the product. These already
+# enforce their own per-route caps (avatars 2 MiB, journal screenshots 10 MiB,
+# KYC documents), so the global limit only needs to not undercut them.
+_BODY_LIMIT_EXEMPT_PREFIXES: tuple[str, ...] = (
+    "/api/kyc/",
+    "/api/profiles/me/avatar",
+    "/api/journal/trades/",
+    "/api/voice/stt",
+)
+
+
+class BodySizeLimitMiddleware:
+    """Reject oversized request bodies with 413 without ever buffering them.
+
+    Checks Content-Length when present, which is the cheap path and covers
+    ordinary clients. A chunked request omits it, so bytes are counted as the
+    handler pulls them and the connection is answered 413 the moment the cap is
+    crossed — otherwise the header check is trivially skipped by sending
+    `Transfer-Encoding: chunked`.
+
+    Pure ASGI, deliberately. As a `BaseHTTPMiddleware` this drained
+    `request.stream()` and reassigned `request._receive` to replay the body,
+    with a comment claiming that is "the documented way". It is not: Starlette
+    binds its own wrapped receive before `dispatch` runs and short-circuits on
+    `_stream_consumed`, so the reassignment was ignored and **every chunked
+    request reached its handler with a zero-byte body**. Silent data loss, and
+    invisible because the size cap itself still worked. Wrapping `receive` keeps
+    the metering without ever taking the body away from the route.
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        if path.startswith(_BODY_LIMIT_EXEMPT_PREFIXES):
+            await self.app(scope, receive, send)
+            return
+
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        declared = headers.get("content-length")
+        if declared is not None:
+            try:
+                if int(declared) > _MAX_BODY_BYTES:
+                    await _send_413(send)
+                    return
+            except ValueError:
+                await _send_json(send, 400, {"detail": "Invalid Content-Length header"})
+                return
+
+        received = 0
+        too_large = False
+
+        async def metered_receive() -> dict:
+            nonlocal received, too_large
+            message = await receive()
+            if message.get("type") == "http.request":
+                received += len(message.get("body", b"") or b"")
+                if received > _MAX_BODY_BYTES:
+                    too_large = True
+                    # End the stream rather than handing the route a partial
+                    # body it would parse as a malformed request.
+                    return {"type": "http.request", "body": b"", "more_body": False}
+            return message
+
+        route_response_started = False
+        replaced_with_413 = False
+
+        async def guarded_send(message) -> None:
+            nonlocal route_response_started, replaced_with_413
+            if replaced_with_413:
+                # Already answered 413; drop whatever the route still emits.
+                return
+            if too_large and not route_response_started:
+                # The route read past the cap before writing anything, so its
+                # reply can still be replaced.
+                replaced_with_413 = True
+                await _send_413(send)
+                return
+            if message.get("type") == "http.response.start":
+                route_response_started = True
+            await send(message)
+
+        await self.app(scope, metered_receive, guarded_send)
+
+
+async def _send_json(send, status: int, payload: dict) -> None:
+    body = _json.dumps(payload).encode()
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+async def _send_413(send) -> None:
+    await _send_json(send, 413, {"detail": f"Request body exceeds {_MAX_BODY_BYTES} bytes"})
+
+
+def setup_body_size_limit(app: FastAPI) -> None:
+    """Install the app-level request body cap (MAX_REQUEST_BODY_BYTES)."""
+    if os.getenv("BODY_SIZE_LIMIT_ENABLED", "true").lower() in ("false", "0", "no"):
+        logger.warning("Request body size limit DISABLED via BODY_SIZE_LIMIT_ENABLED")
+        return
+    app.add_middleware(BodySizeLimitMiddleware)
+    logger.info("Request body size limit registered (%d bytes)", _MAX_BODY_BYTES)
+
+
+# ── Default API rate limit ────────────────────────────────────────────────────
+
+# rate_limiting_configuration.GLOBAL_DEFAULT_RATE has always documented itself as
+# "applied to every endpoint that has no explicit decorator", and
+# api/platform.py::setup_rate_limiting() builds a slowapi Limiter and stores it
+# on app.state. But nothing ever consumed either one: there is not a single
+# @limiter.limit() decorator in the codebase, so the Limiter only ever installed
+# its 429 exception handler. The endpoints that do enforce a limit each brought
+# their own — auth/router.py has a per-IP limiter on login/register/reset,
+# api/payments.py uses rate_limit_dependency(WITHDRAWAL_RATE), and the WS
+# handshakes use rate_limiting.websocket_limiter. Everything else — every ML
+# inference route, every backtest submission, every LLM-backed endpoint — was
+# unmetered. This middleware supplies the documented default so an endpoint has
+# to opt *out* rather than remember to opt in.
+
+# Paths that must not be metered by the default limit.
+_RL_EXEMPT_PREFIXES: tuple[str, ...] = (
+    # Liveness/readiness probes: an orchestrator polls these far faster than any
+    # human, and a 429 to Kubernetes reads as an unhealthy pod.
+    "/health",
+    "/api/health",
+    "/metrics",
+    # WebSocket upgrades carry their own per-IP handshake limiter.
+    "/ws",
+    # Provider webhooks retry in bursts after an outage and are authenticated by
+    # HMAC signature, not by session. Throttling them drops real payment and
+    # KYC events; the signature check is what protects these.
+    "/api/billing/webhook",
+    "/api/monetization/webhook",
+    "/api/payments/webhook",
+    "/api/email/webhook",
+    "/api/kyc/webhooks",
+)
+
+
+class DefaultRateLimitMiddleware(BaseHTTPMiddleware):
+    """Apply GLOBAL_DEFAULT_RATE to every request not covered by a tighter limit.
+
+    Keyed per bearer token when the caller presents one, else per client IP.
+    Keying solely on IP would put an entire office behind one NAT address into a
+    single bucket, which is a denial of service against paying users rather than
+    protection from anyone; keying on the token gives each session its own
+    allowance and still leaves anonymous traffic metered per address.
+
+    Backed by the same Redis sliding window as rate_limiting/advanced.py, so the
+    limit holds across replicas. When Redis is unreachable that module falls back
+    to an in-process counter, which is per-worker — degraded but not open.
+
+    Fails open on an unexpected internal error: a bug in the limiter must not be
+    able to take the whole API down. A limiter that 500s every request is a worse
+    outage than one that briefly stops counting, and the exemption is logged.
+    """
+
+    def __init__(self, app, rate: str | None = None) -> None:
+        super().__init__(app)
+        from rate_limiting_configuration import GLOBAL_DEFAULT_RATE
+
+        self._rate_str = rate or GLOBAL_DEFAULT_RATE
+        from rate_limiting.advanced import _parse_rate
+
+        self._limit, self._window = _parse_rate(self._rate_str)
+
+    def _key(self, request: Request) -> str:
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer "):
+            import hashlib
+
+            token = auth[7:].strip()
+            if token:
+                # Hash rather than store the token: this key reaches Redis, and a
+                # raw JWT sitting in a rate-limit key is a credential at rest.
+                return "default:tok:" + hashlib.sha256(token.encode()).hexdigest()[:32]
+        from rate_limiting.websocket_limiter import get_client_ip
+
+        # get_client_ip() reads .client and .headers, which Request and WebSocket
+        # both expose, so the trusted-proxy handling is shared rather than
+        # reimplemented (and X-Forwarded-For is honoured only behind a proxy in
+        # TRUSTED_PROXY_IPS — otherwise any client could forge its own key).
+        return "default:ip:" + get_client_ip(request)
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if request.method == "OPTIONS" or path.startswith(_RL_EXEMPT_PREFIXES):
+            return await call_next(request)
+
+        try:
+            from rate_limiting.advanced import _redis_is_allowed
+
+            allowed = await _redis_is_allowed(self._key(request), self._limit, self._window)
+        except Exception as exc:
+            logger.warning("Default rate limiter errored (%s) — allowing request", exc)
+            return await call_next(request)
+
+        if not allowed:
+            logger.info("Default rate limit exceeded: %s %s", request.method, path)
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Rate limit exceeded ({self._rate_str})"},
+                headers={"Retry-After": str(self._window)},
+            )
+        return await call_next(request)
+
+
+def setup_default_rate_limit(app: FastAPI) -> None:
+    """Install the default per-caller rate limit.
+
+    Set RATE_LIMIT_DEFAULT_ENABLED=false to disable, and RATE_GLOBAL_DEFAULT to
+    retune it (both read at startup). Load tests that deliberately exceed the
+    limit are the reason the escape hatch exists.
+    """
+    if os.getenv("RATE_LIMIT_DEFAULT_ENABLED", "true").lower() in ("false", "0", "no"):
+        logger.warning(
+            "Default API rate limiting DISABLED via RATE_LIMIT_DEFAULT_ENABLED — "
+            "endpoints without their own limiter are unmetered.",
+        )
+        return
+    try:
+        app.add_middleware(DefaultRateLimitMiddleware)
+        from rate_limiting_configuration import GLOBAL_DEFAULT_RATE
+
+        logger.info("Default API rate limit registered (%s per caller)", GLOBAL_DEFAULT_RATE)
+    except Exception as exc:
+        logger.error("Could not register default rate limit middleware: %s", exc)
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
@@ -399,6 +701,8 @@ _STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
     "/ws",  # WebSocket — auth is checked inside the handler
     "/api/status",  # lightweight status page
     "/api/billing",  # billing/plans must be readable before startup completes
+    "/api/pricing",  # public plan catalogue — the landing + /pricing pages need it pre-init
+    "/api/public",  # public price ticks (landing ticker REST fallback) — unauthenticated
     "/api/notifications",
     "/api/kyc",
     "/api/profiles",
@@ -449,16 +753,139 @@ def setup_startup_gate(app: FastAPI) -> None:
     logger.info("StartupGateMiddleware registered — data endpoints return 503 until initialized")
 
 
+# ── Paywall ───────────────────────────────────────────────────────────────────
+#
+# Paths reachable without an active subscription. Deliberately narrow: account
+# management, billing, auth, health, and the public/landing surface.
+#
+# Non-/api paths are not listed because they are allowed wholesale — the SPA
+# shell, its JS chunks and its assets must load for the app to be able to RENDER
+# the upgrade wall. Gating them would return raw JSON to a browser navigation.
+_PAYWALL_ALWAYS_ALLOW: tuple[str, ...] = (
+    "/api/auth",  # log in, register, refresh, /me — needed to reach checkout
+    "/api/health",
+    "/api/status",
+    "/api/billing",  # plans, checkout session, customer portal
+    "/api/pricing",  # public plan catalogue
+    "/api/public",  # unauthenticated landing-page data
+    "/api/webhooks",  # payment provider callbacks — never gate these
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/metrics",
+)
+
+
+class SubscriptionPaywallMiddleware(BaseHTTPMiddleware):
+    """Require an active subscription for every API route except the allowlist.
+
+    Enforced here rather than per-route on purpose. A dependency has to be
+    remembered on each new endpoint, and the one that is forgotten is the one
+    that leaks. Middleware is the only version of this that is closed by
+    default: a new route is gated the moment it exists.
+
+    This complements — it does not replace — the frontend SubscriptionGate.
+    That gate decides what to *render*; anyone can call the API directly, so
+    the server has to be the thing that actually says no.
+
+    Off unless HOPEFX_PAYWALL_ENABLED=true. Turning it on without a working
+    payment provider will lock out every non-operator account, since nobody
+    can complete a purchase — which is why it ships disabled.
+
+    Operators (admin/superadmin) are always exempt. That is also the safety
+    valve: if the monetization module is unavailable while the paywall is on,
+    everyone else is denied (an operator explicitly demanded payment, so
+    failing open would silently give the platform away), but an operator can
+    still log in and turn it off.
+    """
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if os.getenv("HOPEFX_PAYWALL_ENABLED", "false").lower() not in ("true", "1", "yes"):
+            return await call_next(request)
+
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return await call_next(request)  # SPA shell + assets
+        if any(path.startswith(prefix) for prefix in _PAYWALL_ALWAYS_ALLOW):
+            return await call_next(request)
+
+        # Resolve the caller. An unauthenticated request is not the paywall's
+        # problem — let the route's own auth dependency return 401.
+        token = request.headers.get("authorization", "")
+        token = token[7:] if token.lower().startswith("bearer ") else request.cookies.get("hopefx_access_token", "")
+        if not token:
+            return await call_next(request)
+        try:
+            from api.auth import _decode_token
+
+            payload = _decode_token(token)
+        except Exception:
+            return await call_next(request)  # invalid token → let auth 401 it
+
+        if getattr(payload, "role", "") in ("admin", "superadmin"):
+            return await call_next(request)
+
+        try:
+            from monetization.subscription import subscription_manager
+
+            sub = subscription_manager.get_user_subscription(payload.sub)
+            if sub is not None and sub.is_active():
+                return await call_next(request)
+            current_plan = getattr(getattr(sub, "tier", None), "value", "free")
+        except ImportError:
+            logger.critical(
+                "PAYWALL ENABLED but the monetization module is unavailable — denying user=%s. "
+                "Operators are still exempt; set HOPEFX_PAYWALL_ENABLED=false to restore access.",
+                payload.sub,
+            )
+            current_plan = "unknown"
+        except Exception as exc:
+            logger.error("Paywall subscription lookup failed for user=%s: %s", payload.sub, exc)
+            current_plan = "unknown"
+
+        return JSONResponse(
+            status_code=402,  # Payment Required
+            content={
+                "error": "SUBSCRIPTION_REQUIRED",
+                "detail": "An active subscription is required to use HOPEFX.",
+                "current_plan": current_plan,
+                "checkout_url": "/pricing",
+            },
+        )
+
+
+def setup_paywall(app: FastAPI) -> None:
+    """Add the subscription paywall middleware (no-op unless enabled)."""
+    app.add_middleware(SubscriptionPaywallMiddleware)
+    if os.getenv("HOPEFX_PAYWALL_ENABLED", "false").lower() in ("true", "1", "yes"):
+        logger.warning(
+            "SubscriptionPaywallMiddleware ACTIVE — every API route outside the allowlist "
+            "requires an active subscription. Operators are exempt."
+        )
+    else:
+        logger.info("SubscriptionPaywallMiddleware registered but disabled (HOPEFX_PAYWALL_ENABLED=false)")
+
+
 def register_all(app: FastAPI) -> None:
     """Register all middleware on *app* in the correct order.
 
     Order matters — Starlette applies middleware in reverse registration order
     (last registered = outermost = first to process the request).
     We want:
-      startup_gate → CSRF → metrics → security headers → CORS (outermost)
+      startup_gate → CSRF → rate limit → metrics → security headers → gzip → CORS (outermost)
     """
     setup_startup_gate(app)  # innermost — gate before CSRF so 503 beats 403
+    setup_paywall(app)  # after the startup gate: "still booting" beats "pay up"
     setup_csrf_middleware(app)
+    # Outside CSRF so a flood is rejected before any per-request work, but inside
+    # the security-header and CORS layers so a 429 still carries both.
+    setup_default_rate_limit(app)
+    # Outside the rate limiter: an oversized body should be refused on the header
+    # alone, without first spending a token from the caller's rate-limit budget.
+    setup_body_size_limit(app)
     setup_metrics_middleware(app)
     setup_security_headers(app)
+    # Outside the security-header middleware so it compresses the final body,
+    # but inside CORS so preflight responses are not needlessly wrapped.
+    setup_compression(app)
     setup_cors(app)  # outermost — handles preflight first

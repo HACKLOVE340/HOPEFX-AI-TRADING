@@ -57,6 +57,7 @@ from dataclasses import dataclass
 from fastapi import Depends, Header, HTTPException, status
 
 from whitelabel.config import TierConfig, TierName, get_tier_config
+from utils.redaction import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ try:
     )
     _redis_client.ping()
     _REDIS_AVAILABLE = True
-    logger.info("whitelabel rate limiter: Redis backend at %s", _REDIS_URL)
+    logger.info("whitelabel rate limiter: Redis backend at %s", redact_url(_REDIS_URL))
 except Exception:  # pylint: disable=broad-exception-caught
     _redis_client = None
     _REDIS_AVAILABLE = False

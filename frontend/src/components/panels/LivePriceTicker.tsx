@@ -7,8 +7,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
-import { fmtPrice, fmtPctRaw, fmtSpread, cn } from '../../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtSpread, cn, qualityIsMeaningful } from '../../lib/utils';
 import { StatusDot } from '../ui/StatusDot';
+import { DataAge } from '../ui/DataAge';
 import { Sparkline } from '../ui/Sparkline';
 import type { PriceTick } from '../../types';
 
@@ -24,19 +25,23 @@ interface TickerCellProps {
 function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
   const prevMid  = useRef<number | null>(null);
   const [flash, setFlash] = useState<'bull' | 'bear' | null>(null);
+  const mid = tick?.mid;
 
   useEffect(() => {
-    if (!tick) return;
+    // Bound before the effect, so the dependency IS the value read rather than
+    // a narrowing of a wider object. Depending on `tick` would re-run this on
+    // every tick whose mid did not move, flashing the ticker for nothing.
+    if (mid === undefined) return;
     if (prevMid.current !== null) {
-      const dir = tick.mid > prevMid.current ? 'bull' : tick.mid < prevMid.current ? 'bear' : null;
+      const dir = mid > prevMid.current ? 'bull' : mid < prevMid.current ? 'bear' : null;
       if (dir) {
         setFlash(dir);
         const t = setTimeout(() => setFlash(null), 400);
         return () => clearTimeout(t);
       }
     }
-    prevMid.current = tick.mid;
-  }, [tick?.mid]);
+    prevMid.current = mid;
+  }, [mid]);
 
   const sparkData = history.slice(-40).map((t) => t.mid);
   const change    = tick?.change_pct ?? 0;
@@ -45,10 +50,10 @@ function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
   return (
     <div
       className={cn(
-        'flex items-center gap-4 px-5 py-3 border-r border-[#1e2d3d] transition-colors duration-300',
-        active && 'bg-[#111827]',
-        flash === 'bull' && 'bg-[#00e676]/5',
-        flash === 'bear' && 'bg-[#ff1744]/5',
+        'flex items-center gap-4 px-5 py-3 border-r border-[var(--border)] transition-colors duration-300',
+        active && 'bg-[var(--raised)]',
+        flash === 'bull' && 'bg-[var(--bull)]/5',
+        flash === 'bear' && 'bg-[var(--bear)]/5',
       )}
     >
       {/* Symbol */}
@@ -66,7 +71,7 @@ function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
           <span
             className={cn(
               'font-mono tabular-nums text-sm font-semibold transition-colors duration-200',
-              flash === 'bear' ? 'text-[#ff1744]' : 'text-slate-200',
+              flash === 'bear' ? 'text-[var(--bear)]' : 'text-slate-200',
             )}
           >
             {tick ? fmtPrice(tick.bid) : '—'}
@@ -77,7 +82,7 @@ function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
           <span
             className={cn(
               'font-mono tabular-nums text-sm font-semibold transition-colors duration-200',
-              flash === 'bull' ? 'text-[#00e676]' : 'text-slate-200',
+              flash === 'bull' ? 'text-[var(--bull)]' : 'text-slate-200',
             )}
           >
             {tick ? fmtPrice(tick.ask) : '—'}
@@ -87,13 +92,13 @@ function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
 
       {/* Mid + change */}
       <div className="flex flex-col gap-0.5 min-w-[100px]">
-        <span className="font-mono tabular-nums text-base font-bold text-[#00d4ff]">
+        <span className="font-mono tabular-nums text-base font-bold text-[var(--accent)]">
           {tick ? fmtPrice(tick.mid) : '—'}
         </span>
         <span
           className={cn(
             'text-[11px] font-mono tabular-nums font-semibold',
-            isUp ? 'text-[#00e676]' : 'text-[#ff1744]',
+            isUp ? 'text-[var(--bull)]' : 'text-[var(--bear)]',
           )}
         >
           {tick ? fmtPctRaw(change) : '—'}
@@ -118,22 +123,44 @@ function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
 
 // ── Microstructure strip ──────────────────────────────────────────────────────
 
+/**
+ * Ticks required before order-flow statistics mean anything.
+ *
+ * OFI and buy pressure are normalised ratios: with three ticks that all went
+ * the same way they read 100.0% and paint a full green bar — visually identical
+ * to 100% across a thousand ticks, and carrying none of the same information.
+ * The deployed terminal showed exactly that: `OFI 100.0%  BUY PRESS 100%` beside
+ * `TICKS 3`.
+ *
+ * The engine's arithmetic is correct; what was wrong is presenting a
+ * three-sample estimate with the confidence of a converged one. Below this
+ * threshold the ratios are withheld and the tick count is shown instead, so the
+ * strip says "not enough data yet" rather than "the market is 100% bid".
+ */
+const MIN_TICKS_FOR_FLOW = 30;
+
 function MicroStrip() {
   const micro = useStore((s) => s.microstructure);
 
   if (!micro) return null;
 
+  const ticks    = micro.tick_count ?? 0;
+  const enough   = ticks >= MIN_TICKS_FOR_FLOW;
   const ofi      = micro.order_flow_imbalance;
   const delta    = micro.volume_delta;
   const pressure = micro.buy_pressure;
-  const ofiColor = ofi > 0.1 ? '#00e676' : ofi < -0.1 ? '#ff1744' : '#ffb800';
+  const ofiColor = !enough ? '#64748b' : ofi > 0.1 ? '#00e676' : ofi < -0.1 ? '#ff1744' : '#ffb800';
 
   return (
-    <div className="flex items-center gap-6 px-5 py-2 border-t border-[#1e2d3d] bg-[#080c14]">
+    <div className="flex items-center gap-6 px-5 py-2 border-t border-[var(--border)] bg-[var(--bg)]">
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-slate-600 uppercase tracking-widest">OFI</span>
-        <span className="font-mono tabular-nums text-[11px] font-semibold" style={{ color: ofiColor }}>
-          {(ofi * 100).toFixed(1)}%
+        <span
+          className="font-mono tabular-nums text-[11px] font-semibold"
+          style={{ color: ofiColor }}
+          title={enough ? undefined : `Needs ${MIN_TICKS_FOR_FLOW} ticks; have ${ticks}`}
+        >
+          {enough ? `${(ofi * 100).toFixed(1)}%` : '—'}
         </span>
       </div>
       <div className="flex items-center gap-1.5">
@@ -141,26 +168,26 @@ function MicroStrip() {
         <span
           className={cn(
             'font-mono tabular-nums text-[11px] font-semibold',
-            delta >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]',
+            delta >= 0 ? 'text-[var(--bull)]' : 'text-[var(--bear)]',
           )}
         >
-          {delta >= 0 ? '+' : ''}{delta.toFixed(0)}
+          {enough ? `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}` : '—'}
         </span>
       </div>
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-slate-600 uppercase tracking-widest">Buy Press</span>
         <div className="flex items-center gap-1">
-          <div className="w-16 h-1 bg-[#1e2d3d] rounded-full overflow-hidden">
+          <div className="w-16 h-1 bg-[var(--border)] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full"
               style={{
-                width:           `${pressure * 100}%`,
-                backgroundColor: pressure > 0.6 ? '#00e676' : pressure < 0.4 ? '#ff1744' : '#ffb800',
+                width:           enough ? `${pressure * 100}%` : '0%',
+                backgroundColor: pressure > 0.6 ? 'var(--bull)' : pressure < 0.4 ? 'var(--bear)' : '#ffb800',
               }}
             />
           </div>
           <span className="font-mono tabular-nums text-[10px] text-slate-400">
-            {(pressure * 100).toFixed(0)}%
+            {enough ? `${(pressure * 100).toFixed(0)}%` : '—'}
           </span>
         </div>
       </div>
@@ -172,8 +199,12 @@ function MicroStrip() {
       </div>
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-slate-600 uppercase tracking-widest">Ticks</span>
-        <span className="font-mono tabular-nums text-[11px] text-slate-400">
-          {micro.tick_count.toLocaleString()}
+        <span
+          className="font-mono tabular-nums text-[11px]"
+          style={{ color: enough ? 'var(--text-dim)' : '#ffb800' }}
+          title={enough ? undefined : `Order-flow statistics need ${MIN_TICKS_FOR_FLOW} ticks`}
+        >
+          {ticks.toLocaleString()}
         </span>
       </div>
     </div>
@@ -190,9 +221,16 @@ export function LivePriceTicker() {
   const histories = useStore((s) => s.priceHistory);
   const wsStatus  = useStore((s) => s.wsStatus);
   const quality   = useStore((s) => s.orchestratorHealth?.quality_score);
+  // S9-02: `quality_score` is assigned when a tick is ingested and never
+  // re-evaluated as it ages, so a tick graded GOOD at 14:00 still read 94% at
+  // 15:00. Paired with S9-01's frozen price, the one visible freshness cue
+  // reinforced the illusion instead of correcting it. Gate it on arrival time.
+  const lastDataAt = useStore((s) => s.lastDataAt);
+  const feedStale  = useStore((s) => s.feedStale);
+  const qualityLive = !feedStale && qualityIsMeaningful(lastDataAt);
 
   return (
-    <div className="bg-[#0d1421] border-b border-[#1e2d3d] shrink-0">
+    <div className="bg-[var(--surface)] border-b border-[var(--border)] shrink-0">
       {/* Top bar: symbols */}
       <div className="flex items-stretch overflow-x-auto scrollbar-terminal">
         {SYMBOLS.map((sym) => (
@@ -209,15 +247,40 @@ export function LivePriceTicker() {
         <div className="ml-auto flex items-center gap-4 px-5 shrink-0">
           {quality != null && (
             <div className="flex flex-col items-end gap-0.5">
-              <span className="text-[9px] text-slate-600 uppercase tracking-widest">Data Quality</span>
+              <span className="text-[9px] text-slate-600 uppercase tracking-widest">
+                Data Quality
+              </span>
               <span
                 className="font-mono tabular-nums text-xs font-semibold"
-                style={{ color: quality > 0.8 ? '#00e676' : quality > 0.5 ? '#ffb800' : '#ff3b5c' }}
+                title={
+                  qualityLive
+                    ? 'Ingest quality of the most recent tick'
+                    : 'This score was recorded when the last tick arrived. It does not describe the feed right now.'
+                }
+                style={{
+                  // Never paint a confident green on a score whose data has
+                  // gone stale — that is the S9-02 defect exactly.
+                  color: !qualityLive
+                    ? 'var(--text-muted)'
+                    : quality > 0.8
+                      ? 'var(--bull)'
+                      : quality > 0.5
+                        ? '#ffb800'
+                        : '#ff3b5c',
+                }}
               >
-                {(quality * 100).toFixed(0)}%
+                {(quality * 100).toFixed(0)}%{qualityLive ? '' : ' (as of last tick)'}
               </span>
             </div>
           )}
+
+          {/* S10-05: there was no data-age indicator anywhere in the app, so a
+              frozen price and a live one looked identical. */}
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-[9px] text-slate-600 uppercase tracking-widest">Updated</span>
+            <DataAge at={lastDataAt} />
+          </div>
+
           <StatusDot status={wsStatus} label={wsStatus} size="md" />
         </div>
       </div>

@@ -21,6 +21,8 @@ GET  /ml/engine-health     — InferenceEngine detailed diagnostics (admin only)
 
 from __future__ import annotations
 
+import asyncio
+
 import logging
 import os
 from datetime import datetime, timezone
@@ -376,7 +378,20 @@ class AccuracyResponse(BaseModel):
     recall: float
     f1: float
     sharpe: float
-    win_rate: float
+    # Optional, and it means it. Win rate is the fraction of *trades* that made
+    # money; accuracy is the fraction of directional predictions that were
+    # right. They answer different questions and only coincide by chance.
+    #
+    # This was `float`, and the code below filled it with `win_rate or accuracy`
+    # whenever the evaluation carried no win rate — so the dashboard rendered
+    # ACCURACY 57.3% beside WIN RATE 57.3%, identical to the decimal, and a
+    # reader had no way to tell that one of them was the other wearing a
+    # different label. Worse, `or` treats a real 0.0 win rate — every trade a
+    # loser — as missing, and replaces it with the accuracy figure.
+    #
+    # None now means "not measured", which the dashboard already renders as "—"
+    # via orDash().
+    win_rate: float | None = None
     total_signals: int
     evaluated_at: str
     note: str = ""
@@ -477,7 +492,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
     for p in eval_paths:
         if p.exists():
             try:
-                data = json.loads(p.read_text())
+                data = json.loads(await asyncio.to_thread(p.read_text))
                 # Normalise field names across different file formats
                 accuracy = float(data.get("accuracy") or data.get("oos_accuracy") or data.get("test_accuracy") or 0.0)
                 precision = float(data.get("precision") or data.get("test_precision") or data.get("oos_f1") or 0.0)
@@ -493,8 +508,14 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                     or sharpe_gate.get("sharpe")
                     or 0.0
                 )
-                # win_rate: prefer multi-symbol pooled win rate, else accuracy
-                win_rate = float(data.get("win_rate") or accuracy)
+                # win_rate: the pooled multi-symbol win rate when the evaluation
+                # measured one, otherwise nothing. Never accuracy — see the
+                # field comment on AccuracyResponse.win_rate. `is not None`
+                # rather than `or`, so a genuine 0.0 survives.
+                _wr = data.get("win_rate")
+                if _wr is None:
+                    _wr = multi.get("pooled_win_rate")
+                win_rate = float(_wr) if _wr is not None else None
                 # total_signals: prefer oos_n (number of OOS bars evaluated)
                 total_signals = int(
                     data.get("total_signals")
@@ -530,7 +551,10 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                                 fallback = h.get("fallback_count", 0)
                                 if total > 0:
                                     accuracy = round(1.0 - fallback / total, 4)
-                                    win_rate = accuracy
+                                    # Not a win rate: this is the non-fallback
+                                    # prediction ratio. Leave win_rate unmeasured
+                                    # rather than relabel accuracy as profit.
+                                    win_rate = None
                                     total_signals = total
                                     note = note or "Accuracy derived from live predict/fallback ratio"
                             except Exception as _exc:
@@ -581,7 +605,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                         recall=0.0,
                         f1=0.0,
                         sharpe=0.0,
-                        win_rate=live_accuracy,
+                        win_rate=None,  # a predict/fallback ratio is not a win rate
                         total_signals=total,
                         evaluated_at=datetime.now(UTC).isoformat(),
                         note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
@@ -1439,6 +1463,15 @@ async def rl_walk_forward(
         raise HTTPException(status_code=500, detail="RL walk-forward failed — check server logs") from None
 
 
+def _relative_model_dir(path: str | Path) -> str:
+    """Render a model directory for display without leaking the server layout."""
+    try:
+        return Path(path).resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
+    except (ValueError, OSError):
+        # Outside the repo (a mounted volume, say) — name the leaf only.
+        return Path(path).name
+
+
 @router.get("/rl/status", tags=["ML Models"])
 async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     """Return RL agent runtime status and saved model inventory.
@@ -1504,8 +1537,14 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
         "win_rate": float(agent_state.get("win_rate", 0.0)),
         "last_updated": last_updated,
         "model_version": agent_state.get("model_version", latest_version),
-        # Extended fields for the model inventory table
-        "model_dir": _MODEL_DIR,
+        # Extended fields for the model inventory table.
+        #
+        # Repo-relative, not absolute. This emitted the resolved server path
+        # ("/home/<user>/HOPEFX-AI-TRADING/ml/saved_models/rl"), which tells any
+        # caller the deployment account name, the install root and the directory
+        # layout — free reconnaissance in an API response, and of no use to the
+        # UI, which only labels the inventory table with it.
+        "model_dir": _relative_model_dir(_MODEL_DIR),
         "models": models,
         "count": len(models),
     }
@@ -1553,7 +1592,7 @@ async def get_model_card(
     active_meta: dict[str, Any] = {}
     try:
         if registry_path.exists():
-            registry = json.loads(registry_path.read_text())
+            registry = json.loads(await asyncio.to_thread(registry_path.read_text))
             active_version = registry.get("active_version", "")
             active_meta = registry.get("versions", {}).get(active_version, {})
     except Exception as exc:
@@ -1563,7 +1602,7 @@ async def get_model_card(
     training_report: dict[str, Any] = {}
     try:
         if report_path.exists():
-            training_report = json.loads(report_path.read_text())
+            training_report = json.loads(await asyncio.to_thread(report_path.read_text))
     except Exception as exc:
         logger.warning("model_card: could not read training report: %s", exc)
 
@@ -1571,7 +1610,7 @@ async def get_model_card(
     feature_stats: dict[str, Any] = {}
     try:
         if feature_stats_path.exists():
-            _raw_stats = json.loads(feature_stats_path.read_text())
+            _raw_stats = json.loads(await asyncio.to_thread(feature_stats_path.read_text))
             # surface top-level keys for the drift section
             feature_stats["_available"] = True
             feature_stats.update({k: v for k, v in _raw_stats.items() if not isinstance(v, dict)})
@@ -1582,7 +1621,7 @@ async def get_model_card(
     feature_importances: list[dict] = []
     try:
         if feat_imp_path.exists():
-            raw = json.loads(feat_imp_path.read_text())
+            raw = json.loads(await asyncio.to_thread(feat_imp_path.read_text))
             # Accept list[{feature, importance}] or dict{feature: importance}
             if isinstance(raw, dict):
                 feature_importances = sorted(
@@ -1745,7 +1784,7 @@ async def get_model_card(
     summary="Real-time feature drift report (PSI + KS-test)",
     tags=["ML Models"],
 )
-async def get_drift_report() -> dict:
+async def get_drift_report(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Compute and return a statistical drift report for the live feature distribution.
 
@@ -1813,7 +1852,7 @@ async def get_drift_report() -> dict:
     summary="Live feature drift status",
     tags=["ML Models"],
 )
-async def get_drift_status() -> dict:
+async def get_drift_status(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Return the current feature drift status from the inference engine and drift monitor.
 
@@ -1856,7 +1895,7 @@ async def get_drift_status() -> dict:
     summary="Sharpe circuit breaker state for all tracked model versions",
     tags=["ML Models"],
 )
-async def get_sharpe_circuit_breaker_status() -> dict:
+async def get_sharpe_circuit_breaker_status(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Return the current state of the Sharpe circuit breaker for every tracked
     model version.
@@ -1901,7 +1940,11 @@ async def get_sharpe_circuit_breaker_status() -> dict:
     summary="SHAP feature importance for a deployed model",
     tags=["ML Models"],
 )
-async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
+async def get_model_explanation(
+    model_name: str,
+    top_n: int = 30,
+    user: TokenPayload = Depends(require_role("trader")),
+) -> dict:
     """
     Return SHAP TreeExplainer global feature importance for the named model.
 
@@ -1919,7 +1962,11 @@ async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
     summary="Built-in feature importances for a deployed model (fast)",
     tags=["ML Models"],
 )
-async def get_model_feature_importance(model_name: str, top_n: int = 30) -> dict:
+async def get_model_feature_importance(
+    model_name: str,
+    top_n: int = 30,
+    user: TokenPayload = Depends(require_role("trader")),
+) -> dict:
     """Return XGBoost/RF built-in feature_importances_ (faster than SHAP)."""
     from ml.explainability import get_feature_importance
 
@@ -1934,7 +1981,7 @@ async def get_model_feature_importance(model_name: str, top_n: int = 30) -> dict
     summary="KS-test model-output drift across all production models",
     tags=["ML Models"],
 )
-async def get_model_drift() -> dict:
+async def get_model_drift(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Return per-model prediction distribution drift using Kolmogorov-Smirnov
     tests on a sliding window of recent predictions vs the reference distribution.
@@ -1954,7 +2001,7 @@ async def get_model_drift() -> dict:
     summary="List all active A/B tests",
     tags=["ML Models"],
 )
-async def list_ab_tests() -> dict:
+async def list_ab_tests(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Return all active A/B model comparison tests."""
     from ml.ab_testing import get_ab_test_manager
 
@@ -2032,7 +2079,7 @@ async def stop_ab_test(
     summary="List all training jobs (active + recent)",
     tags=["ML Models"],
 )
-async def list_training_jobs() -> dict:
+async def list_training_jobs(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Return all active and recently completed model training jobs."""
     from ml.training_manager import get_training_manager
 

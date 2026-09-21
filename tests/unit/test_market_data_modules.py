@@ -2039,7 +2039,13 @@ class TestMT5LiveFeedAdditional:
             feed = MT5LiveFeed(url="ws://localhost")
             mock_ws_app = MagicMock()
             mock_ws_class = MagicMock(return_value=mock_ws_app)
-            with patch("market_data.mt5_live_feed.websocket") as mock_ws_mod:
+            # create=True: when websocket-client is genuinely not installed the
+            # module has no `websocket` attribute at all. This test deliberately
+            # forces the library-available branch, so it must supply the name.
+            # It previously worked without create=True only because the dead
+            # repo-root `websocket/` package shadowed the real library and made
+            # the import always succeed (audit S13-02a).
+            with patch("market_data.mt5_live_feed.websocket", create=True) as mock_ws_mod:
                 mock_ws_mod.WebSocketApp = mock_ws_class
                 feed._connect()
             mock_ws_class.assert_called_once()

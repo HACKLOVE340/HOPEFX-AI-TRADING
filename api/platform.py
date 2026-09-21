@@ -73,6 +73,7 @@ router = APIRouter(tags=["Platform"])
 #   platform:api_key_hash:{sha256}  → key_id string      (no TTL)
 
 import json as _json
+from utils.redaction import redact_url
 
 _REDIS_SESSION_TTL = 60 * 60 * 24 * 30  # 30 days
 _REDIS_AUDIT_MAX = 10_000  # cap audit log list length
@@ -704,7 +705,7 @@ def setup_rate_limiting(app):
     redis_url = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}"
     try:
         limiter = Limiter(key_func=get_remote_address, storage_uri=redis_url)
-        logger.info("Rate limiter: Redis backend at %s", redis_url)
+        logger.info("Rate limiter: Redis backend at %s", redact_url(redis_url))
     except Exception:  # nosec B110 — Redis is optional; in-memory is the fallback
         limiter = Limiter(key_func=get_remote_address)
         logger.warning(

@@ -6,18 +6,41 @@
 """
 api/custom_indicators.py
 ========================
-Custom indicator management API.
+Custom indicator management API — parameterised instances of built-in
+indicators (``{"name": ..., "type": "ema", "params": {...}}``).
 
 Routes
 ------
-GET    /api/indicators                    — list user's custom indicators
-POST   /api/indicators                    — create a new custom indicator
-GET    /api/indicators/{id}               — get a specific indicator
-PATCH  /api/indicators/{id}               — update an indicator
-DELETE /api/indicators/{id}               — delete an indicator
-POST   /api/indicators/{id}/apply         — apply indicator to a symbol/timeframe
-GET    /api/indicators/builtin            — list all built-in indicators
-POST   /api/indicators/calculate          — calculate a built-in indicator on data
+GET    /api/custom-indicators                 — list user's custom indicators
+POST   /api/custom-indicators                 — create a new custom indicator
+GET    /api/custom-indicators/{id}            — get a specific indicator
+PUT    /api/custom-indicators/{id}            — replace an indicator
+PATCH  /api/custom-indicators/{id}            — update an indicator
+DELETE /api/custom-indicators/{id}            — delete an indicator
+POST   /api/custom-indicators/{id}/apply      — apply indicator to a symbol/timeframe
+POST   /api/custom-indicators/{id}/test       — test against recent data
+POST   /api/custom-indicators/{id}/deploy     — deploy to the live chart engine
+GET    /api/custom-indicators/builtin         — list all built-in indicators
+POST   /api/custom-indicators/calculate       — calculate a built-in indicator on data
+POST   /api/custom-indicators/preview         — preview a custom indicator formula
+
+Why not ``/api/indicators`` (S-32)
+----------------------------------
+That prefix already belonged to ``api/advanced_trading.py``, which serves a
+*different* product from a *different* store: formula-based chart overlays
+(``{"name": ..., "formula": "close - close", "symbol": ..., "color": ...}``)
+kept in ``advanced:indicator:*``. Both routers were mounted, advanced_trading
+first, so Starlette matched its routes first and this module's `DELETE`,
+`PATCH` and `/{id}/apply` were shadowed outright — while `GET /{id}`, `PUT`,
+`/{id}/test` and `/{id}/deploy`, which advanced_trading does not define,
+stayed reachable but answered 404 for every indicator the app actually
+creates, because they read the other store.
+
+The two APIs were never the same API. Splitting the prefix fixes both halves;
+merging them would have meant picking one schema and orphaning the other's
+data. `/api/indicators/*` is unchanged and still served by
+`api/advanced_trading.py`, which is what `frontend/src/hooks/useApi.ts`
+(`indicatorsApi`) calls.
 """
 
 from __future__ import annotations
@@ -29,13 +52,27 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload
+
+# ── F4-01b: the plan gate must exist on the side that counts ─────────────────
+#
+# `SubscriptionGate` in React and `PLAN_FEATURES` in TypeScript are UI
+# affordances, not authorization: anyone with devtools can set the store's plan,
+# and nothing stops a direct call carrying a valid free-tier token. The routes
+# below depended on `get_current_user` alone, which checks *authentication* and
+# never *plan*, so the advertised gate existed on neither side.
+#
+# Same defect, and the same sentence, as the one already fixed in api/nocode.py.
+# Admin and superadmin bypass require_plan by design.
+# Advertised in frontend/src/lib/subscription.ts as: indicators -> professional
+from monetization.subscription import require_plan
 from api.db_store import db_get, db_set
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 UTC = timezone.utc
 
-router = APIRouter(prefix="/api/indicators", tags=["Custom Indicators"])
+router = APIRouter(prefix="/api/custom-indicators", tags=["Custom Indicators"])
 
 _INDICATORS_KEY = "custom_indicators:{uid}"
 
@@ -140,7 +177,7 @@ _BUILTIN_INDICATORS = [
 
 
 @router.get("", summary="List user's custom indicators")
-async def list_indicators(user: TokenPayload = Depends(get_current_user)) -> dict:
+async def list_indicators(user: TokenPayload = Depends(require_plan("professional"))) -> dict:
     indicators = _load_indicators(user.sub)
     return {"indicators": indicators, "total": len(indicators)}
 
@@ -148,7 +185,7 @@ async def list_indicators(user: TokenPayload = Depends(get_current_user)) -> dic
 @router.post("", summary="Create a custom indicator")
 async def create_indicator(
     body: IndicatorCreate,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     new_indicator = {
@@ -173,7 +210,9 @@ async def list_builtin_indicators() -> dict:
 
 
 @router.post("/calculate", summary="Calculate a built-in indicator on provided data")
-async def calculate_indicator(body: CalculateRequest, _user: TokenPayload = Depends(get_current_user)) -> dict:
+async def calculate_indicator(
+    body: CalculateRequest, _user: TokenPayload = Depends(require_plan("professional"))
+) -> dict:
     """Apply a built-in indicator to a data series and return the result."""
     try:
         from charting.indicators import SMA, EMA, WMA, RSI, MACD, BollingerBands, CCI, WilliamsR
@@ -218,7 +257,9 @@ async def calculate_indicator(body: CalculateRequest, _user: TokenPayload = Depe
 
 
 class PreviewRequest(BaseModel):
-    formula: str
+    # Bound the length so the formula parser's regexes can't be fed a huge string
+    # (defense-in-depth against ReDoS / polynomial backtracking on user input).
+    formula: str = Field(..., min_length=1, max_length=200)
     symbol: str = "XAUUSD"
     periods: int = Field(100, ge=10, le=500)
 
@@ -226,7 +267,7 @@ class PreviewRequest(BaseModel):
 @router.post("/preview", summary="Preview a custom indicator formula")
 async def preview_indicator(
     body: PreviewRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     """Evaluate a formula string against recent price data and return index/value pairs."""
     import math
@@ -257,13 +298,21 @@ async def preview_indicator(
         )
 
     # Evaluate formula — support SMA(close, N), EMA(close, N), RSI(close, N)
+    #
+    # The three patterns below are anchored (re.match, not re.search) and use a
+    # bounded {0,64} argument repeat rather than an unbounded `[^,]*`. Each
+    # branch is already guarded by a startswith on the same prefix, so anchoring
+    # matches at the only position that could ever hit — while removing the
+    # "retry at every offset" factor that makes an unbounded `[^,]*` followed by
+    # a literal quadratic on a long non-matching input. The max_length=200 on
+    # the field caps the damage; this removes the shape entirely.
     formula = body.formula.strip().upper()
     result: list[float] = []
     try:
         if formula.startswith("SMA("):
             import re
 
-            m = re.search(r"SMA\(.*?,\s*(\d+)\)", formula)
+            m = re.match(r"SMA\([^,]{0,64},\s*(\d{1,5})\)", formula)
             period = int(m.group(1)) if m else 20
             for i in range(len(closes)):
                 if i < period - 1:
@@ -273,7 +322,7 @@ async def preview_indicator(
         elif formula.startswith("EMA("):
             import re
 
-            m = re.search(r"EMA\(.*?,\s*(\d+)\)", formula)
+            m = re.match(r"EMA\([^,]{0,64},\s*(\d{1,5})\)", formula)
             period = int(m.group(1)) if m else 20
             k = 2 / (period + 1)
             ema = closes[0]
@@ -283,7 +332,7 @@ async def preview_indicator(
         elif formula.startswith("RSI("):
             import re
 
-            m = re.search(r"RSI\(.*?,\s*(\d+)\)", formula)
+            m = re.match(r"RSI\([^,]{0,64},\s*(\d{1,5})\)", formula)
             period = int(m.group(1)) if m else 14
             gains, losses = [], []
             for i in range(1, len(closes)):
@@ -309,7 +358,7 @@ async def preview_indicator(
 @router.get("/{indicator_id}", summary="Get a specific custom indicator")
 async def get_indicator(
     indicator_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     for ind in indicators:
@@ -322,7 +371,7 @@ async def get_indicator(
 async def replace_indicator(
     indicator_id: str,
     body: IndicatorCreate,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     for ind in indicators:
@@ -343,7 +392,7 @@ async def replace_indicator(
 async def update_indicator(
     indicator_id: str,
     body: IndicatorUpdate,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     for ind in indicators:
@@ -367,7 +416,7 @@ async def update_indicator(
 @router.delete("/{indicator_id}", summary="Delete a custom indicator")
 async def delete_indicator(
     indicator_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     indicators = _load_indicators(user.sub)
     updated = [i for i in indicators if i.get("indicator_id") != indicator_id]
@@ -381,7 +430,7 @@ async def delete_indicator(
 async def apply_indicator(
     indicator_id: str,
     body: dict,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     """
     Apply a saved custom indicator to a symbol/timeframe.
@@ -447,7 +496,7 @@ class TestIndicatorRequest(BaseModel):
 async def test_indicator(
     indicator_id: str,
     body: TestIndicatorRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     """
     Run the saved indicator against recent price data and return a pass/fail result
@@ -502,7 +551,7 @@ async def test_indicator(
         return {
             "indicator_id": indicator_id,
             "passed": False,
-            "error": str(exc),
+            "error": safe_error(exc),
             "sample_values": [],
         }
 
@@ -510,7 +559,7 @@ async def test_indicator(
 @router.post("/{indicator_id}/deploy", summary="Deploy a custom indicator to the live chart engine")
 async def deploy_indicator(
     indicator_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict:
     """
     Mark the indicator as deployed so the chart engine loads it automatically.

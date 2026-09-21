@@ -122,9 +122,10 @@ class ProductionConfigManager:
 
         logger.info("=" * 70)
         logger.info("DEVELOPMENT KEYS GENERATED (DO NOT USE IN PRODUCTION)")
-        logger.info("Encryption Key: %s", self._encryption_key.hex())
-        logger.info("Salt: %s", self._salt.hex())
-        logger.info("Set these in environment for persistence")
+        logger.info("To persist across restarts, add to .env:")
+        logger.info("  HOPEFX_ENCRYPTION_KEY=%s", self._encryption_key.hex())
+        logger.info("  HOPEFX_SALT=%s", self._salt.hex())
+        logger.info("WARNING: These keys are ephemeral — restarting regenerates them")
         logger.info("=" * 70)
 
     @property

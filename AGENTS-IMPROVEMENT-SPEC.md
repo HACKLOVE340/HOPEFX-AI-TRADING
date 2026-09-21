@@ -138,10 +138,12 @@ One of these is wrong. An agent reasoning about model quality will get
 contradictory information depending on which file it reads first.
 
 ### 5. `WORDMAP.json.example` exists but `WORDMAP.json` is gitignored with no
-   generation instructions
-The nuclear strategy system depends on `WORDMAP.json`. The example file exists
-but there is no `scripts/generate_wordmap.py` or documentation on how to
-produce the real file. A fresh environment will fail silently.
+   generation instructions — RESOLVED
+The nuclear strategy system depends on `WORDMAP.json`, which is gitignored.
+When this was written there was no documented way to produce it and a fresh
+environment failed silently. It is now documented in two places: `AGENTS.md`
+("Update the WORDMAP.json keyword scorer") and `CLAUDE.md`. The procedure is
+`cp WORDMAP.json.example WORDMAP.json`, so no generator script is needed.
 
 ---
 
@@ -201,13 +203,13 @@ Document:
 - PR review requirements
 - How to run the full CI check locally before pushing
 
-**2.3 Add `WORDMAP.json` generation instructions**
+**2.3 Add `WORDMAP.json` generation instructions** — DONE
 
-Add a section to `ARCHITECTURE.md` or `docs/` explaining:
-- What `WORDMAP.json` is (nuclear strategy semantic scorer)
-- How to generate it from `WORDMAP.json.example`
-- Or add `scripts/generate_wordmap.py` with a stub that creates a usable
-  development version
+Landed in `AGENTS.md` ("Update the WORDMAP.json keyword scorer") rather than in
+`ARCHITECTURE.md`, and summarised in `CLAUDE.md`. It covers what `WORDMAP.json`
+is (nuclear strategy semantic scorer) and how to produce it from
+`WORDMAP.json.example`. A copy is sufficient, so the generator script this item
+offered as an alternative was not added and is not required.
 
 **2.4 Add coverage enforcement to CI**
 

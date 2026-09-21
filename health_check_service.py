@@ -52,6 +52,8 @@ Mount in app.py:
 from __future__ import annotations
 
 import asyncio
+
+from execution.broker_call import call_broker
 import logging
 import os
 import shutil
@@ -61,6 +63,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +145,7 @@ async def _check_redis() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_database() -> ComponentStatus:
@@ -156,11 +159,18 @@ async def _check_database() -> ComponentStatus:
         if engine is None:
             return ComponentStatus(status="degraded", latency_ms=0.0, detail="DB engine not initialised")
 
-        async def _query():
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
+        connect_ctx = engine.connect()
+        if hasattr(connect_ctx, "__aenter__"):
+            async with connect_ctx as conn:
+                await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=_TIMEOUT_S)
+        else:
+            loop = asyncio.get_running_loop()
 
-        await asyncio.wait_for(_query(), timeout=_TIMEOUT_S)
+            def _query_sync() -> None:
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+
+            await asyncio.wait_for(loop.run_in_executor(None, _query_sync), timeout=_TIMEOUT_S)
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail="SELECT 1 OK")
     except TimeoutError:
@@ -168,7 +178,7 @@ async def _check_database() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_data_feed() -> ComponentStatus:
@@ -215,7 +225,7 @@ async def _check_data_feed() -> ComponentStatus:
         )
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_broker() -> ComponentStatus:
@@ -228,12 +238,13 @@ async def _check_broker() -> ComponentStatus:
         if broker is None:
             return ComponentStatus(status="degraded", latency_ms=0.0, detail="Broker not initialised")
 
-        def _get_info():
-            return broker.get_account_info()
-
-        loop = asyncio.get_running_loop()
+        # S12-04g: this ran `broker.get_account_info()` inside an executor, so
+        # against an async broker the future resolved to a *coroutine*, the
+        # balance read below came back None, and the check reported the broker
+        # healthy having read nothing. `call_broker` awaits a coroutine function
+        # and keeps the executor path for a sync one.
         info = await asyncio.wait_for(
-            loop.run_in_executor(None, _get_info),
+            call_broker(broker.get_account_info),
             timeout=_TIMEOUT_S,
         )
         latency = (time.monotonic() - t0) * 1000
@@ -248,7 +259,7 @@ async def _check_broker() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_event_bus() -> ComponentStatus:
@@ -268,7 +279,7 @@ async def _check_event_bus() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 async def _check_kill_switch() -> ComponentStatus:
@@ -307,13 +318,17 @@ async def _check_disk() -> ComponentStatus:
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail=detail)
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000
-        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=safe_error(exc))
 
 
 # ── Aggregation ───────────────────────────────────────────────────────────────
 
 # Checks that must pass for the service to be considered "ready"
 _CRITICAL_CHECKS = {"redis", "database", "data_feed"}
+
+# Most recent result from _run_all_checks(), for sync readers such as the admin
+# performance endpoint. None until the first health check runs.
+_last_health_result: dict[str, Any] | None = None
 
 
 async def _run_all_checks() -> dict[str, ComponentStatus]:
@@ -335,6 +350,26 @@ async def _run_all_checks() -> dict[str, ComponentStatus]:
             out[name] = ComponentStatus(status="error", latency_ms=0.0, detail=str(result)[:200])
         else:
             out[name] = result  # type: ignore[assignment]
+
+    # Cache the result for readers that cannot run the checks themselves.
+    # api/settings_new_endpoints.get_performance_metrics is a sync route and
+    # imported `_last_health_result` from here, which never existed — health was
+    # computed on demand and thrown away, so that endpoint's "components" block
+    # was always absent. Stored in the shape that consumer reads (name and
+    # critical are not on ComponentStatus itself).
+    global _last_health_result
+    _last_health_result = {
+        "checked_at": _now_iso(),
+        "components": [
+            {
+                "name": comp_name,
+                "status": comp.status,
+                "latency_ms": comp.latency_ms,
+                "critical": comp_name in _CRITICAL_CHECKS,
+            }
+            for comp_name, comp in out.items()
+        ],
+    }
     return out
 
 
@@ -387,7 +422,7 @@ async def invariants_health() -> dict[str, Any]:
         data = _inv_status()
     except Exception as exc:  # pragma: no cover - defensive
         logger.error("invariants health endpoint error: %s", exc)
-        raise HTTPException(status_code=503, detail={"ok": False, "error": str(exc)}) from exc
+        raise HTTPException(status_code=503, detail={"ok": False, "error": safe_error(exc)}) from exc
 
     if not data.get("engine_healthy"):
         raise HTTPException(status_code=503, detail=data)
@@ -453,7 +488,7 @@ def _ledger_snapshot() -> dict[str, Any]:
         }
     except Exception as exc:
         logger.debug("ledger snapshot unavailable: %s", exc)
-        return {"status": "unavailable", "reason": str(exc)[:200]}
+        return {"status": "unavailable", "reason": safe_error(exc)}
 
 
 @health_router.get(

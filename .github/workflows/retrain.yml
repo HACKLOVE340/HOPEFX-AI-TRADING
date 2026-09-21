@@ -74,17 +74,21 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
-          python-version: "3.11"
+          # Must match the Dockerfile interpreter (python:3.12-slim). Model
+          # artifacts are pickled here and loaded in production, so training on
+          # a different minor version risks a deserialisation mismatch on the
+          # very artifacts CI checksum-verifies. See HARDENING_BACKLOG S11-01.
+          python-version: "3.12"
 
       - name: Cache pip
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-retrain-${{ hashFiles('requirements-ci.txt') }}
@@ -147,24 +151,29 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')
 
+    # Training produces reviewable artifacts only. Promotion and repository
+    # updates happen through a reviewed pull request, never from a schedule.
     permissions:
-      contents: write   # needed to commit artefacts back
+      contents: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
-          python-version: "3.11"
+          # Must match the Dockerfile interpreter (python:3.12-slim). Model
+          # artifacts are pickled here and loaded in production, so training on
+          # a different minor version risks a deserialisation mismatch on the
+          # very artifacts CI checksum-verifies. See HARDENING_BACKLOG S11-01.
+          python-version: "3.12"
 
       - name: Cache pip
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-retrain-full-${{ hashFiles('requirements-ci.txt') }}
@@ -202,10 +211,17 @@ jobs:
       - name: Validate training artefacts (legacy check)
         run: python scripts/retrain_horizon5.py --verify-only
 
-      - name: Verify model integrity (ml/verify_model.py)
-        run: python -m ml.verify_model
-        env:
-          PYTHONPATH: .
+      # NOTE: "Verify model integrity (ml/verify_model.py)" was here and was
+      # REMOVED — it checks that advanced_oos.pkl's SHA-256 matches the
+      # ALREADY-COMMITTED entry in registry.json (an anti-tampering check for a
+      # model that is presumed unchanged). ml/train_advanced.py (the training
+      # script run above) unconditionally overwrites advanced_oos.pkl on disk
+      # but never touches registry.json itself — promotion to "active" is a
+      # separate, deliberate step, not automatic. So this check was guaranteed
+      # to fail on every single retrain (new file, stale registry checksum),
+      # which is exactly what happened every week — see issues #183/#185/#186.
+      # It still correctly runs in the smoke-test job above, where the model
+      # files are NOT retrained and should still match the committed registry.
 
       - name: Upload training artefacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -219,21 +235,32 @@ jobs:
             ml/saved_models/feature_importances.json
           retention-days: 90
 
-      - name: Commit updated model registry back to branch
+      # `git add <path> || true` reported success for feature_stats.json every
+      # run for the life of this workflow, because nothing wrote the file. The
+      # drift guard's only input was silently absent and
+      # InferenceEngine.drift_guard_active() was False in every deployment.
+      # Assert the artifacts exist before adding them, so a trainer that stops
+      # producing one fails the run instead of committing nothing.
+      - name: Verify training artifacts were produced
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add \
+          missing=0
+          for f in \
             ml/saved_models/registry.json \
             ml/saved_models/advanced_training_report.json \
             ml/saved_models/feature_stats.json \
-            ml/saved_models/feature_importances.json || true
-          if git diff --cached --quiet; then
-            echo "No model registry changes to commit."
-          else
-            git commit -m "chore(ml): automated weekly retrain $(date -u +'%Y-%m-%d')"
-            git push origin HEAD
-          fi
+            ml/saved_models/feature_importances.json
+          do
+            if [ ! -s "$f" ]; then
+              echo "::error::expected training artifact is missing or empty: $f"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Promotion handoff
+        run: |
+          echo "Training artifacts are available for reviewed promotion."
+          echo "No model or registry changes are committed automatically."
 
   # ────────────────────────────────────────────────────────────────────────────
   # Notify on failure

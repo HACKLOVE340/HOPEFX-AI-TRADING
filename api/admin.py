@@ -10,6 +10,7 @@ Admin endpoints for system control and monitoring.
 All endpoints require role >= 'admin'.
 """
 
+import asyncio
 import json
 import logging
 import os as _os
@@ -23,6 +24,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, require_role
+from api.error_details import safe_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
@@ -125,7 +127,11 @@ def _save_risk_settings(settings: dict[str, Any], changed_by: str = "system") ->
 
     try:
         _RISK_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+        # Trailing newline: this path is repo-tracked (config/risk_settings.json),
+        # so omitting it made every test run that exercised this fallback leave a
+        # one-line diff on a committed risk-config file — noise a contributor
+        # would have to notice and discard by hand, on a file that governs risk.
+        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
         return True
     except Exception as file_exc:
         logger.error("_save_risk_settings fallback failed: %s", file_exc)
@@ -284,10 +290,20 @@ async def get_logs(
     summary="Pause all automated trading",
 )
 async def pause_trading(user: TokenPayload = Depends(require_role("admin"))):
-    """Pause all trading. Requires: role >= 'admin'."""
-    if not app_state or not app_state.brain:
-        raise HTTPException(status_code=503, detail="Brain not available")
-    app_state.brain.pause()
+    """Pause all automated trading by activating the kill switch. Requires: role >= 'admin'.
+
+    Previously targeted app_state.brain, which is never set in the live startup
+    sequence (the registered component is `strategy_brain`, a different object) —
+    so this endpoint returned 503 unconditionally. It now uses the real kill
+    switch, which every trading pipeline respects (via the shared flag file/Redis).
+    """
+    try:
+        from kill_switch import KillSwitch
+
+        KillSwitch().activate(reason=f"Admin pause by {user.sub}")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("pause_trading: kill switch activate failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Trading pause unavailable") from exc
     log_activity(f"Trading paused by {user.sub}")
     return {"status": "paused"}
 
@@ -298,10 +314,23 @@ async def pause_trading(user: TokenPayload = Depends(require_role("admin"))):
     summary="Resume automated trading",
 )
 async def resume_trading(user: TokenPayload = Depends(require_role("admin"))):
-    """Resume trading. Requires: role >= 'admin'."""
-    if not app_state or not app_state.brain:
-        raise HTTPException(status_code=503, detail="Brain not available")
-    app_state.brain.resume()
+    """Resume automated trading by deactivating the kill switch. Requires: role >= 'admin'.
+
+    Deactivation requires HOPEFX_KILL_SWITCH_TOKEN to be configured (the kill
+    switch refuses to resume without it, by design).
+    """
+    try:
+        import os
+
+        from kill_switch import KillSwitch
+
+        KillSwitch().deactivate(token=os.environ.get("HOPEFX_KILL_SWITCH_TOKEN"))
+    except Exception as exc:
+        logger.error("resume_trading: kill switch deactivate failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Trading resume failed — verify HOPEFX_KILL_SWITCH_TOKEN is set.",
+        ) from exc
     log_activity(f"Trading resumed by {user.sub}")
     return {"status": "resumed"}
 
@@ -1281,23 +1310,80 @@ async def unban_user(
     return {"ok": True, "user_id": user_id, "status": "active"}
 
 
+def _lookup_user_email(user_id: str) -> str | None:
+    """Resolve a user's email from the SQL user row.
+
+    The `user:{id}` key-value namespace is an admin-flags overlay written only
+    by ban/suspend/unban; it has never carried an email. The `User` table is
+    the real record, and it is what auth/service.py and this file's own KYC
+    handler read.
+    """
+    try:
+        from core.app_state import app_state as _state
+        from database.user_models import User as _User
+
+        if not _state or not _state.db_session_factory:
+            return None
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
+            row = session.query(_User).filter_by(id=user_id).first()
+            email = getattr(row, "email", None) if row else None
+            return email.strip() if isinstance(email, str) and email.strip() else None
+    except Exception as exc:
+        logger.warning("user email lookup failed for %s: %s", user_id, exc)
+        return None
+
+
 @router.post("/users/{user_id}/reset-password", summary="Trigger password reset email")
 async def reset_user_password(
     user_id: str,
     user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
-    """Send a password reset email to the user."""
-    try:
-        from core.email_service import email_service
-        from api.db_store import db_get as _db_g4
+    """Trigger the standard password reset flow for a user.
 
-        u = _db_g4(f"user:{user_id}") or {}
-        email = u.get("email", "")
-        if email:
-            await email_service.send_password_reset(email)
+    This does not mint a token. It runs the same
+    ``auth/password_reset.send_password_reset_for_email`` path as the anonymous
+    ``POST /auth/forgot-password``, so there is one expiry policy, one salt and
+    one hashing choice, and the link goes to the user's registered address.
+
+    The token is deliberately absent from the response: an admin who could read
+    it could complete the reset and take the account. An admin causes a reset;
+    they do not perform one.
+
+    The previous implementation resolved the address from
+    ``db_get(f"user:{user_id}")``. Only ban/suspend/unban write that namespace,
+    and none of them store an email, so the lookup returned ``""`` for every
+    user — and the send it guarded was unreachable anyway, because
+    that module exports no such mail facade. The handler
+    answered ``{"ok": true, "message": "Password reset email queued"}``
+    regardless, so an admin helping a locked-out user saw success while the
+    user got nothing.
+
+    It also imported a mail facade that module does not define, so even a
+    correct address would not have produced a send.
+    """
+    import asyncio as _aio
+
+    email = await _aio.to_thread(_lookup_user_email, user_id)
+    if not email:
+        return {
+            "ok": False,
+            "user_id": user_id,
+            "error": "User not found, or has no email address on file",
+        }
+
+    try:
+        from auth.password_reset import send_password_reset_for_email
+
+        issued = await _aio.to_thread(send_password_reset_for_email, email)
     except Exception as exc:
-        logger.warning("reset_user_password email: %s", exc)
-    return {"ok": True, "user_id": user_id, "message": "Password reset email queued"}
+        logger.warning("reset_user_password for %s: %s", user_id, exc)
+        return {"ok": False, "user_id": user_id, "error": safe_error(exc)}
+
+    if not issued:
+        return {"ok": False, "user_id": user_id, "error": "No account is registered for that address"}
+
+    log_activity(f"Password reset triggered for user {user_id} by admin {user.sub}")
+    return {"ok": True, "user_id": user_id, "message": "Password reset email sent to the user's registered address"}
 
 
 @router.get("/audit-log", summary="Paginated audit log")
@@ -1308,11 +1394,53 @@ async def get_audit_log(
     event_type: str | None = None,
     user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
-    """Return paginated audit log entries."""
-    from api.db_store import db_keys_prefix, db_get as _db_g5
+    """Return paginated audit log entries.
 
+    Reads the ``audit_log`` table first — the append-only, hash-chained record
+    ``AuditLogEntry`` writes, whose columns are annotated in database/models.py
+    as "Fields required by the superadmin audit/security APIs":
+    ``timestamp``, ``event_type``, ``user_id``, ``detail``, ``ip_address``.
+
+    This endpoint never queried it. It read ``db_store`` keys under
+    ``audit_event:`` — a prefix nothing in the codebase writes, so that branch
+    has always returned nothing — and then fell back to the in-memory
+    ``activity_log``, whose entries are ``{"time", "message"}`` and carry none
+    of the fields the page displays. The deployed Audit Log therefore reported
+    "16 events total" above sixteen rows of ``—``, ``UNKNOWN``, ``—``: the count
+    was right, every column was empty, and no actual audit record had ever been
+    shown.
+
+    Every source is now normalised to one shape, so a row either has a value or
+    the record genuinely lacks it.
+    """
     events: list[dict] = []
+
+    # ── Source 1: the real audit table ───────────────────────────────────────
     try:
+        from database.connection import SessionLocal
+        from database.models import AuditLogEntry
+
+        db = SessionLocal()
+        try:
+            q = db.query(AuditLogEntry)
+            if user_id:
+                q = q.filter(AuditLogEntry.user_id == user_id)
+            if event_type:
+                q = q.filter(AuditLogEntry.event_type == event_type)
+            total_rows = q.count()
+            rows = q.order_by(AuditLogEntry.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+            events = [_normalise_audit_row(r) for r in rows]
+        finally:
+            db.close()
+        if events or total_rows:
+            return {"events": events, "total": total_rows, "page": page, "limit": limit}
+    except Exception as exc:
+        logger.debug("get_audit_log: audit_log table unavailable: %s", exc)
+
+    # ── Source 2: db_store audit_event:* keys ────────────────────────────────
+    try:
+        from api.db_store import db_get as _db_g5, db_keys_prefix
+
         keys = sorted(db_keys_prefix("audit_event:"), reverse=True)
         for key in keys[: limit * 10]:  # over-fetch then filter
             ev = _db_g5(key)
@@ -1321,21 +1449,59 @@ async def get_audit_log(
                     continue
                 if event_type and ev.get("event_type") != event_type:
                     continue
-                events.append(ev)
+                events.append(_normalise_audit_dict(ev))
     except Exception as exc:
         logger.debug("get_audit_log: %s", exc)
 
-    # Fallback to activity_log
+    # ── Source 3: the in-memory activity log ─────────────────────────────────
     if not events:
-        events = list(activity_log)
+        raw = [_normalise_audit_dict(e) for e in activity_log]
         if user_id:
-            events = [e for e in events if e.get("user_id") == user_id]
+            raw = [e for e in raw if e.get("user_id") == user_id]
         if event_type:
-            events = [e for e in events if e.get("event_type") == event_type]
+            raw = [e for e in raw if e.get("event_type") == event_type]
+        events = raw
 
     total = len(events)
     offset = (page - 1) * limit
     return {"events": events[offset : offset + limit], "total": total, "page": page, "limit": limit}
+
+
+def _normalise_audit_row(row) -> dict:
+    """One ``AuditLogEntry`` → the shape the Audit Log page renders."""
+    ts = getattr(row, "timestamp", None) or getattr(row, "created_at", None)
+    return {
+        "id": str(getattr(row, "id", "") or ""),
+        "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else None),
+        "user_id": getattr(row, "user_id", None) or getattr(row, "actor", None),
+        "event_type": getattr(row, "event_type", None) or getattr(row, "action", None),
+        "detail": getattr(row, "detail", None) or getattr(row, "data_json", None),
+        "ip_address": getattr(row, "ip_address", None),
+        "level": getattr(row, "level", None),
+        "category": getattr(row, "category", None),
+    }
+
+
+def _normalise_audit_dict(ev: dict) -> dict:
+    """Any legacy record → the same shape.
+
+    ``activity_log`` entries are ``{"time": <float>, "message": <str>}``. Passed
+    through untouched they render as an entirely blank row; mapped, they are at
+    least a timestamped system message.
+    """
+    ts = ev.get("timestamp") or ev.get("time") or ev.get("created_at")
+    if isinstance(ts, int | float):
+        ts = _import_datetime().fromtimestamp(ts, _import_utc()).isoformat()
+    return {
+        "id": str(ev.get("id", "") or ""),
+        "timestamp": ts,
+        "user_id": ev.get("user_id") or ev.get("actor"),
+        "event_type": ev.get("event_type") or ev.get("action") or ("system" if ev.get("message") else None),
+        "detail": ev.get("detail") or ev.get("message") or ev.get("data_json"),
+        "ip_address": ev.get("ip_address") or ev.get("ip"),
+        "level": ev.get("level"),
+        "category": ev.get("category"),
+    }
 
 
 # ── System backup trigger ─────────────────────────────────────────────────────
@@ -1375,7 +1541,7 @@ async def trigger_backup(
         snapshot = {k: _db_g6(k) for k in keys}
         dst = _P2(__file__).parent.parent / "backups" / backup_id
         dst.mkdir(parents=True, exist_ok=True)
-        (dst / "db_snapshot.json").write_text(_json.dumps(snapshot, default=str))
+        await asyncio.to_thread((dst / "db_snapshot.json").write_text, _json.dumps(snapshot, default=str))
         backed_up.append("db_store")
     except Exception as exc:
         logger.warning("backup db_store: %s", exc)
@@ -1492,7 +1658,9 @@ def set_maintenance(
     try:
         import redis as _redis
 
-        rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=0.5, socket_timeout=1.5)
+        rc = _redis.Redis.from_url(
+            _os.environ.get("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=0.5, socket_timeout=1.5
+        )
         import json as _json
 
         rc.set("platform:maintenance", _json.dumps(state))
@@ -1532,7 +1700,9 @@ def broadcast_message(
     try:
         import redis as _redis
 
-        rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=0.5, socket_timeout=1.5)
+        rc = _redis.Redis.from_url(
+            _os.environ.get("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=0.5, socket_timeout=1.5
+        )
         rc.lpush("platform:broadcasts", _json.dumps(msg))
         rc.ltrim("platform:broadcasts", 0, 49)
         rc.publish("platform:broadcast", _json.dumps(msg))
@@ -1551,18 +1721,46 @@ async def test_smtp(
     payload: dict,
     user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
-    """Send a test email to the admin's address to verify SMTP settings."""
-    try:
-        from core.email_service import get_email_service
+    """Send a test email to the admin's address to verify SMTP settings.
 
-        svc = get_email_service()
-        recipient = payload.get("email") or user.sub
-        await svc.send_email(
-            to=recipient,
-            subject="HOPEFX SMTP Test",
-            body="This is a test email from the HOPEFX admin panel. SMTP is configured correctly.",
+    This previously imported a factory that `core.email_service` does not
+    define, so it raised ImportError into its own handler and reported
+    `ok: false` no matter how SMTP was configured — the panel could never
+    confirm a working setup.
+    `_send` is the real sender, and it returns a bool rather than raising, so
+    a refused delivery is reported as a failure instead of a silent success.
+    """
+    recipient = payload.get("email") or user.sub
+    if not recipient:
+        return {"ok": False, "error": "No recipient address"}
+
+    import asyncio as _aio
+
+    body = "This is a test email from the HOPEFX admin panel. SMTP is configured correctly."
+    try:
+        from core.email_service import _send, active_transport
+
+        transport = active_transport()
+        if transport is None:
+            # _send would answer True here — it logs the message rather than
+            # sending it, which is right for a signup email in dev and useless
+            # for the one endpoint whose job is to detect this exact state.
+            return {
+                "ok": False,
+                "error": "No mail transport is configured; set SENDGRID_API_KEY or the SMTP_* variables",
+            }
+
+        delivered = await _aio.to_thread(
+            _send,
+            recipient,
+            "HOPEFX SMTP Test",
+            f"<p>{body}</p>",
+            body,
         )
-        return {"ok": True, "sent_to": recipient}
     except Exception as exc:
         logger.warning("SMTP test failed: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": safe_error(exc)}
+
+    if not delivered:
+        return {"ok": False, "transport": transport, "error": "The mail provider refused the message"}
+    return {"ok": True, "sent_to": recipient, "transport": transport}
