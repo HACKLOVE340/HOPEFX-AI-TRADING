@@ -4,8 +4,8 @@ React Native (Expo) mobile trading app for the HopeFX AI Trading platform.
 
 ## Stack
 
-- **Expo SDK 51** — managed workflow
-- **React Navigation 6** — stack + bottom tabs
+- **Expo SDK 55** — managed workflow
+- **React Navigation 7** — stack + bottom tabs
 - **Zustand 4** — auth + trading state
 - **Axios** — HTTP client with JWT refresh
 - **expo-notifications** — push notifications (iOS + Android)
