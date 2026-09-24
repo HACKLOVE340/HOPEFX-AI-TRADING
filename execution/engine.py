@@ -931,7 +931,16 @@ class ExecutionEngine:
             # (it becomes resting until filled or cancelled)
             self._stp.add_resting_order(stp_order)
         except (ImportError, AttributeError, TypeError, RuntimeError) as exc:
-            logger.debug("Self-trade prevention check failed (non-fatal): %s", exc)
+            # A14: a market-abuse control being off must leave a trace production
+            # emits. DEBUG is not emitted in production.
+            logger.error(
+                "[SELF_TRADE_PREVENTION_UNAVAILABLE] STP check skipped for order %s (%s %s %s): %s",
+                request.request_id,
+                request.side,
+                request.quantity,
+                request.symbol,
+                exc,
+            )
         return None
 
     async def _check_margin(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
@@ -964,12 +973,17 @@ class ExecutionEngine:
             price = float(request.price or 0)
             notional = price * float(request.quantity) if price > 0 else 0.0
 
-            # Skip margin check when notional is unknown (e.g. market orders
-            # submitted without an explicit price).  We cannot compute the
-            # margin impact of an order we cannot price, so blocking would be a
-            # false positive.
+            # A14 (owner decision): an order we cannot price has an unknown
+            # margin impact — refuse it rather than skip the gate. The usual
+            # cause is price enrichment failing (no data layer, no tick feed).
             if notional <= 0:
-                return None
+                msg = (
+                    f"[MARGIN_CHECK_FAILED] Order has no usable price (price={request.price!r}) — "
+                    "margin impact not computable, blocking order (fail-closed)"
+                )
+                logger.error(msg)
+                await self._inc_blocks()
+                return self._blocked_report(request, msg, t0)
 
             # After this order, projected margin used increases by notional
             projected_used = margin_used + notional
@@ -986,8 +1000,9 @@ class ExecutionEngine:
                     logger.warning(msg)
                     await self._inc_blocks()
                     return self._blocked_report(request, msg, t0)
-        except (AttributeError, TypeError) as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             # Data-shape errors from a malformed account object — block (fail-closed).
+            # ValueError: float() on a non-numeric string (A14).
             msg = f"[MARGIN_CHECK_FAILED] Malformed account data: {exc} — blocking order (fail-closed)"
             logger.error(msg)
             await self._inc_blocks()
@@ -1014,7 +1029,14 @@ class ExecutionEngine:
             return None
         price = float(request.price or 0)
         if price <= 0:
-            return None
+            # A14 (owner decision): leverage of an unpriced order is unknown — refuse.
+            msg = (
+                f"[LEVERAGE_CHECK_FAILED] Order has no usable price (price={request.price!r}) — "
+                "leverage not computable, blocking order (fail-closed)"
+            )
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
         notional = price * float(request.quantity)
         try:
             account = await call_broker(self._broker.get_account_info)
@@ -1041,7 +1063,7 @@ class ExecutionEngine:
                 logger.warning(msg)
                 await self._inc_blocks()
                 return self._blocked_report(request, msg, t0)
-        except (AttributeError, TypeError) as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             msg = f"[LEVERAGE_CHECK_FAILED] Malformed account data: {exc} — blocking order (fail-closed)"
             logger.error(msg)
             await self._inc_blocks()

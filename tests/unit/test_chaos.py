@@ -344,6 +344,12 @@ class TestExecutionEngineBrokerFaultInjection:
         with (
             patch.object(engine, "_submit_to_broker", AsyncMock(return_value=mock_report)),
             patch.object(engine, "_run_pre_trade_gate", AsyncMock(return_value=None)),
+            # A14: an unpriced order is now refused by margin/leverage; this
+            # test's subject is post-fill side-effects, so those gates are
+            # stubbed like the pre-trade gate (they are covered in
+            # test_execution_engine_gates.py).
+            patch.object(engine, "_check_margin", AsyncMock(return_value=None)),
+            patch.object(engine, "_check_leverage", AsyncMock(return_value=None)),
             patch.object(engine, "_persist_to_redis", AsyncMock(side_effect=RuntimeError("redis down"))),
             patch.object(engine, "_record_tca", AsyncMock(side_effect=RuntimeError("tca down"))),
             patch.object(engine, "_notify_callbacks", AsyncMock(return_value=None)),

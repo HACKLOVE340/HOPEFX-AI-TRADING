@@ -191,21 +191,15 @@ class TestMarginGate:
         assert "Malformed account data" in report.message
 
     @pytest.mark.asyncio
-    async def test_a_non_numeric_string_raises_instead_of_blocking(self) -> None:
-        """The gap in the fail-closed handling, recorded as it is.
+    async def test_a_non_numeric_string_blocks_rather_than_raising(self) -> None:
+        """A non-numeric account field is a refusal (owner decision A14).
 
-        The docstring says "any unexpected exception from the broker API blocks
-        the trade rather than allowing it through". The two handlers cover
-        `(AttributeError, TypeError)` and `(RuntimeError, OSError)`.
-        `float("not a number")` raises `ValueError`, which is neither — and a
-        non-numeric string is exactly what a malformed JSON account payload
-        yields, so it is the most likely shape of the error the malformed-data
-        branch was written for.
-
-        Whether `execute()` compensates is **not** established here: in every
-        configuration tried, an earlier data-layer gate blocked first and the
-        margin check was never reached, so the question could not be answered
-        from outside. See MASTER_OUTSTANDING A14.
+        This test used to be `test_a_non_numeric_string_raises_instead_of_blocking`
+        and asserted that `ValueError` escaped the gate: the handlers covered
+        `(AttributeError, TypeError)` and `(RuntimeError, OSError)` while the
+        docstring promised any unexpected error blocks. `float("not a number")`
+        — the shape a malformed JSON payload takes — escaped both. The owner
+        chose fail-closed, so the test now asserts the block.
         """
 
         class _Garbage:
@@ -215,8 +209,11 @@ class TestMarginGate:
 
         engine = _engine(_Broker(_Garbage()))
 
-        with pytest.raises(ValueError, match="could not convert string to float"):
-            await engine._check_margin(_request(), time.monotonic())
+        report = await engine._check_margin(_request(), time.monotonic())
+
+        assert report is not None
+        assert report.status is ExecutionStatus.BLOCKED
+        assert "Malformed account data" in report.message
 
     @pytest.mark.asyncio
     async def test_with_no_broker_there_is_nothing_to_check(self) -> None:
@@ -231,33 +228,33 @@ class TestMarginGate:
             assert engine._blocks == before + 1
 
 
-class TestAnUnpricedOrderSkipsTheMarginGate:
-    """`if notional <= 0: return None` — and notional is `price * quantity`.
+class TestAnUnpricedOrderIsRefusedByTheMarginGate:
+    """An order whose notional cannot be computed is refused (owner decision A14).
 
-    A market order whose price could not be enriched has `price is None`, so
-    notional is 0 and the margin check returns without looking at the account.
-    The comment justifies it — the margin impact of an order you cannot price is
-    not computable — but the condition that produces it is the price feed being
-    unavailable, which is not obviously the moment to stop checking margin.
-
-    Recorded rather than changed: see MASTER_OUTSTANDING A14.
+    This class used to be `TestAnUnpricedOrderSkipsTheMarginGate` and asserted
+    `if notional <= 0: return None` — a market order whose price enrichment had
+    failed was let through without its margin impact being checked. The
+    condition producing it is the price feed being unavailable, which is not
+    the moment to stop checking margin. The gate now fails closed.
     """
 
     @pytest.mark.asyncio
-    async def test_an_unpriced_market_order_is_not_margin_checked(self) -> None:
-        asked: list[int] = []
-
-        class _Counting(_Broker):
-            async def get_account_info(self):
-                asked.append(1)
-                return _Account(margin_available=0.0, margin_used=1_000_000.0)
-
-        engine = _engine(_Counting())
+    async def test_an_unpriced_market_order_is_refused(self) -> None:
+        engine = _engine(_Broker(_Account(margin_available=0.0, margin_used=1_000_000.0)))
 
         report = await engine._check_margin(_request(price=None), time.monotonic())
 
-        assert report is None, "an unpriced order was blocked — the guard changed; update A14"
-        assert asked == [1], "the account was still fetched, then the result discarded"
+        assert report is not None, "an unpriced order passed the margin gate"
+        assert report.status is ExecutionStatus.BLOCKED
+        assert "MARGIN_CHECK_FAILED" in report.message
+        assert "price" in report.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_an_unpriced_order_is_refused_even_with_ample_margin(self) -> None:
+        engine = _engine(_Broker(_Account()))
+        report = await engine._check_margin(_request(price=None), time.monotonic())
+        assert report is not None
+        assert report.status is ExecutionStatus.BLOCKED
 
     @pytest.mark.asyncio
     async def test_the_same_order_with_a_price_is_blocked(self) -> None:
@@ -386,10 +383,28 @@ class TestLeverageGate:
         assert "Broker unreachable" in report.message
 
     @pytest.mark.asyncio
-    async def test_an_unpriced_order_skips_the_leverage_gate_too(self) -> None:
-        """Same shape as the margin gate — see A14."""
+    async def test_an_unpriced_order_is_refused_by_the_leverage_gate(self) -> None:
+        """Used to be `test_an_unpriced_order_skips_the_leverage_gate_too`, which
+        asserted `None` (let through). Owner decision A14: fail closed."""
         engine = _engine(_Broker(_Account(equity=1.0)))
-        assert await engine._check_leverage(_request(price=None), time.monotonic()) is None
+        report = await engine._check_leverage(_request(price=None), time.monotonic())
+        assert report is not None
+        assert report.status is ExecutionStatus.BLOCKED
+        assert "LEVERAGE_CHECK_FAILED" in report.message
+
+    @pytest.mark.asyncio
+    async def test_a_non_numeric_equity_blocks_rather_than_raising(self) -> None:
+        """`float("not a number")` raises `ValueError`, which escaped the
+        `(AttributeError, TypeError)` handler before A14."""
+
+        class _Garbage:
+            equity = "not a number"
+            balance = "not a number"
+
+        report = await _engine(_Broker(_Garbage()))._check_leverage(_request(), time.monotonic())
+        assert report is not None
+        assert report.status is ExecutionStatus.BLOCKED
+        assert "Malformed account data" in report.message
 
     @pytest.mark.asyncio
     async def test_with_no_broker_there_is_nothing_to_check(self) -> None:
@@ -417,11 +432,24 @@ class TestSelfTradePrevention:
 
         assert reason is None or "SELF_TRADE_PREVENTION" in reason
 
-    def test_a_broken_stp_module_does_not_block_execution(self, monkeypatch) -> None:
-        """Documented as non-fatal. Recorded so the choice stays visible: when
-        STP is unavailable the control is off and the only trace is a DEBUG
-        line, which production does not emit. See A14."""
+    def test_a_broken_stp_module_is_logged_at_error_naming_the_order(self, monkeypatch, caplog) -> None:
+        """When STP is unavailable the control is off for this order; that must
+        leave a trace production emits (owner decision A14).
+
+        This used to be `test_a_broken_stp_module_does_not_block_execution`, and
+        only asserted the fallthrough — the sole trace was a DEBUG line, which
+        production does not emit. It now asserts an ERROR record naming the
+        order whose self-trade check was skipped.
+        """
+        import logging
         import sys
 
         monkeypatch.setitem(sys.modules, "risk.self_trade_prevention", None)
-        assert _engine(None)._check_self_trade(_request()) is None
+        request = _request()
+        with caplog.at_level(logging.ERROR, logger="execution.engine"):
+            _engine(None)._check_self_trade(request)
+
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR and "SELF_TRADE" in r.getMessage()]
+        assert errors, "STP unavailability left no ERROR record"
+        assert request.request_id in errors[0].getMessage()
+        assert "XAUUSD" in errors[0].getMessage()
