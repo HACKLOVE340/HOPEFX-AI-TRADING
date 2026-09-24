@@ -51,15 +51,11 @@ def migrated_engine(tmp_path):
     engine.dispose()
 
 
-_next_id = iter(range(1, 10_000))
-
-
 def _row(**overrides):
-    # `outbox_events.id` does not autoincrement on a migrated SQLite database
-    # (a separate, pre-existing gap — `r1s2t3u4v5w6` covers other bigint PKs
-    # but not this table); assign an id explicitly rather than rely on it.
+    # `outbox_events.id` autoincrements on a migrated SQLite database as of
+    # migration `b7c8d9e0f1g2` — no explicit id needed, matching how the
+    # production relay (`core/outbox.py::write_outbox_event`) inserts a row.
     defaults = {
-        "id": next(_next_id),
         "event_type": "KILL_SWITCH",
         "channel": "hopefx:breach",
         "payload": json.dumps({"reason": "drawdown exceeded"}),
