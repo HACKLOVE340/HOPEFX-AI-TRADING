@@ -340,6 +340,8 @@ class TestExecutionEngineBrokerFaultInjection:
         mock_report.metadata = {"realised_pnl": 0.0}
         mock_report.request_id = "test-req-001"
         mock_report.status = ExecutionStatus.FILLED
+        mock_report.filled_quantity = 0.1
+        mock_report.average_price = 2000.0
 
         with (
             patch.object(engine, "_submit_to_broker", AsyncMock(return_value=mock_report)),
