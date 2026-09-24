@@ -846,11 +846,19 @@ defect had to be found twice.
 > `generate_signal`, so there is no look-ahead. The mean-reversion and RSI-50
 > exits now fire in backtests. `tests/unit/test_reversion_exits_now_fire.py` was
 > red on the pre-fix adapter and green after. **Every earlier backtest baseline
-> for these two strategies is stale.** **Not done:** the live and production path
-> still never writes `.position`.
-> `tests/unit/test_reversion_exits_are_never_reached.py::TestNothingSetsPositionInProduction`
-> still pins this, and will fail when a live caller is wired. The text below
-> describes the state before the fix.
+> for these two strategies is stale.** **Live: not wired, because the live path
+> cannot reach an exit (traced by execution, 2026-09-24).** Only
+> `core/startup_factories.py::init_strategy_brain` builds these strategies live,
+> and it builds `RSIStrategy` only; `MeanReversionStrategy` is never built live.
+> Three facts make a live `.position` inert. Nothing ever `.start()`s the
+> strategies, so `StrategyBrain.analyze_joint` skips them as not RUNNING. The
+> dict `generate_signal` path it uses has no exit branch. And `analyze()` carries
+> no price, so `on_bar` discards any signal. **Live strategy signals are
+> therefore off entirely, entries included.** All three facts are pinned by
+> `TestTheLivePathCannotReachAnExitEvenWithAPosition`. **Owner decision needed:**
+> whether to switch on live strategy signals at all. That turns on entries from
+> four strategies that have never produced one — a much larger change than
+> adding exits. The text below describes the state before the fix.
 
 `strategies/mean_reversion.py` and `strategies/rsi_strategy.py` both carry exit
 branches gated on `self.position == "LONG"` / `"SHORT"`. Both classes declare
