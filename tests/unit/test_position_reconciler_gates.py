@@ -389,56 +389,97 @@ class _HaltingRM:
 
 
 class TestGetPrice:
+    """`_get_price` reads the platform's own feed via `data_layer.orchestrator`
+    — the canonical market-data surface (CLAUDE.md "Canonical vs. legacy
+    directories") — and never falls back to a third-party feed such as
+    yfinance. See MASTER_OUTSTANDING A10.
+
+    This class previously stubbed `sys.modules["yfinance"]` and asserted the
+    reconciler priced XAUUSD from Yahoo Finance — the wrong feed, per A10 —
+    and that a missing price surfaced only via a `logger.debug` call that is
+    off in production. It now asserts the orchestrator is used and that a
+    missing price is refused loudly (ERROR), not silently.
+    """
+
     @pytest.mark.asyncio
-    async def test_an_unreachable_feed_yields_no_price_rather_than_raising(self, monkeypatch) -> None:
+    async def test_an_unreachable_feed_yields_no_price_rather_than_raising(self, monkeypatch, caplog) -> None:
         """`_reconcile_once` does `if price is None: continue`, so this
         returning None skips the position entirely — no P&L update, no drift
-        check, no invariant. See MASTER_OUTSTANDING A10."""
-        broken = types.ModuleType("yfinance")
+        check, no invariant. That is still true; what must not happen is the
+        caller mistaking the None for "market closed" rather than "feed
+        unreachable" — hence the ERROR log."""
+        broken = types.ModuleType("data_layer.orchestrator")
 
-        def _ticker(_symbol):
-            raise RuntimeError("network unreachable")
+        class _BrokenOrchestrator:
+            def get_latest_tick(self, symbol):
+                raise RuntimeError("network unreachable")
 
-        broken.Ticker = _ticker
-        monkeypatch.setitem(sys.modules, "yfinance", broken)
+        broken.orchestrator = _BrokenOrchestrator()
+        monkeypatch.setitem(sys.modules, "data_layer.orchestrator", broken)
 
-        assert await _reconciler()._get_price("XAUUSD") is None
+        with caplog.at_level(logging.ERROR):
+            price = await _reconciler()._get_price("XAUUSD")
 
-    @pytest.mark.asyncio
-    async def test_an_empty_history_yields_no_price(self, monkeypatch) -> None:
-        import pandas as pd
-
-        stub = types.ModuleType("yfinance")
-
-        class _T:
-            def __init__(self, _symbol):
-                pass
-
-            def history(self, **_kwargs):
-                return pd.DataFrame()
-
-        stub.Ticker = _T
-        monkeypatch.setitem(sys.modules, "yfinance", stub)
-
-        assert await _reconciler()._get_price("XAUUSD") is None
+        assert price is None
+        assert any("XAUUSD" in r.message and r.levelno == logging.ERROR for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_the_last_close_is_returned(self, monkeypatch) -> None:
-        import pandas as pd
+    async def test_no_tick_yields_no_price_and_is_refused_loudly(self, monkeypatch, caplog) -> None:
+        stub = types.ModuleType("data_layer.orchestrator")
 
-        stub = types.ModuleType("yfinance")
+        class _EmptyOrchestrator:
+            def get_latest_tick(self, symbol):
+                return None
 
-        class _T:
-            def __init__(self, _symbol):
-                pass
+        stub.orchestrator = _EmptyOrchestrator()
+        monkeypatch.setitem(sys.modules, "data_layer.orchestrator", stub)
 
-            def history(self, **_kwargs):
-                return pd.DataFrame({"Close": [1900.0, 1925.5, 1950.25]})
+        with caplog.at_level(logging.ERROR):
+            price = await _reconciler()._get_price("XAUUSD")
 
-        stub.Ticker = _T
-        monkeypatch.setitem(sys.modules, "yfinance", stub)
+        assert price is None
+        assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_the_orchestrator_tick_mid_is_returned(self, monkeypatch) -> None:
+        stub = types.ModuleType("data_layer.orchestrator")
+
+        class _Tick:
+            mid = 1950.25
+
+        class _LiveOrchestrator:
+            def get_latest_tick(self, symbol):
+                assert symbol == "XAUUSD"
+                return _Tick()
+
+        stub.orchestrator = _LiveOrchestrator()
+        monkeypatch.setitem(sys.modules, "data_layer.orchestrator", stub)
 
         assert await _reconciler()._get_price("XAUUSD") == pytest.approx(1950.25, abs=0.01)
+
+    @pytest.mark.asyncio
+    async def test_never_reaches_yfinance(self, monkeypatch) -> None:
+        """Regression for A10: the reconciler must not fall back to yfinance
+        even if it is importable — the owner decision was orchestrator-or-refuse,
+        not orchestrator-then-yfinance."""
+        stub = types.ModuleType("data_layer.orchestrator")
+
+        class _EmptyOrchestrator:
+            def get_latest_tick(self, symbol):
+                return None
+
+        stub.orchestrator = _EmptyOrchestrator()
+        monkeypatch.setitem(sys.modules, "data_layer.orchestrator", stub)
+
+        poisoned_yf = types.ModuleType("yfinance")
+
+        def _ticker(_symbol):
+            raise AssertionError("yfinance must never be consulted by the reconciler (A10)")
+
+        poisoned_yf.Ticker = _ticker
+        monkeypatch.setitem(sys.modules, "yfinance", poisoned_yf)
+
+        assert await _reconciler()._get_price("XAUUSD") is None
 
 
 class TestStats:

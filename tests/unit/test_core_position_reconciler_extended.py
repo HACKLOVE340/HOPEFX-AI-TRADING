@@ -326,22 +326,25 @@ async def test_reconcile_once_triggers_drift_halt():
     mock_halt.assert_called_once()
 
 
-# ── _get_price — uses yfinance internally ────────────────────────────────────
+# ── _get_price — reads data_layer.orchestrator, the canonical feed ──────────
+#
+# Previously this section imported `yfinance` and asserted the reconciler
+# priced positions off Yahoo Finance — the wrong feed, per MASTER_OUTSTANDING
+# A10. It now asserts the orchestrator is used and returns float-or-None.
 
 
 @pytest.mark.asyncio
 async def test_get_price_returns_float_or_none():
     r = _make_reconciler()
-    # yfinance may or may not return data in CI — just verify no crash
-    price = await r._get_price("EURUSD=X")
+    with patch("data_layer.orchestrator.orchestrator.get_latest_tick", return_value=None):
+        price = await r._get_price("EURUSD")
     assert price is None or isinstance(price, float)
 
 
 @pytest.mark.asyncio
-async def test_get_price_yfinance_exception():
-    pytest.importorskip("yfinance", reason="yfinance not installed")
+async def test_get_price_orchestrator_exception():
     r = _make_reconciler()
-    with patch("yfinance.Ticker", side_effect=RuntimeError("yf error")):
+    with patch("data_layer.orchestrator.orchestrator.get_latest_tick", side_effect=RuntimeError("feed error")):
         price = await r._get_price("XAUUSD")
     assert price is None
 

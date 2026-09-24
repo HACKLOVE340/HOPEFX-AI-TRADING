@@ -409,17 +409,47 @@ class PositionReconciler:
             logger.warning("Could not halt risk manager: %s", rm_exc)
 
     async def _get_price(self, symbol: str) -> float | None:
-        """Fetch latest price. Uses yfinance with a short timeout."""
-        try:
-            import yfinance as yf
+        """Fetch the latest price from the platform's own market-data feed.
 
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="1d", interval="1m")
-            if not hist.empty:
-                return float(hist["Close"].iloc[-1])
-        except Exception as _exc:
-            logger.debug("Suppressed exception: %s", _exc)
-        return None
+        Reads `data_layer.orchestrator` — the canonical public surface for
+        market data (see CLAUDE.md "Canonical vs. legacy directories") —
+        rather than a third-party feed. `data_layer.orchestrator.orchestrator`
+        is the module-level singleton the rest of the codebase reads.
+
+        Previously this pulled `XAUUSD` from yfinance, which does not quote
+        that symbol (its gold tickers are `GC=F` / `XAUUSD=X`) and failed
+        silently at `logger.debug`. See MASTER_OUTSTANDING A10. Do not add a
+        yfinance ticker for XAUUSD here or anywhere else — CLAUDE.md explains
+        why (Yahoo delisted XAUUSD spot; a previous hand-maintained copy
+        quietly served delisted `GC=F` futures as spot).
+
+        A `None` return means "refuse": the caller (`_reconcile_once`) skips
+        this position for the cycle rather than reconciling against a
+        fabricated price, and that refusal is now logged at ERROR — loud,
+        not swallowed — so a reconciler that cannot price a position leaves
+        a trace instead of a quietly healthy-looking cycle counter.
+        """
+        try:
+            from data_layer.orchestrator import orchestrator
+
+            tick = orchestrator.get_latest_tick(symbol)
+        except Exception as exc:
+            logger.error(
+                "RECONCILE_PRICE_UNAVAILABLE: data_layer.orchestrator raised fetching %s: %s",
+                symbol,
+                exc,
+            )
+            return None
+
+        if tick is None or getattr(tick, "mid", None) is None:
+            logger.error(
+                "RECONCILE_PRICE_UNAVAILABLE: no live price for %s from data_layer.orchestrator "
+                "— this position is skipped for the current reconciliation cycle",
+                symbol,
+            )
+            return None
+
+        return float(tick.mid)
 
     @staticmethod
     def _calc_pnl(pos, current_price: float) -> float:
