@@ -346,3 +346,6 @@ frontend/proof/shots/
 # test that exercises that endpoint, and a committed .db.gz is both noise and
 # a potential data leak.
 backups/
+
+# Agent worktrees (isolated sub-agent checkouts, never committed)
+.claude/worktrees/
