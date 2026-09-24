@@ -33,11 +33,26 @@ strategy from the one the code describes. Same for RSI: it buys below 30 and
 holds past 50 until 70. First dead-control shape, *a guard that can never open*,
 and one letter from `positions`.
 
-**Not fixed here.** Teaching a strategy its own position is an architecture
-decision — `execution/position_tracker.py` owns live positions and the strategies
-are stateless by design — and the two candidate fixes (thread position state in,
-or move the exit rule into the adapter) have different consequences for
-backtests. Raised as F276 / MASTER_OUTSTANDING §A18.
+**Fixed — owner decision A18 (MASTER_OUTSTANDING §A18): thread position state
+in.** `backtesting.strategy_adapter.BacktestStrategyAdapter`, the one place
+that drives both of these strategies and already tracks a confirmed
+flat/long position for its own entry/exit gating, now writes that same value
+into `strategy.position` before every `generate_signal` call — from the fill
+the adapter already recorded on a *prior* bar, never from the order the
+current bar is about to place, so there is no look-ahead. See
+`tests/unit/test_reversion_exits_now_fire.py`, which drives both strategies
+through the adapter end to end and proves the exit branches now fire — those
+tests fail on the pre-fix tree.
+
+This module's `TestNothingSetsPositionInProduction` class below still holds
+for the **raw, unwrapped** strategy object — a freshly constructed
+`MeanReversionStrategy`/`RSIStrategy` used outside the adapter still leaves
+`.position` at `None`, by design: the strategies remain stateless on their
+own, and the adapter is what supplies real position state when one is driving
+them from bar data. The `TestTheExitsThatProductionCannotReach` class name
+below is stale for the adapter-driven path specifically — read it as "cannot
+reach without the adapter's wiring," which is now built and tested
+separately.
 
 **What made this hard to see** is worth recording, because
 `hopefx-dead-controls` predicts it exactly: the existing suite covers these
