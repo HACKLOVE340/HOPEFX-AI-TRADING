@@ -28,7 +28,7 @@ is always today's. Everything below is the shape; that command is the state.
 
 | Question | Where it is answered |
 |---|---|
-| **Did the audit branch land?** | **Yes — PR #315 merged 2026-09-18**, merge commit `9cdc37a`: 666 commits and 1,561 files, in ONE merge, not nine slices. `docs/audit/LANDING_PLAN.md` is now a RECORD, not a plan — read its top box first, because everything below it is written in the present tense about a state that no longer holds. The branch is 41 commits and 295 files ahead of `main`, and that is follow-up work. Verified by local execution on Python 3.11 AND 3.12 (F95: Actions has assigned no runner for twelve days, so no CI run has ever executed against any of it). |
+| **Did the audit branch land?** | **Yes — PR #315 merged 2026-09-18**, merge commit `9cdc37a`: 666 commits and 1,561 files, in ONE merge, not nine slices. `docs/audit/LANDING_PLAN.md` is now a RECORD, not a plan — read its top box first, because everything below it is written in the present tense about a state that no longer holds. The branch is 1 commits and 5 files ahead of `main`, and that is follow-up work. Verified by local execution on Python 3.11 AND 3.12 (F95: Actions has assigned no runner for twelve days, so no CI run has ever executed against any of it). |
 | **What do I fix next?** | **`docs/audit/CORRECTION_REGISTER.md`** — one entry per finding, each with the fix, the test to write first and the command that proves it. Status is probed from the code by `python scripts/correction_register.py`, not typed, so it cannot quietly go stale. **Start here.** |
 | **I am picking up the frontend / AI-presence work — what is done and what is next?** | **`docs/audit/FRONTEND_HANDOVER.md`** — what was built and why it is shaped that way, what is left in the order to do it, what is deliberately NOT worth doing, and the six traps this thread actually fell into. Start there before the plan. |
 | What was the frontend plan, and which parts are done? | `docs/audit/plans/2026-09-15-frontend-ultra.md` — Tasks 1–2 landed, 3–11 open. The handover above supersedes it where they differ, because it was measured later. |
@@ -234,6 +234,36 @@ Test markers: `unit`, `integration`, `e2e`, `slow`, `requires_redis`, `asyncio`.
 3. No leftover conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`).
 4. Never commit secrets or real credentials. `prop_firm_mode.json` and
    `.env.example` carry **placeholders only**.
+
+---
+
+## Sub-agent delegation and model routing
+
+**Standing instruction from the owner: never do the work yourself — always
+dispatch a sub-agent.** Every task runs through the `Agent` tool, not
+directly through the orchestrating session's own tools. Don't default every
+call to the same model — route by the tier below, and don't always reach for
+Fable.
+
+### Model routing
+
+| Tier | Work | Model |
+|---|---|---|
+| Heavy | Architecture, hard bugs, review | Opus 5.5 |
+| Medium | Edits, tests, docs, refactors | Sonnet 5 |
+| Light | Lookups, summaries | Haiku 4.5 |
+
+**Pass `model` explicitly on every `Agent` call** — never rely on whatever
+the default happens to be.
+
+### Delegation
+
+1. One sub-agent per task. Plan the task before dispatching it.
+2. Run independent sub-agents in parallel — don't serialize work that has no
+   dependency between the pieces.
+3. Read the sub-agent's report, not its files. Trust the report as the
+   interface; go to the files yourself only when the report leaves something
+   unresolved.
 
 ---
 
