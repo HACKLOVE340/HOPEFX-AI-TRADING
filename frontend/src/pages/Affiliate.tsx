@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Repeat, Share2, Trophy } from 'lucide-react';
+import { Check, Medal, Repeat, Share2, Trophy } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -27,6 +27,24 @@ const fmtUSD = (n:number|null|undefined) => (n == null || !Number.isFinite(n)) ?
 
 const statusBadge=(s:string)=>{ const m:Record<string,{bg:string;color:string}>={pending:{bg:'#1e3a5f',color:'#60a5fa'},converted:{bg:'#14532d',color:'#4ade80'},paid:{bg:'#1a2e1a',color:'#22c55e'},expired:{bg:'#2d1b1b',color:'#f87171'},cancelled:{bg:'#2d1b1b',color:'#f87171'},active:{bg:'#14532d',color:'#4ade80'}}; const c=m[s]??{bg:'#1e293b',color:'#94a3b8'}; return <span style={{...st.badge,background:c.bg,color:c.color}}>{s}</span>; };
 const MetricCard:React.FC<{label:string;value:string;sub?:string}>=({label,value,sub})=>(<div style={st.metricCard}><div style={st.metricValue}>{value}</div><div style={st.metricLabel}>{label}</div>{sub&&<div style={st.metricSub}>{sub}</div>}</div>);
+
+/**
+ * Leaderboard rank, 1st/2nd/3rd. The medal colour is a hint, never the only
+ * signal — the numeral is always drawn too, and `aria-label` names the place
+ * for a screen reader, so rank is never conveyed by colour alone.
+ */
+const RANK_TOKENS: Record<number,string> = { 1:'var(--rank-gold)', 2:'var(--rank-silver)', 3:'var(--rank-bronze)' };
+const RANK_LABELS: Record<number,string> = { 1:'1st place', 2:'2nd place', 3:'3rd place' };
+const RankBadge:React.FC<{rank:number}> = ({rank}) => {
+  const tone = RANK_TOKENS[rank];
+  if (!tone) return <>{rank}</>;
+  return (
+    <span aria-label={RANK_LABELS[rank]} style={{display:'inline-flex',alignItems:'center',gap:4,color:tone,fontWeight:700}}>
+      <Medal size="1em" aria-hidden="true" />
+      {rank}
+    </span>
+  );
+};
 
 const Affiliate:React.FC=()=>{
   const navigate=useNavigate();
@@ -248,7 +266,7 @@ const Affiliate:React.FC=()=>{
           {subErrors.leaderboard&&<div style={st.subError}>{subErrors.leaderboard}</div>}
           {!subErrors.leaderboard&&(
             <table style={st.table}><thead><tr><th style={st.th}>#</th><th style={st.th}>Code</th><th style={st.th}>Level</th><th style={st.th}>Conversions</th><th style={st.th}>Earned</th></tr></thead>
-            <tbody>{leaderboard.map(e=>(<tr key={e.affiliate_id} style={{...st.tr,background:e.affiliate_id===account.affiliate_id?'#1e3a5f':undefined}}><td style={st.td}>{e.rank===1?'🥇':e.rank===2?'🥈':e.rank===3?'🥉':e.rank}</td><td style={{...st.td,fontFamily:'monospace',color:'var(--text)'}}>{e.code}</td><td style={{...st.td,color:LEVEL_COLORS[e.level]??'var(--text-dim)',textTransform:'capitalize'}}>{e.level}</td><td style={st.td}>{e.converted_referrals}</td><td style={{...st.td,color:'var(--gain)'}}>{fmtUSD(e.total_commissions)}</td></tr>))}</tbody></table>
+            <tbody>{leaderboard.map(e=>(<tr key={e.affiliate_id} style={{...st.tr,background:e.affiliate_id===account.affiliate_id?'#1e3a5f':undefined}}><td style={st.td}><RankBadge rank={e.rank} /></td><td style={{...st.td,fontFamily:'monospace',color:'var(--text)'}}>{e.code}</td><td style={{...st.td,color:LEVEL_COLORS[e.level]??'var(--text-dim)',textTransform:'capitalize'}}>{e.level}</td><td style={st.td}>{e.converted_referrals}</td><td style={{...st.td,color:'var(--gain)'}}>{fmtUSD(e.total_commissions)}</td></tr>))}</tbody></table>
           )}
         </div>
       )}
