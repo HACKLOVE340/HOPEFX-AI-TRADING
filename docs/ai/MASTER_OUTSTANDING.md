@@ -589,10 +589,17 @@ is skipped, so the behaviour is pinned while the decision is open.
 > compiles to `BIGSERIAL`. `tests/unit/test_outbox_and_crypto_payments_autoincrement_migration.py`
 > was red before the fix and green after.
 > **Still open, found by the same work:**
-> - (1) `api/payments.py::_save_payment` catches a failed insert, logs
->   "payment … not persisted" at WARNING, and carries on. The crypto payment is
->   created with no record of it, which is the dead-control shape on the money
->   path.
+> - (1) ~~`api/payments.py::_save_payment` catches a failed insert, logs at
+>   WARNING and carries on.~~ **Fixed 2026-09-24. Owner chose fail-closed.**
+>   `_save_payment` now catches only `SQLAlchemyError`, logs at ERROR, and
+>   raises `PaymentNotPersistedError`. `POST /api/payments/crypto/address` then
+>   returns **503** with no address or amount. The HD index for ETH/USDT
+>   is left skipped, never reused. `tests/unit/test_crypto_payment_unpersisted_is_not_issued.py`
+>   was red before the fix. **Found alongside it, being fixed now:**
+>   `api/billing.py::create_crypto_order` swallows the same failure, and
+>   **every BTC deposit request gets the same address (HD index 0), for every
+>   user**, because a new `BitcoinClient` is built per request. Any BTC deposit
+>   already issued may need the owner to reconcile it by hand.
 > - (2) The ORM models declare these ids as `Integer`, while the migrations use
 >   `BigInteger`. So a Postgres schema built by the `create_all()` startup
 >   fallback in `core/startup_factories.py` gets 32-bit `SERIAL`.
