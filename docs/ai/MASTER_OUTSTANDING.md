@@ -89,14 +89,23 @@ These are not blocked on engineering. They are blocked on someone deciding.
 >   not produce a promotable model.**
 > - **Model files untouched.** The committed artifacts match their sha256
 >   snapshot, and 11 of 11 manifest entries verify.
-> - **Defects found, still open:**
->   - (1) `rollback()` reads `artifact_path`, which `register()` never writes,
->     so `current.pkl` is not rolled back.
->   - (2) `promote()`/`rollback()` set state `"production"`, but
->     `ml.verify_model` requires `"active"`, so it fails after either.
->   - (3) `scripts/retrain_horizon5.py --use-cached` loads `XAUUSD_50Y.csv`,
->     which the corrupt-data check refuses, and it has no option to choose
->     another file.
+> - **Defects found, all three fixed test-first the same day:**
+>   - (1) `rollback()` now restores `current.pkl` from `file`, the field
+>     `register()` writes, as a relative link.
+>   - (2) There is now one state vocabulary, `"active"` (`STATE_ACTIVE`).
+>     `ml/verify_model.py` is unchanged. Readers go through `is_active_state()`,
+>     which also fixed three things: `promote()` leaving two entries active,
+>     the Sharpe circuit breaker never retiring the shipped model, and the
+>     superadmin page labelling it "staged".
+>   - (3) `retrain_horizon5.py` now takes `--cached-csv` (default the clean
+>     `XAUUSD_40Y.csv`) and `--output-dir`/`RETRAIN_OUTPUT_DIR`, and never
+>     downloads.
+>
+>   `tests/unit/test_registry_rollback_restores_pointer.py` runs an end-to-end
+>   register → promote → rollback → verify. The shipped artifacts' sha256 are
+>   unchanged. **New, still open:** `retrain_horizon5.py --smoke` writes no
+>   `advanced_oos.pkl`, so the smoke step in `retrain.yml` has only ever passed
+>   on the committed file.
 
 **Not a new defect — a fact the old gate was hiding, and it is now load-bearing.**
 
