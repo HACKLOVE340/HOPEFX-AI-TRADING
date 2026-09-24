@@ -100,6 +100,14 @@ def _parse_requirements(path: Path) -> dict[str, list[VersionSpec]]:
         if not line:
             continue
 
+        # Strip environment markers (e.g. "; sys_platform != \"win32\"") — Gate K
+        # reasons about version bounds only. Left in, a marker's text becomes
+        # part of the parsed version (e.g. '3.6.1 ; sys_platform != "win32"'),
+        # which then fails every version comparison against it.
+        line = line.split(";", 1)[0].strip()
+        if not line:
+            continue
+
         # Strip extras: package[extra] → package
         line_no_extras = re.sub(r"\[.*?\]", "", line)
 

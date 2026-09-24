@@ -63,7 +63,7 @@ attrs==26.1.0
     #   aiohttp
     #   jsonschema
     #   referencing
-base58==2.1.1
+base58==2.1.1 ; sys_platform != "win32"
     # via hdwallet
 bcrypt==5.0.0
     # via
@@ -81,7 +81,7 @@ brotli==1.2.0
     # via geventhttpclient
 build==1.6.1
     # via chromadb
-cbor2==5.9.0
+cbor2==5.9.0 ; sys_platform != "win32"
     # via hdwallet
 ccxt==4.5.18
     # via -r requirements.txt
@@ -149,7 +149,7 @@ configargparse==1.7.7
     # via locust
 contourpy==1.4.0
     # via matplotlib
-crcmod==1.7
+crcmod==1.7 ; sys_platform != "win32"
     # via hdwallet
 cross-web==0.7.0
     # via strawberry-graphql
@@ -179,9 +179,9 @@ dnspython==2.8.0
     # via email-validator
 durationpy==0.11
     # via kubernetes
-ecdsa==0.19.2
+ecdsa==0.19.2 ; sys_platform != "win32"
     # via hdwallet
-ed25519-blake2b==1.4.1
+ed25519-blake2b==1.4.1 ; sys_platform != "win32"
     # via hdwallet
 email-validator==2.3.0
     # via
@@ -671,7 +671,7 @@ pycares==5.0.1
     # via aiodns
 pycparser==3.0
     # via cffi
-pycryptodome==3.23.0
+pycryptodome==3.23.0 ; sys_platform != "win32"
     # via hdwallet
 pydantic==2.13.5
     # via
@@ -695,7 +695,7 @@ pygments==2.21.0
     #   rich
 pyjwt==2.13.0
     # via -r requirements.txt
-pynacl==1.6.2
+pynacl==1.6.2 ; sys_platform != "win32"
     # via hdwallet
 pyotp==2.10.0
     # via -r requirements.txt

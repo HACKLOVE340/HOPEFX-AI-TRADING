@@ -38,6 +38,12 @@ jobs:
           # comment below always documented --output-file correctly, it just never
           # made it into this actual command).
           pip-compile requirements.txt --output-file requirements.lock.tmp --no-header --quiet --strip-extras
+          # pip-compile attaches a marker (e.g. "; sys_platform != 'win32'") to a
+          # top-level package's own line, but does not propagate it onto packages
+          # reachable only as that package's transitive dependency — see
+          # tests/unit/test_lockfile_marker_propagation.py (LOCK-MARKER-NOT-PROPAGATED).
+          # Left unpatched, a fresh regeneration here silently reopens that gap.
+          python scripts/lock_marker_propagation.py --apply --file requirements.lock.tmp
           {
             echo "# requirements.lock — exact pinned versions for reproducible production builds"
             echo "#"
