@@ -423,6 +423,16 @@ programme, which found the defect it caused.
 
 ### A10. The position reconciler prices XAUUSD off Yahoo Finance, and skips the cycle when it cannot
 
+> **Decided and resolved 2026-09-24 — owner chose "read `data_layer.orchestrator`".**
+> `_get_price` now reads `data_layer.orchestrator.orchestrator.get_latest_tick()`
+> and returns `tick.mid`. `XAUUSD` resolves through the orchestrator's gold-alias
+> fallback. An unreachable feed or empty tick logs ERROR
+> (`RECONCILE_PRICE_UNAVAILABLE`) instead of DEBUG. No yfinance ticker was added.
+> The position is still skipped for that cycle, but the skip is now visible.
+> `tests/unit/test_position_reconciler_gates.py::TestGetPrice` pins this,
+> including a test that fails if yfinance is ever consulted. The text below
+> describes the state before the fix.
+
 `PositionReconciler._get_price` is the only price source the reconciliation loop
 has:
 
