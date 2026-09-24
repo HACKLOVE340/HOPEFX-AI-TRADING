@@ -497,6 +497,18 @@ is skipped, so the behaviour is pinned while the decision is open.
 
 ### A11. `outbox_events.idempotency_key` has two schemas, and the code only works under one
 
+> **Decided and resolved 2026-09-24 — owner chose "enforce UNIQUE".** Migration
+> `a6b7c8d9e0f1` (revises `z5a6b7c8d9e0`) adds `uq_outbox_events_idempotency_key`,
+> so the database now enforces what the ORM model already declared. If duplicate
+> keys already exist, the migration **refuses to run** (a `RuntimeError` naming the
+> count and a sample of the keys) instead of deleting rows. An operator must
+> reconcile duplicates by hand before upgrading such a database. NULL keys stay
+> unconstrained. This is proven against a schema built by `alembic upgrade head`,
+> not `create_all()`: `tests/unit/test_outbox_idempotency_key_unique_migration.py`.
+> **Found on the way, still open:** `outbox_events.id` does not autoincrement on a
+> SQLite database built from migrations. Migration `r1s2t3u4v5w6` does not cover
+> this table. The text below describes the state before the fix.
+
 `database/models.py:1263` declares the column with `unique=True`. The migration
 that adds it to an existing table —
 `alembic/versions/n1o2p3q4r5s6_add_journal_subaccounts_billing_profiles.py:237`
