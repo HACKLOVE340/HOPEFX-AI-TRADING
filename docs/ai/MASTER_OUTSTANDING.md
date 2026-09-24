@@ -858,7 +858,9 @@ defect had to be found twice.
 > `TestTheLivePathCannotReachAnExitEvenWithAPosition`. **Owner decision needed:**
 > whether to switch on live strategy signals at all. That turns on entries from
 > four strategies that have never produced one — a much larger change than
-> adding exits. The text below describes the state before the fix.
+> adding exits. **Owner, 2026-09-24: leave live signals off until A0 is fixed**
+> (a current model is registered), then re-baseline these strategies before
+> deciding. The text below describes the state before the fix.
 
 `strategies/mean_reversion.py` and `strategies/rsi_strategy.py` both carry exit
 branches gated on `self.position == "LONG"` / `"SHORT"`. Both classes declare
