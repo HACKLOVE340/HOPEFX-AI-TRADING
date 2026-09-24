@@ -17,6 +17,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Promotion now requires a recent training-data end date (A0 Task 1).
+_FRESH_DATA_END = __import__("datetime").date.today().isoformat()
+
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -112,6 +115,7 @@ class TestRegister:
             sharpe_gate_passed=True,
             n_trades=800,
             feature_count=50,
+            data_end=_FRESH_DATA_END,
         )
         assert entry["name"] == "v1"
         assert entry["state"] == "staging"
@@ -119,18 +123,18 @@ class TestRegister:
 
     def test_register_raises_for_missing_artifact(self, registry, tmp_path):
         with pytest.raises(FileNotFoundError):
-            registry.register(name="v1", file_path=tmp_path / "missing.pkl")
+            registry.register(name="v1", file_path=tmp_path / "missing.pkl", data_end=_FRESH_DATA_END)
 
     def test_register_raises_for_empty_name(self, registry, artifact):
         with pytest.raises(ValueError, match="non-empty"):
-            registry.register(name="", file_path=artifact)
+            registry.register(name="", file_path=artifact, data_end=_FRESH_DATA_END)
 
     def test_register_raises_for_invalid_state(self, registry, artifact):
         with pytest.raises(ValueError, match="state"):
-            registry.register(name="v1", file_path=artifact, state="production")
+            registry.register(name="v1", file_path=artifact, state="production", data_end=_FRESH_DATA_END)
 
     def test_register_persists_to_manifest(self, registry, artifact):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         versions = registry.list_versions()
         assert "v1" in versions
 
@@ -147,6 +151,7 @@ class TestPromote:
             oos_auc=0.72,
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            data_end=_FRESH_DATA_END,
         )
 
     def test_promote_raises_for_unknown_version(self, registry):
@@ -160,6 +165,7 @@ class TestPromote:
             oos_accuracy=0.50,  # below threshold
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            data_end=_FRESH_DATA_END,
         )
         with pytest.raises(RuntimeError, match="BLOCKED"):
             registry.promote("v1")
@@ -187,6 +193,7 @@ class TestPromote:
             oos_accuracy=0.70,
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            data_end=_FRESH_DATA_END,
         )
         with (
             patch.object(registry, "_update_symlink"),
@@ -201,6 +208,7 @@ class TestPromote:
             oos_accuracy=0.72,
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            data_end=_FRESH_DATA_END,
         )
         with (
             patch.object(registry, "_update_symlink"),
@@ -275,7 +283,7 @@ class TestVerify:
         assert "not found" in msg
 
     def test_verify_returns_false_when_artifact_missing(self, registry, artifact):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         # Delete the artifact
         artifact.unlink()
         ok, msg = registry.verify("v1")
@@ -283,13 +291,13 @@ class TestVerify:
         assert "missing" in msg.lower()
 
     def test_verify_returns_true_for_intact_artifact(self, registry, artifact):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         ok, msg = registry.verify("v1")
         assert ok is True
         assert "OK" in msg
 
     def test_verify_returns_false_on_sha256_mismatch(self, registry, artifact):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         # Tamper with the stored hash
         manifest = registry._load()
         manifest["versions"]["v1"]["sha256"] = "deadbeef" * 8
@@ -300,7 +308,7 @@ class TestVerify:
         assert "MISMATCH" in msg
 
     def test_verify_returns_false_when_no_sha256_stored(self, registry, artifact):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         manifest = registry._load()
         manifest["versions"]["v1"]["sha256"] = ""
         registry._save(manifest)
@@ -314,7 +322,7 @@ class TestVerify:
         assert "No active" in msg
 
     def test_verify_active_delegates_to_verify(self, registry, artifact):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         manifest = registry._load()
         manifest["active_version"] = "v1"
         registry._save(manifest)
@@ -328,7 +336,7 @@ class TestVerify:
 
 class TestRetire:
     def test_retire_sets_state(self, registry, artifact):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         registry.retire("v1")
         assert registry.get_version("v1")["state"] == "retired"
 
@@ -354,6 +362,7 @@ class TestActiveVersion:
             oos_accuracy=0.70,
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            data_end=_FRESH_DATA_END,
         )
         with (
             patch.object(registry, "_update_symlink"),
@@ -372,6 +381,7 @@ class TestActiveVersion:
             oos_accuracy=0.70,
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            data_end=_FRESH_DATA_END,
         )
         with (
             patch.object(registry, "_update_symlink"),
@@ -400,7 +410,7 @@ class TestManifestIO:
         assert manifest["versions"] == {}
 
     def test_save_is_atomic(self, registry, artifact):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         # Verify the file exists and is valid JSON
         data = json.loads(registry._path.read_text())
         assert "v1" in data["versions"]
@@ -444,7 +454,7 @@ class TestBootstrapFromMeta:
         assert result["oos_accuracy"] == pytest.approx(0.68)
 
     def test_bootstrap_is_noop_when_already_registered(self, registry, artifact, tmp_path):
-        registry.register(name="v1", file_path=artifact)
+        registry.register(name="v1", file_path=artifact, data_end=_FRESH_DATA_END)
         result = registry.bootstrap_from_meta(
             meta_path=tmp_path / "meta.json",
             model_path=artifact,
@@ -472,6 +482,7 @@ class TestBootstrapFromMeta:
             "oos_auc": 0.73,
             "oos_p_value": 0.001,
             "sharpe_gate": {"gate_passed": True, "n_trades": 700},
+            "data_end": _FRESH_DATA_END,
             "feature_count": 40,
         }
         meta_path = tmp_path / "meta.json"

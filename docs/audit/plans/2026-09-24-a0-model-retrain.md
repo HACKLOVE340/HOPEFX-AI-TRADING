@@ -1,6 +1,6 @@
 # A0 — Retrain and Register a Current Model: Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace the 176-day-old active model (`xgb_horizon5_v3`, sha256 `dc7454d8…`, provenance 2026-04-01) with a model trained on data that reaches to within `MODEL_MAX_AGE_DAYS=30` of deployment. Register it with a sha256-bound `trained_at`, pass every validation gate, and keep a one-command rollback. The limit and `STALE_MODEL_BLOCK` stay unchanged.
 
@@ -54,7 +54,7 @@ A registry entry's `trained_at` must not be trusted unless the data behind it is
 **Interfaces:**
 - Produces: `ModelRegistry.register(..., data_end: str | None = None)` stores `"data_end"` (ISO date). `ModelRegistry.promote(name)` raises `ValueError("training data ends <date>, <n> days old > MODEL_MAX_AGE_DAYS")`. `rollback()` is deliberately left unchanged: an emergency restore of a previously validated model must stay possible.
 
-- [ ] **Step 1: Write the failing test.** It uses a `tmp_path` registry only; it must never point at `ml/saved_models`.
+- [x] **Step 1: Write the failing test.** It uses a `tmp_path` registry only; it must never point at `ml/saved_models`.
 
 ```python
 import datetime as dt, pytest
@@ -82,14 +82,14 @@ def test_promote_refuses_when_data_end_unknown(tmp_path, monkeypatch):
 
 Before writing it, check `ModelRegistry.__init__`'s real signature (`sed -n 1,180p ml/model_registry.py`) and adapt the constructor call. Check which other gates `promote` applies (Sharpe/PnL) so the fixture reaches the new check. **Assert that the new check is the one that refused, and not an earlier gate.** An earlier gate refusing would make the test pass for the wrong reason.
 
-- [ ] **Step 2:** `.venv/bin/python -m pytest tests/unit/test_registry_refuses_stale_training_data.py -q` → expected FAIL (`register() got an unexpected keyword 'data_end'`).
-- [ ] **Step 3:** Implement. Store `data_end` in `register`. In `promote`, compute `(today - date.fromisoformat(data_end)).days` against `int(os.getenv("MODEL_MAX_AGE_DAYS", "30"))`. A missing value refuses.
-- [ ] **Step 4:** Re-run → PASS. Then run `.venv/bin/python -m pytest tests/unit -q -k "registry or model_age or promote"`. Read any newly red test before changing it: it may be asserting the defect (see the hopefx-dead-controls skill).
-- [ ] **Step 5:** `git stash push -- ml/model_registry.py`, run the test and watch it fail, then `git stash pop`. Commit the test and the change together.
+- [x] **Step 2:** `.venv/bin/python -m pytest tests/unit/test_registry_refuses_stale_training_data.py -q` → expected FAIL (`register() got an unexpected keyword 'data_end'`).
+- [x] **Step 3:** Implement. Store `data_end` in `register`. In `promote`, compute `(today - date.fromisoformat(data_end)).days` against `int(os.getenv("MODEL_MAX_AGE_DAYS", "30"))`. A missing value refuses.
+- [x] **Step 4:** Re-run → PASS. Then run `.venv/bin/python -m pytest tests/unit -q -k "registry or model_age or promote"`. Read any newly red test before changing it: it may be asserting the defect (see the hopefx-dead-controls skill).
+- [x] **Step 5:** `git stash push -- ml/model_registry.py`, run the test and watch it fail, then `git stash pop`. Commit the test and the change together.
 
 ### Task 2: Isolated 3.12 training workspace
 
-- [ ] **Step 1:**
+- [x] **Step 1:**
 ```bash
 git worktree add --detach /tmp/a0-retrain HEAD
 /usr/bin/python3.12 -m venv /tmp/a0-venv312
@@ -97,41 +97,53 @@ git worktree add --detach /tmp/a0-retrain HEAD
 /tmp/a0-venv312/bin/python -c "import sys,xgboost,sklearn;print(sys.version,xgboost.__version__,sklearn.__version__)"
 ```
 Expected: `3.12.x`, with library versions matching the Dockerfile and requirements pins. **Record them in the report.** A pickle made under a different sklearn/xgboost version is not loadable either.
-- [ ] **Step 2: Snapshot the manifest.** `sha256sum ml/saved_models/*.pkl > /tmp/a0-before.sha` (run in the MAIN checkout). Task 6 diffs against this snapshot.
+- [x] **Step 2: Snapshot the manifest.** `sha256sum ml/saved_models/*.pkl > /tmp/a0-before.sha` (run in the MAIN checkout). Task 6 diffs against this snapshot.
 
 ### Task 3: Dry run on bundled data, to prove the pipeline only
 
 This proves the pipeline end to end. **It does not produce a model to register.** The data ends 2026-03-25, so Task 1's guard must refuse it, and that refusal is part of the check.
 
-- [ ] **Step 1:**
+- [x] **Step 1:**
 ```bash
 cd /tmp/a0-retrain && PYTHONPATH=. /tmp/a0-venv312/bin/python scripts/retrain_horizon5.py \
   --use-cached --splits 8 --oos-years 2 2>&1 | tee /tmp/a0-dryrun.log
 ```
 Expected: walk-forward folds are logged, an OOS accuracy/AUC/N is printed, and artifacts are written under `/tmp/a0-retrain/ml/saved_models/`, not under the main checkout.
-- [ ] **Step 2:** Confirm the training frame starts at or after `CLEAN_SINCE["XAUUSD"]` (2020), or goes through `data/XAUUSD_40Y_clamped.csv`. `grep -n "load_cached_daily\|XAUUSD_40Y" scripts/retrain_horizon5.py`. If the script reads the raw 40Y file with its 441 bad pre-2020 bars, record that as a finding. Do not silently patch it.
-- [ ] **Step 3:** Register the candidate in a **throwaway** `ModelRegistry(/tmp/a0-retrain/ml/saved_models/registry.json)` with `data_end="2026-03-25"`, then call `promote`. Expected: `ValueError: training data ends 2026-03-25…`. The guard is shown able to fail.
+- [x] **Step 2:** Confirm the training frame starts at or after `CLEAN_SINCE["XAUUSD"]` (2020), or goes through `data/XAUUSD_40Y_clamped.csv`. `grep -n "load_cached_daily\|XAUUSD_40Y" scripts/retrain_horizon5.py`. If the script reads the raw 40Y file with its 441 bad pre-2020 bars, record that as a finding. Do not silently patch it.
+- [x] **Step 3:** Register the candidate in a **throwaway** `ModelRegistry(/tmp/a0-retrain/ml/saved_models/registry.json)` with `data_end="2026-03-25"`, then call `promote`. Expected: `ValueError: training data ends 2026-03-25…`. The guard is shown able to fail.
 
 ### Task 4: Validation gates for any candidate
 
 Run these in the worktree on the candidate. Owner-supplied data goes through the same gates in Task 7.
 
-- [ ] Leakage: `/tmp/a0-venv312/bin/python -m pytest tests/unit/test_mtf_ensemble_leakage.py -q` → PASS. The file asserts it observed a fit before asserting anything else (LEAKAGE-GUARD-CHECKED-NOTHING).
-- [ ] Walk-forward OOS: from the training report (`horizon5_training_report.json`), require OOS N ≥ 600, Sharpe SE ≤ 0.10 and `sharpe_gate_passed=true`. These are the gates the incumbent's notes cite.
-- [ ] Head-to-head on the same held-out window. Evaluate the incumbent (`git show HEAD:ml/saved_models/advanced_oos.pkl > /tmp/a0-incumbent.pkl`) and the candidate on identical post-cutoff bars. Write `/tmp/a0-compare.json` with accuracy, AUC, N, and net P&L after costs via `backtesting/`. Promote only if the candidate is not worse beyond one standard error. **Held-out bars must post-date every training bar of BOTH models:** the incumbent saw data to about 2026-03, so the comparison window is only the owner-supplied new data.
-- [ ] Drift: `/tmp/a0-venv312/bin/python scripts/drift_guard_report.py`. Record the zero-filled-feature fraction (ADR 0019). A candidate trained with `--no-macro` changes the feature set, and the report must show this.
-- [ ] Provenance ratchet: `.venv/bin/python scripts/model_provenance_report.py --check` → no growth.
-- [ ] Run the fast suite on **both** interpreters in the worktree (SUITE-REWRITES-MODEL is invisible on 3.11): `pytest -m "not slow and not e2e" -q`. `tests/conftest.py::_refuse_to_rewrite_committed_models` must stay in place.
+- [x] Leakage: `/tmp/a0-venv312/bin/python -m pytest tests/unit/test_mtf_ensemble_leakage.py -q` → PASS. The file asserts it observed a fit before asserting anything else (LEAKAGE-GUARD-CHECKED-NOTHING).
+- [x] Walk-forward OOS: from the training report (`horizon5_training_report.json`), require OOS N ≥ 600, Sharpe SE ≤ 0.10 and `sharpe_gate_passed=true`. These are the gates the incumbent's notes cite.
+- [ ] **Not possible yet (needs Task 7 data).** Head-to-head on the same held-out window. Evaluate the incumbent (`git show HEAD:ml/saved_models/advanced_oos.pkl > /tmp/a0-incumbent.pkl`) and the candidate on identical post-cutoff bars. Write `/tmp/a0-compare.json` with accuracy, AUC, N, and net P&L after costs via `backtesting/`. Promote only if the candidate is not worse beyond one standard error. **Held-out bars must post-date every training bar of BOTH models:** the incumbent saw data to about 2026-03, so the comparison window is only the owner-supplied new data.
+- [x] Drift: `/tmp/a0-venv312/bin/python scripts/drift_guard_report.py`. Record the zero-filled-feature fraction (ADR 0019). A candidate trained with `--no-macro` changes the feature set, and the report must show this.
+- [x] Provenance ratchet: `.venv/bin/python scripts/model_provenance_report.py --check` → no growth.
+- [ ] **Not run in full** (targeted model/registry subset run on 3.11 only; leakage file run on 3.12). Run the fast suite on **both** interpreters in the worktree (SUITE-REWRITES-MODEL is invisible on 3.11): `pytest -m "not slow and not e2e" -q`. `tests/conftest.py::_refuse_to_rewrite_committed_models` must stay in place.
 
 ### Task 5: Rollback drill (throwaway registry)
 
-- [ ] In the worktree registry: `register` the candidate, `promote` it, then `ModelRegistry.rollback("xgb_horizon5_v3")`. Assert that `active_version == "xgb_horizon5_v3"` and that `ml.verify_model` passes. The runtime path is `ml/inference_engine.py:2210 rollback_model()`. The git path is `git revert <registration commit>`, which restores the pkl, registry and manifest atomically. **Note:** after a rollback the incumbent is 176 days old again, so inference is refused again. Rollback means "stop trading", not "trade on the old model". Say so in the runbook line in §A0.
+- [x] In the worktree registry: `register` the candidate, `promote` it, then `ModelRegistry.rollback("xgb_horizon5_v3")`. Assert that `active_version == "xgb_horizon5_v3"` and that `ml.verify_model` passes. The runtime path is `ml/inference_engine.py:2210 rollback_model()`. The git path is `git revert <registration commit>`, which restores the pkl, registry and manifest atomically. **Note:** after a rollback the incumbent is 176 days old again, so inference is refused again. Rollback means "stop trading", not "trade on the old model". Say so in the runbook line in §A0.
 
 ### Task 6: Prove the main checkout was untouched
 
-- [ ] `sha256sum ml/saved_models/*.pkl | diff /tmp/a0-before.sha -` → no output. `git -C /home/user/HOPEFX-AI-TRADING status --short ml/` → empty.
+- [x] `sha256sum ml/saved_models/*.pkl | diff /tmp/a0-before.sha -` → no output. `git -C /home/user/HOPEFX-AI-TRADING status --short ml/` → empty.
 
 ---
+
+
+### Dry-run results (2026-09-24, measured)
+
+- **Env:** Python 3.12.3, xgboost 3.4.1, scikit-learn 1.9.1 (`/tmp/a0-venv312`, `requirements.txt`). yfinance was import-blocked (`PYTHONPATH=/tmp/a0-noyf`) so no GC=F path could run; macro came from `data/macro/*.csv` (1,256 rows × 5).
+- **Task 3 Step 1 as written FAILS CLOSED:** `retrain_horizon5.py --use-cached` loads `data/XAUUSD_50Y.csv` first (the file `ml/cached_series.py` excludes) and `_assert_price_history_is_plausible` refuses it (1,972 of 12,909 bars move >20%). The wrapper has no `--cached-csv`, so it cannot be pointed at a clean file. Finding recorded, not patched.
+- **Ran instead:** `ml/train_advanced.py --horizon 5 --years 6 --oos-years 2 --splits 8 --use-cached --cached-csv data/XAUUSD_40Y.csv` → 1,381 bars **2020-09-28 → 2026-03-25** (post-`CLEAN_SINCE`), exit 0, artifacts only under `/tmp/a0-retrain/ml/saved_models/`.
+- **Candidate:** walk-forward acc 0.474 ± 0.066, AUC 0.483, p=0.34; OOS (2024-02-23 → 2026-03-18, n=476) acc **0.387** ± 0.022, AUC 0.499, p=1.0; Sharpe gate **BLOCKED** (N=476 < 600); ECE 0.239. Incumbent's recorded OOS acc 0.5734 (own window, not comparable). Candidate is not promotable on quality either.
+- **Task 3 Step 3:** throwaway registry `promote` → `StaleTrainingDataError: training data ends 2026-03-25, 183 days old > MODEL_MAX_AGE_DAYS (30)`.
+- **Task 4:** leakage file 13 passed on 3.12; drift guard coverage 200/258 (77.5%), 22 constant features unmonitored; provenance `--check` 2/0 at baseline.
+- **Task 5 drill:** promote(drill) → rollback(`xgb_horizon5_v3`) sets `active_version` back and `verify_active()` is OK, **but `python -m ml.verify_model` FAILS** after it: (1) `rollback()` reads `entry["artifact_path"]`, which `register()` never writes, so `current.pkl` stays pointed at the rolled-back-from candidate; (2) `promote`/`rollback` write `state="production"` while `ml/verify_model.py` requires `"active"`. Both block Task 8's `verify_model → exit 0`.
+- **Task 6:** sha256 of all `ml/saved_models/*.pkl` + `ml/rl_models/*` in the main checkout identical to the pre-run snapshot; 11/11 manifest entries verify.
 
 ## (b) Steps that need the owner
 
