@@ -542,9 +542,24 @@ is skipped, so the behaviour is pinned while the decision is open.
 > reconcile duplicates by hand before upgrading such a database. NULL keys stay
 > unconstrained. This is proven against a schema built by `alembic upgrade head`,
 > not `create_all()`: `tests/unit/test_outbox_idempotency_key_unique_migration.py`.
-> **Found on the way, still open:** `outbox_events.id` does not autoincrement on a
-> SQLite database built from migrations. Migration `r1s2t3u4v5w6` does not cover
-> this table. The text below describes the state before the fix.
+> **Found on the way, fixed the same day:** on a SQLite database built from
+> migrations, `outbox_events.id` **and `crypto_payments.id`** did not
+> autoincrement, so every ORM insert failed with `NOT NULL constraint failed`.
+> Both tables were created by `b2c3d4e5f6a7`, before `r1s2t3u4v5w6`'s table
+> list. Migration `b7c8d9e0f1g2` (revises `a6b7c8d9e0f1`) fixes both. It
+> preserves existing ids and is a no-op on PostgreSQL, where the column already
+> compiles to `BIGSERIAL`. `tests/unit/test_outbox_and_crypto_payments_autoincrement_migration.py`
+> was red before the fix and green after.
+> **Still open, found by the same work:**
+> - (1) `api/payments.py::_save_payment` catches a failed insert, logs
+>   "payment … not persisted" at WARNING, and carries on. The crypto payment is
+>   created with no record of it, which is the dead-control shape on the money
+>   path.
+> - (2) The ORM models declare these ids as `Integer`, while the migrations use
+>   `BigInteger`. So a Postgres schema built by the `create_all()` startup
+>   fallback in `core/startup_factories.py` gets 32-bit `SERIAL`.
+>
+> The text below describes the state before the fix.
 
 `database/models.py:1263` declares the column with `unique=True`. The migration
 that adds it to an existing table —
