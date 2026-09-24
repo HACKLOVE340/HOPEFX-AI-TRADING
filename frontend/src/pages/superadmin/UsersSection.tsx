@@ -266,7 +266,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
 
         {msg && (
           <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: msg === 'Done' ? '#052e16' : '#450a0a', color: msg === 'Done' ? 'var(--gain)' : 'var(--loss)', fontSize: 'var(--fs-body)', fontWeight: 600 }}>
-            {msg === 'Done' ? '✅ Action completed successfully' : `❌ ${msg}`}
+            {msg === 'Done' ? <><CheckCircle2 size="1em" aria-hidden="true" /> Action completed successfully</> : <><XCircle size="1em" aria-hidden="true" /> {msg}</>}
           </div>
         )}
       </div>

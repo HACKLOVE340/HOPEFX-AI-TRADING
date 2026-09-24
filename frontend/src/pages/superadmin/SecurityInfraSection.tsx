@@ -9,7 +9,7 @@ import {
 } from './ui';
 import { extractApiError } from '../../lib/utils';
 import { ActionBanner } from '../../components/ActionBanner';
-import { AlertTriangle, Bug, ClipboardList, Folder, KeyRound, RefreshCw, Shield, Wrench } from 'lucide-react';
+import { AlertTriangle, Bug, CheckCircle2, ClipboardList, Folder, KeyRound, RefreshCw, Shield, Wrench, XCircle } from 'lucide-react';
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -388,7 +388,7 @@ const SecurityInfraSection: React.FC = () => {
                         <td style={{ padding: '8px 12px', fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(ti.first_seen)}</td>
                         <td style={{ padding: '8px 12px', fontSize: 'var(--fs-label)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{fmtDate(ti.last_seen)}</td>
                         <td style={{ padding: '8px 12px' }}>
-                          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: ti.blocked ? 'var(--gain)' : 'var(--loss)' }}>{ti.blocked ? '✅ Yes' : '❌ No'}</span>
+                          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 700, color: ti.blocked ? 'var(--gain)' : 'var(--loss)' }}>{ti.blocked ? <><CheckCircle2 size="1em" aria-hidden="true" /> Yes</> : <><XCircle size="1em" aria-hidden="true" /> No</>}</span>
                         </td>
                       </tr>
                     );

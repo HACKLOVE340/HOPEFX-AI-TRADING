@@ -197,7 +197,7 @@ const AuditTrailSection: React.FC = () => {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {(['compliance', 'system'] as const).map(t => (
           <button key={t} onClick={() => setMainTab(t)} style={{ background: mainTab === t ? 'var(--raised)' : 'transparent', border: `1px solid ${mainTab === t ? '#475569' : '#1e293b'}`, borderRadius: 8, color: mainTab === t ? 'var(--text-strong)' : 'var(--text-muted)', padding: '7px 16px', fontSize: 'var(--fs-body)', cursor: 'pointer' }}>
-            {{ compliance: '🔗 Compliance Audit Trail', system: '📋 System Audit Log' }[t]}
+            {{ compliance: <><Link2 size="1em" aria-hidden="true" /> Compliance Audit Trail</>, system: <><ClipboardList size="1em" aria-hidden="true" /> System Audit Log</> }[t]}
           </button>
         ))}
       </div>

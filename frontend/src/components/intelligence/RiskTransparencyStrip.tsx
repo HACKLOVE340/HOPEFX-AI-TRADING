@@ -13,7 +13,7 @@
 
 import React from 'react';
 import { useStore, selectRiskSnapshot, selectAccount, selectKillSwitch } from '../../store';
-import { Shield } from 'lucide-react';
+import { Ban, Check, Shield } from 'lucide-react';
 
 const fmtPct = (v: number | null | undefined, dp = 1): string =>
   v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(dp)}%`;
@@ -70,7 +70,7 @@ export const RiskTransparencyStrip: React.FC = () => {
           background: killSwitch ? 'rgba(248,113,113,0.12)' : 'rgba(34,197,94,0.12)',
           border: `1px solid ${killSwitch ? 'rgba(248,113,113,0.35)' : 'rgba(34,197,94,0.3)'}`,
         }}>
-          {killSwitch ? '⛔ Kill switch active' : '✓ Trading enabled'}
+          {killSwitch ? <><Ban size="1em" aria-hidden="true" /> Kill switch active</> : <><Check size="1em" aria-hidden="true" /> Trading enabled</>}
         </span>
       </div>
 

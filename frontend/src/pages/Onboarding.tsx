@@ -79,7 +79,7 @@ const StepIndicator: React.FC<{ current: number; total: number }> = ({ current, 
             color: done ? '#0f172a' : active ? 'var(--warn)' : 'var(--text-faint)',
             flexShrink: 0,
           }}>
-            {done ? '✓' : STEPS[i]?.icon ?? ''}
+            {done ? <Check size="1em" aria-hidden="true" /> : STEPS[i]?.icon ?? ''}
           </div>
           {i < total - 1 && (
             <div style={{ flex: 1, height: 2, background: i < current ? '#f59e0b' : 'var(--surface-hover)' }} />
@@ -304,7 +304,7 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
       {!state.paperStarted ? (
         <button onClick={startPaper} disabled={starting}
           style={{ ...s.primaryBtn, background: '#059669', opacity: starting ? 0.6 : 1 }}>
-          {starting ? '⟳ Starting…' : '📈 Launch Paper Trading'}
+          {starting ? '⟳ Starting…' : <><TrendingUp size="1em" aria-hidden="true" /> Launch Paper Trading</>}
         </button>
       ) : (
         <div style={{ ...s.resultBox, border: '1px solid #14532d', background: '#052e16' }}>

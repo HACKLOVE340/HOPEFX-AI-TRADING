@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../hooks/useApi';
 import { Card, SectionHeader, Button, StatusBadge } from './ui';
 import { extractApiError } from '../../lib/utils';
-import { AlertTriangle, BarChart3, XCircle } from 'lucide-react';
+import { AlertTriangle, BarChart3, Pause, XCircle } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CpuMetrics {
@@ -222,7 +222,7 @@ const PerformanceSection: React.FC = () => {
           size="sm"
           onClick={() => setAutoRefresh((v) => !v)}
         >
-          {autoRefresh ? '⏸ Pause' : '▶ Resume'} auto-refresh
+          {autoRefresh ? <><Pause size="1em" aria-hidden="true" /> Pause</> : '▶ Resume'} auto-refresh
         </Button>
         <Button variant="secondary" size="sm" onClick={fetchMetrics}>
           ↻ Refresh now

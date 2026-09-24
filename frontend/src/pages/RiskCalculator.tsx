@@ -274,9 +274,9 @@ const RiskCalculator: React.FC = () => {
   const [history, setHistory]       = useState<SavedCalc[]>([]);
   const [saving, setSaving]         = useState(false);
   // {text, ok} rather than a string: the colour below used to be decided by
-  // saveMsg.startsWith('✓'), so the tick was not decoration — it was the
-  // success flag. Removing the glyph without this would have rendered every
-  // successful save in the failure colour.
+  // saveMsg.startsWith of the success checkmark character, so that character
+  // was not decoration — it was the success flag. Removing the glyph without
+  // this would have rendered every successful save in the failure colour.
   const [saveMsg, setSaveMsg]       = useState<{ text: string; ok: boolean } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [calcLabel, setCalcLabel]   = useState('');

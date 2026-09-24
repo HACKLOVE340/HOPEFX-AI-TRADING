@@ -22,7 +22,7 @@ import { parseVoiceCommand, describeIntent, type VoiceIntent } from '../../lib/v
 import { tradingApi } from '../../hooks/useApi';
 import { describeSubmitFailure } from '../../lib/utils';
 import { useToast } from '../Toast';
-import { Mic } from 'lucide-react';
+import { AlertTriangle, Mic, Square } from 'lucide-react';
 
 const VoiceTradingPanel: React.FC = () => {
   const user = useStore(selectUser);
@@ -147,7 +147,7 @@ const VoiceTradingPanel: React.FC = () => {
             cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 700, padding: '9px 16px',
           }}
         >
-          {voice.listening ? '⏹ Stop' : '🎤 Speak command'}
+          {voice.listening ? <><Square size="1em" aria-hidden="true" /> Stop</> : <><Mic size="1em" aria-hidden="true" /> Speak command</>}
         </button>
         {voice.transcript && (
           <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-dim)', fontStyle: 'italic' }}>“{voice.transcript}”</span>
@@ -172,7 +172,7 @@ const VoiceTradingPanel: React.FC = () => {
             }}
           >
             <div style={{ fontSize: 'var(--fs-value)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: 8 }}>
-              {pending.kind === 'kill_switch' ? '⚠️ Confirm kill switch' : 'Confirm trade'}
+              {pending.kind === 'kill_switch' ? <><AlertTriangle size="1em" aria-hidden="true" /> Confirm kill switch</> : 'Confirm trade'}
             </div>
             {heard && <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', marginBottom: 10 }}>Heard: “{heard}”</div>}
             <div style={{

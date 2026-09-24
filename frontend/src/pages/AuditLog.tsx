@@ -19,7 +19,7 @@ import { Badge, type BadgeVariant } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { EmptyState } from '../components/EmptyState';
-import { Search, Shield, Wrench } from 'lucide-react';
+import { ArrowDownToLine, Search, Shield, Wrench } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AuditEvent {
@@ -248,7 +248,7 @@ const AuditLog: React.FC = () => {
               disabled={exporting}
               style={s.exportBtn}
             >
-              {exporting ? <Spinner size="sm" /> : '⬇ Export CSV'}
+              {exporting ? <Spinner size="sm" /> : <><ArrowDownToLine size="1em" aria-hidden="true" /> Export CSV</>}
             </button>
           </div>
         }

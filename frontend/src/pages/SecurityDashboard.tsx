@@ -20,7 +20,7 @@ import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
 import { PageShell } from '../components/system/PageShell';
 import { extractApiError } from '../lib/utils';
-import { AlertTriangle, Ban, BarChart3, ClipboardList, Globe, Lock, Siren } from 'lucide-react';
+import { AlertTriangle, Ban, BarChart3, ClipboardList, Globe, Lock, LockOpen, Siren } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface LockdownStatus {
@@ -228,7 +228,7 @@ const SecurityDashboard: React.FC = () => {
             flexShrink: 0,
           }}
         >
-          {togglingLockdown ? '…' : lockdown.lockdown_active ? '🔓 Disable Lockdown' : '🔒 Enable Lockdown'}
+          {togglingLockdown ? '…' : lockdown.lockdown_active ? <><LockOpen size="1em" aria-hidden="true" /> Disable Lockdown</> : <><Lock size="1em" aria-hidden="true" /> Enable Lockdown</>}
         </button>
       </div>
 

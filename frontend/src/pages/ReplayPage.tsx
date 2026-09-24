@@ -18,7 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { PageShell } from '../components/system/PageShell';
-import { AlertTriangle, BarChart3, Bot, Check, NotebookPen, Rewind, SkipForward, TrendingUp, X } from 'lucide-react';
+import { AlertTriangle, BarChart3, Bot, Check, NotebookPen, Pause, Rewind, SkipForward, TrendingUp, X } from 'lucide-react';
 // Playback speed options (ms between auto-step ticks)
 /** 1× — the speed used if an index somehow falls outside SPEED_OPTIONS. */
 const DEFAULT_SPEED_MS = 500;
@@ -451,7 +451,7 @@ const ReplayPage: React.FC = () => {
                   background: autoPlay ? '#ef4444' : '#22c55e',
                   color: '#fff', border: 'none', borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                   opacity: selected.status === 'completed' ? 0.5 : 1 }}>
-                {autoPlay ? '⏸ Pause' : '▶ Play'}
+                {autoPlay ? <><Pause size="1em" aria-hidden="true" /> Pause</> : '▶ Play'}
               </button>
 
               {/* Speed selector */}

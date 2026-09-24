@@ -30,7 +30,7 @@ import { cn, fmtPrice, extractApiError } from '../../lib/utils';
 import type { PriceTick } from '../../types';
 import { toUTCSeconds as toUTC } from '../../lib/chartTime';
 import { assessBars } from '../../lib/barQuality';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Zap } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -470,7 +470,7 @@ export function AIChart({
               : 'bg-[#1e3a5f]/40 border-[#3b82f6]/30 text-[var(--link)] hover:bg-[#1e3a5f]/70',
           )}
         >
-          {analyzing ? '⚡ …' : '⚡ AI'}
+          {analyzing ? <><Zap size="1em" aria-hidden="true" /> …</> : <><Zap size="1em" aria-hidden="true" /> AI</>}
         </button>
       </div>
 

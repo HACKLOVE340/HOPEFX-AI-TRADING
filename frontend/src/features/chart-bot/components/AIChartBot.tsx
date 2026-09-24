@@ -132,7 +132,7 @@ const Provenance = memo(({ analysis }: { analysis: AIAnalysis }) => {
   const model = analysis.modelAvailable ? (analysis.modelVersion ?? 'model') : 'no model';
   return (
     <div style={{ ...ab.provenance, ...(degraded ? ab.provenanceDegraded : null) }}>
-      <span style={ab.provItem}>{degraded ? '⚠ DEGRADED' : '● LIVE'}</span>
+      <span style={ab.provItem}>{degraded ? <><AlertTriangle size="1em" aria-hidden="true" /> DEGRADED</> : '● LIVE'}</span>
       <span style={ab.provItem}>model: {model}</span>
       {bars !== undefined && <span style={ab.provItem}>bars: {bars}</span>}
       {analysis.dataSource && <span style={ab.provItem}>src: {analysis.dataSource}</span>}

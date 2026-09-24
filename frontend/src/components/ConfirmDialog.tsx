@@ -17,6 +17,7 @@
  */
 
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { AlertTriangle, HelpCircle, Trash2 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -180,7 +181,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
               border: `1px solid ${variant === 'danger' ? '#7f1d1d' : variant === 'warning' ? '#92400e' : '#1d4ed8'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
             }}>
-              {variant === 'danger' ? '🗑' : variant === 'warning' ? '⚠️' : '❓'}
+              {variant === 'danger' ? <Trash2 size="1em" aria-hidden="true" /> : variant === 'warning' ? <AlertTriangle size="1em" aria-hidden="true" /> : <HelpCircle size="1em" aria-hidden="true" />}
             </div>
 
             <h2 id="confirm-title" style={{ fontSize: 'var(--fs-title)', fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' }}>

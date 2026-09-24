@@ -2617,7 +2617,7 @@ const DiagnosticsTab: React.FC = () => {
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
           <Button onClick={runDiag} disabled={running}>{running ? 'Running…' : '▶ Run Full Diagnostics'}</Button>
-          <Button onClick={() => setConfirmRemediate(true)} disabled={remediating} variant="secondary">{remediating ? 'Remediating…' : '🔧 Auto-Remediate'}</Button>
+          <Button onClick={() => setConfirmRemediate(true)} disabled={remediating} variant="secondary">{remediating ? 'Remediating…' : <><Wrench size="1em" aria-hidden="true" /> Auto-Remediate</>}</Button>
           <Button onClick={loadSummary} variant="secondary">↻ Refresh</Button>
         </div>
         {confirmRemediate && (

@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { copyTradingApi } from '../hooks/useApi';
 import { extractApiError, fmtPrice, fmtPnl, fmtPctRaw } from '../lib/utils';
 import { ActionBanner } from '../components/ActionBanner';
-import { AlertTriangle, ClipboardList, Search, Trophy, Users } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Search, Square, Trophy, Users } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Leader {
@@ -281,7 +281,7 @@ const CopyTrading: React.FC = () => {
               ...s.tabBtn,
               ...(activeTab === t ? s.tabBtnActive : {}),
             }}>
-              {t === 'browse' ? '🔍 Browse Traders' : `📋 Active Sessions (${sessions.length})`}
+              {t === 'browse' ? <><Search size="1em" aria-hidden="true" /> Browse Traders</> : <><ClipboardList size="1em" aria-hidden="true" /> Active Sessions ({sessions.length})</>}
             </button>
           ))}
           <div style={{ width: 1, height: 24, background: 'var(--surface-hover)' }} />
@@ -381,7 +381,7 @@ const CopyTrading: React.FC = () => {
                   disabled={stoppingId === sess.trader_id}
                   style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: 'var(--loss)', cursor: 'pointer', fontSize: 'var(--fs-body)', fontWeight: 600, padding: '8px 16px' }}
                 >
-                  {stoppingId === sess.trader_id ? 'Stopping…' : '⏹ Stop Copying'}
+                  {stoppingId === sess.trader_id ? 'Stopping…' : <><Square size="1em" aria-hidden="true" /> Stop Copying</>}
                 </button>
               </div>
             );

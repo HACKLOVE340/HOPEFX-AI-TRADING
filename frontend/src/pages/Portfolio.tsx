@@ -20,7 +20,7 @@ import { PageShell } from '../components/system/PageShell';
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CrossLinkBar } from '../components';
-import { AlertTriangle, Banknote, BarChart3, BookOpen, Briefcase, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, X, Zap } from 'lucide-react';
+import { AlertTriangle, Banknote, BarChart3, BookOpen, Briefcase, Check, ChevronRight, Download, Eye, Inbox, LineChart, NotebookPen, Radar, Shield, TrendingUp, Trophy, X, Zap } from 'lucide-react';
 import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
@@ -271,12 +271,12 @@ const TradeHistory: React.FC = () => {
   const totalPnl = filtered.reduce((s, t) => s + t.pnl, 0);
   const wins     = filtered.filter((t) => t.pnl >= 0).length;
 
-  const FILTERS: { id: TradeFilter; label: string; color: string }[] = [
+  const FILTERS: { id: TradeFilter; label: string; icon?: React.ReactNode; color: string }[] = [
     { id: 'all',   label: 'ALL',     color: '#64748b' },
     { id: 'long',  label: '▲ LONG',  color: '#00e676' },
     { id: 'short', label: '▼ SHORT', color: '#ff1744' },
-    { id: 'win',   label: '✓ WINS',  color: '#00e676' },
-    { id: 'loss',  label: '✗ LOSSES',color: '#ff1744' },
+    { id: 'win',   label: 'WINS',    icon: <Check size="1em" aria-hidden="true" />, color: '#00e676' },
+    { id: 'loss',  label: 'LOSSES',  icon: <X size="1em" aria-hidden="true" />,     color: '#ff1744' },
   ];
 
   const dateInputStyle: React.CSSProperties = {
@@ -308,11 +308,12 @@ const TradeHistory: React.FC = () => {
         className="bg-[var(--raised)] border border-[var(--border)] rounded px-2 py-1 text-[11px] text-slate-300 outline-none w-20"
       />
       {/* Filter pills */}
-      {FILTERS.map(({ id, label, color }) => (
+      {FILTERS.map(({ id, label, icon, color }) => (
         <button
           key={id}
           onClick={() => setFilter(id)}
           style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
             padding: '2px 8px', borderRadius: 4,
             background: filter === id ? `${color}18` : 'transparent',
             border: `1px solid ${filter === id ? `${color}50` : 'var(--border)'}`,
@@ -320,7 +321,7 @@ const TradeHistory: React.FC = () => {
             fontSize: 9, fontWeight: 700, letterSpacing: 0.8, cursor: 'pointer',
           }}
         >
-          {label}
+          {icon}{label}
         </button>
       ))}
       {filtered.length > 0 && (
