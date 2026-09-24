@@ -897,7 +897,10 @@ class ExecutionEngine:
         Check the request against resting orders for self-trade prevention.
 
         Returns a block reason string if a self-trade would occur, else None.
-        Non-fatal on STP unavailability — execution proceeds without check.
+
+        Fail-closed on STP unavailability (owner decision): a market-abuse
+        control that cannot run must not be treated as "no self-trade found".
+        The order is blocked rather than allowed through silently.
         """
         try:
             from risk.self_trade_prevention import Order as STPOrder, SelfTradePrevention
@@ -931,8 +934,10 @@ class ExecutionEngine:
             # (it becomes resting until filled or cancelled)
             self._stp.add_resting_order(stp_order)
         except (ImportError, AttributeError, TypeError, RuntimeError) as exc:
-            # A14: a market-abuse control being off must leave a trace production
-            # emits. DEBUG is not emitted in production.
+            # Fail-closed (owner decision): a market-abuse control being
+            # unavailable must block the order, not silently allow it. It
+            # must also leave a trace production emits — DEBUG is not
+            # emitted in production.
             logger.error(
                 "[SELF_TRADE_PREVENTION_UNAVAILABLE] STP check skipped for order %s (%s %s %s): %s",
                 request.request_id,
@@ -940,6 +945,10 @@ class ExecutionEngine:
                 request.quantity,
                 request.symbol,
                 exc,
+            )
+            return (
+                f"[SELF_TRADE_PREVENTION_UNAVAILABLE] STP module unavailable for order "
+                f"{request.request_id} — blocking order (fail-closed): {exc}"
             )
         return None
 
