@@ -79,6 +79,19 @@ class _Router:
         return self._result
 
 
+class _Canonical:
+    def __init__(self, report):
+        self.report = report
+        self.calls = 0
+
+    def update_last_tick(self, *_):
+        pass
+
+    async def execute(self, _request):
+        self.calls += 1
+        return self.report
+
+
 def _engine(router, broker):
     """A HopeFXEngine positioned exactly on the fallback path.
 
@@ -101,6 +114,7 @@ def _engine(router, broker):
     )
     e._trade_logger = SimpleNamespace(log_fill=lambda *a, **k: None)
     e._position_tracker = None
+    e._oms = None
     e._order_listeners = []
     return e
 
@@ -187,6 +201,145 @@ class TestTheHappyPathStillWorks:
         _decide(engine)
 
         assert broker.orders == [], "the router filled it; the engine must not send a second order"
+
+
+class TestCanonicalDecisionIsTerminal:
+    def test_fallback_kill_switch_blocks_before_router(self, monkeypatch):
+        import kill_switch
+
+        monkeypatch.setattr(kill_switch, "KillSwitch", lambda: SimpleNamespace(is_active=lambda: True))
+        broker = _Spy()
+        router = _Router({"status": "rejected", "reason": "no_brokers_available"})
+        engine = _engine(router, broker)
+
+        _decide(engine)
+
+        assert router.calls == 0
+        assert broker.orders == []
+
+    def test_fallback_kill_switch_error_blocks_before_router(self, monkeypatch):
+        import kill_switch
+
+        def broken_kill_switch():
+            raise OSError("state file unreadable")
+
+        monkeypatch.setattr(kill_switch, "KillSwitch", broken_kill_switch)
+        broker = _Spy()
+        router = _Router({"status": "rejected", "reason": "no_brokers_available"})
+        engine = _engine(router, broker)
+
+        _decide(engine)
+
+        assert router.calls == 0
+        assert broker.orders == []
+
+    @pytest.mark.parametrize("status", ["BLOCKED", "REJECTED", "ERROR"])
+    def test_canonical_refusal_never_uses_router_or_broker(self, status):
+        from execution.engine import ExecutionReport, ExecutionStatus
+
+        broker = _Spy()
+        router = _Router({"status": "rejected", "reason": "no_brokers_available"})
+        engine = _engine(router, broker)
+        canonical = _Canonical(
+            ExecutionReport(request_id="req-1", status=ExecutionStatus[status], message="[KILL_SWITCH] halted")
+        )
+        engine._execution_engine = canonical
+
+        _decide(engine)
+
+        assert canonical.calls == 1
+        assert router.calls == 0
+        assert broker.orders == []
+
+    @pytest.mark.parametrize("status,filled,price,expected_fills", [
+        ("SUBMITTED", 0.0, 0.0, []),
+        ("PARTIAL", 0.4, 1.03, [(0.4, 1.03)]),
+        ("FILLED", 1.0, 1.03, [(1.0, 1.03)]),
+    ])
+    def test_only_confirmed_canonical_quantity_is_logged(self, status, filled, price, expected_fills):
+        from execution.engine import ExecutionReport, ExecutionStatus
+
+        broker = _Spy()
+        router = _Router({"status": "rejected", "reason": "no_brokers_available"})
+        engine = _engine(router, broker)
+        fills = []
+        opened = []
+        engine._trade_logger.log_fill = lambda **kw: fills.append((kw["lots"], kw["fill_price"]))
+        engine._risk_manager.notify_position_opened = opened.append
+        engine._execution_engine = _Canonical(
+            ExecutionReport(
+                request_id="req-1", status=ExecutionStatus[status], order_id="broker-order-1",
+                filled_quantity=filled, average_price=price,
+            )
+        )
+
+        _decide(engine)
+
+        assert fills == expected_fills
+        assert len(opened) == len(expected_fills)
+        assert router.calls == 0
+        assert broker.orders == []
+
+    def test_unconfirmed_direct_broker_result_creates_no_fill(self):
+        broker = _Spy()
+        broker.place_order = lambda **_kw: None
+        engine = _engine(_Router({"status": "rejected", "reason": "no_brokers_available"}), broker)
+        fills = []
+        opened = []
+        engine._trade_logger.log_fill = lambda **kw: fills.append(kw)
+        engine._risk_manager.notify_position_opened = opened.append
+
+        _decide(engine)
+
+        assert fills == []
+        assert opened == []
+
+    def test_confirmed_direct_broker_fill_records_actual_quantity(self):
+        broker = _Spy()
+        broker.place_order = lambda **_kw: SimpleNamespace(
+            status=SimpleNamespace(value="filled"), filled_quantity=0.4, average_price=1.03
+        )
+        engine = _engine(_Router({"status": "rejected", "reason": "no_brokers_available"}), broker)
+        fills = []
+        engine._trade_logger.log_fill = lambda **kw: fills.append((kw["lots"], kw["fill_price"]))
+
+        _decide(engine)
+
+        assert fills == [(0.4, 1.03)]
+
+    @pytest.mark.parametrize("reason", ["timeout:primary", "no_brokers_available"])
+    def test_router_unknown_status_is_not_counted_as_fill(self, reason):
+        broker = _Spy()
+        engine = _engine(_Router({"status": "unknown", "reason": reason}), broker)
+        fills = []
+        engine._trade_logger.log_fill = lambda **kw: fills.append(kw)
+
+        _decide(engine)
+
+        assert broker.orders == []
+        assert fills == []
+
+    def test_nuclear_pending_order_does_not_open_position(self, monkeypatch):
+        import kill_switch
+        from execution.engine import ExecutionReport, ExecutionStatus
+
+        monkeypatch.setattr(kill_switch, "kill_switch", SimpleNamespace(is_active=lambda: False))
+        engine = _engine(None, _Spy())
+        engine.primary_symbol = "XAUUSD"
+        engine._execution_engine = _Canonical(
+            ExecutionReport(request_id="nuclear-1", status=ExecutionStatus.SUBMITTED, order_id="broker-order-2")
+        )
+        fills = []
+        opened = []
+        engine._trade_logger.log_fill = lambda **kw: fills.append(kw)
+        engine._risk_manager.notify_position_opened = opened.append
+        signal = SimpleNamespace(direction="long", symbol="XAUUSD", confidence=0.9, entry_price=1.0)
+
+        asyncio.run(engine._on_nuclear_signal(signal))
+
+        assert engine._execution_engine.calls == 1
+        assert fills == []
+        assert opened == []
 
 
 class TestThePredicateIsTiedToTheRouter:

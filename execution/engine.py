@@ -645,7 +645,10 @@ class ExecutionEngine:
                 )
                 with _fill_ctx as _fill_span:
                     try:
-                        if report.success:
+                        if report.status == ExecutionStatus.SUBMITTED:
+                            _fill_span.add_event("order.submitted", {"order_id": str(report.order_id or "")})
+                            _root_span.add_event("order.submitted", {"order_id": str(report.order_id or "")})
+                        elif report.success:
                             _fill_span.add_event(
                                 "fill.success",
                                 {
@@ -1214,8 +1217,30 @@ class ExecutionEngine:
                 message="[BROKER_ERROR] Order submission failed — check server logs",
             )
 
-        if report.success:
-            await self._handle_fill_success(request, report)
+        if report.status == ExecutionStatus.SUBMITTED:
+            # Broker acceptance is a successful submission, but no trade has
+            # filled yet. Fill metrics/callbacks wait for a confirmed fill.
+            await self._circuit_breaker.record_success()
+            await self._record_latency(report.latency_ms)
+            try:
+                await self._persist_to_redis(request, report)
+            except (TimeoutError, RuntimeError, ConnectionError) as exc:
+                logger.warning("Order acceptance persistence failed: %s", exc)
+        elif report.status in (ExecutionStatus.FILLED, ExecutionStatus.PARTIAL):
+            if report.filled_quantity > 0 and report.average_price > 0:
+                await self._handle_fill_success(request, report)
+            else:
+                # A malformed fill is not evidence of an executed position.
+                # Its broker outcome may still need reconciliation.
+                logger.error(
+                    "Broker reported %s without confirmed fill details: %s",
+                    report.status.value,
+                    report.request_id,
+                )
+                report.status = ExecutionStatus.ERROR
+                report.message = "[FILL_UNCONFIRMED] Reconcile broker order before retry"
+                await self._circuit_breaker.record_failure()
+                await self._inc_errors()
         else:
             await self._circuit_breaker.record_failure()
             await self._inc_errors()
@@ -1456,7 +1481,7 @@ class ExecutionEngine:
         )
 
         logger.info(
-            "ExecutionEngine: fill report | request_id=%s order_id=%s status=%s filled=%.4f avg_px=%.4f latency=%.2fms",
+            "ExecutionEngine: order report | request_id=%s order_id=%s status=%s filled=%.4f avg_px=%.4f latency=%.2fms",
             request.request_id,
             order.id,
             exec_status.value,

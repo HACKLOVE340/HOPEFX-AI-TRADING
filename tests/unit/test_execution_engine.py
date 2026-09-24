@@ -387,6 +387,32 @@ class TestExecutionEngine:
         assert metrics["fill_rate"] == pytest.approx(1.0)
 
     @pytest.mark.asyncio
+    async def test_pending_order_is_accepted_without_fill_side_effects(self):
+        broker = _make_broker_manager(OrderStatus.PENDING)
+        original_place_order = broker.place_order
+
+        def pending_order(*args, **kwargs):
+            order = original_place_order(*args, **kwargs)
+            order.filled_quantity = 0.0
+            order.average_price = None
+            return order
+
+        broker.place_order = pending_order
+        engine = ExecutionEngine(broker, _make_risk_manager())
+        await engine.start()
+        fills = []
+        engine.add_fill_callback(fills.append)
+
+        report = await engine.execute(
+            ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0)
+        )
+
+        assert report.status == ExecutionStatus.SUBMITTED
+        assert report.filled_quantity == 0
+        assert fills == []
+        assert engine.get_metrics()["total_fills"] == 0
+
+    @pytest.mark.asyncio
     async def test_broker_error_returns_error_report(self):
         class _ErrorBroker(_ConnectedPaperBroker):
             """Real broker that raises on place_order to test error handling."""
