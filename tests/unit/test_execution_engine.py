@@ -236,7 +236,9 @@ class TestExecutionEngine:
         engine = ExecutionEngine(broker, risk)
         await engine.start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         report = await engine.execute(req)
 
         assert report.success is True
@@ -259,7 +261,9 @@ class TestExecutionEngine:
         engine = ExecutionEngine(broker, _make_risk_manager())
         await engine.start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         report = await engine.execute(req)
 
         assert report.success is True
@@ -277,7 +281,9 @@ class TestExecutionEngine:
         engine = ExecutionEngine(broker, risk, kill_switch=ks)
         await engine.start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         report = await engine.execute(req)
 
         assert report.success is False
@@ -293,7 +299,9 @@ class TestExecutionEngine:
         engine = ExecutionEngine(broker, risk)
         # Do NOT call start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         report = await engine.execute(req)
 
         assert report.status == ExecutionStatus.BLOCKED
@@ -313,7 +321,9 @@ class TestExecutionEngine:
         engine._circuit_breaker = EngineCircuitBreaker(max_failures=2, window_sec=60.0, reset_sec=9999.0)
         await engine.start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         # First two failures open the circuit breaker
         await engine.execute(req)
         await engine.execute(req)
@@ -331,7 +341,9 @@ class TestExecutionEngine:
         engine = ExecutionEngine(broker, risk)
         await engine.start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         report = await engine.execute(req)
 
         assert report.success is False
@@ -348,7 +360,9 @@ class TestExecutionEngine:
         fills = []
         engine.add_fill_callback(fills.append)
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         await engine.execute(req)
 
         assert len(fills) == 1
@@ -361,7 +375,9 @@ class TestExecutionEngine:
         engine = ExecutionEngine(broker, risk)
         await engine.start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         await engine.execute(req)
 
         metrics = engine.get_metrics()
@@ -383,7 +399,9 @@ class TestExecutionEngine:
         engine = ExecutionEngine(broker, risk)
         await engine.start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         report = await engine.execute(req)
 
         assert report.success is False
@@ -405,7 +423,9 @@ class TestExecutionEngine:
         engine = ExecutionEngine(broker, risk)
         await engine.start()
 
-        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        req = ExecutionRequest(
+            symbol="XAUUSD", side="BUY", quantity=0.1, price=1950.0
+        )  # A14: unpriced is refused; 0.1 keeps notional under the per-trade risk cap
         # Must not raise
         report = await engine.execute(req)
         assert isinstance(report, ExecutionReport)
