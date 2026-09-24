@@ -38,6 +38,15 @@ What it does
 * Marks exits with ``exit: True`` so the engine closes the whole open position.
   Kelly sizing computes an entry quantity from equity and would otherwise
   part-close a position by an unrelated amount.
+* Threads its own confirmed position into ``strategy.position`` before every
+  call, so the mean-reversion/RSI exit branches gated on ``self.position ==
+  "LONG"`` (F276 / MASTER_OUTSTANDING §A18) can actually fire. The adapter
+  already tracks ``self.position`` from its own confirmed entries/exits — the
+  fix threads that same value into the wrapped strategy rather than inventing
+  a second, speculative source of truth. It is set from the fill the adapter
+  already recorded on a *previous* bar, never from the order this bar is about
+  to place, so a strategy's exit condition never sees a position it does not
+  actually hold yet.
 
 Long/flat only
 --------------
@@ -152,6 +161,13 @@ class BacktestStrategyAdapter:
         history = frame[frame["timestamp"] <= timestamp]
         if len(history) < 2:
             return []
+
+        # Thread the adapter's own confirmed position into the wrapped
+        # strategy so exit branches gated on `self.position` (F276) can fire.
+        # This is the fill the adapter recorded on a PRIOR bar — never the
+        # order this call is about to decide on — so it carries no look-ahead.
+        if hasattr(self.strategy, "position"):
+            self.strategy.position = "LONG" if self.position == "long" else None
 
         try:
             raw = self.strategy.generate_signal(history)
