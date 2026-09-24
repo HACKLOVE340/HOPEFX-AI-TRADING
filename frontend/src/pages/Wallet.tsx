@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageShell } from '../components/system/PageShell';
 import { RelatedPages } from '../components';
-import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, Check, ClipboardList, CreditCard, Handshake, IdCard, Receipt, Send, Settings, ShieldCheck, Star, Wallet as WalletIcon, Zap } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, BarChart3, Briefcase, Check, ClipboardList, CreditCard, Handshake, IdCard, Receipt, RefreshCw, Send, Settings, ShieldCheck, Star, Wallet as WalletIcon, Zap } from 'lucide-react';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -64,8 +64,8 @@ interface PaymentMethod {
   is_default: boolean;
 }
 
-const TYPE_ICON: Record<string, string> = {
-  deposit: '↓', withdrawal: '↑', subscription: '🔄', copy_fee: '📊', refund: '↩',
+const TYPE_ICON: Record<string, React.ReactNode> = {
+  deposit: '↓', withdrawal: '↑', subscription: <RefreshCw size="1em" aria-hidden="true" />, copy_fee: <BarChart3 size="1em" aria-hidden="true" />, refund: '↩',
 };
 const TYPE_COLOR: Record<string, string> = {
   deposit: 'var(--gain)', withdrawal: 'var(--loss)', subscription: 'var(--text-dim)',

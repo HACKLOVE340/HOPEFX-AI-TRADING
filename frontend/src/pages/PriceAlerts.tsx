@@ -19,7 +19,7 @@ import { api } from '../hooks/useApi';
 import { useStore, selectTriggeredAlerts, selectFeedLive } from '../store';
 import { LiveFeedNotice } from '../components/ui/LiveFeedNotice';
 import { extractApiError, toSlashSymbol } from '../lib/utils';
-import { AlertTriangle, Bell, Eye, Trash2, Zap } from 'lucide-react';
+import { AlertTriangle, Bell, Eye, Pause, Trash2, X, Zap } from 'lucide-react';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AlertCondition {
@@ -184,7 +184,7 @@ const PriceAlerts: React.FC = () => {
       width="wide" title="Price Alerts"
       subtitle="Get notified via Discord, Telegram, or email when price conditions are met."
       actions={<><button onClick={() => setShowForm(!showForm)} style={s.createBtn}>
-          {showForm ? '✕ Cancel' : '+ Create Alert'}
+          {showForm ? <><X size="1em" aria-hidden="true" /> Cancel</> : '+ Create Alert'}
         </button></>}
     >
 
@@ -307,7 +307,7 @@ const PriceAlerts: React.FC = () => {
             </button>
             <button onClick={() => handleToggle(alert)} style={s.iconBtn}
               title={alert.status === 'paused' ? 'Resume' : 'Pause'}>
-              {alert.status === 'paused' ? '▶' : '⏸'}
+              {alert.status === 'paused' ? '▶' : <Pause size="1em" aria-hidden="true" />}
             </button>
             <button onClick={() => handleDelete(alert.id)}
               style={{ ...s.iconBtn, color: 'var(--loss)' }} title="Delete">

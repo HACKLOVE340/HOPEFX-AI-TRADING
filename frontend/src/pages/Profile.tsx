@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { Eye, Trophy, User, UserRound, Zap } from 'lucide-react';
+import { Camera, Eye, Star, Trophy, User, UserRound, Zap } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -214,7 +214,7 @@ const Profile: React.FC = () => {
           {isOwn && (
             <>
               <button onClick={()=>fileRef.current?.click()} style={s.avatarEditBtn} title="Change avatar" aria-label="Change avatar">
-                {avatarUploading ? '…' : '📷'}
+                {avatarUploading ? '…' : <Camera size="1em" aria-hidden="true" />}
               </button>
               <input ref={fileRef} type="file" accept="image/*" aria-label="Upload a new avatar image" style={{display:'none'}} onChange={handleAvatarChange}/>
             </>
@@ -304,7 +304,12 @@ const Profile: React.FC = () => {
               <div key={str.strategy_id} style={s.stratRow}>
                 <span style={{fontWeight:600,color:'var(--text-strong)'}}>{str.name}</span>
                 <span style={{fontSize: 'var(--fs-body)',color:'var(--text-muted)'}}>{str.subscribers ?? 0} subscribers</span>
-                <span style={{fontSize: 'var(--fs-body)',color:'#f59e0b'}}>{'★'.repeat(str.rating != null && Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0)} {str.rating != null && Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}</span>
+                <span style={{fontSize: 'var(--fs-body)',color:'#f59e0b',display:'inline-flex',alignItems:'center',gap:4}}>
+                  <span style={{display:'inline-flex',gap:1}} aria-hidden="true">
+                    {Array.from({length: str.rating != null && Number.isFinite(str.rating) ? Math.max(0, Math.min(5, Math.round(str.rating))) : 0}).map((_, i) => <Star key={i} size="1em" fill="currentColor" stroke="none" />)}
+                  </span>
+                  {str.rating != null && Number.isFinite(str.rating) ? str.rating.toFixed(1) : '—'}
+                </span>
               </div>
             ))}
           </div>

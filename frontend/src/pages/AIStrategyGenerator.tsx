@@ -6,7 +6,7 @@
  *           POST /api/brain/deploy-strategy
  */
 
-import { Check, ClipboardList, TrendingUp } from 'lucide-react';
+import { Check, ClipboardList, Hourglass, Rocket, TrendingUp } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -374,7 +374,7 @@ const AIStrategyGenerator: React.FC = () => {
                       fontFamily: 'inherit', transition: 'all 0.2s',
                     }}
                   >
-                    {copied ? '✓ Copied!' : '⎘ Copy'}
+                    {copied ? <><Check size="1em" aria-hidden="true" /> Copied!</> : '⎘ Copy'}
                   </button>
                 </div>
                 {codeExpanded && (
@@ -389,7 +389,7 @@ const AIStrategyGenerator: React.FC = () => {
                   disabled={deploying}
                   style={{ ...s.deployBtn, opacity: deploying ? 0.5 : 1 }}
                 >
-                  {deploying ? '⏳ Deploying…' : '🚀 Deploy to Paper Trading'}
+                  {deploying ? <><Hourglass size="1em" aria-hidden="true" /> Deploying…</> : <><Rocket size="1em" aria-hidden="true" /> Deploy to Paper Trading</>}
                 </button>
                 <button
                   onClick={() => navigate('/walk-forward')}

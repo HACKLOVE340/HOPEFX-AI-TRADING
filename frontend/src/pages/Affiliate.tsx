@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Repeat, Share2, Trophy } from 'lucide-react';
+import { Check, Repeat, Share2, Trophy } from 'lucide-react';
 import { PageShell } from '../components/system/PageShell';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -178,7 +178,7 @@ const Affiliate:React.FC=()=>{
 
       <div style={st.linkCard}>
         <div style={st.linkLabel}>Your referral link</div>
-        <div style={st.linkRow}><code style={st.linkCode}>{referralLink}</code><button onClick={copyLink} style={st.copyBtn}>{copied?'✅ Copied':'Copy link'}</button></div>
+        <div style={st.linkRow}><code style={st.linkCode}>{referralLink}</code><button onClick={copyLink} style={st.copyBtn}>{copied?<><Check size="1em" aria-hidden="true" /> Copied</>:'Copy link'}</button></div>
         <div style={{fontSize: 'var(--fs-body)',color:'var(--text-muted)',marginTop:8}}>Code: <strong style={{color:'var(--text-dim)'}}>{account.code}</strong></div>
       </div>
 

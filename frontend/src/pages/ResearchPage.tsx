@@ -16,7 +16,7 @@ import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { RelatedPages } from '../components';
-import { Bot, Cpu, FlaskConical, LineChart, Microscope, Sparkles, X } from 'lucide-react';
+import { Bot, Cpu, FlaskConical, Hourglass, LineChart, Microscope, Sparkles, X } from 'lucide-react';
 import { researchApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -352,7 +352,7 @@ const ResearchPage: React.FC = () => {
                   style={{ padding: '7px 14px', background: '#22c55e', color: '#fff', border: 'none',
                     borderRadius: 6, fontSize: 'var(--fs-body)', fontWeight: 600, cursor: 'pointer',
                     opacity: (runMut.isPending || selected.status === 'running') ? 0.5 : 1 }}>
-                  {selected.status === 'running' ? '⏳ Running…' : '▶ Run'}
+                  {selected.status === 'running' ? <><Hourglass size="1em" aria-hidden="true" /> Running…</> : '▶ Run'}
                 </button>
                 <button
                   onClick={() => deleteMut.mutate(selected.notebook_id)}
@@ -425,7 +425,7 @@ const ResearchPage: React.FC = () => {
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 'var(--fs-body)'}}>
                 {selected.status === 'running'
-                  ? '⏳ Analysis in progress…'
+                  ? <><Hourglass size="1em" aria-hidden="true" /> Analysis in progress…</>
                   : 'Click ▶ Run to execute this notebook'}
               </div>
             )}

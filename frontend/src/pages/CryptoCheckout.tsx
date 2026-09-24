@@ -549,7 +549,7 @@ const CryptoCheckout: React.FC = () => {
               <code style={{ flex: 1, fontSize: 'var(--fs-body)', color: 'var(--text-dim)', wordBreak: 'break-all',
                 lineHeight: 1.5 }}>{depositInfo.address}</code>
               <button onClick={copyAddress} style={{ ...st.copyBtn, flexShrink: 0 }}>
-                {copied ? '✅' : 'Copy'}
+                {copied ? <><CheckCircle2 size="1em" aria-hidden="true" /> Copied</> : 'Copy'}
               </button>
             </div>
           </div>

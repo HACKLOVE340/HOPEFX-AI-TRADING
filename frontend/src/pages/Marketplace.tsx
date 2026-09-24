@@ -3,7 +3,7 @@
  * Tabs: Browse · My Listings
  */
 import { PageShell } from '../components/system/PageShell';
-import { Bot, PenLine, ShoppingCart, Star, Store, X } from 'lucide-react';
+import { Bot, CheckCircle2, PenLine, ShoppingCart, Star, Store, X } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
@@ -26,7 +26,14 @@ const fmt = (n: number, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '—');
 const Stars: React.FC<{rating: number; size?: number}> = ({rating, size=14}) => {
   const r = Number.isFinite(rating) ? Math.max(0, Math.min(5, rating)) : 0;
   const full = Math.floor(r); const half = r - full >= 0.5;
-  return <span style={{fontSize:size,lineHeight:1}}>{'★'.repeat(full)}{half ? '½' : ''}{'☆'.repeat(Math.max(0, 5-full-(half?1:0)))}</span>;
+  const empty = Math.max(0, 5 - full - (half ? 1 : 0));
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',gap:1,lineHeight:1}} aria-hidden="true">
+      {Array.from({length: full}).map((_, i) => <Star key={`f${i}`} size={size} fill="currentColor" stroke="none" />)}
+      {half && <Star key="half" size={size} fill="currentColor" stroke="none" style={{clipPath:'inset(0 50% 0 0)'}} />}
+      {Array.from({length: empty}).map((_, i) => <Star key={`e${i}`} size={size} fill="none" />)}
+    </span>
+  );
 };
 /**
  * `positive` defaults to true, so a caller that forgets it renders green. Every
@@ -94,7 +101,7 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
         <p style={{color:'var(--text-dim)',fontSize: 'var(--fs-value)',lineHeight:1.7,marginBottom:20}}>{strategy.description}</p>
         {p&&<div style={{...st.perfRow,marginBottom:24}}>{p.total_return_pct!=null&&<PerfBadge label="Total return" value={fmtPctRaw(p.total_return_pct, 1)} positive={p.total_return_pct>=0}/>}{p.sharpe_ratio!=null&&<PerfBadge label="Sharpe ratio" value={fmt(p.sharpe_ratio)} positive={p.sharpe_ratio>=0}/>}{p.max_drawdown_pct!=null&&<PerfBadge label="Max drawdown" value={`-${fmt(Math.abs(p.max_drawdown_pct))}%`} positive={false}/>}{p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}</div>}
         <div style={{display:'flex',gap:10,marginBottom:16}}>
-          <button onClick={()=>onSubscribe(strategy)} disabled={subscribed} style={{...st.subscribeBtn,flex:1,opacity:subscribed?0.6:1}}>{subscribed?'✅ Subscribed':strategy.price===0?'Add to my strategies':`Subscribe — $${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}</button>
+          <button onClick={()=>onSubscribe(strategy)} disabled={subscribed} style={{...st.subscribeBtn,flex:1,opacity:subscribed?0.6:1}}>{subscribed?<><CheckCircle2 size="1em" aria-hidden="true" /> Subscribed</>:strategy.price===0?'Add to my strategies':`Subscribe — $${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}</button>
           {subscribed&&<button onClick={onReview} style={{...st.subscribeBtn,background:'var(--surface-hover)',flex:'0 0 auto',padding:'14px 16px'}}><PenLine size="1em" aria-hidden /> Review</button>}
         </div>
         {purchaseError&&<div style={st.purchaseError}>{purchaseError}</div>}

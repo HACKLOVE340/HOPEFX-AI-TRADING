@@ -148,7 +148,7 @@ const NuclearControlsSection: React.FC = () => {
 
       {/* Status KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        <KpiTile label="Platform Status" value={halted ? 'HALTED' : 'RUNNING'} icon={halted ? '🛑' : '✅'} accent={halted ? '#ef4444' : '#22c55e'} />
+        <KpiTile label="Platform Status" value={halted ? 'HALTED' : 'RUNNING'} icon={halted ? <OctagonAlert size={18} aria-hidden /> : <CheckCircle2 size={18} aria-hidden />} accent={halted ? '#ef4444' : '#22c55e'} />
         <KpiTile label="Kill Switch" value={status?.kill_switch_active ? 'ACTIVE' : 'INACTIVE'} icon={<Zap size={18} aria-hidden />} accent={status?.kill_switch_active ? '#ef4444' : '#22c55e'} />
         <KpiTile label="Hedge" value={status?.hedge_active ? `${((status.hedge_ratio ?? 0) * 100).toFixed(0)}%` : 'OFF'} icon={<Shield size={18} aria-hidden />} accent={status?.hedge_active ? '#fbbf24' : '#475569'} />
         <KpiTile label="Risk Override" value={status?.risk_override ? `${((status.max_risk_fraction ?? 1) * 100).toFixed(0)}%` : 'NORMAL'} icon={<AlertTriangle size={18} aria-hidden />} accent={status?.risk_override ? '#f97316' : '#475569'} />

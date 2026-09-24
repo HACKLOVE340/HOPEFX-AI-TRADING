@@ -45,7 +45,7 @@ import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError, fmtMarginLevel, marginLevelIsSafe, sameSymbol, describeCloseAll, positionSide } from '../lib/utils';
 import type { PriceTick } from '../types';
-import { AlertTriangle, BarChart3, Briefcase, CandlestickChart, Eye, Monitor, NotebookPen, Repeat, Shield } from 'lucide-react';
+import { AlertTriangle, BarChart3, Briefcase, CandlestickChart, Eye, Monitor, NotebookPen, Repeat, Shield, X } from 'lucide-react';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // Tradable universe — mirrors the 6-char pairs in config/multi_source_feed.yaml
@@ -566,7 +566,7 @@ const Trade: React.FC = () => {
               disabled={closingAll}
               className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-bold bg-[var(--bear)]/10 border border-[var(--bear)]/30 text-[var(--bear)] hover:bg-[var(--bear)]/20 transition-colors disabled:opacity-50 min-h-[36px]"
             >
-              {closingAll ? 'Closing…' : '✕ Close All'}
+              {closingAll ? 'Closing…' : <><X size="1em" aria-hidden="true" /> Close All</>}
             </button>
           </div>
         }
