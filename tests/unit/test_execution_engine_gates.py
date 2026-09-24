@@ -432,14 +432,17 @@ class TestSelfTradePrevention:
 
         assert reason is None or "SELF_TRADE_PREVENTION" in reason
 
-    def test_a_broken_stp_module_is_logged_at_error_naming_the_order(self, monkeypatch, caplog) -> None:
-        """When STP is unavailable the control is off for this order; that must
-        leave a trace production emits (owner decision A14).
+    def test_a_broken_stp_module_blocks_the_order_and_is_logged_at_error(self, monkeypatch, caplog) -> None:
+        """When STP is unavailable the order is refused (fail-closed, owner
+        decision A14 follow-up).
 
-        This used to be `test_a_broken_stp_module_does_not_block_execution`, and
-        only asserted the fallthrough — the sole trace was a DEBUG line, which
-        production does not emit. It now asserts an ERROR record naming the
-        order whose self-trade check was skipped.
+        This used to be `test_a_broken_stp_module_does_not_block_execution`,
+        then `test_a_broken_stp_module_is_logged_at_error_naming_the_order`
+        — both asserted that the order was ALLOWED through when the
+        self-trade-prevention module could not be loaded, with only an ERROR
+        log as the trace. That was a market-abuse control that could be
+        silently disabled by an ImportError. It now asserts the order is
+        BLOCKED, with the ERROR record still emitted.
         """
         import logging
         import sys
@@ -447,7 +450,10 @@ class TestSelfTradePrevention:
         monkeypatch.setitem(sys.modules, "risk.self_trade_prevention", None)
         request = _request()
         with caplog.at_level(logging.ERROR, logger="execution.engine"):
-            _engine(None)._check_self_trade(request)
+            reason = _engine(None)._check_self_trade(request)
+
+        assert reason is not None, "STP unavailability must block the order (fail-closed)"
+        assert "SELF_TRADE_PREVENTION_UNAVAILABLE" in reason
 
         errors = [r for r in caplog.records if r.levelno >= logging.ERROR and "SELF_TRADE" in r.getMessage()]
         assert errors, "STP unavailability left no ERROR record"
