@@ -44,6 +44,35 @@ These are not blocked on engineering. They are blocked on someone deciding.
 > (OANDA/MT5 credentials or a licensed export), matching macro data, approval
 > to register and deploy, and a retrain schedule under 30 days.
 >
+> **Why there is no edge: investigated 2026-09-24, see
+> `docs/audit/2026-09-24-a0-no-edge-investigation.md`. This changes what A0 is.**
+> - **The labels are correct.** All 1,190 match an independent recomputation.
+> - **The dry run's 0.387 is a base-rate shift, not skill.** Gold went up on 50%
+>   of training bars and 65.5% of OOS bars, and the model called "down" 84.5% of
+>   the time, driven by raw price-level features. Always-up scores 0.655.
+> - **There is no signal underneath.** AUC is about 0.50 on every model tried,
+>   including tiny baselines, and matches training on shuffled labels.
+> - **The incumbent's recorded 0.5734 is base rate plus leakage.** 37% of
+>   `XAUUSD_50Y.csv` from 2016 onward is fake flat bars priced at the month's
+>   mean close. On clean data the incumbent scores 0.534 against always-up at
+>   0.558.
+> - **So the platform has not had a working model; the stale-age block hid
+>   that.** Recent data alone will not create an edge. It is needed only to pass
+>   the age gate.
+>
+> **Recommended fixes, in order:**
+> 1. Promote only a model that beats always-up, with an AUC confidence bound
+>    above 0.5.
+> 2. Retire 0.5734 as the comparison bar.
+> 3. Keep the 50Y file out of training and detect fake flat bars.
+> 4. Retrain on 26 years of clean data plus new bars.
+> 5. Fix the feature defects.
+> 6. Fix the unfiltered label.
+> 7. Define the OOS split by date.
+> 8. Report balanced accuracy and base-rate baselines.
+>
+> Each fix names a test that fails today.
+>
 > **Plan Tasks 1–6 done, 2026-09-24.**
 > - **The guard.** `ml/model_registry.py::promote()` now refuses a model with
 >   `StaleTrainingDataError` when its training data ends more than
