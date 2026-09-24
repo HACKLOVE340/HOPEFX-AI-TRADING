@@ -112,15 +112,28 @@ class TestTheRecordSurvivesAndUpdates:
             assert mod._load_payment("nope") is None
 
 
-class TestNoDatabaseIsSurvivedRatherThanCrashed:
-    """A payment API that raises when the database is down is worse than one
-    that logs and carries on — but it must not claim to have persisted."""
+class TestNoDatabaseRefusesTheWriteAndToleratesTheReads:
+    """A write that cannot be persisted refuses; reads and updates stay quiet.
 
-    def test_save_without_a_session_does_not_raise(self):
+    This class used to open: "A payment API that raises when the database is
+    down is worse than one that logs and carries on", and its first test was
+    `test_save_without_a_session_does_not_raise`. That was the defect stated as
+    the requirement: carrying on meant `generate_deposit_address` issued a live
+    address and amount for a payment with no record, so a user could pay to an
+    address the webhook cannot match to anyone (MASTER_OUTSTANDING §A11). The
+    owner decided fail closed. The endpoint-level proof is in
+    `test_crypto_payment_unpersisted_is_not_issued.py`.
+    """
+
+    def test_save_without_a_session_raises(self):
         from api import payments as mod
 
-        with patch.object(mod, "_get_db_session", lambda: None):
+        with (
+            patch.object(mod, "_get_db_session", lambda: None),
+            pytest.raises(mod.PaymentNotPersistedError) as excinfo,
+        ):
             mod._save_payment(_payment("PAY-nodb"))
+        assert excinfo.value.payment_id == "PAY-nodb"
 
     def test_load_and_update_without_a_session_are_quiet(self):
         from api import payments as mod

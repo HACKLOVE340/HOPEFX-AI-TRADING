@@ -280,19 +280,29 @@ class TestPaymentDBHelpers:
             "expires_at": (now + timedelta(minutes=30)).isoformat(),
         }
 
-    def test_save_payment_logs_warning_when_db_unavailable(self, caplog):
-        """_save_payment() logs a warning when DB session is None."""
+    def test_save_payment_refuses_and_logs_error_when_db_unavailable(self, caplog):
+        """_save_payment() raises, and logs at ERROR naming the payment, when DB session is None.
+
+        This was `test_save_payment_logs_warning_when_db_unavailable`, and it
+        asserted the defect: a WARNING and a normal return, after which the
+        endpoint issued the deposit address for a payment with no record
+        (MASTER_OUTSTANDING §A11). The owner decided fail closed, so the helper
+        now raises and the caller refuses.
+        """
         import logging
 
-        from api.payments import _save_payment
+        from api.payments import PaymentNotPersistedError, _save_payment
 
         with (
             patch("api.payments._get_db_session", return_value=None),
             caplog.at_level(logging.WARNING, logger="api.payments"),
+            pytest.raises(PaymentNotPersistedError) as excinfo,
         ):
             _save_payment(self._make_payment())
 
-        assert "not persisted" in caplog.text.lower() or "unavailable" in caplog.text.lower()
+        assert excinfo.value.payment_id == "PAY_test_BTC_1234"
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any("PAY_test_BTC_1234" in r.getMessage() for r in errors)
 
     def test_load_payment_returns_none_when_db_unavailable(self):
         """_load_payment() returns None when DB session is None."""

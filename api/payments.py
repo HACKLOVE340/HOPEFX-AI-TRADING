@@ -147,12 +147,38 @@ def _exact(value: float | str | Decimal | None) -> Decimal | None:
     return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
+class PaymentNotPersistedError(RuntimeError):
+    """The payment record could not be written, so the payment must not be issued.
+
+    A deposit address handed to a user for a payment with no record is an
+    address the webhook cannot match to anyone: funds sent to it arrive
+    unattributed. So a failed write is not survivable by logging and carrying
+    on — the caller refuses the request instead (owner decision, fail closed;
+    MASTER_OUTSTANDING §A11).
+    """
+
+    def __init__(self, payment_id: str, reason: str) -> None:
+        super().__init__(f"payment {payment_id} not persisted: {reason}")
+        self.payment_id = payment_id
+        self.reason = reason
+
+
 def _save_payment(payment: dict) -> None:
-    """Persist a new payment record to the database."""
+    """Persist a new payment record, or raise ``PaymentNotPersistedError``.
+
+    Returns only once the record is committed. This used to log the failure
+    ("DB unavailable — payment %s not persisted" at WARNING, or the insert error
+    at ERROR) and return normally, so `generate_deposit_address` issued a live
+    address and amount for a payment the database did not have.
+    """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    payment_id = payment["payment_id"]
     session = _get_db_session()
     if session is None:
-        logger.warning("DB unavailable — payment %s not persisted", payment["payment_id"])
-        return
+        reason = "no database session is available"
+        logger.error("Payment %s NOT persisted — %s. Refusing to issue it.", payment_id, reason)
+        raise PaymentNotPersistedError(payment_id, reason)
     try:
         from database.models import CryptoPayment
 
@@ -178,9 +204,15 @@ def _save_payment(payment: dict) -> None:
         )
         session.add(record)
         session.commit()
-    except Exception as exc:
-        session.rollback()
-        logger.error("Failed to persist payment %s: %s", payment["payment_id"], exc)
+    except SQLAlchemyError as exc:
+        try:
+            session.rollback()
+        except SQLAlchemyError as rollback_exc:
+            # The connection is likely gone; the refusal below is what matters.
+            logger.error("Rollback after failed insert of payment %s also failed: %s", payment_id, rollback_exc)
+        reason = f"insert failed ({type(exc).__name__}: {exc})"
+        logger.error("Payment %s NOT persisted — %s. Refusing to issue it.", payment_id, reason)
+        raise PaymentNotPersistedError(payment_id, reason) from exc
     finally:
         session.close()
 
@@ -295,7 +327,22 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
         "expires_at": expires_at,
     }
 
-    _save_payment(payment)
+    # Fail closed. The address was derived above, but it has been shown to no
+    # one: if the record cannot be written, the address and amount stay in this
+    # frame and the request is refused. `_save_payment` has already logged the
+    # payment id and the reason at ERROR.
+    #
+    # The derivation is NOT rolled back. For ETH/USDT it durably advanced the
+    # shared HD counter; putting it back could re-issue an index another request
+    # has since taken, whereas a skipped index costs one unused address.
+    try:
+        _save_payment(payment)
+    except PaymentNotPersistedError:
+        raise HTTPException(
+            status_code=503,
+            detail="Payment could not be recorded, so no deposit address was issued. "
+            "Do not send funds; please try again shortly.",
+        ) from None
 
     logger.info(
         "Deposit address issued: payment_id=%s user_id=%s plan_id=%s amount_usd=%.2f currency=%s",
