@@ -183,6 +183,33 @@ def test_a_deleted_file_simply_leaves(project: Path):
     assert run("--check", "--root", str(project), cwd=project).returncode == 0
 
 
+def test_reaching_zero_across_every_file_still_passes(project: Path):
+    """An adopted baseline of true zero is not the same as no baseline.
+
+    F175: driving the whole tree to zero emoji and running `--adopt` writes
+    `{"_total": 0, "files": {}}`. `load_baseline` returns `{}` for that file
+    exactly as it does when the file is absent, so `check()`'s `if not
+    baseline:` could not tell "genuinely at zero" from "never adopted" and
+    refused a fully-clean tree with "no baseline — run --adopt", which had
+    already been run. The baseline FILE's existence on disk, not the
+    truthiness of the dict it decodes to, is what must distinguish them.
+    """
+    a = project / "frontend" / "src" / "pages" / "A.tsx"
+    a.write_text(
+        "import { BarChart3, Zap } from 'lucide-react';\n"
+        "export const A = () => <div><BarChart3 /> Stats <Zap /> Fast</div>;\n",
+        encoding="utf-8",
+    )
+    assert run("--adopt", "--root", str(project), cwd=project).returncode == 0
+    baseline = json.loads((project / "docs" / "FRONTEND_EMOJI_DEBT.json").read_text(encoding="utf-8"))
+    assert baseline["_total"] == 0
+    assert baseline["files"] == {}
+
+    result = run("--check", "--root", str(project), cwd=project)
+    assert result.returncode == 0, result.stderr
+    assert "no baseline" not in result.stderr
+
+
 def test_check_without_a_baseline_refuses(tmp_path: Path):
     (tmp_path / "frontend" / "src").mkdir(parents=True)
     result = run("--check", "--root", str(tmp_path), cwd=tmp_path)

@@ -506,25 +506,29 @@ describe('Affiliate — enrolled: tabs', () => {
     expect(screen.getByText('SILVER99')).toBeInTheDocument();
   });
 
-  it('Leaderboard tab shows gold medal for rank 1', async () => {
+  // F175: the medal glyphs are gone — a Lucide `Medal` icon tinted by
+  // --rank-gold/silver/bronze draws the badge, with the numeral and an
+  // `aria-label` ("Nst/nd/rd place") carrying the meaning a screen reader (and
+  // any colour-blind viewer) needs, so rank is never colour-only.
+  it('Leaderboard tab shows a gold rank badge for rank 1', async () => {
     await renderAffiliate();
     await waitFor(() => screen.getByRole('button', { name: /^leaderboard$/i }), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: /^leaderboard$/i }));
-    await waitFor(() => expect(screen.getByText('🥇')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByLabelText('1st place')).toBeInTheDocument(), { timeout: 3000 });
   });
 
-  it('Leaderboard tab shows silver medal for rank 2', async () => {
+  it('Leaderboard tab shows a silver rank badge for rank 2', async () => {
     await renderAffiliate();
     await waitFor(() => screen.getByRole('button', { name: /^leaderboard$/i }), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: /^leaderboard$/i }));
-    await waitFor(() => expect(screen.getByText('🥈')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByLabelText('2nd place')).toBeInTheDocument(), { timeout: 3000 });
   });
 
-  it('Leaderboard tab shows bronze medal for rank 3', async () => {
+  it('Leaderboard tab shows a bronze rank badge for rank 3', async () => {
     await renderAffiliate();
     await waitFor(() => screen.getByRole('button', { name: /^leaderboard$/i }), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: /^leaderboard$/i }));
-    await waitFor(() => expect(screen.getByText('🥉')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByLabelText('3rd place')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('Leaderboard tab shows earned commissions', async () => {

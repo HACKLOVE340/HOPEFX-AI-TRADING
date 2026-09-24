@@ -974,7 +974,7 @@ const AutoHealingSection: React.FC = () => {
   const [loading, setLoading]           = useState(true);
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
-  const [msg, setMsg]                   = useState('');
+  const [msg, setMsg]                   = useState<React.ReactNode>('');
   const [msgType, setMsgType]           = useState<'ok' | 'err'>('ok');
   const [refreshing, setRefreshing]     = useState(false);
   const [rebuildBusy, setRebuildBusy]   = useState(false);
@@ -1015,7 +1015,7 @@ const AutoHealingSection: React.FC = () => {
 
   const errDetail = (e: unknown, fb: string) => extractApiError(e, fb);
 
-  const showMsg = (text: string, type: 'ok' | 'err' = 'ok') => {
+  const showMsg = (text: React.ReactNode, type: 'ok' | 'err' = 'ok') => {
     setMsg(text); setMsgType(type);
     setTimeout(() => setMsg(''), 6000);
   };
@@ -1181,7 +1181,12 @@ const AutoHealingSection: React.FC = () => {
     try {
       const res = await superadminApi.autoHealRunTests();
       setLastTestResult(res.data);
-      showMsg(res.data.success ? `Tests passed: ${res.data.passed ?? 0}` : `Tests failed: ${res.data.failed ?? 0} ✗`, res.data.success ? 'ok' : 'err');
+      showMsg(res.data.success ? `Tests passed: ${res.data.passed ?? 0}` : (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {`Tests failed: ${res.data.failed ?? 0}`}
+          <XCircle size="1em" aria-hidden="true" />
+        </span>
+      ), res.data.success ? 'ok' : 'err');
       setTimeout(loadStatus, 2000);
     } catch (e: unknown) {
       showMsg(errDetail(e, 'Test run failed'), 'err');

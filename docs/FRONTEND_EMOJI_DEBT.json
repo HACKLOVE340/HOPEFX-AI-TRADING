@@ -1,10 +1,5 @@
 {
  "_comment": "Emoji per file in frontend/src. This number may only fall. See scripts/frontend_emoji_ratchet.py for why emoji cannot serve as icons, and for the rule that a file reaching zero must be DELETED from this list rather than left at 0 \u2014 an entry describing nothing is how a ratchet stops being one.",
- "_total": 6,
- "files": {
-  "frontend/src/features/chart-bot/hooks/useNuclearWS.ts": 1,
-  "frontend/src/pages/AdminPanel.tsx": 1,
-  "frontend/src/pages/Affiliate.tsx": 3,
-  "frontend/src/pages/superadmin/AutoHealingSection.tsx": 1
- }
+ "_total": 0,
+ "files": {}
 }

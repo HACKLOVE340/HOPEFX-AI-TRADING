@@ -255,6 +255,13 @@
        otherwise silent and inherits the wrong colour. */
     --ai-model: #a78bfa;   /* model and inference state, distinct from accent */
     --ai-grid:  none;      /* plotting-field texture, off outside AI pages    */
+
+    /* Rank badges (leaderboards, affiliate tiers). Never the only signal for
+       rank — the badge always carries the numeral and an accessible label
+       too — but distinct enough by hue to read at a glance beside them. */
+    --rank-gold:   #f5b301;
+    --rank-silver: #9aa5b1;
+    --rank-bronze: #c9752f;
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -346,6 +353,11 @@
     --ok:       #0f8b5f;
     --degraded: #9a6206;
     --failed:   #c0303c;
+
+    /* Same rank hues, darkened enough to hold AA on white. */
+    --rank-gold:   #8a6300;
+    --rank-silver: #5b6674;
+    --rank-bronze: #99501c;
 
     /* A shadow tuned for a dark ground is a smudge on a white one. */
     --e-1: 0 1px 2px rgba(15, 23, 42, .07);

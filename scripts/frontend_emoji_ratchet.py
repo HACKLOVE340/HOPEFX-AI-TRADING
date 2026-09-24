@@ -206,11 +206,18 @@ def adopt(root: Path) -> int:
 
 def check(root: Path) -> int:
     current = count_emoji(root)
-    baseline = load_baseline(root)
 
-    if not baseline:
+    # A baseline file that exists but holds an empty `files` map — the state
+    # this repository reached on 2026-09-24, driving the count to genuine
+    # zero — is not "no baseline". `load_baseline` returning `{}` in both
+    # cases used to make `if not baseline` treat them the same and block a
+    # correct, fully-adopted zero with "run --adopt", which had already been
+    # run. The file's presence on disk is what distinguishes them.
+    if not (root / BASELINE_REL).exists():
         print("frontend_emoji_ratchet: no baseline — run --adopt", file=sys.stderr)
         return 1
+
+    baseline = load_baseline(root)
 
     failures: list[str] = []
     improved = 0

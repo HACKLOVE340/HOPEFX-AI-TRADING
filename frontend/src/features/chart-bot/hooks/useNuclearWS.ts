@@ -90,15 +90,14 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
         setLastAlert(alert);
         // Flash the page title on critical alerts.
         //
-        // The radiation glyph below is the one emoji in this file that
-        // `scripts/frontend_emoji_ratchet.py` counts and that CANNOT become an
-        // SVG: `document.title` is a string rendered by the browser's own tab
-        // chrome, where no markup exists. Driving this file to zero would mean
-        // deleting a deliberate attention signal on a severity>=8 nuclear alert
-        // — the case where the operator is most likely to be on another tab.
-        // So this file stays in the baseline at 1, on purpose.
+        // `document.title` is a string rendered by the browser's own tab
+        // chrome, where no markup exists — an SVG icon cannot appear here.
+        // This used to carry the one emoji `scripts/frontend_emoji_ratchet.py`
+        // could not convert and that CLAUDE.md said to leave at 1; the owner
+        // has since decided to close that out (F175), so it is now plain text
+        // conveying the same "look at this tab" signal.
         if (alert.severity >= NUCLEAR_ALERT_SEVERITY) {
-          _flashTitle(`☢️ NUCLEAR ALERT — Severity ${alert.severity}/10`);
+          _flashTitle(`[!] NUCLEAR ALERT — Severity ${alert.severity}/10`);
         }
         break;
       }

@@ -105,7 +105,7 @@ const eventColor = (type: string) => {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const KpiCard: React.FC<{
-  label: string; value: string; sub?: string; accent?: string;
+  label: string; value: string; sub?: React.ReactNode; accent?: string;
 }> = ({ label, value, sub, accent }) => (
   <div style={{
     background: 'var(--raised)', border: '1px solid var(--border-strong)', borderRadius: 10,
@@ -401,7 +401,7 @@ const AdminPanel: React.FC = () => {
             <KpiCard label="Revenue Today"    value={overview ? fmtUSD(overview.revenue_today_usd) : '—'}              sub={overview ? `MTD: ${fmtUSD(overview.revenue_mtd_usd)}` : undefined}                               accent="#f59e0b" />
             <KpiCard label="Active Subs"      value={overview ? overview.active_subscriptions.toLocaleString() : '—'}  sub={overview ? `${overview.pending_withdrawals} pending withdrawals` : undefined}                    accent="#8b5cf6" />
             <KpiCard label="Platform Uptime"  value={overview && Number.isFinite(overview.platform_uptime_pct) ? `${overview.platform_uptime_pct.toFixed(2)}%` : '—'}   sub={overview ? `${overview.ws_connections} WS connections` : undefined}                              accent="#06b6d4" />
-            <KpiCard label="ML Accuracy"      value={overview && Number.isFinite(overview.ml_model_accuracy) ? `${(overview.ml_model_accuracy * 100).toFixed(1)}%` : '—'} sub={overview && overview.flagged_accounts > 0 ? `⚠️ ${overview.flagged_accounts} flagged` : 'No flagged accounts'} accent={overview && overview.flagged_accounts > 0 ? '#f87171' : '#22c55e'} />
+            <KpiCard label="ML Accuracy"      value={overview && Number.isFinite(overview.ml_model_accuracy) ? `${(overview.ml_model_accuracy * 100).toFixed(1)}%` : '—'} sub={overview && overview.flagged_accounts > 0 ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size="1em" aria-hidden="true" />{`${overview.flagged_accounts} flagged`}</span> : 'No flagged accounts'} accent={overview && overview.flagged_accounts > 0 ? '#f87171' : '#22c55e'} />
           </div>
 
           {/* Active Alerts */}
