@@ -13,6 +13,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# Promotion now requires a recent training-data end date (A0 Task 1).
+_FRESH_DATA_END = __import__("datetime").date.today().isoformat()
+
 UTC = timezone.utc
 
 
@@ -581,6 +584,7 @@ class TestModelRegistry:
             oos_p_value=0.03,
             sharpe_gate_passed=True,
             n_trades=100,
+            data_end=_FRESH_DATA_END,
         )
         assert entry is not None
         assert "v1" in reg.list_versions()
@@ -590,7 +594,14 @@ class TestModelRegistry:
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
         reg.register(
-            "v1", model_file, oos_accuracy=0.65, oos_auc=0.70, oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100
+            "v1",
+            model_file,
+            oos_accuracy=0.65,
+            oos_auc=0.70,
+            oos_p_value=0.03,
+            sharpe_gate_passed=True,
+            n_trades=100,
+            data_end=_FRESH_DATA_END,
         )
         v = reg.get_version("v1")
         assert v is not None
@@ -630,7 +641,14 @@ class TestModelRegistry:
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
         reg.register(
-            "v1", model_file, oos_accuracy=0.65, oos_auc=0.70, oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100
+            "v1",
+            model_file,
+            oos_accuracy=0.65,
+            oos_auc=0.70,
+            oos_p_value=0.03,
+            sharpe_gate_passed=True,
+            n_trades=100,
+            data_end=_FRESH_DATA_END,
         )
         result = reg.promote("v1")
         assert result is not None
@@ -641,7 +659,14 @@ class TestModelRegistry:
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
         reg.register(
-            "v1", model_file, oos_accuracy=0.65, oos_auc=0.70, oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100
+            "v1",
+            model_file,
+            oos_accuracy=0.65,
+            oos_auc=0.70,
+            oos_p_value=0.03,
+            sharpe_gate_passed=True,
+            n_trades=100,
+            data_end=_FRESH_DATA_END,
         )
         reg.retire("v1")
         v = reg.get_version("v1")
@@ -652,7 +677,14 @@ class TestModelRegistry:
         model_file = Path(tmp_path) / "model.joblib"
         model_file.write_bytes(b"dummy")
         reg.register(
-            "v1", model_file, oos_accuracy=0.65, oos_auc=0.70, oos_p_value=0.03, sharpe_gate_passed=True, n_trades=100
+            "v1",
+            model_file,
+            oos_accuracy=0.65,
+            oos_auc=0.70,
+            oos_p_value=0.03,
+            sharpe_gate_passed=True,
+            n_trades=100,
+            data_end=_FRESH_DATA_END,
         )
         # Delete the file then verify
         model_file.unlink()
@@ -665,7 +697,14 @@ class TestModelRegistry:
         model_file.write_bytes(b"dummy")
         # oos_accuracy below threshold, sharpe_gate_passed=False
         reg.register(
-            "v_bad", model_file, oos_accuracy=0.40, oos_auc=0.45, oos_p_value=0.5, sharpe_gate_passed=False, n_trades=10
+            "v_bad",
+            model_file,
+            oos_accuracy=0.40,
+            oos_auc=0.45,
+            oos_p_value=0.5,
+            sharpe_gate_passed=False,
+            n_trades=10,
+            data_end=_FRESH_DATA_END,
         )
         # Should be in staging, not promoted
         v = reg.get_version("v_bad")

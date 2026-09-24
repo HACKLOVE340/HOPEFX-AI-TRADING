@@ -109,6 +109,21 @@ _MAX_OOS_PVAL: float = float(os.getenv("REGISTRY_MAX_OOS_PVAL", "0.05"))
 _REQUIRE_SHARPE_GATE: bool = os.getenv("REGISTRY_REQUIRE_SHARPE_GATE", "true").lower() != "false"
 
 
+class StaleTrainingDataError(RuntimeError, ValueError):
+    """Promotion refused: the candidate's training data is missing a
+    ``data_end`` or ends more than ``MODEL_MAX_AGE_DAYS`` ago.
+
+    Subclasses both ``RuntimeError`` (what existing promote callers such as
+    :meth:`ModelRegistry.bootstrap_from_meta` already catch) and ``ValueError``
+    (what the A0 plan specifies), so neither kind of caller is bypassed.
+    """
+
+
+def _max_model_age_days() -> int:
+    """The same limit the runtime staleness gate reads; read at call time."""
+    return int(os.getenv("MODEL_MAX_AGE_DAYS", "30"))
+
+
 # ── SHA-256 helper ────────────────────────────────────────────────────────────
 
 
@@ -191,6 +206,7 @@ class ModelRegistry:
         feature_count: int = 0,
         notes: str = "",
         state: str = "staging",
+        data_end: str | None = None,
     ) -> dict[str, Any]:
         """
         Register a model artifact in the manifest.
@@ -211,6 +227,10 @@ class ModelRegistry:
         feature_count : Number of features the model expects.
         notes         : Free-text annotation.
         state         : Initial state — "staging" or "retired".
+        data_end      : ISO date of the last bar in the training data. Required
+                        (and must be within MODEL_MAX_AGE_DAYS) for
+                        :meth:`promote`; ``trained_at`` alone says when the
+                        fit ran, not what market window it learned from.
 
         Returns
         -------
@@ -247,6 +267,7 @@ class ModelRegistry:
             "n_trades": int(n_trades),
             "feature_count": int(feature_count),
             "notes": notes,
+            "data_end": data_end,
         }
 
         manifest = self._load()
@@ -288,6 +309,30 @@ class ModelRegistry:
         if _REQUIRE_SHARPE_GATE and not sharpe_ok:
             return False, ("Sharpe gate not passed. Run multi-symbol backtest with N >= 600 trades.")
         return True, (f"Gate passed: acc={acc:.4f}, p={pval:.6f}, sharpe_ok={sharpe_ok}")
+
+    @staticmethod
+    def _data_recency_check(entry: dict[str, Any]) -> tuple[bool, str]:
+        """Refuse a candidate whose training data is unknown or too old.
+
+        A model retrained today on data ending months ago gets a fresh
+        ``trained_at`` and would clear the runtime age gate while having
+        learned nothing newer than the model it replaces (A0 / MODEL-AGE-IS-MTIME).
+        Missing or unparseable ``data_end`` refuses: fail closed.
+        """
+        limit = _max_model_age_days()
+        raw = entry.get("data_end")
+        if not raw:
+            return False, (
+                f"training data ends unknown (no data_end recorded) — cannot show it is within MODEL_MAX_AGE_DAYS ({limit})"
+            )
+        try:
+            end = datetime.fromisoformat(str(raw)).date()
+        except ValueError:
+            return False, f"training data ends {raw!r}, which is not an ISO date"
+        age = (datetime.now(UTC).date() - end).days
+        if age > limit:
+            return False, f"training data ends {end.isoformat()}, {age} days old > MODEL_MAX_AGE_DAYS ({limit})"
+        return True, f"training data ends {end.isoformat()}, {age} days old"
 
     def _pnl_reconciliation_check(self) -> tuple[bool, str]:
         """
@@ -358,6 +403,12 @@ class ModelRegistry:
             raise KeyError(f"Version '{name}' not found in registry")
 
         entry = manifest["versions"][name]
+
+        # Gate 0: training-data recency. rollback() deliberately does not run
+        # this, so an emergency restore of a validated model stays possible.
+        fresh, fresh_reason = self._data_recency_check(entry)
+        if not fresh:
+            raise StaleTrainingDataError(f"Promotion gate BLOCKED for '{name}': {fresh_reason}")
 
         # Gate 1: OOS accuracy, p-value, Sharpe
         passed, reason = self._gate_check(entry)
@@ -790,6 +841,7 @@ class ModelRegistry:
             n_trades=int(sg.get("n_trades", meta.get("oos_n", 0))),
             feature_count=int(meta.get("feature_count", 0)),
             notes="Bootstrapped from advanced_oos_meta.json",
+            data_end=meta.get("data_end"),
         )
 
         if promote:

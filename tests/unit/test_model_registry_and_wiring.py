@@ -25,6 +25,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Promotion now requires a recent training-data end date (A0 Task 1).
+_FRESH_DATA_END = __import__("datetime").date.today().isoformat()
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -70,6 +73,7 @@ class TestModelRegistryRegister:
             sharpe_gate_passed=True,
             n_trades=700,
             feature_count=176,
+            data_end=_FRESH_DATA_END,
         )
         assert entry["name"] == "v1"
         assert entry["state"] == "staging"
@@ -82,38 +86,36 @@ class TestModelRegistryRegister:
         content = b"deterministic-content-xyz"
         pkl = _tmp_pkl(content)
         expected = hashlib.sha256(content).hexdigest()
-        entry = reg.register("v_sha", pkl, oos_accuracy=0.61, oos_p_value=0.01, sharpe_gate_passed=True)
+        entry = reg.register(
+            "v_sha", pkl, oos_accuracy=0.61, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+        )
         assert entry["sha256"] == expected
         pkl.unlink()
 
     def test_register_missing_file_raises(self, tmp_path):
         reg = _make_registry(tmp_path)
         with pytest.raises(FileNotFoundError):
-            reg.register("v_missing", pathlib.Path("/nonexistent/model.pkl"))
+            reg.register("v_missing", pathlib.Path("/nonexistent/model.pkl"), data_end=_FRESH_DATA_END)
 
     def test_register_empty_name_raises(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl()
         with pytest.raises(ValueError, match="name"):
-            reg.register("", pkl)
+            reg.register("", pkl, data_end=_FRESH_DATA_END)
         pkl.unlink()
 
     def test_register_invalid_state_raises(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl()
         with pytest.raises(ValueError, match="state"):
-            reg.register("v_bad", pkl, state="production")
+            reg.register("v_bad", pkl, state="production", data_end=_FRESH_DATA_END)
         pkl.unlink()
 
     def test_register_persists_to_disk(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl()
         reg.register(
-            "v_persist",
-            pkl,
-            oos_accuracy=0.62,
-            oos_p_value=0.02,
-            sharpe_gate_passed=True,
+            "v_persist", pkl, oos_accuracy=0.62, oos_p_value=0.02, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
         )
         # Re-load from disk
         reg2 = _make_registry(tmp_path)
@@ -130,6 +132,7 @@ class TestModelRegistryRegister:
                 oos_accuracy=0.60 + i * 0.01,
                 oos_p_value=0.01,
                 sharpe_gate_passed=True,
+                data_end=_FRESH_DATA_END,
             )
             pkl.unlink()
         assert len(reg.list_versions()) == 3
@@ -145,11 +148,7 @@ class TestModelRegistryPromotionGate:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl()
         reg.register(
-            "v_gate",
-            pkl,
-            oos_accuracy=acc,
-            oos_p_value=pval,
-            sharpe_gate_passed=sharpe_ok,
+            "v_gate", pkl, oos_accuracy=acc, oos_p_value=pval, sharpe_gate_passed=sharpe_ok, data_end=_FRESH_DATA_END
         )
         return reg, pkl
 
@@ -189,8 +188,10 @@ class TestModelRegistryPromotionGate:
         reg = _make_registry(tmp_path)
         pkl1 = _tmp_pkl(b"model-1")
         pkl2 = _tmp_pkl(b"model-2")
-        reg.register("v1", pkl1, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True)
-        reg.register("v2", pkl2, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True)
+        reg.register("v1", pkl1, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END)
+        reg.register(
+            "v2", pkl2, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+        )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v1")
             reg.promote("v2")
@@ -214,7 +215,9 @@ class TestModelRegistryVerify:
     def test_verify_passes_for_correct_digest(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"correct-content")
-        reg.register("v_ok", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True)
+        reg.register(
+            "v_ok", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+        )
         ok, msg = reg.verify("v_ok")
         assert ok is True
         assert "OK" in msg
@@ -224,11 +227,7 @@ class TestModelRegistryVerify:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"original-content")
         reg.register(
-            "v_tamper",
-            pkl,
-            oos_accuracy=0.62,
-            oos_p_value=0.01,
-            sharpe_gate_passed=True,
+            "v_tamper", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
         )
         # Tamper with the file after registration
         pkl.write_bytes(b"tampered-content")
@@ -240,7 +239,9 @@ class TestModelRegistryVerify:
     def test_verify_fails_for_missing_artifact(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"will-be-deleted")
-        reg.register("v_del", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True)
+        reg.register(
+            "v_del", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+        )
         pkl.unlink()
         ok, msg = reg.verify("v_del")
         assert ok is False
@@ -261,7 +262,9 @@ class TestModelRegistryVerify:
     def test_verify_active_after_promotion(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"production-model")
-        reg.register("v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True)
+        reg.register(
+            "v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+        )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v_prod")
         ok, _ = reg.verify_active()
@@ -301,6 +304,7 @@ class TestModelRegistryBootstrap:
             "oos_p_value": 0.001,
             "feature_count": 176,
             "sharpe_gate": {"gate_passed": True, "n_trades": 700},
+            "data_end": _FRESH_DATA_END,
         }
         meta_path = tmp_path / "meta.json"
         meta_path.write_text(json.dumps(meta))
@@ -389,11 +393,7 @@ class TestAdvancedPredictorIntegrity:
         pkl = _tmp_pkl(b"registered-model-content")
         reg = _make_registry(tmp_path)
         reg.register(
-            "v_match",
-            pkl,
-            oos_accuracy=0.65,
-            oos_p_value=0.001,
-            sharpe_gate_passed=True,
+            "v_match", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
         )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v_match")
@@ -415,11 +415,7 @@ class TestAdvancedPredictorIntegrity:
         pkl = _tmp_pkl(b"original-content")
         reg = _make_registry(tmp_path)
         reg.register(
-            "v_mismatch",
-            pkl,
-            oos_accuracy=0.65,
-            oos_p_value=0.001,
-            sharpe_gate_passed=True,
+            "v_mismatch", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
         )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v_mismatch")
@@ -455,11 +451,7 @@ class TestAdvancedPredictorIntegrity:
         pkl = _tmp_pkl(b"tampered-model")
         reg = _make_registry(tmp_path)
         reg.register(
-            "v_block",
-            pkl,
-            oos_accuracy=0.65,
-            oos_p_value=0.001,
-            sharpe_gate_passed=True,
+            "v_block", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
         )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v_block")

@@ -33,6 +33,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Promotion now requires a recent training-data end date (A0 Task 1).
+_FRESH_DATA_END = __import__("datetime").date.today().isoformat()
+
 UTC = timezone.utc
 
 
@@ -524,6 +527,7 @@ class TestModelRegistryPnLGate:
             oos_auc=0.72,
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            data_end=_FRESH_DATA_END,
         )
 
     def test_promote_blocked_when_pnl_gate_fails(self, registry, artifact):
@@ -562,6 +566,7 @@ class TestModelRegistryPnLGate:
             oos_accuracy=0.40,  # below threshold — stat gate fails first
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            data_end=_FRESH_DATA_END,
         )
 
         pnl_check = MagicMock(return_value=(True, "ok"))
