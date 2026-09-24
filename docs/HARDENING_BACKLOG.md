@@ -11,6 +11,31 @@ risk to the critical path: **signal → risk → execution → broker**.
 
 ---
 
+## Live execution follow-up — 24 September 2026
+
+The live `HopeFXEngine` composition had three safety gaps that component-only
+tests did not catch. This branch changes the decision-to-broker flow and adds
+regressions that run the real `_execute_decision` with fake brokers:
+
+- A rejected, blocked, or errored `ExecutionEngine` report is terminal. The
+  SmartRouter/direct path is used only if that engine was unavailable *before*
+  the attempt. The fallback checks the persisted kill switch and refuses when
+  its check fails.
+- `SUBMITTED` is broker acceptance, not a fill: it does not increment fill
+  counts, call fill callbacks, or open a position. `PARTIAL` and `FILLED` need
+  a positive confirmed filled quantity and average price. Both normal and
+  nuclear signals use the actual filled quantity when logging a position.
+- A missing, unknown, or unconfirmed direct broker result no longer creates a
+  fill or position. Such outcomes require broker reconciliation before retry.
+
+**Still open:** `risk_approval_token` and `decision_id` are currently checked
+for presence rather than verified against the approved order. The direct
+fallback also lacks the canonical execution engine's full pre-trade checks.
+Do not infer production readiness from this patch or run it with live capital
+until those controls and broker reconciliation are proven end to end.
+
+---
+
 ## Round 2 — deep audit of previously-untouched areas (all fixed/verified)
 
 Money/compliance, real-time transport, order-routing/exit, secrets:

@@ -745,13 +745,17 @@ class HopeFXEngine:
                     metadata={"confidence": confidence, "source": "nuclear_agent"},
                 )
                 report = await self._execution_engine.execute(req)
-                if report.success:
+                if (
+                    report.status.name in ("FILLED", "PARTIAL")
+                    and report.filled_quantity > 0
+                    and report.average_price > 0
+                ):
                     self._trade_logger.log_fill(
                         symbol=symbol,
                         side=side,
-                        lots=report.filled_quantity or sized.quantity,
+                        lots=report.filled_quantity,
                         requested_price=entry_price,
-                        fill_price=report.average_price or entry_price,
+                        fill_price=report.average_price,
                         broker=self.broker_name,
                         notes=f"nuclear|latency={report.latency_ms:.1f}ms",
                     )
@@ -764,9 +768,9 @@ class HopeFXEngine:
                             id=report.order_id or str(_uuid.uuid4())[:16],
                             symbol=symbol,
                             side="long" if side == "BUY" else "short",
-                            quantity=report.filled_quantity or sized.quantity,
-                            entry_price=report.average_price or entry_price,
-                            current_price=report.average_price or entry_price,
+                            quantity=report.filled_quantity,
+                            entry_price=report.average_price,
+                            current_price=report.average_price,
                             stop_loss=float(stop_loss) if stop_loss else sized.stop_loss_usd,
                             take_profit=float(take_profit) if take_profit else sized.take_profit_usd,
                         )
@@ -777,7 +781,7 @@ class HopeFXEngine:
                         report.latency_ms,
                     )
                 else:
-                    logger.warning("NuclearSignal execution blocked: %s", report.message)
+                    logger.warning("NuclearSignal not filled (%s): %s", report.status.value, report.message)
             else:
                 # Fallback: synthesise a brain-compatible decision and execute directly
                 class _FallbackDecision:
@@ -1365,18 +1369,24 @@ class HopeFXEngine:
 
                 report = await self._execution_engine.execute(req)
 
-                if not report.success:
-                    logger.warning(
-                        "ExecutionEngine blocked order: %s — falling back to direct",
-                        report.message,
+                if report.status.name not in ("FILLED", "PARTIAL"):
+                    # A refusal, pending acceptance, or unknown outcome ends this
+                    # attempt. Retrying via another broker bypasses the canonical
+                    # pre-trade gate and can duplicate an in-flight order.
+                    logger.warning("ExecutionEngine order not filled (%s): %s", report.status.value, report.message)
+                    return
+                if report.filled_quantity <= 0 or report.average_price <= 0:
+                    logger.error(
+                        "ExecutionEngine returned an unconfirmed fill for %s — reconcile before retry",
+                        req.request_id,
                     )
-                    # Fall through to direct path below
+                    return
                 else:
-                    fill_price = report.average_price or exec_price
+                    fill_price = report.average_price
                     self._trade_logger.log_fill(
                         symbol=symbol,
                         side=side,
-                        lots=report.filled_quantity or quantity,
+                        lots=report.filled_quantity,
                         requested_price=exec_price,
                         fill_price=fill_price,
                         broker=self.broker_name,
@@ -1387,7 +1397,7 @@ class HopeFXEngine:
                         order_type,
                         side,
                         symbol,
-                        report.filled_quantity or quantity,
+                        report.filled_quantity,
                         fill_price,
                         stop_loss_price or 0.0,
                         take_profit_price or 0.0,
@@ -1404,7 +1414,7 @@ class HopeFXEngine:
                             id=report.order_id or str(_uuid.uuid4())[:16],
                             symbol=symbol,
                             side="long" if side == "BUY" else "short",
-                            quantity=report.filled_quantity or quantity,
+                            quantity=report.filled_quantity,
                             entry_price=fill_price,
                             current_price=fill_price,
                             stop_loss=stop_loss_price,
@@ -1452,7 +1462,18 @@ class HopeFXEngine:
                     return  # ExecutionEngine handled it — done
 
             # ── Fallback path: SmartRouter → direct broker call ───────────────
-            # Used only when ExecutionEngine is unavailable.
+            # Used only when ExecutionEngine was unavailable before this order.
+            # The kill switch must also be enforced here, including if reading
+            # its persisted state fails; this path bypasses ExecutionEngine.
+            try:
+                from kill_switch import KillSwitch
+
+                if KillSwitch().is_active():
+                    logger.critical("Fallback order blocked by kill switch: %s", symbol)
+                    return
+            except Exception as ks_exc:
+                logger.critical("Fallback kill-switch check failed for %s: %s", symbol, ks_exc)
+                return
             # Check for existing opposite position — close first
             if hasattr(self._broker, "get_positions"):
                 _pos_coro = self._broker.get_positions()
@@ -1546,7 +1567,7 @@ class HopeFXEngine:
                     "features": {},
                 }
                 sr_result = await self._smart_router.route_and_execute(sr_request)
-                if sr_result.get("status") not in ("rejected", "error"):
+                if sr_result.get("status") == "filled":
                     result = sr_result
                     _used_smart_router = True
                     logger.info(
@@ -1569,11 +1590,14 @@ class HopeFXEngine:
                         sr_result.get("reason"),
                     )
                     return
-                else:
+                elif sr_result.get("status") == "rejected" and sr_result.get("reason") == "no_brokers_available":
                     logger.warning(
                         "SmartRouter found no venue (%s) — falling back to direct order",
                         sr_result.get("reason"),
                     )
+                else:
+                    logger.error("SmartRouter outcome unknown (%s) — reconcile before retry", sr_result)
+                    return
             except Exception as _sr_exc:
                 # An exception can be raised after the order was transmitted, so
                 # the outcome is unknown. Sending another is the duplicate fill
@@ -1592,16 +1616,45 @@ class HopeFXEngine:
                 _order_coro = self._broker.place_order(**order_kwargs)
                 result = await _order_coro if _inspect.isawaitable(_order_coro) else _order_coro
 
-            if result is not None:
-                if isinstance(result, dict):
-                    fill_price = float(result.get("fill_price", exec_price))
-                else:
-                    fill_price = float(getattr(result, "average_price", exec_price))
+            # Broker acceptance and transport errors are not fills. A missing
+            # response may mean the order is still in flight; never invent a
+            # fill or open a position from the requested price/quantity.
+            if result is None:
+                logger.error("Broker returned no order result for %s — reconcile before retry", symbol)
+                return
+            if isinstance(result, dict):
+                result_status = str(result.get("status", "")).lower()
+                raw_price = result.get("fill_price")
+                raw_quantity = result.get("filled_quantity", quantity if result_status == "filled" else 0)
+            else:
+                status = getattr(result, "status", None)
+                result_status = str(getattr(status, "value", status)).lower()
+                raw_price = getattr(result, "average_price", None)
+                raw_quantity = getattr(result, "filled_quantity", None)
+            if result_status not in ("filled", "partial") or raw_price is None or raw_quantity is None:
+                logger.warning(
+                    "Broker result not a confirmed fill for %s (%s) — reconcile before retry",
+                    symbol,
+                    result_status,
+                )
+                return
+            import math
+
+            fill_price = float(raw_price)
+            filled_quantity = float(raw_quantity)
+            if (
+                not math.isfinite(fill_price)
+                or not math.isfinite(filled_quantity)
+                or fill_price <= 0
+                or filled_quantity <= 0
+            ):
+                logger.error("Broker returned invalid fill details for %s — reconcile before retry", symbol)
+                return
 
             self._trade_logger.log_fill(
                 symbol=symbol,
                 side=side,
-                lots=quantity,
+                lots=filled_quantity,
                 requested_price=exec_price,
                 fill_price=fill_price,
                 broker=self.broker_name,
@@ -1612,7 +1665,7 @@ class HopeFXEngine:
                 order_type,
                 side,
                 symbol,
-                quantity,
+                filled_quantity,
                 fill_price,
                 stop_loss_price or 0.0,
                 take_profit_price or 0.0,
@@ -1628,7 +1681,7 @@ class HopeFXEngine:
                     id=str(_uuid.uuid4())[:16],
                     symbol=symbol,
                     side="long" if side == "BUY" else "short",
-                    quantity=quantity,
+                    quantity=filled_quantity,
                     entry_price=fill_price,
                     current_price=fill_price,
                     stop_loss=stop_loss_price,
