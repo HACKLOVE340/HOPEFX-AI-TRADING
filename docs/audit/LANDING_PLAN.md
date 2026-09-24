@@ -7,7 +7,7 @@
 
 `claude/add-new-skills-lys862` merged into `main` on **2026-09-18** as PR #315,
 merge commit **9cdc37a** — 666 commits, 1,561 files, in **one merge**, not nine
-slices. The branch is now **38 commits and 69 files ahead of `main`** (measured;
+slices. The branch is now **40 commits and 69 files ahead of `main`** (measured;
 `scripts/doc_metrics.py --sync` maintains both figures), and that figure is
 follow-up work, not a backlog to land.
 
