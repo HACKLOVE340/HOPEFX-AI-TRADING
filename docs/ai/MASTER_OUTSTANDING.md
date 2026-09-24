@@ -43,6 +43,31 @@ These are not blocked on engineering. They are blocked on someone deciding.
 > **Owner-only blockers:** a source for XAUUSD spot data from 2026-03-26 onward
 > (OANDA/MT5 credentials or a licensed export), matching macro data, approval
 > to register and deploy, and a retrain schedule under 30 days.
+>
+> **Plan Tasks 1–6 done, 2026-09-24.**
+> - **The guard.** `ml/model_registry.py::promote()` now refuses a model with
+>   `StaleTrainingDataError` when its training data ends more than
+>   `MODEL_MAX_AGE_DAYS` ago, or when that date is missing.
+>   `tests/unit/test_registry_refuses_stale_training_data.py` was red on the
+>   pre-fix code. The current active entry, `xgb_horizon5_v3`, loads and
+>   verifies as before, and rollback is not gated.
+> - **Dry run.** A candidate was trained end to end on Python 3.12, from
+>   `XAUUSD_40Y.csv` for 2020-09 to 2026-03, with yfinance blocked. It is
+>   poor: walk-forward accuracy 0.474 (AUC 0.483), out-of-sample accuracy
+>   0.387 (AUC 0.499), and the Sharpe gate refused it on too few trades. The
+>   new guard refused to promote it. **The retrain pipeline has no edge on
+>   current features even before the data problem, so recent data alone may
+>   not produce a promotable model.**
+> - **Model files untouched.** The committed artifacts match their sha256
+>   snapshot, and 11 of 11 manifest entries verify.
+> - **Defects found, still open:**
+>   - (1) `rollback()` reads `artifact_path`, which `register()` never writes,
+>     so `current.pkl` is not rolled back.
+>   - (2) `promote()`/`rollback()` set state `"production"`, but
+>     `ml.verify_model` requires `"active"`, so it fails after either.
+>   - (3) `scripts/retrain_horizon5.py --use-cached` loads `XAUUSD_50Y.csv`,
+>     which the corrupt-data check refuses, and it has no option to choose
+>     another file.
 
 **Not a new defect — a fact the old gate was hiding, and it is now load-bearing.**
 
