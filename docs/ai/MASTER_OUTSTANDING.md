@@ -696,9 +696,11 @@ back here if the behaviour changes.
 > that has no usable price instead of skipping. When the STP module is
 > unavailable, `_check_self_trade` logs at ERROR
 > (`[SELF_TRADE_PREVENTION_UNAVAILABLE]`, naming the order) instead of DEBUG.
-> **The order is still allowed in that case; only the log level changed.**
-> Blocking the order when STP is unavailable is a one-line change if the owner
-> wants it. **Availability effect:** a market order whose price was never filled
+> **Owner follow-up, same day: the order is now also BLOCKED in that case**
+> (fail closed, reason `[SELF_TRADE_PREVENTION_UNAVAILABLE]`). STP is imported
+> lazily from `risk/self_trade_prevention.py`, so this fires only on a broken
+> deploy or an exception inside STP itself, which is exactly when fail-open used
+> to switch the control off silently. **Availability effect:** a market order whose price was never filled
 > from the data layer is now refused rather than traded. The tests in
 > `tests/unit/test_execution_engine_gates.py` that recorded the old behaviour now
 > assert the refusals, and they fail on the pre-fix tree. The text below
