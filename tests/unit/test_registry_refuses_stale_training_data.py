@@ -84,7 +84,7 @@ def test_promote_accepts_recent_data(reg):
     r, art = reg
     r.register("cand", art, data_end=_days_ago(5), **_GOOD)
     entry = r.promote("cand")
-    assert entry["state"] == "production"
+    assert entry["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
 
 
 def test_limit_follows_env(reg, monkeypatch):
@@ -110,5 +110,5 @@ def test_rollback_is_deliberately_not_gated(reg):
     r, art = reg
     r.register("old", art, **_GOOD)  # no data_end, like the shipped active entry
     entry = r.rollback("old")
-    assert entry["state"] == "production"
+    assert entry["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
     assert r.active_version()["name"] == "old"

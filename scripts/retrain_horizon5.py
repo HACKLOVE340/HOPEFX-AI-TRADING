@@ -50,8 +50,27 @@ Usage
     # Custom horizon (e.g. 3-bar hold period)
     python scripts/retrain_horizon5.py --horizon 3
 
+    # Rehearsal that cannot touch the committed artifacts
+    python scripts/retrain_horizon5.py --use-cached --output-dir /tmp/a0-out
+
+Data source
+-----------
+Always the cached CSV named by ``--cached-csv`` (default: the file
+``ml/cached_series.py`` treats as clean, ``data/XAUUSD_40Y.csv``), and ONLY
+that file. ``--no-download`` is always passed to ``ml/train_advanced.py``, so
+the Yahoo Finance fallback — ``GC=F``, COMEX futures rather than XAUUSD spot —
+cannot be reached from here. ``--symbol`` is a label in the metadata only.
+
+``XAUUSD_40Y.csv`` carries 441 malformed OHLC bars, all before
+``ml.cached_series.CLEAN_SINCE`` (2020-01-01); a ``--years`` window reaching
+before that date is logged as a warning.
+
 Output
 ------
+Everything below is written to ``--output-dir`` (env ``RETRAIN_OUTPUT_DIR``),
+default ``ml/saved_models``. ``ML_MODEL_DIR`` is deliberately not read: it is
+already set by deployments for other purposes (docs/HARDENING_BACKLOG.md).
+
     ml/saved_models/advanced_oos.pkl          (replaces existing model)
     ml/saved_models/advanced_oos_meta.json    (updated with horizon=5)
     ml/saved_models/horizon5_training_report.json  (full metrics)
@@ -64,6 +83,7 @@ Environment variables
     RETRAIN_OOS_YEARS      — override default OOS years (default: 8)
     RETRAIN_STACKING       — "true" to use full stacking ensemble
     RETRAIN_NO_MACRO       — "true" to skip macro features
+    RETRAIN_OUTPUT_DIR     — output directory (default: ml/saved_models)
 """
 
 from __future__ import annotations
@@ -89,6 +109,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+#: The packaged model directory: the default output, and the one a rehearsal
+#: must never write to. Every writer below takes ``args.output_dir`` instead.
 _MODEL_DIR = _ROOT / "ml" / "saved_models"
 _TRAIN_SCRIPT = _ROOT / "ml" / "train_advanced.py"
 
@@ -98,6 +120,24 @@ _DEFAULT_YEARS = int(os.getenv("RETRAIN_YEARS", "50"))
 _DEFAULT_OOS_YEARS = float(os.getenv("RETRAIN_OOS_YEARS", "8"))
 _DEFAULT_STACKING = os.getenv("RETRAIN_STACKING", "false").lower() == "true"
 _DEFAULT_NO_MACRO = os.getenv("RETRAIN_NO_MACRO", "false").lower() == "true"
+
+
+def _default_cached_csv() -> Path:
+    """The XAUUSD file ``ml/cached_series.py`` prefers — never ``XAUUSD_50Y.csv``,
+    which it excludes and ``_assert_price_history_is_plausible`` refuses."""
+    from ml.cached_series import DEFAULT_FILES
+
+    return _ROOT / "data" / DEFAULT_FILES["XAUUSD"][0]
+
+
+def _output_dir(args: argparse.Namespace) -> Path:
+    """``args.output_dir`` when it is a real path, else the packaged directory."""
+    out = getattr(args, "output_dir", None)
+    # str/Path only: a MagicMock is os.PathLike (it fakes __fspath__), and a
+    # test double must not steer writes into a directory named after it.
+    if isinstance(out, str | Path) and str(out):
+        return Path(out)
+    return _MODEL_DIR
 
 
 def parse_args() -> argparse.Namespace:
@@ -155,7 +195,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--use-cached",
         action="store_true",
-        help="Load OHLCV from data/XAUUSD_40Y.csv instead of downloading",
+        help=(
+            "Load OHLCV from --cached-csv. Accepted for compatibility: this script ALWAYS "
+            "trains from the cached CSV and never downloads (GC=F is futures, not spot)."
+        ),
+    )
+    parser.add_argument(
+        "--cached-csv",
+        default=None,
+        help=(
+            "OHLCV CSV to train on, and the only file tried "
+            "(default: data/XAUUSD_40Y.csv, the file ml/cached_series.py treats as clean)"
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=os.getenv("RETRAIN_OUTPUT_DIR") or None,
+        help=(
+            "Directory for every artifact this run writes (default: ml/saved_models; "
+            "env RETRAIN_OUTPUT_DIR). Point it outside the checkout for a rehearsal."
+        ),
     )
     parser.add_argument(
         "--min-move",
@@ -188,7 +247,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--symbol",
         default="GC=F",
-        help="Yahoo Finance symbol (default: GC=F for XAUUSD)",
+        help=("Label recorded in the metadata. Never used to download: this script refuses the Yahoo fallback."),
     )
     parser.add_argument(
         "--verify-only",
@@ -200,7 +259,47 @@ def parse_args() -> argparse.Namespace:
             "Use after a completed retrain to confirm the CI gate passes."
         ),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.cached_csv:
+        args.cached_csv = str(_default_cached_csv())
+    if not args.output_dir:
+        args.output_dir = str(_MODEL_DIR)
+    return args
+
+
+def warn_if_window_precedes_clean_data(args: argparse.Namespace) -> None:
+    """Say so when ``--years`` reaches before ``CLEAN_SINCE``.
+
+    Not refused: choosing the window is the operator's call (A0 plan, Task 3).
+    But the 441 malformed bars in XAUUSD_40Y.csv all predate it, and a run
+    that trains on them should not look like one that did not.
+    """
+    from datetime import date, timedelta
+
+    from ml.cached_series import CLEAN_SINCE
+
+    clean_since = CLEAN_SINCE.get("XAUUSD")
+    window_start = date.today() - timedelta(days=int(args.years) * 365)
+    if clean_since and window_start < clean_since:
+        logger.warning(
+            "Training window starts %s, before CLEAN_SINCE[XAUUSD]=%s: %s carries malformed "
+            "OHLC bars before that date (ml/cached_series.py). Use --years %d or fewer to stay clean.",
+            window_start,
+            clean_since,
+            Path(args.cached_csv).name,
+            max(1, (date.today() - clean_since).days // 365),
+        )
+
+
+def _require_cached_csv(args: argparse.Namespace) -> None:
+    path = Path(args.cached_csv)
+    if not path.is_file():
+        logger.error(
+            "Cached CSV %s does not exist. This script trains only from a cached file and never "
+            "downloads (GC=F is futures, not XAUUSD spot). Pass --cached-csv PATH.",
+            path,
+        )
+        sys.exit(1)
 
 
 def validate_horizon_alignment(horizon: int) -> None:
@@ -246,14 +345,18 @@ def dry_run(args: argparse.Namespace) -> None:
     try:
         from datetime import timedelta
 
-        from ml.train_advanced import fetch_gold_ohlcv, fetch_macro
+        import ml.train_advanced as _ta
+
+        fetch_gold_ohlcv = _ta.fetch_gold_ohlcv
+        fetch_macro = _ta.fetch_macro
 
         logger.info("Fetching OHLCV data (%d years)...", args.years)
         ohlcv = fetch_gold_ohlcv(
             args.symbol,
             args.years,
-            use_cached=args.use_cached,
-            cached_csv=None,
+            use_cached=True,
+            cached_csv=args.cached_csv,
+            allow_download=False,
         )
         logger.info(
             "OHLCV: %d bars (%s → %s)",
@@ -339,7 +442,8 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
         Updated in-place so the existing InferenceEngine picks up the new
         horizon and accuracy values without a restart.
     """
-    _MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = _output_dir(args)
+    out_dir.mkdir(parents=True, exist_ok=True)
     now_iso = datetime.now(UTC).isoformat()
 
     meta = {
@@ -367,7 +471,7 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
     }
 
     # ── horizon5_meta.json ────────────────────────────────────────────────────
-    meta_path = _MODEL_DIR / "horizon5_meta.json"
+    meta_path = out_dir / "horizon5_meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))
     logger.info("Horizon meta written → %s", meta_path)
 
@@ -384,20 +488,20 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
     # canonical artifact is self-contained (CI asserts report.sharpe_gate).
     if "sharpe_gate" not in full_report:
         try:
-            _adv_meta = json.loads((_MODEL_DIR / "advanced_oos_meta.json").read_text())
+            _adv_meta = json.loads((out_dir / "advanced_oos_meta.json").read_text())
             if isinstance(_adv_meta.get("sharpe_gate"), dict):
                 full_report["sharpe_gate"] = _adv_meta["sharpe_gate"]
         except (OSError, ValueError) as exc:
             logger.warning("Could not mirror sharpe_gate from advanced_oos_meta.json: %s", exc)
 
-    h5_report_path = _MODEL_DIR / "horizon5_training_report.json"
+    h5_report_path = out_dir / "horizon5_training_report.json"
     h5_report_path.write_text(json.dumps(full_report, indent=2, default=str))
     logger.info("Horizon5 training report written → %s", h5_report_path)
 
     # ── advanced_oos_meta.json ────────────────────────────────────────────────
     # Update in-place so InferenceEngine.health() picks up the new horizon
     # and accuracy values without a restart.
-    oos_meta_path = _MODEL_DIR / "advanced_oos_meta.json"
+    oos_meta_path = out_dir / "advanced_oos_meta.json"
     existing_meta: dict = {}
     if oos_meta_path.exists():
         try:
@@ -440,11 +544,12 @@ def verify_output_artifacts(args: argparse.Namespace) -> bool:
     ml/saved_models/horizon5_training_report.json — full training report
     ml/saved_models/advanced_oos_meta.json    — updated inference meta
     """
+    out_dir = _output_dir(args)
     required = [
-        _MODEL_DIR / "advanced_oos.pkl",
-        _MODEL_DIR / "horizon5_meta.json",
-        _MODEL_DIR / "horizon5_training_report.json",
-        _MODEL_DIR / "advanced_oos_meta.json",
+        out_dir / "advanced_oos.pkl",
+        out_dir / "horizon5_meta.json",
+        out_dir / "horizon5_training_report.json",
+        out_dir / "advanced_oos_meta.json",
     ]
 
     all_ok = True
@@ -461,7 +566,7 @@ def verify_output_artifacts(args: argparse.Namespace) -> bool:
     # Verify horizon5_meta.json has the correct horizon value
     if all_ok:
         try:
-            meta = json.loads((_MODEL_DIR / "horizon5_meta.json").read_text())
+            meta = json.loads((out_dir / "horizon5_meta.json").read_text())
             if meta.get("horizon") != args.horizon:
                 logger.error(
                     "CI GATE FAILED: horizon5_meta.json has horizon=%s, expected %d",
@@ -481,7 +586,7 @@ def verify_output_artifacts(args: argparse.Namespace) -> bool:
     # Verify horizon5_training_report.json has the correct horizon value
     if all_ok:
         try:
-            rpt = json.loads((_MODEL_DIR / "horizon5_training_report.json").read_text())
+            rpt = json.loads((out_dir / "horizon5_training_report.json").read_text())
             if rpt.get("horizon") != args.horizon:
                 logger.error(
                     "CI GATE FAILED: horizon5_training_report.json has horizon=%s, expected %d",
@@ -514,7 +619,13 @@ def run_training(args: argparse.Namespace) -> dict:
 
     Uses subprocess so the training script runs in its own process with a clean
     import state — avoids any module-level side effects from the current process.
+
+    Always cache-only: ``--cached-csv`` names the one file, ``--no-download``
+    makes the Yahoo (``GC=F`` futures) fallback a refusal, and ``--model-dir``
+    keeps every artifact in the chosen output directory.
     """
+    _require_cached_csv(args)
+    out_dir = _output_dir(args)
     cmd = [
         sys.executable,
         str(_TRAIN_SCRIPT),
@@ -530,14 +641,18 @@ def run_training(args: argparse.Namespace) -> dict:
         str(args.min_move),
         "--symbol",
         args.symbol,
+        "--use-cached",
+        "--cached-csv",
+        str(args.cached_csv),
+        "--no-download",
+        "--model-dir",
+        str(out_dir),
     ]
 
     if args.stacking:
         cmd.append("--stacking")
     if args.no_macro:
         cmd.append("--no-macro")
-    if args.use_cached:
-        cmd.append("--use-cached")
     if args.smoke:
         cmd.append("--smoke")
 
@@ -556,7 +671,7 @@ def run_training(args: argparse.Namespace) -> dict:
         sys.exit(result.returncode)
 
     # Load the report written by train_advanced.py
-    report_path = _MODEL_DIR / "advanced_training_report.json"
+    report_path = out_dir / "advanced_training_report.json"
     if report_path.exists():
         try:
             return json.loads(report_path.read_text())
@@ -592,8 +707,8 @@ def print_horizon_summary(args: argparse.Namespace, report: dict) -> None:
         logger.info("  OOS F1           : %.3f", oos.get("f1", 0))
         logger.info("  OOS p-value      : %.4f", oos.get("p_value_binomial", 1))
     logger.info("")
-    logger.info("  Model saved → ml/saved_models/advanced_oos.pkl")
-    logger.info("  Meta  saved → ml/saved_models/horizon5_meta.json")
+    logger.info("  Model saved → %s", _output_dir(args) / "advanced_oos.pkl")
+    logger.info("  Meta  saved → %s", _output_dir(args) / "horizon5_meta.json")
     logger.info("")
     logger.info("  Next steps:")
     logger.info("  1. Restart the inference engine (or it will auto-reload on next predict)")
@@ -632,6 +747,11 @@ def main() -> None:
 
     # Validate horizon alignment
     validate_horizon_alignment(args.horizon)
+
+    logger.info("Training data: %s (cache only, no download)", args.cached_csv)
+    logger.info("Output directory: %s", _output_dir(args))
+    if not args.verify_only:
+        warn_if_window_precedes_clean_data(args)
 
     # Verify-only mode — check artifacts without retraining
     if args.verify_only:

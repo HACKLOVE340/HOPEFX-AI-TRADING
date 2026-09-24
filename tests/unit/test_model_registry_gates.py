@@ -177,7 +177,7 @@ class TestPromote:
             patch.object(registry, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")),
         ):
             entry = registry.promote("v1")
-        assert entry["state"] == "production"
+        assert entry["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
         assert entry["promoted_at"] is not None
 
     def test_promote_retires_previous_production(self, registry, artifact, tmp_path):
@@ -218,7 +218,7 @@ class TestPromote:
 
         versions = registry.list_versions()
         assert versions["v1"]["state"] == "retired"
-        assert versions["v2"]["state"] == "production"
+        assert versions["v2"]["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
 
     def test_promote_notifies_performance_monitor(self, registry, artifact):
         self._register_good(registry, artifact)
@@ -245,7 +245,7 @@ class TestPromote:
         ):
             entry = registry.promote("v1")  # must not raise
 
-        assert entry["state"] == "production"
+        assert entry["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
 
 
 # ── _update_symlink ───────────────────────────────────────────────────────────
@@ -503,7 +503,7 @@ class TestBootstrapFromMeta:
             )
 
         assert result is not None
-        assert result["state"] == "production"
+        assert result["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
 
 
 # ── sha256_file ───────────────────────────────────────────────────────────────

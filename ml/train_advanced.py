@@ -164,6 +164,7 @@ def fetch_gold_ohlcv(
     years: int,
     use_cached: bool = False,
     cached_csv: str | None = None,
+    allow_download: bool = True,
 ) -> pd.DataFrame:
     """Load XAUUSD OHLCV from the bundled long-history CSV, Yahoo Finance fallback.
 
@@ -182,15 +183,26 @@ def fetch_gold_ohlcv(
     symbol      : Yahoo Finance ticker used only for the fallback path (e.g. ``"GC=F"``).
     years       : Years of history to keep (date-filtered from the CSV).
     use_cached  : If True, load from ``cached_csv`` before any download (default path).
-    cached_csv  : Path to cached CSV (default: ``data/XAUUSD_50Y.csv`` then ``data/XAUUSD_40Y.csv``).
+    cached_csv  : Path to cached CSV. When given it is the ONLY file tried: the
+                  operator named it, and walking on to ``XAUUSD_50Y.csv`` when it
+                  yields nothing is how the corrupt file got trained on.
+                  When omitted: ``data/XAUUSD_50Y.csv`` then ``data/XAUUSD_40Y.csv``.
+    allow_download : When False, the Yahoo fallback is refused with
+                  ``FileNotFoundError`` instead of reached. ``GC=F`` is COMEX
+                  futures, not XAUUSD spot, so a retrain that must train on
+                  spot passes False (``--no-download``).
     """
     # ── 1. Cached CSV (the default, broker-free data source) ───────────────────
     if use_cached:
-        for csv_candidate in [
-            cached_csv,
-            str(ROOT / "data" / "XAUUSD_50Y.csv"),
-            str(ROOT / "data" / "XAUUSD_40Y.csv"),
-        ]:
+        candidates = (
+            [cached_csv]
+            if cached_csv
+            else [
+                str(ROOT / "data" / "XAUUSD_50Y.csv"),
+                str(ROOT / "data" / "XAUUSD_40Y.csv"),
+            ]
+        )
+        for csv_candidate in candidates:
             if not csv_candidate:
                 continue
             csv_path = Path(csv_candidate)
@@ -213,6 +225,12 @@ def fetch_gold_ohlcv(
                 logger.warning("Cached CSV empty after date filter — trying next source")
 
     # ── 2. Yahoo Finance daily fallback (only when the cache is unavailable) ───
+    if not allow_download:
+        tried = cached_csv if cached_csv else "data/XAUUSD_50Y.csv, data/XAUUSD_40Y.csv"
+        raise FileNotFoundError(
+            f"No usable cached OHLCV in {tried} for the last {years} years, and download is "
+            f"forbidden: refusing the Yahoo Finance fallback ({symbol}), which is futures, not XAUUSD spot."
+        )
     logger.info("Falling back to Yahoo Finance daily data for %s", symbol)
     import yfinance as yf
 
@@ -771,6 +789,28 @@ def archive_artifact_before_overwrite(path: Path, registry: Any | None = None) -
     return archive
 
 
+def _archival_registry():
+    """The registry whose entries describe the artifacts in ``MODEL_DIR``.
+
+    ``archive_artifact_before_overwrite`` rewrites registry entries by digest.
+    When ``--model-dir`` redirects a run, the shipped registry must not be
+    touched — a rehearsal output that happened to hold the served model's
+    bytes would otherwise repoint ``ml/saved_models/registry.json`` at a
+    temporary directory. So a redirected run archives against its own
+    ``registry.json``; only the packaged directory uses the singleton.
+    """
+    try:
+        from ml.model_registry import ModelRegistry, get_registry
+
+        packaged = (ROOT / "ml" / "saved_models").resolve()
+        if Path(MODEL_DIR).resolve() != packaged:
+            return ModelRegistry(Path(MODEL_DIR) / "registry.json")
+        return get_registry()
+    except Exception as _reg_exc:
+        logger.debug("registry unavailable for archival: %s", _reg_exc)
+        return None
+
+
 def write_feature_stats(X: pd.DataFrame, path: Path | None = None) -> dict[str, dict[str, float]]:
     """Write the per-feature training distribution the drift guard compares against.
 
@@ -1152,14 +1192,7 @@ def oos_eval_advanced(
     # is what left older registry entries describing a model that no longer
     # existed there — the defect repaired by repair_model_registry.py --resync.
     out_path = MODEL_DIR / "advanced_oos.pkl"
-    try:
-        from ml.model_registry import get_registry
-
-        _registry = get_registry()
-    except Exception as _reg_exc:
-        logger.debug("registry unavailable for archival: %s", _reg_exc)
-        _registry = None
-    archive_artifact_before_overwrite(out_path, registry=_registry)
+    archive_artifact_before_overwrite(out_path, registry=_archival_registry())
 
     joblib.dump(model, out_path)
     logger.info("Saved OOS model → %s", out_path)
@@ -1339,7 +1372,28 @@ def main(argv: list[str] | None = None):
         "--cached-csv",
         type=str,
         default=None,
-        help="Path to cached OHLCV CSV (used with --use-cached; default: data/XAUUSD_50Y.csv)",
+        help=(
+            "Path to cached OHLCV CSV (used with --use-cached). When given, it is the only file "
+            "tried. Default: data/XAUUSD_50Y.csv, then data/XAUUSD_40Y.csv"
+        ),
+    )
+    parser.add_argument(
+        "--no-download",
+        action="store_true",
+        help=(
+            "Refuse the Yahoo Finance fallback when the cache yields nothing (GC=F is futures, "
+            "not XAUUSD spot). scripts/retrain_horizon5.py always passes this."
+        ),
+    )
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        default=None,
+        help=(
+            "Write every artifact here instead of ml/saved_models, so a rehearsal cannot touch "
+            "the committed models. Deliberately NOT read from ML_MODEL_DIR, which deployments "
+            "already set for other purposes (docs/HARDENING_BACKLOG.md)."
+        ),
     )
     parser.add_argument(
         "--smoke",
@@ -1350,6 +1404,12 @@ def main(argv: list[str] | None = None):
         ),
     )
     args = parser.parse_args(argv)
+
+    if args.model_dir:
+        global MODEL_DIR
+        MODEL_DIR = Path(args.model_dir)
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        logger.info("Model output directory: %s", MODEL_DIR)
 
     # ── Smoke-test overrides ──────────────────────────────────────────────────
     if args.smoke:
@@ -1376,6 +1436,7 @@ def main(argv: list[str] | None = None):
         args.years,
         use_cached=getattr(args, "use_cached", False),
         cached_csv=getattr(args, "cached_csv", None),
+        allow_download=not args.no_download,
     )
     end_dt = datetime.now(UTC)
     start_dt = end_dt - timedelta(days=args.years * 365)

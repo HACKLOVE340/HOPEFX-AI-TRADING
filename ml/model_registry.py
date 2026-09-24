@@ -13,11 +13,11 @@ Responsibilities
 ----------------
 - Maintain a JSON manifest (registry.json) that records every registered
   model version: file path, SHA-256 digest, OOS metrics, and promotion state.
-- Enforce a promotion gate: a model may only be promoted to "production"
+- Enforce a promotion gate: a model may only be promoted to ``"active"``
   when its OOS accuracy and Sharpe gate both pass the configured thresholds.
 - Provide an atomic symlink ``ml/saved_models/current.pkl`` that always
-  points to the active production model, updated via a rename-swap so
-  readers never see a broken link.
+  points to the active model, updated via a rename-swap so readers never see
+  a broken link. The link is relative, so a committed one survives a clone.
 - Compute and verify SHA-256 checksums so corrupted or tampered artifacts
   are detected before serving.
 
@@ -33,12 +33,13 @@ Manifest schema (registry.json)
       "sha256": "<hex>",
       "registered_at": "<iso8601>",
       "promoted_at": "<iso8601 | null>",
-      "state": "production | staging | retired",
+      "state": "active | staging | retired",
       "oos_accuracy": 0.6635,
       "oos_auc": 0.7108,
       "oos_p_value": 0.0,
       "sharpe_gate_passed": true,
       "n_trades": 1260,
+      "sharpe": 1.52,
       "feature_count": 176,
       "notes": ""
     }
@@ -69,7 +70,7 @@ Usage
         feature_count=176,
     )
 
-    # Promote to production (runs gate checks)
+    # Promote to active (runs gate checks)
     reg.promote(version["name"])
 
     # Verify integrity of the active model before serving
@@ -99,6 +100,7 @@ logger = logging.getLogger(__name__)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _SAVED = Path(__file__).parent / "saved_models"
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 _REGISTRY_FILE = _SAVED / "registry.json"
 _SYMLINK_NAME = "current.pkl"
 _SCHEMA_VERSION = 1
@@ -107,6 +109,27 @@ _SCHEMA_VERSION = 1
 _MIN_OOS_ACC: float = float(os.getenv("REGISTRY_MIN_OOS_ACC", "0.60"))
 _MAX_OOS_PVAL: float = float(os.getenv("REGISTRY_MAX_OOS_PVAL", "0.05"))
 _REQUIRE_SHARPE_GATE: bool = os.getenv("REGISTRY_REQUIRE_SHARPE_GATE", "true").lower() != "false"
+
+
+# ── State vocabulary ──────────────────────────────────────────────────────────
+#
+# ONE value names the model that serves inference, and it is the one
+# ``ml/verify_model.py`` requires and the shipped registry.json records.
+# promote() and rollback() used to write "production", so neither could ever
+# leave a registry that verify_model accepts, and every reader that looked for
+# "production" did not recognise the model actually serving (A0 dry run).
+STATE_ACTIVE = "active"
+STATE_STAGING = "staging"
+STATE_RETIRED = "retired"
+#: Written by promote()/rollback() before 2026-09-24. Readers that must act on
+#: the serving model (retire it, list it, avoid double-serving) accept it; no
+#: writer produces it, and ``ml/verify_model.py`` still refuses it.
+LEGACY_ACTIVE_STATES: frozenset[str] = frozenset({"production"})
+
+
+def is_active_state(state: object) -> bool:
+    """True when *state* marks the serving model, in current or legacy vocabulary."""
+    return state == STATE_ACTIVE or state in LEGACY_ACTIVE_STATES
 
 
 class StaleTrainingDataError(RuntimeError, ValueError):
@@ -205,8 +228,9 @@ class ModelRegistry:
         n_trades: int = 0,
         feature_count: int = 0,
         notes: str = "",
-        state: str = "staging",
+        state: str = STATE_STAGING,
         data_end: str | None = None,
+        sharpe: float | None = None,
     ) -> dict[str, Any]:
         """
         Register a model artifact in the manifest.
@@ -231,6 +255,9 @@ class ModelRegistry:
                         (and must be within MODEL_MAX_AGE_DAYS) for
                         :meth:`promote`; ``trained_at`` alone says when the
                         fit ran, not what market window it learned from.
+        sharpe        : OOS Sharpe ratio. ``ml/verify_model.py`` refuses an
+                        active model without one >= 1.0, so an entry
+                        registered without it can never pass that check.
 
         Returns
         -------
@@ -243,7 +270,7 @@ class ModelRegistry:
         """
         if not name:
             raise ValueError("name must be a non-empty string")
-        if state not in ("staging", "retired"):
+        if state not in (STATE_STAGING, STATE_RETIRED):
             raise ValueError("state must be 'staging' or 'retired' on registration")
 
         file_path = Path(file_path)
@@ -269,6 +296,8 @@ class ModelRegistry:
             "notes": notes,
             "data_end": data_end,
         }
+        if sharpe is not None:
+            entry["sharpe"] = round(float(sharpe), 6)
 
         manifest = self._load()
         manifest["versions"][name] = entry
@@ -361,7 +390,7 @@ class ModelRegistry:
 
     def promote(self, name: str) -> dict[str, Any]:
         """
-        Promote *name* to production state.
+        Promote *name* to the active (serving) state.
 
         Runs two mandatory promotion gates in order.  Both must pass:
 
@@ -380,7 +409,7 @@ class ModelRegistry:
             to refresh the snapshot.
 
         On success:
-          - Sets ``state="production"`` and ``promoted_at`` in the manifest.
+          - Sets ``state="active"`` and ``promoted_at`` in the manifest.
           - Atomically updates the ``current.pkl`` symlink to point at the
             model's artifact file.
           - Retires the previously active version (sets state="retired").
@@ -397,6 +426,7 @@ class ModelRegistry:
         ------
         KeyError    : If *name* is not in the registry.
         RuntimeError: If either promotion gate fails.
+        FileNotFoundError: If the artifact the entry names does not exist.
         """
         manifest = self._load()
         if name not in manifest["versions"]:
@@ -420,30 +450,34 @@ class ModelRegistry:
         if not pnl_passed:
             raise RuntimeError(f"Promotion gate BLOCKED for '{name}': {pnl_reason}")
 
-        # Retire the current production model
+        # Resolve before mutating anything: an entry naming no artifact cannot
+        # be served, and recording it as active would be a promotion that did
+        # not happen.
+        artifact = self._require_artifact(name, entry)
+
+        # Retire the currently serving model
         prev_active = manifest.get("active_version")
         if prev_active and prev_active != name:
             prev = manifest["versions"].get(prev_active)
-            if prev and prev.get("state") == "production":
-                prev["state"] = "retired"
+            if prev and is_active_state(prev.get("state")):
+                prev["state"] = STATE_RETIRED
                 logger.info(
-                    "ModelRegistry: retired previous production model '%s'",
+                    "ModelRegistry: retired previous active model '%s'",
                     prev_active,
                 )
 
         # Promote
         now = datetime.now(UTC).isoformat()
-        entry["state"] = "production"
+        entry["state"] = STATE_ACTIVE
         entry["promoted_at"] = now
         manifest["active_version"] = name
         self._save(manifest)
 
         # Atomic symlink update
-        artifact = Path(entry["file"])
         self._update_symlink(artifact)
 
         logger.info(
-            "ModelRegistry: promoted '%s' to production  sha256=%s…",
+            "ModelRegistry: promoted '%s' to active  sha256=%s…",
             name,
             entry["sha256"][:12],
         )
@@ -461,25 +495,61 @@ class ModelRegistry:
 
         return entry
 
+    def _resolve_artifact(self, entry: dict[str, Any]) -> Path:
+        """Where the artifact *entry* describes lives on disk.
+
+        ``file`` is the one field :meth:`register` writes, and the only one read
+        here. The shipped entries record it relative to the repository root
+        (``ml/saved_models/advanced_oos.pkl``), so a bare ``Path(...)`` resolved
+        against the working directory named nothing whenever the process was not
+        started from the root. Tried in order: absolute as given; the repository
+        root; the working directory; the registry's own directory by basename.
+        The first that exists wins; if none does, the root-relative path is
+        returned so the error names where it was expected.
+        """
+        raw = Path(str(entry.get("file") or ""))
+        if raw.is_absolute():
+            return raw
+        candidates = [_REPO_ROOT / raw, Path.cwd() / raw, self._path.parent / raw.name]
+        for candidate in candidates:
+            if raw.name and candidate.exists():
+                return candidate
+        return candidates[0]
+
+    def _require_artifact(self, name: str, entry: dict[str, Any]) -> Path:
+        """Resolve *entry*'s artifact, or refuse before anything is mutated."""
+        artifact = self._resolve_artifact(entry)
+        if not entry.get("file") or not artifact.exists():
+            raise FileNotFoundError(
+                f"Version '{name}' names artifact {entry.get('file')!r}, which does not exist "
+                f"(looked for {artifact}); current.pkl cannot be pointed at it."
+            )
+        return artifact
+
     def _update_symlink(self, target: Path) -> None:
         """
         Atomically update ``current.pkl`` symlink to point at *target*.
 
-        Uses a temp-symlink + rename so readers never see a broken link.
-        Falls back to a plain copy on platforms that don't support symlinks
-        (e.g. some Windows configurations).
+        Uses a temp-symlink + rename so readers never see a broken link. The
+        link is written RELATIVE to the registry directory: the shipped
+        ``current.pkl -> advanced_oos.pkl`` is committed, and an absolute link
+        written in one checkout names a path that does not exist after a
+        clone, which ``ml/verify_model.py`` then reports as a missing symlink.
         """
         symlink = self._path.parent / _SYMLINK_NAME
         tmp_link = self._path.parent / f".current_tmp_{os.getpid()}.pkl"
 
-        # Resolve target to an absolute path so the symlink works from any cwd
         abs_target = target.resolve()
+        try:
+            link_target: str | Path = os.path.relpath(abs_target, symlink.parent.resolve())
+        except ValueError:  # different drive on Windows: no relative form exists
+            link_target = abs_target
 
         try:
             # Remove stale temp link if it exists
             if tmp_link.exists() or tmp_link.is_symlink():
                 tmp_link.unlink()
-            tmp_link.symlink_to(abs_target)
+            tmp_link.symlink_to(link_target)
             tmp_link.replace(symlink)
             logger.info("ModelRegistry: symlink %s → %s", symlink.name, abs_target.name)
         except (OSError, NotImplementedError) as exc:
@@ -512,11 +582,11 @@ class ModelRegistry:
         return True, f"Integrity OK: {name}  sha256={actual[:16]}…"
 
     def verify_active(self) -> tuple[bool, str]:
-        """Verify the integrity of the currently active production model."""
+        """Verify the integrity of the currently active model."""
         manifest = self._load()
         active = manifest.get("active_version")
         if not active:
-            return False, "No active production model in registry"
+            return False, "No active model in registry"
         return self.verify(active)
 
     def audit_manifest(self) -> dict[str, Any]:
@@ -651,7 +721,7 @@ class ModelRegistry:
     # ── Queries ───────────────────────────────────────────────────────────────
 
     def active_version(self) -> dict[str, Any] | None:
-        """Return the active production version entry, or None."""
+        """Return the active version entry, or None."""
         manifest = self._load()
         name = manifest.get("active_version")
         if not name:
@@ -724,13 +794,13 @@ class ModelRegistry:
         manifest = self._load()
         if name not in manifest["versions"]:
             raise KeyError(f"Version '{name}' not found in registry")
-        manifest["versions"][name]["state"] = "retired"
+        manifest["versions"][name]["state"] = STATE_RETIRED
         self._save(manifest)
         logger.info("ModelRegistry: retired '%s'", name)
 
     def rollback(self, name: str) -> dict[str, Any]:
         """
-        Force-promote *name* to production, bypassing quality gates.
+        Force-promote *name* to active, bypassing quality gates.
 
         Used exclusively for emergency rollbacks where a previously-validated
         model must be restored immediately without re-running the Sharpe/PnL
@@ -747,38 +817,51 @@ class ModelRegistry:
 
         Raises
         ------
-        KeyError : If *name* is not in the registry.
+        KeyError          : If *name* is not in the registry.
+        FileNotFoundError : If the artifact *name* records does not exist. The
+                            manifest is left untouched: a rollback that cannot
+                            repoint ``current.pkl`` must not report itself done.
+        RuntimeError      : If ``current.pkl`` does not resolve to the restored
+                            artifact afterwards.
+
+        The pointer is repointed from ``file``, the field :meth:`register`
+        writes. This used to read ``artifact_path``, which nothing has ever
+        written, so ``current.pkl`` kept serving the model being rolled back
+        FROM while the manifest named the one rolled back TO (A0 dry run).
         """
         manifest = self._load()
         if name not in manifest["versions"]:
             raise KeyError(f"Version '{name}' not found in registry")
+
+        entry = manifest["versions"][name]
+        artifact = self._require_artifact(name, entry)
 
         # Retire the current active version
         prev_active = manifest.get("active_version")
         if prev_active and prev_active != name:
             prev = manifest["versions"].get(prev_active)
             if prev:
-                prev["state"] = "retired"
+                prev["state"] = STATE_RETIRED
                 logger.info("ModelRegistry.rollback: retired previous active '%s'", prev_active)
 
         # Promote the target version without gate checks
-        from datetime import datetime, timezone
-
-        entry = manifest["versions"][name]
-        entry["state"] = "production"
-        entry["promoted_at"] = datetime.now(timezone.utc).isoformat()
+        entry["state"] = STATE_ACTIVE
+        entry["promoted_at"] = datetime.now(UTC).isoformat()
         manifest["active_version"] = name
         self._save(manifest)
 
-        # Update symlink if artifact exists
-        artifact = entry.get("artifact_path")
-        if artifact:
-            artifact_path = Path(artifact)
-            if artifact_path.exists():
-                try:
-                    self._update_symlink(artifact_path)
-                except Exception as exc:
-                    logger.warning("ModelRegistry.rollback: symlink update failed: %s", exc)
+        self._update_symlink(artifact)
+        symlink = self._path.parent / _SYMLINK_NAME
+        if symlink.resolve() != artifact.resolve():
+            logger.error(
+                "ModelRegistry.rollback: manifest names '%s' active but current.pkl resolves to %s, not %s",
+                name,
+                symlink.resolve(),
+                artifact.resolve(),
+            )
+            raise RuntimeError(
+                f"rollback to '{name}' is recorded in the manifest but current.pkl was not repointed at {artifact}"
+            )
 
         logger.info("ModelRegistry.rollback: rolled back to '%s' (gates bypassed)", name)
         return entry

@@ -150,7 +150,8 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
 
     Registry entry fields → MLModel fields:
       name            → name
-      state           → status  (production→active, staging→staged, retired→retired)
+      state           → status  (active→active, staging→staged, retired→retired;
+                                 legacy "production" also → active)
       oos_accuracy    → accuracy
       registered_at   → last_trained  (best available timestamp)
       promoted_at     → deployed_at
@@ -159,7 +160,7 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
 
     # ── Primary: ModelRegistry manifest (versioned, SHA-256 integrity) ────────
     try:
-        from ml.model_registry import get_registry
+        from ml.model_registry import get_registry, is_active_state
 
         registry = get_registry()
         versions = registry.list_versions()
@@ -181,13 +182,14 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
 
         for name, info in versions.items():
             state = info.get("state", "staging")
-            # Map registry state → MLModel status values
-            status_map = {
-                "production": "active",
-                "staging": "staged",
-                "retired": "retired",
-            }
-            status = status_map.get(state, "staged")
+            # Map registry state → MLModel status values. The serving entry
+            # says "active" (ml.model_registry.STATE_ACTIVE); this map knew
+            # only the legacy "production", so the served model listed as
+            # "staged".
+            if is_active_state(state):
+                status = "active"
+            else:
+                status = {"staging": "staged", "retired": "retired"}.get(state, "staged")
 
             # The active version gets the live prediction counter
             preds_today = predict_count_today if name == active_version else 0
@@ -316,19 +318,19 @@ async def deploy_model(body: DeployModelBody, user: TokenPayload = Depends(requi
 async def rollback_model(model_name: str, user: TokenPayload = Depends(require_superadmin_2fa)) -> dict:
     _log_superadmin_action(user, "rollback_model", model_name)
     try:
-        from ml.model_registry import get_registry
+        from ml.model_registry import STATE_STAGING, get_registry, is_active_state
 
         registry = get_registry()
-        # Demote the current active version back to staging, then promote the
-        # previous production version if one exists.
+        # Retire the current active version, then restore the most recent
+        # other active-or-staging version if one exists.
         manifest = registry._load()
         versions = manifest.get("versions", {})
         active = manifest.get("active_version")
-        # Find the most recent non-active production or staging version
+        # Find the most recent non-active active-state or staging version
         candidates = [
             (name, info)
             for name, info in versions.items()
-            if name != active and info.get("state") in ("production", "staging")
+            if name != active and (is_active_state(info.get("state")) or info.get("state") == STATE_STAGING)
         ]
         if not candidates:
             raise HTTPException(status_code=404, detail="No previous version available for rollback")

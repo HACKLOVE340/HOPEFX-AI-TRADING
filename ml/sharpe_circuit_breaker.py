@@ -497,12 +497,15 @@ class SharpeCircuitBreaker:
     async def _retire_model(self, model_version: str, reason: str) -> None:
         """Retire the model in the registry so it cannot be re-promoted without review."""
         try:
-            from ml.model_registry import get_registry
+            from ml.model_registry import get_registry, is_active_state
 
             registry = get_registry()
             manifest = registry._load()
             entry = manifest["versions"].get(model_version)
-            if entry and entry.get("state") == "production":
+            # The serving entry says "active" (the shipped registry and every
+            # promote since 2026-09-24); this compared with "production" only,
+            # so a tripped breaker left the serving model promotable.
+            if entry and is_active_state(entry.get("state")):
                 entry["state"] = "retired"
                 entry["retired_reason"] = reason
                 entry["retired_at"] = datetime.now(UTC).isoformat()

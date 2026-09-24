@@ -525,6 +525,12 @@ class TestFireTripEvent:
 # ── _retire_model ─────────────────────────────────────────────────────────────
 
 
+# The stand-in registry module must carry the REAL state predicate: a bare
+# MagicMock attribute returns a truthy MagicMock, which agrees that every
+# state marks the serving model.
+from ml.model_registry import is_active_state as _real_is_active_state
+
+
 class TestRetireModel:
     def _make_cb(self):
         import ml.sharpe_circuit_breaker as scb
@@ -542,7 +548,10 @@ class TestRetireModel:
         mock_registry._load.return_value = {"versions": {"v1": {"state": "production"}}}
         mock_get_registry = MagicMock(return_value=mock_registry)
 
-        with patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}):
+        with patch.dict(
+            "sys.modules",
+            {"ml.model_registry": MagicMock(get_registry=mock_get_registry, is_active_state=_real_is_active_state)},
+        ):
             await cb._retire_model("v1", "bad sharpe")
 
         mock_registry._save.assert_called_once()
@@ -557,7 +566,10 @@ class TestRetireModel:
         mock_registry._load.return_value = {"versions": {"v1": {"state": "staging"}}}
         mock_get_registry = MagicMock(return_value=mock_registry)
 
-        with patch.dict("sys.modules", {"ml.model_registry": MagicMock(get_registry=mock_get_registry)}):
+        with patch.dict(
+            "sys.modules",
+            {"ml.model_registry": MagicMock(get_registry=mock_get_registry, is_active_state=_real_is_active_state)},
+        ):
             await cb._retire_model("v1", "bad sharpe")
 
         mock_registry._save.assert_not_called()
