@@ -1233,6 +1233,12 @@ owner = ""
 state = "draft"
 
 [[document]]
+path = "docs/audit/2026-09-24-a0-no-edge-investigation.md"
+tier = "T4"
+owner = "hacklove340"
+state = "draft"
+
+[[document]]
 path = "docs/audit/AI_CORE_REMAINING.md"
 tier = "T2"
 subject = "ai_core_remaining"
