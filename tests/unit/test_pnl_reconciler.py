@@ -556,7 +556,7 @@ class TestModelRegistryPnLGate:
         ):
             entry = registry.promote("v1")
 
-        assert entry["state"] == "production"
+        assert entry["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
 
     def test_promote_pnl_gate_checked_after_stat_gate(self, registry, artifact):
         """P&L gate must not be called when the statistical gate already fails."""

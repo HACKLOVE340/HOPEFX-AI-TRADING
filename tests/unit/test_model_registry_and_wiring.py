@@ -156,7 +156,7 @@ class TestModelRegistryPromotionGate:
         reg, pkl = self._reg_with_entry(tmp_path, acc=0.65, pval=0.001, sharpe_ok=True)
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             entry = reg.promote("v_gate")
-        assert entry["state"] == "production"
+        assert entry["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
         assert entry["promoted_at"] is not None
         assert reg.active_version()["name"] == "v_gate"
         pkl.unlink()
@@ -196,7 +196,7 @@ class TestModelRegistryPromotionGate:
             reg.promote("v1")
             reg.promote("v2")
         assert reg.get_version("v1")["state"] == "retired"
-        assert reg.get_version("v2")["state"] == "production"
+        assert reg.get_version("v2")["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
         pkl1.unlink()
         pkl2.unlink()
 
@@ -313,7 +313,7 @@ class TestModelRegistryBootstrap:
         reg = _make_registry(tmp_path)
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             entry = reg.bootstrap_from_meta(meta_path=meta_path, model_path=pkl, name="v_promo", promote=True)
-        assert entry["state"] == "production"
+        assert entry["state"] == "active"  # A0: was "production"; see STATE_ACTIVE
         pkl.unlink()
 
     def test_bootstrap_skips_if_already_registered(self, tmp_path):
