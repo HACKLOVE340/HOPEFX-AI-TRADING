@@ -407,3 +407,66 @@ class TestBothAreCausal:
         first = rsi.calculate_rsi(pd.Series(closes)).iloc[-1]
         second = rsi.calculate_rsi(pd.Series([*closes, 9000.0, 10.0])).iloc[len(closes) - 1]
         assert first == pytest.approx(second)
+
+
+class TestTheLivePathCannotReachAnExitEvenWithAPosition:
+    """Why A18's live half was NOT wired (2026-09-24), measured rather than argued.
+
+    The only live construction of either strategy is
+    ``core/startup_factories.py::init_strategy_brain``, which registers
+    ``RSIStrategy`` (never ``strategies.mean_reversion.MeanReversionStrategy``)
+    in a ``StrategyBrain``. The live call site is
+    ``core/signal_engine.py::_tick`` -> ``StrategyBrain.analyze_joint`` ->
+    ``BaseStrategy.on_bar`` -> ``analyze(dict)`` -> ``generate_signal(dict)``
+    (also reached via ``HOPEFXDecisionEngine`` and ``StrategyBrain.generate_signals``).
+    Setting ``.position`` there changes nothing, for three independent reasons,
+    each pinned below. When one goes red, the live-wiring question reopens.
+    """
+
+    @pytest.fixture
+    def live_brain(self):
+        import asyncio
+
+        from core.startup_factories import init_strategy_brain
+
+        return asyncio.run(init_strategy_brain(None))
+
+    def test_the_live_brain_builds_rsi_but_no_reversion_strategy(self, live_brain):
+        from strategies.mean_reversion import MeanReversionStrategy
+        from strategies.rsi_strategy import RSIStrategy
+
+        kinds = [type(s) for s in live_brain.strategies.values()]
+        assert RSIStrategy in kinds
+        assert MeanReversionStrategy not in kinds
+
+    def test_nothing_starts_the_live_strategies_so_generate_signal_is_never_called(self, live_brain):
+        from strategies.base import StrategyStatus
+
+        rsi = next(s for s in live_brain.strategies.values() if type(s).__name__ == "RSIStrategy")
+        assert rsi.status == StrategyStatus.IDLE
+        rsi.position = "LONG"
+        calls: list = []
+        rsi.generate_signal = calls.append  # instance-level spy
+        closes = [2000.0 + i for i in range(60)]
+        live_brain.analyze_joint({"symbol": "XAUUSD", "close": closes[-1], "prices": closes})
+        assert calls == [], "analyze_joint now drives IDLE strategies — revisit A18 live wiring"
+
+    def test_the_dict_path_the_live_brain_uses_has_no_exit_branch(self):
+        from strategies.base import StrategyConfig
+        from strategies.rsi_strategy import RSIStrategy
+
+        strategy = RSIStrategy(StrategyConfig(name="rsi", symbol="XAUUSD", timeframe="1h"))
+        strategy.position = "LONG"
+        # RSI 60: past the mean, inside the bands — the DataFrame path exits here.
+        assert strategy.generate_signal({"rsi": 60.0, "price": 2000.0}) is None
+
+    def test_the_dict_analysis_carries_no_price_so_any_live_signal_is_discarded(self):
+        from strategies.base import StrategyConfig
+        from strategies.rsi_strategy import RSIStrategy
+
+        strategy = RSIStrategy(StrategyConfig(name="rsi", symbol="XAUUSD", timeframe="1h"))
+        strategy.start()
+        falling = [2000.0 - 5 * i for i in range(60)]
+        assert "price" not in strategy.analyze({"prices": falling})
+        # on_bar rejects the price-0 BUY that the oversold reading produces.
+        assert strategy.on_bar({"close": falling[-1], "prices": falling}) is None
