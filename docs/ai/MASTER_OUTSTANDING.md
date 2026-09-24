@@ -839,6 +839,19 @@ defect had to be found twice.
 
 ### A18. Two mean-reverting strategies that cannot take profit at the mean
 
+> **Decided 2026-09-24: owner chose to thread position state into the
+> strategies. Resolved in backtesting only; the live path is still open.**
+> `backtesting/strategy_adapter.py::BacktestStrategyAdapter` now sets
+> `strategy.position` from its own confirmed fill on the prior bar before each
+> `generate_signal`, so there is no look-ahead. The mean-reversion and RSI-50
+> exits now fire in backtests. `tests/unit/test_reversion_exits_now_fire.py` was
+> red on the pre-fix adapter and green after. **Every earlier backtest baseline
+> for these two strategies is stale.** **Not done:** the live and production path
+> still never writes `.position`.
+> `tests/unit/test_reversion_exits_are_never_reached.py::TestNothingSetsPositionInProduction`
+> still pins this, and will fail when a live caller is wired. The text below
+> describes the state before the fix.
+
 `strategies/mean_reversion.py` and `strategies/rsi_strategy.py` both carry exit
 branches gated on `self.position == "LONG"` / `"SHORT"`. Both classes declare
 `self.position: str | None = None` and **neither ever writes it**, so the exits
