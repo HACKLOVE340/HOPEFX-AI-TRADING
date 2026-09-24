@@ -32,6 +32,18 @@ These are not blocked on engineering. They are blocked on someone deciding.
 
 ### A0. The model the platform ships is 167 days old, and the gate now blocks it *(new, 2026-09-14)*
 
+> **Owner chose retrain, 2026-09-24. The plan is
+> `docs/audit/plans/2026-09-24-a0-model-retrain.md`.** The key finding:
+> **retraining on the bundled data would not produce a current model.** The
+> newest offline XAUUSD bar is 2026-03-25, and the macro CSVs also end then.
+> A retrain would pass the 30-day age gate while learning the same market
+> window, which is the mtime loophole again. The plan adds a guard first: the
+> registry records the date the training data ends, and refuses to promote a
+> model whose data is older than `MODEL_MAX_AGE_DAYS`.
+> **Owner-only blockers:** a source for XAUUSD spot data from 2026-03-26 onward
+> (OANDA/MT5 credentials or a licensed export), matching macro data, approval
+> to register and deploy, and a retrain schedule under 30 days.
+
 **Not a new defect — a fact the old gate was hiding, and it is now load-bearing.**
 
 `_check_model_staleness()` measured the artifact's filesystem **mtime**. That made

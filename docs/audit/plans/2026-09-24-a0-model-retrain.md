@@ -49,7 +49,7 @@ A registry entry's `trained_at` must not be trusted unless the data behind it is
 
 **Files:**
 - Modify: `ml/model_registry.py` (`register`: new kwarg `data_end: str | None`; `promote`: refuse if missing or stale)
-- Test: `tests/unit/test_registry_refuses_stale_training_data.py`
+- Test: tests/unit/test_registry_refuses_stale_training_data.py — to be created
 
 **Interfaces:**
 - Produces: `ModelRegistry.register(..., data_end: str | None = None)` stores `"data_end"` (ISO date). `ModelRegistry.promote(name)` raises `ValueError("training data ends <date>, <n> days old > MODEL_MAX_AGE_DAYS")`. `rollback()` is deliberately left unchanged: an emergency restore of a previously validated model must stay possible.
