@@ -678,6 +678,20 @@ back here if the behaviour changes.
 
 ### A14. Three gaps in the pre-trade gates, found while covering `execution/engine.py`
 
+> **Decided and resolved 2026-09-24. Owner chose fail-closed.**
+> `_check_margin` and `_check_leverage` now treat `ValueError` as malformed
+> account data and block. With a broker attached, both now **refuse** an order
+> that has no usable price instead of skipping. When the STP module is
+> unavailable, `_check_self_trade` logs at ERROR
+> (`[SELF_TRADE_PREVENTION_UNAVAILABLE]`, naming the order) instead of DEBUG.
+> **The order is still allowed in that case; only the log level changed.**
+> Blocking the order when STP is unavailable is a one-line change if the owner
+> wants it. **Availability effect:** a market order whose price was never filled
+> from the data layer is now refused rather than traded. The tests in
+> `tests/unit/test_execution_engine_gates.py` that recorded the old behaviour now
+> assert the refusals, and they fail on the pre-fix tree. The text below
+> describes the state before the fix.
+
 The engine carries seven checks between a signal and a broker. They are well
 built and they fail closed — six mutations against them all die. These three are
 what the coverage work turned up around the edges.
