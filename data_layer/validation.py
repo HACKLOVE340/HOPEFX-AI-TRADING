@@ -217,6 +217,108 @@ def detect_price_spikes(
     }
 
 
+# ── Synthetic / fake-bar detection ─────────────────────────────────────────────
+
+#: Fraction of flat (open == high == low == close) bars a genuine daily series
+#: can carry before it stops looking like real market data.
+#:
+#: Measured on ``data/XAUUSD_40Y.csv`` (the clean source — no OHLC violations
+#: from 2020 onward, per ``ml.cached_series.CLEAN_SINCE``): any rolling window
+#: up to 20 years wide sits at 2.8%-6.7% flat, and even its full 26-year
+#: history — which includes documented pre-2020 OHLC imperfections, not
+#: synthetic bars — is 12.66% flat. ``data/XAUUSD_50Y.csv`` measures
+#: 36.3%-51.5% flat depending on window (36.9% for its last 10 years, the
+#: widest window the pre-existing spike-only gate let through — see
+#: ``docs/audit/2026-09-24-a0-no-edge-investigation.md`` D2). 20% sits with
+#: comfortable headroom above the worst clean measurement and well below the
+#: best contaminated one, so the exact tolerance used for the period-mean
+#: check below does not matter to where this line falls.
+MAX_PLAUSIBLE_FLAT_BAR_RATE = 0.20
+
+#: How close a flat bar's close must sit to its period's mean close before it
+#: is also counted as a probable manufactured gap-fill (reported for
+#: diagnostics, not part of the gate above). A genuine flat print has no
+#: reason to land on its period's mean; one built by averaging the period's
+#: real prints does, by construction. Measured on monthly periods: 0.19% of
+#: XAUUSD_40Y.csv's clean 2020+ bars match within this tolerance, against
+#: 22.2%-22.9% of XAUUSD_50Y.csv's 2016+/2020+ bars.
+SYNTHETIC_MEAN_TOLERANCE = 0.002
+
+
+def detect_synthetic_bars(
+    df: pd.DataFrame,
+    *,
+    column: str = "close",
+    period: str = "M",
+    mean_tolerance: float = SYNTHETIC_MEAN_TOLERANCE,
+) -> dict[str, Any]:
+    """Report the fraction of *df* that looks like a manufactured bar.
+
+    ``data/XAUUSD_50Y.csv`` fills gaps in its early history with a flat print
+    (open == high == low == close, zero volume) priced at that month's mean
+    close — which is not a real market print, it is future information: the
+    "mean of the month" is only knowable once the month has finished. 37% of
+    its bars from 2016 onward are built this way, and those bars agree with
+    the next 5-bar move 65.1% of the time (see
+    ``docs/audit/2026-09-24-a0-no-edge-investigation.md`` Q4.3). Neither
+    ``detect_price_spikes`` (single-bar returns) nor ``validate_ohlcv``
+    (absolute price bounds, high>=low) can see this: the bars are individually
+    plausible prices in an OHLC-valid shape, and they move only across bars a
+    long window apart, not within one.
+
+    Flags two patterns, reported separately:
+
+    1. **Flat bars** — ``open == high == low == close``. A real illiquid
+       session can post one; a genuine multi-decade series does not post one
+       on more than a fifth of its bars (see ``MAX_PLAUSIBLE_FLAT_BAR_RATE``).
+    2. **Period-mean-matched bars** — a flat bar whose close sits within
+       ``mean_tolerance`` of the mean close of its own period (default:
+       calendar month). Reported as a stronger, more specific signal that a
+       flat bar is a manufactured gap-fill rather than a real thin session,
+       but it is not itself the gate: the threshold check operates on the
+       simpler, tolerance-free flat-bar fraction above.
+
+    Never mutates *df*. Returns a report even for a frame with no OHLC columns
+    or no ``DatetimeIndex`` (needed only for the period-mean signal) — a
+    caller decides what to do with a report it cannot fully populate.
+    """
+    total_bars = len(df)
+    required = {"open", "high", "low", column}
+    if total_bars == 0 or not required.issubset(df.columns):
+        return {
+            "total_bars": total_bars,
+            "flat_count": 0,
+            "flat_rate": 0.0,
+            "mean_matched_count": 0,
+            "mean_matched_rate": 0.0,
+            "period": period,
+        }
+
+    o = pd.to_numeric(df["open"], errors="coerce")
+    h = pd.to_numeric(df["high"], errors="coerce")
+    lo = pd.to_numeric(df["low"], errors="coerce")
+    c = pd.to_numeric(df[column], errors="coerce")
+
+    flat = (o == h) & (h == lo) & (lo == c) & c.notna()
+    flat_count = int(flat.sum())
+
+    mean_matched_count = 0
+    if flat_count and isinstance(df.index, pd.DatetimeIndex):
+        period_key = df.index.to_period(period)
+        period_mean = c.groupby(period_key).transform("mean")
+        near_mean = (c - period_mean).abs() <= (period_mean.abs() * mean_tolerance)
+        mean_matched_count = int((flat & near_mean.fillna(False)).sum())
+
+    return {
+        "total_bars": total_bars,
+        "flat_count": flat_count,
+        "flat_rate": round(flat_count / total_bars, 4),
+        "mean_matched_count": mean_matched_count,
+        "mean_matched_rate": round(mean_matched_count / total_bars, 4),
+        "period": period,
+    }
+
+
 def validate_ohlcv(
     df: pd.DataFrame,
     symbol: str = "",

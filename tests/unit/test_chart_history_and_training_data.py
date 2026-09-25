@@ -186,8 +186,10 @@ def test_degenerate_frames_do_not_raise(frame):
 
 
 def test_training_refuses_the_corrupt_fifty_year_file():
-    """The real file, not a fixture. This is the first cache candidate in
-    ml/train_advanced.py, so this is what a retrain would have loaded."""
+    """The real file, not a fixture. It is no longer an automatic cache
+    candidate (see the "never selects 50Y by default" tests below), but an
+    operator can still name it explicitly via --cached-csv, and the gate must
+    still catch it when they do."""
     import pathlib
 
     from ml.train_advanced import CorruptTrainingDataError, _assert_price_history_is_plausible
@@ -293,8 +295,168 @@ def test_the_default_window_really_passes_the_gate():
     assert str(df.index[0].date()) >= "2001-01-01", f"window starts {df.index[0].date()}, inside the corrupt region"
 
 
-def test_fifty_years_is_still_refused_through_the_loader():
+def test_a_large_years_request_no_longer_falls_through_to_the_fifty_year_file():
+    """A window request wider than the clean file's own history used to fall
+    through the old candidate order (50Y, 40Y) into the corrupt file and get
+    refused there. XAUUSD_50Y.csv is no longer an automatic candidate at all,
+    so the same request now just returns everything the clean file has —
+    truncated, but never contaminated."""
+    from ml.train_advanced import fetch_gold_ohlcv
+
+    df = fetch_gold_ohlcv("GC=F", years=50, use_cached=True)
+    assert str(df.index[0].date()) >= "2000-01-01", "fell through to the pre-2000 corrupt region"
+
+
+def test_an_explicit_fifty_year_request_is_still_refused():
+    """An operator who explicitly names the 50-year file must still be
+    protected — the plausibility gate runs regardless of which file was
+    asked for, default or explicit."""
+    import pathlib
+
     from ml.train_advanced import CorruptTrainingDataError, fetch_gold_ohlcv
 
+    path = pathlib.Path(__file__).resolve().parents[2] / "data/XAUUSD_50Y.csv"
     with pytest.raises(CorruptTrainingDataError):
-        fetch_gold_ohlcv("GC=F", years=50, use_cached=True)
+        fetch_gold_ohlcv("GC=F", years=6, use_cached=True, cached_csv=str(path))
+
+
+# ── Synthetic / flat-bar detection ───────────────────────────────────────────
+#
+# data/XAUUSD_50Y.csv fills gaps from 2016 onward with a flat print
+# (open=high=low=close) priced at that month's mean close — future
+# information, since the month's mean is only knowable once the month has
+# finished. No single-bar spike check can see it: the bars are individually
+# plausible prices in an OHLC-valid shape (docs/audit/2026-09-24-a0-no-edge-
+# investigation.md D2/Q4.3).
+
+
+def _flat_frame(n: int, *, flat_at: set[int], base: float = 1800.0) -> pd.DataFrame:
+    """A synthetic daily series with real bars, except the given positions,
+    which are flat (O=H=L=C) at the series' own overall mean close."""
+    idx = pd.date_range("2020-01-01", periods=n, freq="D", tz="UTC")
+    close = [base + (i % 7) - 3 for i in range(n)]
+    mean_close = sum(close) / len(close)
+    for i in flat_at:
+        close[i] = mean_close
+    open_ = list(close)
+    high = list(close)
+    low = list(close)
+    for i in range(n):
+        if i not in flat_at:
+            open_[i] = close[i] - 1
+            high[i] = close[i] + 2
+            low[i] = close[i] - 2
+    return pd.DataFrame({"open": open_, "high": high, "low": low, "close": close}, index=idx)
+
+
+def test_a_clean_series_has_a_low_flat_bar_rate():
+    from data_layer.validation import detect_synthetic_bars
+
+    report = detect_synthetic_bars(_flat_frame(200, flat_at=set()))
+    assert report["flat_count"] == 0
+    assert report["flat_rate"] == 0.0
+
+
+def test_a_mostly_flat_series_is_flagged():
+    from data_layer.validation import MAX_PLAUSIBLE_FLAT_BAR_RATE, detect_synthetic_bars
+
+    n = 200
+    flat_at = set(range(0, n, 2))  # 50% flat, at the series mean
+    report = detect_synthetic_bars(_flat_frame(n, flat_at=flat_at))
+    assert report["flat_rate"] > MAX_PLAUSIBLE_FLAT_BAR_RATE
+    assert report["mean_matched_count"] > 0
+
+
+def test_it_never_mutates_the_frame_synthetic():
+    from data_layer.validation import detect_synthetic_bars
+
+    df = _flat_frame(50, flat_at={5, 10, 15})
+    before = df.copy()
+    detect_synthetic_bars(df)
+    pd.testing.assert_frame_equal(df, before)
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [pd.DataFrame(), pd.DataFrame({"close": [1800.0]})],
+)
+def test_degenerate_frames_do_not_raise_synthetic(frame):
+    from data_layer.validation import detect_synthetic_bars
+
+    assert detect_synthetic_bars(frame)["flat_count"] == 0
+
+
+def test_detector_flags_the_real_fifty_year_2016_plus_window_and_passes_forty_year():
+    """(a) The measurement itself, on the real committed files, not fixtures.
+
+    XAUUSD_50Y.csv from 2016 onward is documented (A0 investigation, Q4.3) at
+    37% flat. XAUUSD_40Y.csv from its clean 2020+ start (ml.cached_series.
+    CLEAN_SINCE) measures well under the threshold.
+    """
+    import pathlib
+
+    from data_layer.validation import MAX_PLAUSIBLE_FLAT_BAR_RATE, detect_synthetic_bars
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+
+    df50 = pd.read_csv(root / "data/XAUUSD_50Y.csv", index_col=0, parse_dates=True)
+    df50.columns = [c.lower() for c in df50.columns]
+    window_50y = df50[df50.index >= "2016-01-01"]
+    report_50y = detect_synthetic_bars(window_50y)
+    assert report_50y["flat_rate"] > MAX_PLAUSIBLE_FLAT_BAR_RATE, (
+        f"50Y 2016+ measured {report_50y['flat_rate']:.4f} — expected clearly above threshold"
+    )
+
+    df40 = pd.read_csv(root / "data/XAUUSD_40Y.csv", index_col=0, parse_dates=True)
+    df40.columns = [c.lower() for c in df40.columns]
+    window_40y = df40[df40.index >= "2020-01-01"]
+    report_40y = detect_synthetic_bars(window_40y)
+    assert report_40y["flat_rate"] < MAX_PLAUSIBLE_FLAT_BAR_RATE, (
+        f"40Y 2020+ measured {report_40y['flat_rate']:.4f} — expected clearly below threshold"
+    )
+
+
+def test_default_loader_never_selects_the_fifty_year_file():
+    """(b) The default training data path returns data from the clean file,
+    not the one that carries the manufactured bars."""
+    from ml.train_advanced import fetch_gold_ohlcv
+
+    df = fetch_gold_ohlcv("GC=F", years=6, use_cached=True)
+    # XAUUSD_50Y.csv starts in 1968; XAUUSD_40Y.csv starts in 2000. A 6-year
+    # window from either file starts well after 1968, so the real
+    # discriminator is checking which source file supplied the data.
+    import inspect
+
+    src = inspect.getsource(fetch_gold_ohlcv)
+    # The default candidate list must not name the 50Y file at all.
+    default_block = src.split("for csv_candidate in [")[1].split("]")[0]
+    assert "XAUUSD_50Y" not in default_block, "XAUUSD_50Y.csv is still an automatic candidate"
+    assert "XAUUSD_40Y" in default_block, "XAUUSD_40Y.csv must be the default candidate"
+    assert len(df) > 0
+
+
+def test_explicit_request_for_the_contaminated_window_is_refused():
+    """(c) A caller that explicitly asks for the 50Y file's contaminated
+    2016+ window is refused, not silently served synthetic bars."""
+    import pathlib
+
+    from ml.train_advanced import CorruptTrainingDataError, fetch_gold_ohlcv
+
+    path = pathlib.Path(__file__).resolve().parents[2] / "data/XAUUSD_50Y.csv"
+    with pytest.raises(CorruptTrainingDataError) as excinfo:
+        fetch_gold_ohlcv("GC=F", years=10, use_cached=True, cached_csv=str(path))
+    message = str(excinfo.value)
+    assert "flat" in message.lower()
+    assert "XAUUSD_40Y.csv" in message, "the error must name a source that works"
+    assert "%" in message
+
+
+def test_the_retrain_mtf_script_also_runs_the_gate():
+    """scripts/retrain_mtf_accuracy.py always wants the long-history file by
+    design, so it always makes the "explicit 50Y" choice — the gate must run
+    there too, not only in ml/train_advanced.py's default path."""
+    import scripts.retrain_mtf_accuracy as rma
+    from ml.train_advanced import CorruptTrainingDataError
+
+    with pytest.raises(CorruptTrainingDataError):
+        rma.load_58y_data()
