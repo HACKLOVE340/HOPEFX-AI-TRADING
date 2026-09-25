@@ -319,6 +319,115 @@ async def init_config(s: Any) -> Any:
     return cfg
 
 
+def _schema_fallback_or_refuse(engine: Any, base: Any, exc: BaseException, *, what: str, current, head) -> Any:
+    """A migration could not bring the schema to head. Refuse, or — in dev/test only — create_all().
+
+    Never stamps. Stamping head here is what this replaced: a PostgreSQL database
+    that reported head having run no migration, so every later upgrade was a
+    no-op and the damage was permanent (runbook §6a, owner decision 2026-09-25).
+    """
+    from database.schema_state import RUNBOOK, SchemaRefused, SchemaState, create_all_is_schema_source
+    from utils.production_guard import current_env
+
+    env = current_env() if os.getenv("APP_ENV") is not None else f"{current_env()} (unset)"
+    if not create_all_is_schema_source():
+        message = (
+            f"REFUSING TO START: {what}: {type(exc).__name__}: {exc} | "
+            f"database revision={current or 'none'} target head={head or 'unknown'} APP_ENV={env}. "
+            "The database was NOT stamped and create_all() was NOT run, so its version table "
+            f"still tells the truth. Fix the migration and restart; see {RUNBOOK}."
+        )
+        logger.critical(message)
+        engine.dispose()
+        raise SchemaRefused(message) from exc
+
+    logger.error(
+        "%s: %s: %s | database revision=%s target head=%s. APP_ENV=%s allows create_all() as the "
+        "schema source, so the tables are built with it. NOT stamping: the next start retries the "
+        "upgrade. This schema is not what the migrations build; /ready reports schema_unverified.",
+        what,
+        type(exc).__name__,
+        exc,
+        current or "none",
+        head or "unknown",
+        env,
+    )
+    try:
+        base.metadata.create_all(engine, checkfirst=True)
+    except Exception as exc2:
+        logger.error("create_all() also failed: %s", exc2)
+    return SchemaState(verified=False, current=current, head=head, source="create_all", detail=f"{what}: {exc}")
+
+
+async def _migrate_or_refuse(engine: Any, conn_str: str, base: Any) -> Any:
+    """Bring the schema to Alembic head and prove it by content, or refuse to start.
+
+    Returns the :class:`database.schema_state.SchemaState` that ``/ready`` and
+    ``/health`` report. Raises :class:`database.schema_state.SchemaRefused` — a
+    ``SystemExit``, so ``ComponentRegistry`` and ``startup_event`` cannot catch
+    it and ``app._on_startup_task_done`` exits the process non-zero — when:
+
+    * ``alembic upgrade head`` fails, or alembic is missing, outside
+      development/test (``utils.production_guard.current_env``; unset is
+      production). Development and test build with ``create_all()`` instead;
+    * the version table says the head migration ran but, on PostgreSQL, the
+      objects it creates are absent — the shape the old stamp-head fallback left.
+    """
+    from database.schema_state import RUNBOOK, SchemaRefused, SchemaState, missing_head_objects
+
+    try:
+        from alembic import command as alembic_command
+        from alembic.config import Config as AlembicConfig
+        from alembic.runtime.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+    except ImportError as exc:
+        return _schema_fallback_or_refuse(engine, base, exc, what="alembic is not installed", current=None, head=None)
+
+    alembic_cfg = AlembicConfig("alembic.ini")
+    alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
+    current_rev = head_rev = None
+    try:
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_rev = script.get_current_head()
+        # Read the revision first so an at-head database skips the upgrade (avoids a
+        # SQLite write-lock deadlock when database.connection already holds a conn).
+        with engine.connect() as conn:
+            current_rev = MigrationContext.configure(conn).get_current_revision()
+        if current_rev == head_rev:
+            logger.info("Database already at alembic head (%s) — skipping upgrade", current_rev)
+        else:
+            # alembic is synchronous I/O: keep it off the event loop.
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, lambda: alembic_command.upgrade(alembic_cfg, "head"))
+            logger.info("Database migrations applied (alembic upgrade head, was=%s)", current_rev or "none")
+    except Exception as exc:
+        return _schema_fallback_or_refuse(
+            engine, base, exc, what="alembic upgrade head failed", current=current_rev, head=head_rev
+        )
+
+    # Head by content, not only by the version table.
+    try:
+        with engine.connect() as conn:
+            now_rev = MigrationContext.configure(conn).get_current_revision()
+            missing = missing_head_objects(conn, script, now_rev)
+    except Exception as exc:
+        return _schema_fallback_or_refuse(
+            engine, base, exc, what="the schema could not be verified", current=current_rev, head=head_rev
+        )
+    if now_rev != head_rev or missing:
+        message = (
+            f"REFUSING TO START: the database version table says {now_rev or 'none'} (head is {head_rev}) "
+            f"but {', '.join(missing) or 'the schema'} "
+            f"{'are' if len(missing) > 1 else 'is'} missing. It was stamped without running its "
+            "migrations — the pre-2026-09-25 startup fallback did exactly this — so upgrading it "
+            f"again would be a no-op. Do not re-stamp. Recover by {RUNBOOK}."
+        )
+        logger.critical(message)
+        engine.dispose()
+        raise SchemaRefused(message)
+    return SchemaState(verified=True, current=now_rev, head=head_rev, source="alembic")
+
+
 async def init_database(s: Any) -> Any:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -426,68 +535,7 @@ async def init_database(s: Any) -> Any:
         engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 
     engine = create_engine(conn_str, **engine_kwargs)
-    try:
-        from alembic import command as alembic_command
-        from alembic.config import Config as AlembicConfig
-        from alembic.runtime.migration import MigrationContext
-        from alembic.util.exc import CommandError as AlembicCommandError
-
-        alembic_cfg = AlembicConfig("alembic.ini")
-        alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
-
-        # Determine current revision before attempting upgrade so we can
-        # skip the upgrade entirely when already at head (avoids a SQLite
-        # write-lock deadlock when database.connection already holds a conn).
-        with engine.connect() as _conn:
-            _mctx = MigrationContext.configure(_conn)
-            _current_rev = _mctx.get_current_revision()
-
-        # Resolve the head revision without touching the DB.
-        from alembic.script import ScriptDirectory as _ScriptDir
-
-        _script = _ScriptDir.from_config(alembic_cfg)
-        _head_rev = _script.get_current_head()
-
-        if _current_rev == _head_rev:
-            logger.info(
-                "Database already at alembic head (%s) — skipping upgrade",
-                _current_rev,
-            )
-        else:
-            # Run alembic upgrade in a thread executor so it doesn't block the
-            # async event loop during startup (alembic is synchronous I/O).
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: alembic_command.upgrade(alembic_cfg, "head"))
-            logger.info(
-                "Database migrations applied (alembic upgrade head, was=%s)",
-                _current_rev or "none",
-            )
-    except ImportError:
-        # Alembic not installed — first-run path for minimal/dev installs.
-        # create_all is safe here because there is no existing schema to drift from.
-        logger.info("Alembic not installed — using create_all for schema setup")
-        try:
-            Base.metadata.create_all(engine, checkfirst=True)
-            logger.info("Database schema ensured via create_all (checkfirst=True)")
-        except Exception as exc2:
-            logger.warning("create_all also failed: %s", exc2)
-    except (AlembicCommandError, Exception) as exc:
-        # Alembic is installed but upgrade failed. Most common cause on dev
-        # machines: the DB was created via create_all before Alembic was
-        # introduced, so alembic_version table is missing.
-        # Fix: stamp the DB at head so future runs apply only new migrations,
-        # then run _ensure_user_columns() to add any missing columns directly.
-        logger.warning("Alembic upgrade failed (%s) — attempting auto-stamp and column sync.", exc)
-        try:
-            alembic_command.stamp(alembic_cfg, "head")
-            logger.info("DB stamped at alembic head — future migrations will apply incrementally")
-        except Exception as stamp_exc:
-            logger.warning("Alembic stamp failed: %s", stamp_exc)
-        try:
-            Base.metadata.create_all(engine, checkfirst=True)
-            logger.info("Database schema partially ensured via create_all (checkfirst=True)")
-        except Exception as exc2:
-            logger.warning("create_all also failed: %s", exc2)
+    s.schema_state = await _migrate_or_refuse(engine, conn_str, Base)
     s.db_engine = engine
     s.db_session_factory = sessionmaker(bind=engine)
     return engine

@@ -187,22 +187,117 @@ so everything rolled back and the database was left empty.
 All of it is fixed now. `tests/unit/test_migration_chain_runs_on_postgres.py`
 proves the round trip against a real server.
 
-**If the app booted against an empty PostgreSQL database while the chain was
-broken, check the schema before you trust it.** `core/startup_factories.py`
-handles a failed upgrade like this: it *stamps the database at head*, then builds
-the tables with `create_all()`. A database built that way reports head, but no
-migration ever ran on it. Tell-tales:
+#### What startup does when the migrations fail (since 2026-09-25)
+
+**Before 2026-09-25**, `core/startup_factories.py` handled a failed upgrade by
+*stamping the database at head* and building the tables with `create_all()`,
+then serving. The database then reported head although no migration had run on
+it, so every later `alembic upgrade head` was a no-op. The damage was permanent
+and silent.
+
+**Now startup refuses to start** (owner decision, 2026-09-25). It never stamps
+and never runs `create_all()` outside development and test. `APP_ENV` decides
+this through `utils.production_guard.current_env`, and an **unset `APP_ENV`
+counts as production**.
+
+What you see:
+
+| Where | What |
+|---|---|
+| Pod | Exits with status 1. Kubernetes shows `CrashLoopBackOff` / `Error`, not `Running`. It is never Ready and never gets traffic |
+| Log, failed upgrade | `CRITICAL … REFUSING TO START: alembic upgrade head failed: <ExceptionType>: <error> \| database revision=<rev or none> target head=<head> APP_ENV=<env>. The database was NOT stamped and create_all() was NOT run …` |
+| Log, stamped but not migrated | `CRITICAL … REFUSING TO START: the database version table says <rev> (head is <head>) but crypto_hd_index_btc, crypto_hd_index_eth, crypto_hd_index_trc20 are missing …` |
+| `/ready` | `503 {"reason": "schema_unverified"}` for any pod whose startup did not verify the schema at head. In production such a pod has already exited; you see this only in development/test |
+| `/health` | `components.schema` is `healthy` / `unverified` / `unavailable`, and `schema` is one of the critical components in the overall `status` |
+| Development/test | `ERROR` log. The tables are built with `create_all()` and NOT stamped, so the next start tries the upgrade again. `/ready` stays 503 |
+
+The same rule now applies to `scripts/start_prod.sh`. It runs
+`alembic upgrade head` and stops if it fails; before, it ran no migration and
+fell back to `create_all()`. It also applies to `database_init.py` and to the
+`create_all()` in `scripts/create_admin.py`, `scripts/create_superadmin.py` and
+`cli.py init|db create`. All of those build nothing outside development/test.
+
+`tests/unit/test_failed_migration_refuses_to_start.py` proves all of it,
+including against PostgreSQL 16.13.
+
+#### Case A — the upgrade failed. The version table is still honest
+
+Startup left the database exactly as it found it. `alembic/env.py` runs the whole
+upgrade in one transaction, so on PostgreSQL no migration is half-applied.
+
+1. Read the `CRITICAL` line. It names the error and both revisions. Common causes:
+   * `lock_timeout` or a stalled migration: another backend holds a lock. See the
+     output of `scripts/preflight.sh`.
+   * `DuplicateTable` or `already exists`: an object is in the way. Find out who
+     created it before you drop anything.
+   * a data check in a migration refused, such as `a6b7c8d9e0f1`'s duplicate
+     idempotency keys. Reconcile the rows it names.
+2. Fix the cause. Then run the upgrade once by hand and watch it finish:
+   ```bash
+   DATABASE_URL=postgresql://…/hopefx alembic upgrade head
+   DATABASE_URL=postgresql://…/hopefx alembic current        # "<rev> (head)"
+   ```
+3. Restart the pods. Do **not** set `SKIP_MIGRATIONS=true`, run `alembic stamp`,
+   or run `create_all()` to get them up. Each of these recreates the defect below.
+
+#### Case B — the database was already stamped by the old behaviour
+
+This applies to any PostgreSQL database first booted by the app between
+2026-09-10 and 2026-09-25 while the migration chain was broken. Startup now
+refuses it with the "stamped but not migrated" line. To confirm:
 
 ```sql
--- 'integer' here means create_all() built it; the migrations build 'bigint'
+-- zero rows: d9e0f1a2b3c4 never ran, although alembic_version says it did.
+SELECT sequence_name FROM information_schema.sequences WHERE sequence_name LIKE 'crypto_hd_index_%';
+-- 'integer' here means create_all() built it while the models said Integer
+-- (before 2026-09-25); the migrations build 'bigint'. A create_all() run after
+-- that date builds bigint too, so this check alone can miss it; the one above cannot.
 SELECT table_name, data_type FROM information_schema.columns
 WHERE column_name = 'id' AND table_name IN ('outbox_events', 'crypto_payments');
--- zero rows means d9e0f1a2b3c4 never ran, so crypto address issuing returns 503
-SELECT sequence_name FROM information_schema.sequences WHERE sequence_name LIKE 'crypto_hd_index_%';
 ```
 
-If either check shows the tell-tale, escalate to the owner. Do not re-stamp and
-do not re-run migrations over it by hand.
+**Do not:**
+* re-stamp it;
+* run `alembic upgrade head` over it. It is a no-op, because the version table
+  already says head;
+* create the three sequences by hand to make the refusal go away. A hand-made
+  sequence starts at 0, and the migration seeds past every index already issued.
+  Starting at 0 **re-issues deposit addresses that users have already paid to**.
+  It also leaves the rest of the `create_all()` schema in place.
+
+**Recover by rebuilding from the migrations and copying the data across.** Do
+this with the owner's agreement, because it is a planned outage. Stop the writers
+first (§2) and take a copy (§3).
+
+```bash
+createdb hopefx_new
+# 1. every migration up to, but not including, the one that seeds the sequences
+DATABASE_URL=postgresql://…/hopefx_new alembic upgrade c8d9e0f1a2b3
+# 2. the data, never the version table
+pg_dump --data-only --exclude-table=alembic_version --no-owner postgresql://…/hopefx \
+  | psql -v ON_ERROR_STOP=1 postgresql://…/hopefx_new
+# 3. the last migration now seeds each sequence past the indices in the copied rows.
+#    Point HOPEFX_CRYPTO_COUNTER_PATH at the highest pod counter file first
+#    (MASTER_OUTSTANDING §A11, owner action (2)).
+DATABASE_URL=postgresql://…/hopefx_new alembic upgrade head
+DATABASE_URL=postgresql://…/hopefx_new alembic current        # "<rev> (head)"
+```
+
+Then run §7 against `hopefx_new` and re-run the two queries above: three
+sequences, `bigint` ids. Swap the databases as in §6, and restart one pod before
+the rest.
+
+If step 2 stops on an error, the error is the finding. Four column widths
+differ between the models and the migrations: `accounts.user_id`, `trades.side`,
+`trades.status` and `users.kyc_rejection_reason`. A value that does not fit
+stops the copy, which is the right result. Escalate that to the owner with the
+rows it names. Do not widen the column to force it through.
+
+This procedure was rehearsed on 2026-09-25 against PostgreSQL 16.13. The test
+database was built with `create_all()`, stamped at head and given one BTC
+payment at index 7. Startup refused it. After steps 1–3 it held the row with
+`bigint` ids, `nextval('crypto_hd_index_btc')` returned 8, and startup accepted
+it.
 
 ## 7. Verify the restore is the data, not just a database
 
@@ -288,6 +383,12 @@ The restore path is exercised automatically on every CI run:
   ones. CI sets `HOPEFX_REQUIRE_POSTGRES=1`, so a missing server fails there
   instead of skipping. Verified by execution against PostgreSQL 16.13 on
   2026-09-25.
+* `tests/unit/test_failed_migration_refuses_to_start.py` — §6a's startup
+  behaviour: a failed upgrade refuses to start with the version row untouched and
+  no `create_all()`; a stamped-but-unmigrated PostgreSQL database is refused;
+  development/test still start; `/ready` is 503 on an unverified schema. Its
+  PostgreSQL tests use the same `TEST_POSTGRES_URL` / `HOPEFX_REQUIRE_POSTGRES`
+  gate.
 
 To rehearse by hand, take a backup of a scratch database and walk §4–§7. The
 whole point of this phase was that **a backup nobody has restored is not a

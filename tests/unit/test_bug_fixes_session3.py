@@ -663,14 +663,21 @@ class TestEventBusFixes:
 
 
 class TestStartupFactoriesFixes:
-    def test_alembic_command_error_used_in_except(self):
-        """AlembicCommandError must appear in an except clause, not just imported."""
+    def test_a_failed_upgrade_is_never_answered_with_a_stamp(self):
+        """No `alembic stamp` anywhere in startup.
+
+        This used to be ``test_alembic_command_error_used_in_except``, which
+        required ``AlembicCommandError`` to appear in an ``except`` clause. That
+        clause was the one that handled a failed ``alembic upgrade head`` by
+        stamping the database at head and running ``create_all()`` — the defect
+        runbook §6a describes. It was removed on 2026-09-25 (owner decision:
+        refuse to start); the behaviour is proven by execution in
+        ``test_failed_migration_refuses_to_start.py``. This is the cheap static
+        backstop: a reintroduced stamp fails here before anything runs.
+        """
         src = _source("core/startup_factories.py")
-        assert "AlembicCommandError" in src
-        # It must appear in an except clause
-        assert "except (AlembicCommandError" in src or "except AlembicCommandError" in src, (
-            "AlembicCommandError must be used in an except clause"
-        )
+        assert "command.stamp(" not in src
+        assert "alembic_command.stamp" not in src
 
     def test_no_unused_noqa_for_alembic_import(self):
         """The noqa: F401 directive for AlembicCommandError must be removed."""

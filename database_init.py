@@ -42,7 +42,10 @@ _OPTIONAL_EXTENSIONS: list[str] = ["pg_trgm", "btree_gin"]
 
 
 def initialize_database(db_url: str | None = None) -> None:
-    """Create all ORM tables and run pending Alembic migrations.
+    """Run pending Alembic migrations; in development/test, create_all() first.
+
+    Outside development and test (an unset APP_ENV counts as production) this
+    never runs create_all() and a failed upgrade raises ``RuntimeError``.
 
     Args:
         db_url: SQLAlchemy connection URL.  Defaults to the DATABASE_URL
@@ -62,24 +65,33 @@ def initialize_database(db_url: str | None = None) -> None:
 
     from sqlalchemy import create_engine
 
+    from database.schema_state import RUNBOOK, create_all_is_schema_source
+
     engine = create_engine(db_url)
+    # create_all() is a schema source only in development and test
+    # (utils.production_guard.current_env; UNSET is production). Everywhere else
+    # the schema comes from the migrations alone, and a failed upgrade raises.
+    local = create_all_is_schema_source()
 
     # Create tables defined in both model modules.
-    try:
-        from database.models import Base as CoreBase
+    if local:
+        try:
+            from database.models import Base as CoreBase
 
-        CoreBase.metadata.create_all(engine)
-        logger.info("Core tables created/verified")
-    except Exception as exc:
-        logger.warning("Could not create core tables: %s", exc)
+            CoreBase.metadata.create_all(engine)
+            logger.info("Core tables created/verified")
+        except Exception as exc:
+            logger.warning("Could not create core tables: %s", exc)
 
-    try:
-        from database.user_models import Base as UserBase
+        try:
+            from database.user_models import Base as UserBase
 
-        UserBase.metadata.create_all(engine)
-        logger.info("User tables created/verified")
-    except Exception as exc:
-        logger.warning("Could not create user tables: %s", exc)
+            UserBase.metadata.create_all(engine)
+            logger.info("User tables created/verified")
+        except Exception as exc:
+            logger.warning("Could not create user tables: %s", exc)
+    else:
+        logger.info("Not running create_all() outside development/test — the migrations build the schema.")
 
     # Run Alembic migrations if alembic.ini is present.
     alembic_ini = os.path.join(Path(__file__).parent, "alembic.ini")
@@ -95,7 +107,18 @@ def initialize_database(db_url: str | None = None) -> None:
                 command.upgrade(alembic_cfg, "head")
             logger.info("Alembic migrations applied")
         except Exception as exc:
+            if not local:
+                engine.dispose()
+                raise RuntimeError(
+                    f"alembic upgrade head failed: {exc}. The database was not stamped and "
+                    f"create_all() was not run. Fix the migration and re-run; see {RUNBOOK}."
+                ) from exc
             logger.warning("Alembic migration failed (non-fatal in dev): %s", exc)
+    elif not local:
+        engine.dispose()
+        raise RuntimeError(
+            f"{alembic_ini} not found: outside development/test the migrations are the only schema source."
+        )
     else:
         logger.debug("alembic.ini not found — skipping migrations")
 

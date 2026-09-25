@@ -1761,7 +1761,15 @@ def _p_api_trading_role() -> tuple[str, str]:
     reports = 'getattr(app_state, "engine", None)' in health and '"healthy" if running else "stopped"' in health
     # Reported but NOT folded into the overall verdict: an API-only deployment
     # has no engine by design, and a permanently degraded field is ignored.
-    not_critical = 'critical = ["api", "config", "database"]' in health
+    # Parsed rather than matched: the list grew "schema" on 2026-09-25 (a
+    # verified schema is part of the verdict), and an exact-string match read
+    # that as the engine having been made critical.
+    _critical = re.search(r"^\s*critical = (\[[^\]]*\])", health, re.MULTILINE)
+    try:
+        _critical_names = ast.literal_eval(_critical.group(1)) if _critical else None
+    except (ValueError, SyntaxError):
+        _critical_names = None
+    not_critical = bool(_critical_names) and "database" in _critical_names and "engine" not in _critical_names
     documented = "ENGINE_AUTOSTART" in (_read("CLAUDE.md") or "")
 
     if reports and not_critical and documented:

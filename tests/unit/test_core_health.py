@@ -84,9 +84,16 @@ def _state(**overrides):
         ws_manager=None,
         broker=None,
         initialized=True,
+        schema_state=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
+
+
+# What core/startup_factories.py::_migrate_or_refuse records when the schema is
+# at head and proven by content. Since 2026-09-25 a wired database is ready and
+# healthy only with this; the tests below that wire one said so without it.
+_VERIFIED = SimpleNamespace(verified=True)
 
 
 def _route(app: FastAPI, path: str):
@@ -203,7 +210,9 @@ class TestTheHealthEndpoint:
         return asyncio.run(_route(app, "/health").endpoint())
 
     def test_everything_wired_and_reachable_is_healthy(self) -> None:
-        state = _state(config=SimpleNamespace(environment="test", api_configs=[]), db_engine=_Engine())
+        state = _state(
+            config=SimpleNamespace(environment="test", api_configs=[]), db_engine=_Engine(), schema_state=_VERIFIED
+        )
         assert self._health(state, _KillSwitch()).status == "healthy"
 
     def test_an_unreachable_database_degrades_the_whole_report(self) -> None:
@@ -218,7 +227,9 @@ class TestTheHealthEndpoint:
         """The property worth pinning: every component up and trading halted is
         NOT a healthy system, and a dashboard that showed green would be lying
         about the only thing that matters."""
-        state = _state(config=SimpleNamespace(environment="test", api_configs=[]), db_engine=_Engine())
+        state = _state(
+            config=SimpleNamespace(environment="test", api_configs=[]), db_engine=_Engine(), schema_state=_VERIFIED
+        )
         assert self._health(state, _KillSwitch(active=True)).status == "degraded"
 
     def test_the_environment_is_unknown_rather_than_guessed(self) -> None:
@@ -251,7 +262,7 @@ class TestTheReadinessProbe:
         assert b"database_unavailable" in response.body
 
     def test_an_initialised_process_with_a_reachable_database_is_ready(self) -> None:
-        assert self._ready(_state(db_engine=_Engine())) == {"ready": True}
+        assert self._ready(_state(db_engine=_Engine(), schema_state=_VERIFIED)) == {"ready": True}
 
     def test_no_database_configured_does_not_block_readiness(self) -> None:
         assert self._ready(_state(db_engine=None)) == {"ready": True}
@@ -261,7 +272,7 @@ class TestTheReadinessProbe:
         readiness path, so an outage there must not evict every pod from the
         load balancer at once."""
         monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")
-        assert self._ready(_state(db_engine=_Engine())) == {"ready": True}
+        assert self._ready(_state(db_engine=_Engine(), schema_state=_VERIFIED)) == {"ready": True}
 
 
 class TestTheStatusEndpoint:
@@ -314,7 +325,7 @@ class TestTheLockdownPath:
 
         monkeypatch.setattr(redis_module, "from_url", lambda *a, **k: _FakeRedis())
         app = FastAPI()
-        register_health_routes(app, _state(db_engine=_Engine()), _KillSwitch())
+        register_health_routes(app, _state(db_engine=_Engine(), schema_state=_VERIFIED), _KillSwitch())
         return asyncio.run(_route(app, "/ready").endpoint())
 
     def test_an_active_lockdown_takes_the_pod_out_of_rotation(self, monkeypatch) -> None:

@@ -15,9 +15,10 @@ SQLite stores that happily, PostgreSQL will not coerce an integer to a boolean.
 ``alembic/env.py`` runs the whole upgrade in ONE transaction, so the failure
 rolled back every table the earlier migrations had created: a new deployment, or a
 restore from scratch, ended with an empty database. And the startup path
-(``core/startup_factories.py``) then *stamps the database at head* and builds it
+(``core/startup_factories.py``) then *stamped the database at head* and built it
 with ``create_all()`` — which, while the models declared ``Integer`` ids, gave
-32-bit ``SERIAL`` keys where the migrations say ``BIGINT``.
+32-bit ``SERIAL`` keys where the migrations say ``BIGINT``. Since 2026-09-25
+startup refuses to start instead (``test_failed_migration_refuses_to_start.py``).
 
 Two things are held here, both against a real server:
 
