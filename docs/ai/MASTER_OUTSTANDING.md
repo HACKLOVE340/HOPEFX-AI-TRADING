@@ -645,6 +645,12 @@ is skipped, so the behaviour is pinned while the decision is open.
 >   - (a) Every BTC payment already issued shares one address, and early
 >     ETH/USDT payments may share addresses. Reconcile deposits to those
 >     addresses by amount and time.
+>     **Tool:** `python scripts/crypto_address_collision_report.py --database-url <prod URL>`
+>     is read-only (SQLite `mode=ro`, Postgres `READ ONLY` transaction) and
+>     reads both the `crypto_payments` table and the billing order store. It
+>     lists every address used by more than one payment, flags ETH/USDT-ERC20
+>     mixes, and exits 1 if it finds any. The local dev database has 0
+>     payments; the production run is the owner's.
 >   - (b) The counter is per host. Running more than one host needs a database
 >     sequence or a shared counter.
 >   - (c) `bitcoin.py::_load_mnemonic` still accepts a throwaway wallet in
