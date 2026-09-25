@@ -33,9 +33,14 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
+import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
+from alembic.ddl.impl import DefaultImpl
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.schema import CreateColumn
 
+import database.user_models  # noqa: F401 — registers its tables on Base
 from database.models import Base
 
 pytestmark = [pytest.mark.unit, pytest.mark.slow]
@@ -47,25 +52,47 @@ KNOWN_EXTRA_COLUMNS: dict[str, set[str]] = {}
 
 
 @pytest.fixture(scope="module")
-def migrated_db(tmp_path_factory) -> sqlite3.Connection:
-    """A database built only by the migrations, exactly as a deployment is.
+def migration_run(tmp_path_factory):
+    """A database built only by the migrations, exactly as a deployment is —
+    plus every ``sa.Table`` the migrations handed to ``create_table``.
 
     DATABASE_URL is set, not just the ini option: `alembic/env.py` reads that
     env var and *overrides* `sqlalchemy.url` with it. Setting only the config
     lets any other test that exports DATABASE_URL redirect this migration to a
     different database, and the assertions below then describe that one — which
     is how this fixture first failed, under `-k` selection rather than alone.
+
+    The recorded tables carry the types the migration *declared*, before SQLite
+    flattened them. That is what lets a SQLite run see a PostgreSQL-only drift:
+    ``BigInteger().with_variant(Integer, "sqlite")`` and ``Integer`` both read
+    back from SQLite as ``INTEGER``, but compile differently for PostgreSQL.
     """
     db = tmp_path_factory.mktemp("migrated") / "schema.db"
     cfg = Config("alembic.ini")
     url = f"sqlite:///{db}"
     cfg.set_main_option("sqlalchemy.url", url)
+    created: dict[str, sa.Table] = {}
+    real_create_table = DefaultImpl.create_table
+
+    def recording_create_table(self, table, **kw):
+        # First creation wins: batch_alter_table's SQLite rebuilds go through
+        # `_alembic_tmp_<name>` with the SQLite-only retyped columns.
+        if not table.name.startswith("_alembic_tmp_"):
+            created.setdefault(table.name, table)
+        return real_create_table(self, table, **kw)
+
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("DATABASE_URL", url)
+        mp.setattr(DefaultImpl, "create_table", recording_create_table)
         command.upgrade(cfg, "head")
     con = sqlite3.connect(db)
-    yield con
+    yield con, created
     con.close()
+
+
+@pytest.fixture(scope="module")
+def migrated_db(migration_run) -> sqlite3.Connection:
+    return migration_run[0]
 
 
 def migrated_tables(con: sqlite3.Connection) -> set[str]:
@@ -133,4 +160,49 @@ def test_the_specific_columns_that_were_missing(migrated_db, table, column):
     """Named individually so a regression says which column came back."""
     assert column in migrated_columns(migrated_db, table), (
         f"{table}.{column} is declared by the model and created by no migration"
+    )
+
+
+# ── Types, not just names ───────────────────────────────────────────────────
+#
+# Everything above compares column NAMES on SQLite. It could not see the drift
+# found on 2026-09-25: `outbox_events.id` and `crypto_payments.id` were `Integer`
+# in the models and `BigInteger` in the migrations. SQLite reads both back as
+# INTEGER — deliberately, since only that word aliases the rowid — so no
+# SQLite-reflected comparison can tell them apart. On PostgreSQL the startup
+# `create_all()` fallback built them as 32-bit SERIAL.
+#
+# This compares the PostgreSQL rendering of each primary-key column as the
+# migration declared it with the PostgreSQL rendering of the model's column.
+# `tests/unit/test_migration_chain_runs_on_postgres.py` holds the same property
+# against a real server; this one runs anywhere.
+
+
+def _pg_pk_spec(table: sa.Table) -> dict[str, str]:
+    """pk column → its PostgreSQL type as CREATE TABLE would render it (SERIAL/BIGSERIAL/…)."""
+    dialect = postgresql.dialect()
+    specs = {}
+    for column in table.primary_key.columns:
+        rendered = str(CreateColumn(column).compile(dialect=dialect))
+        specs[column.name] = rendered.split()[1]  # "<name> <TYPE> ..." → TYPE
+    return specs
+
+
+def test_primary_key_types_match_the_models_as_postgresql_renders_them(migration_run):
+    _, created = migration_run
+    compared = sorted(set(created) & set(Base.metadata.tables))
+    # Harness-is-live guard: the recording hook must actually have seen the
+    # chain's CREATE TABLEs, or an empty loop below would pass.
+    assert len(compared) > 40, f"recorded only {len(compared)} migration-created model tables"
+
+    drift = []
+    for name in compared:
+        declared = _pg_pk_spec(created[name])
+        modelled = _pg_pk_spec(Base.metadata.tables[name])
+        if declared != modelled:
+            drift.append(f"  {name}: migrations={declared}  models={modelled}")
+    assert not drift, (
+        "Primary-key types differ between the migrations and the models when "
+        "rendered for PostgreSQL — a schema built by create_all() is not the "
+        "migrated schema:\n" + "\n".join(drift)
     )

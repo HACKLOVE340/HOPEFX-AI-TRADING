@@ -167,6 +167,43 @@ WHERE datname = 'hopefx' AND pid <> pg_backend_pid();
 Keep `hopefx_damaged` until the postmortem is written. It costs disk; it may cost
 much less than the rows nobody has noticed are missing yet.
 
+### 6a. PostgreSQL from scratch — an empty schema, no backup
+
+Only when §9 has been escalated and the owner has decided to start from an empty
+database (or for a brand-new deployment). The schema comes from the migrations,
+never from `create_all()`:
+
+```bash
+createdb hopefx_new
+DATABASE_URL=postgresql://…/hopefx_new alembic upgrade head   # must end at the single head
+DATABASE_URL=postgresql://…/hopefx_new alembic current        # prints "<rev> (head)"
+```
+
+**Until 2026-09-25 this could not complete on PostgreSQL.** `x3y4z5a6b7c8`
+gave a boolean column an integer default and the upgrade died with
+`DatatypeMismatch`. `alembic/env.py` runs the whole upgrade in ONE transaction,
+so everything rolled back and the database was left empty.
+`downgrade base` followed by `upgrade head` also failed, three different ways.
+All of it is fixed now. `tests/unit/test_migration_chain_runs_on_postgres.py`
+proves the round trip against a real server.
+
+**If the app booted against an empty PostgreSQL database while the chain was
+broken, check the schema before you trust it.** `core/startup_factories.py`
+handles a failed upgrade like this: it *stamps the database at head*, then builds
+the tables with `create_all()`. A database built that way reports head, but no
+migration ever ran on it. Tell-tales:
+
+```sql
+-- 'integer' here means create_all() built it; the migrations build 'bigint'
+SELECT table_name, data_type FROM information_schema.columns
+WHERE column_name = 'id' AND table_name IN ('outbox_events', 'crypto_payments');
+-- zero rows means d9e0f1a2b3c4 never ran, so crypto address issuing returns 503
+SELECT sequence_name FROM information_schema.sequences WHERE sequence_name LIKE 'crypto_hd_index_%';
+```
+
+If either check shows the tell-tale, escalate to the owner. Do not re-stamp and
+do not re-run migrations over it by hand.
+
 ## 7. Verify the restore is the data, not just a database
 
 Row counts alone are not proof — a restore of the wrong backup also has rows.
@@ -228,7 +265,7 @@ Stop working down the list in silence. After **two** refused backups:
 |---|---|---|
 | Two or more backups refuse | Owner | Immediately |
 | Restore succeeds but data looks wrong (§7) | Owner | Before promoting |
-| No backups exist at all | Owner | Immediately, and preserve everything |
+| No backups exist at all | Owner | Immediately, and preserve everything. An empty schema is §6a, on the owner's decision |
 
 ## 10. After the incident
 
@@ -245,6 +282,12 @@ The restore path is exercised automatically on every CI run:
   every refusal above proven by handing the code the broken artefact.
 * `tests/integration/test_database_restore_postgres.py` — a real `pg_dump`
   restored into a real database, checksums compared.
+* `tests/unit/test_migration_chain_runs_on_postgres.py` — §6a's schema from
+  scratch: the full Alembic chain up, down to base and up again on a real
+  PostgreSQL, plus `create_all()`'s primary keys compared with the migrated
+  ones. CI sets `HOPEFX_REQUIRE_POSTGRES=1`, so a missing server fails there
+  instead of skipping. Verified by execution against PostgreSQL 16.13 on
+  2026-09-25.
 
 To rehearse by hand, take a backup of a scratch database and walk §4–§7. The
 whole point of this phase was that **a backup nobody has restored is not a

@@ -1217,8 +1217,12 @@ if SQLALCHEMY_AVAILABLE:
 
         __tablename__ = "crypto_payments"
 
-        # Use Integer for SQLite compatibility (BigInteger maps to INTEGER in SQLite anyway)
-        id = Column(Integer, primary_key=True, autoincrement=True)
+        # PKBigInt: BIGINT (BIGSERIAL) on PostgreSQL, as migration b2c3d4e5f6a7
+        # creates it; INTEGER on SQLite so it aliases the rowid (b7c8d9e0f1g2).
+        # This said "Integer for SQLite compatibility (BigInteger maps to
+        # INTEGER in SQLite anyway)" — it does not, and plain Integer made the
+        # create_all() startup fallback build a 32-bit SERIAL on PostgreSQL.
+        id = Column(PKBigInt, primary_key=True, autoincrement=True)
         payment_id = Column(String(100), unique=True, nullable=False, index=True)
         user_id = Column(String(128), nullable=False, index=True)
         plan_id = Column(String(100), nullable=False)
@@ -1288,7 +1292,11 @@ if SQLALCHEMY_AVAILABLE:
 
         __tablename__ = "outbox_events"
 
-        id = Column(Integer, primary_key=True, autoincrement=True)
+        # PKBigInt, matching migration b2c3d4e5f6a7 (BIGINT on PostgreSQL) —
+        # an append-only outbox must not stop at 2^31 rows. Was Integer, so
+        # create_all() on PostgreSQL built SERIAL where the migrations build
+        # BIGSERIAL.
+        id = Column(PKBigInt, primary_key=True, autoincrement=True)
         event_type = Column(String(100), nullable=False, index=True)
         channel = Column(String(100), nullable=False)  # Redis pub/sub channel
         payload = Column(Text, nullable=False)  # JSON

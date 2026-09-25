@@ -69,9 +69,7 @@ def upgrade() -> None:
 
         # Use op.create_foreign_key directly (not batch_alter_table) so that
         # the just-added column is guaranteed to be visible to the DDL.
-        if "fk_orders_account_id" not in {
-            fk["name"] for fk in inspector.get_foreign_keys("orders")
-        }:
+        if "fk_orders_account_id" not in {fk["name"] for fk in inspector.get_foreign_keys("orders")}:
             op.create_foreign_key(
                 "fk_orders_account_id",
                 "orders",
@@ -173,10 +171,14 @@ def downgrade() -> None:
         ("idx_signals_confidence", "signals"),
         ("idx_wallet_reference", "wallet_transactions"),
     ]:
-        try:
+        # Inspect, never try/except: on PostgreSQL a failed DROP aborts the
+        # whole transaction (env.py runs the downgrade in ONE), so swallowing
+        # the error only moved the failure to the next statement —
+        # InFailedSqlTransaction. Downgrade-only change (2026-09-25): on
+        # PostgreSQL this path could never have completed when anything was
+        # absent, and where everything is present it drops exactly as before.
+        if table in _tables() and idx_name in {i["name"] for i in sa.inspect(bind).get_indexes(table)}:
             op.drop_index(idx_name, table_name=table)
-        except Exception:  # nosec B110 — constraint may not exist yet
-            pass
 
     if dialect != "sqlite":
         # Restore FKs without ondelete (original state)
@@ -188,11 +190,17 @@ def downgrade() -> None:
             ("fk_positions_account_id", "positions"),
             ("fk_positions_user_id", "positions"),
         ]:
-            try:
+            # Absent when a later downgrade already dropped its column (e.g.
+            # v1w2x3y4z5a6 drops orders.account_id, and PostgreSQL drops the
+            # dependent FK with it). See the index loop above for why this
+            # inspects rather than catching.
+            if table in _tables() and constraint in {fk.get("name") for fk in sa.inspect(bind).get_foreign_keys(table)}:
                 with op.batch_alter_table(table) as batch_op:
                     batch_op.drop_constraint(constraint, type_="foreignkey")
-            except Exception:  # nosec B110 — constraint may not exist yet
-                pass
+
+
+def _tables() -> set[str]:
+    return set(sa.inspect(op.get_bind()).get_table_names())
 
 
 def _create_index_if_not_exists(name: str, table: str, columns: list[str]) -> None:

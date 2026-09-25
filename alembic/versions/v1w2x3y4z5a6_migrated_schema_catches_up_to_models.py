@@ -207,9 +207,17 @@ def downgrade() -> None:
 
     _drop_indexes_referencing("orders", {"account_id"})
     if "account_id" in _columns("orders"):
+        # Only drop the FK this migration's upgrade created. On a database the
+        # chain built, orders.account_id already existed (p1q2r3s4t5u6 adds it,
+        # with fk_orders_account_id), so upgrade() skipped both the column and
+        # this constraint — and an unconditional drop failed with
+        # UndefinedObject, aborting `alembic downgrade base` on PostgreSQL.
+        # Downgrade-only change: that path could never have completed there.
+        own_fk = "fk_orders_account_id_accounts"
+        fk_present = own_fk in {fk.get("name") for fk in _inspector().get_foreign_keys("orders")}
         with op.batch_alter_table("orders") as batch:
-            if op.get_bind().dialect.name != "sqlite":
-                batch.drop_constraint("fk_orders_account_id_accounts", type_="foreignkey")
+            if op.get_bind().dialect.name != "sqlite" and fk_present:
+                batch.drop_constraint(own_fk, type_="foreignkey")
             batch.drop_column("account_id")
 
     if "account_name" in _columns("accounts"):

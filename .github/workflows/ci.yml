@@ -416,6 +416,14 @@ jobs:
           STRATEGY_MIN_BARS: "100"
           STRATEGY_TICKS_PER_BAR: "10"
           FIX_CONFIG_FILE: fix.cfg
+          # tests/unit/test_migration_chain_runs_on_postgres.py runs the FULL
+          # Alembic chain (upgrade → downgrade base → upgrade) and compares
+          # create_all()'s primary keys against it, on the postgres service
+          # above via DATABASE_URL. Without a server it SKIPS; this makes that
+          # skip a failure here, so a broken service cannot turn the only
+          # PostgreSQL migration proof into a silent green (2026-09-25: the
+          # chain had not reached head on PostgreSQL since x3y4z5a6b7c8).
+          HOPEFX_REQUIRE_POSTGRES: "1"
         run: |
           pytest tests/ \
             -m "not slow and not e2e" \

@@ -112,7 +112,11 @@ def upgrade() -> None:
             sa.Column("transaction_id", sa.String(length=128), nullable=True),
             sa.Column("notes", sa.Text(), nullable=True),
             sa.Column("settlements_json", sa.Text(), nullable=True),
-            sa.Column("reversed", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+            # sa.false(), not sa.text("0"): see x3y4z5a6b7c8 — PostgreSQL refuses
+            # an integer default on a boolean. Unreachable on PostgreSQL until
+            # 2026-09-25 (the chain stopped one revision earlier); SQLite still
+            # renders DEFAULT 0, byte-identical.
+            sa.Column("reversed", sa.Boolean(), nullable=False, server_default=sa.false()),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("processed_at", sa.DateTime(timezone=True), nullable=True),
             sa.CheckConstraint("amount >= 0", name="ck_affiliate_payouts_amount_non_negative"),
