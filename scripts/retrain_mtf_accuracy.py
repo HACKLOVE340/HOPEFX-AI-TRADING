@@ -101,15 +101,32 @@ def _calibrate_prefit(estimator, X_val, y_val):
 
 
 def load_58y_data() -> pd.DataFrame:
+    """Load the long-history XAUUSD dataset.
+
+    This script's whole point is the 58Y/50Y file, so it always makes the
+    "explicit 50Y" choice — which is exactly the case
+    ``data_layer.validation.detect_synthetic_bars`` exists for.
+    ``data/XAUUSD_50Y.csv`` fills gaps in its history with a flat print
+    (open=high=low=close) priced at that period's mean close, which is future
+    information; 37% of its bars from 2016 onward are built this way (see
+    ``docs/audit/2026-09-24-a0-no-edge-investigation.md`` D2/Q4.3). This
+    loader used to run no plausibility check at all. It now runs the same
+    gate ``ml/train_advanced.py`` uses, so a contaminated file is refused
+    here too rather than silently trained on.
+    """
+    from ml.train_advanced import _assert_price_history_is_plausible
+
     path_50y = DATA_DIR / "XAUUSD_50Y.csv"
     path_40y = DATA_DIR / "XAUUSD_40Y.csv"
 
     if path_50y.exists():
-        df = pd.read_csv(path_50y)
-        logger.info("Loaded 58Y data: %d rows from %s", len(df), path_50y)
+        path = path_50y
+        df = pd.read_csv(path)
+        logger.info("Loaded 58Y data: %d rows from %s", len(df), path)
     elif path_40y.exists():
-        df = pd.read_csv(path_40y)
-        logger.info("Loaded 40Y data: %d rows from %s (run build_50y_data.py for 58Y)", len(df), path_40y)
+        path = path_40y
+        df = pd.read_csv(path)
+        logger.info("Loaded 40Y data: %d rows from %s (run build_50y_data.py for 58Y)", len(df), path)
     else:
         raise FileNotFoundError("No OHLCV data found. Run scripts/build_50y_data.py first.")
 
@@ -118,6 +135,10 @@ def load_58y_data() -> pd.DataFrame:
     for col in ["open", "high", "low", "close", "volume"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.dropna(subset=["close"]).reset_index(drop=True)
+
+    gate_df = df.set_index(pd.DatetimeIndex(df["Date"]))
+    _assert_price_history_is_plausible(gate_df, path)
+
     return df
 
 

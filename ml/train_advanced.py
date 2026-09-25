@@ -7,7 +7,9 @@
 """
 ml/train_advanced.py
 ====================
-Production XAUUSD direction model: 200+ features, 50-year data, 3-year OOS.
+Production XAUUSD direction model: 200+ features, clean 26-year data
+(data/XAUUSD_40Y.csv — the default; the uncapped 50-year file is not selected
+automatically, see ``_assert_price_history_is_plausible``), 3-year OOS.
 
 Architecture
 ------------
@@ -98,28 +100,47 @@ class CorruptTrainingDataError(RuntimeError):
 
 
 def _assert_price_history_is_plausible(df, csv_path) -> None:
-    """Refuse to train on a price series containing impossible moves.
+    """Refuse to train on a price series containing impossible moves or
+    manufactured bars.
 
-    ``data/XAUUSD_50Y.csv`` is the first cache candidate below, and 23.5% of its
-    pre-2000 daily bars move more than 20% in a single day — one by 518%. Its
+    Two independent checks, either of which can refuse the whole window —
+    a window with zero single-bar spikes can still be mostly synthetic, and
+    the reverse. Neither implies the other.
+
+    **1. Single-bar spikes.** ``data/XAUUSD_50Y.csv``'s pre-2000 daily bars
+    move more than 20% in a single day 23.5% of the time — one by 518%. Its
     1990 rows dip to $81 in a year gold traded near $380; its 1999 rows dip to
     $56. ``api/trading.py`` already declines to serve this same file to charts,
     with a comment saying its "pre-2000 bars are corrupted (isolated bad prints,
     e.g. $43 when gold was ~$270), which would feed bad data into charts."
 
+    **2. Manufactured flat bars.** The same file's 2016+ bars are 37% flat
+    prints (open == high == low == close) priced at that month's mean close —
+    future information, since a month's mean is only knowable once the month
+    has finished, and those bars agree with the next 5-bar move 65.1% of the
+    time. No single-bar move is large enough to look like a spike, so check 1
+    passed on this window for years — which is exactly why the plausibility
+    gate used to accept any window of 10 years or less: the corruption it
+    protected against and the corruption actually there were different shapes.
+    See ``docs/audit/2026-09-24-a0-no-edge-investigation.md`` D2/Q4.3 and
+    ``data_layer.validation.detect_synthetic_bars``.
+
     So the corruption was known and the chart was defended from it, while
-    training loaded it by preference and no stage of the pipeline looked. The
-    model's reported 57.34% out-of-sample accuracy was measured over a history
-    a quarter of which never happened.
+    training loaded the file by preference and no stage of the pipeline
+    looked. The model's reported 57.34% out-of-sample accuracy was measured
+    over a history a third to a quarter of which never happened, depending on
+    the window.
 
-    This raises rather than filtering. Dropping a quarter of the bars would
-    leave a series with silent multi-year gaps and train on it anyway, which
-    replaces a visible problem with an invisible one. Choosing the data is the
-    operator's call — ``data/XAUUSD_40Y.csv`` covers 2000→2026 with zero
-    implausible moves — and the message says so.
+    This raises rather than filtering. Dropping a third of the bars would
+    leave a series with silent gaps and train on it anyway, which replaces a
+    visible problem with an invisible one. Choosing the data is the operator's
+    call — ``data/XAUUSD_40Y.csv`` covers 2000→2026 with zero implausible
+    moves and a flat-bar rate an order of magnitude below either gate's
+    threshold — and the message says so.
 
-    ``TRAIN_MAX_SPIKE_RATE`` raises the tolerance for a deliberate run;
-    ``TRAIN_ALLOW_CORRUPT_HISTORY=true`` disables the gate entirely.
+    ``TRAIN_MAX_SPIKE_RATE`` / ``TRAIN_MAX_FLAT_BAR_RATE`` raise the
+    respective tolerance for a deliberate run; ``TRAIN_ALLOW_CORRUPT_HISTORY=
+    true`` disables both gates entirely.
     """
     import os as _os
 
@@ -128,35 +149,61 @@ def _assert_price_history_is_plausible(df, csv_path) -> None:
         return
 
     try:
-        from data_layer.validation import detect_price_spikes
+        from data_layer.validation import (
+            MAX_PLAUSIBLE_FLAT_BAR_RATE,
+            SYNTHETIC_MEAN_TOLERANCE,
+            detect_price_spikes,
+            detect_synthetic_bars,
+        )
     except ImportError:  # pragma: no cover - data_layer is always present in-repo
         return
 
-    report = detect_price_spikes(df)
-    if not report["spike_count"]:
-        return
-
-    threshold = float(_os.getenv("TRAIN_MAX_SPIKE_RATE", "0.002"))
-    detail = (
-        f"{report['spike_count']} of {report['total_bars']} bars "
-        f"({report['spike_rate'] * 100:.2f}%) move more than 20% in one bar; "
-        f"largest move {report['max_abs_return'] * 100:.0f}%. "
-        f"Worst: {report['worst']}"
-    )
-    if report["spike_rate"] <= threshold:
+    # ── 1. Single-bar spikes ────────────────────────────────────────────────
+    spike_report = detect_price_spikes(df)
+    if spike_report["spike_count"]:
+        threshold = float(_os.getenv("TRAIN_MAX_SPIKE_RATE", "0.002"))
+        detail = (
+            f"{spike_report['spike_count']} of {spike_report['total_bars']} bars "
+            f"({spike_report['spike_rate'] * 100:.2f}%) move more than 20% in one bar; "
+            f"largest move {spike_report['max_abs_return'] * 100:.0f}%. "
+            f"Worst: {spike_report['worst']}"
+        )
+        if spike_report["spike_rate"] > threshold:
+            clean_hint = ""
+            if spike_report.get("first_clean_index"):
+                clean_hint = f" History appears clean from {spike_report['first_clean_index']} onward."
+            raise CorruptTrainingDataError(
+                f"Refusing to train on {csv_path}: {detail}.{clean_hint}\n"
+                "A bar that moves 500% in one session is not data.\n"
+                "  Clean source:  --cached-csv data/XAUUSD_40Y.csv --years 25\n"
+                "                 (2000→2026, zero implausible moves)\n"
+                "  Override:      TRAIN_MAX_SPIKE_RATE=<rate> or TRAIN_ALLOW_CORRUPT_HISTORY=true"
+            )
         logger.warning("Price history sanity: %s — %s", csv_path, detail)
-        return
 
-    clean_hint = ""
-    if report.get("first_clean_index"):
-        clean_hint = f" History appears clean from {report['first_clean_index']} onward."
-    raise CorruptTrainingDataError(
-        f"Refusing to train on {csv_path}: {detail}.{clean_hint}\n"
-        "A bar that moves 500% in one session is not data.\n"
-        "  Clean source:  --cached-csv data/XAUUSD_40Y.csv --years 25\n"
-        "                 (2000→2026, zero implausible moves)\n"
-        "  Override:      TRAIN_MAX_SPIKE_RATE=<rate> or TRAIN_ALLOW_CORRUPT_HISTORY=true"
-    )
+    # ── 2. Manufactured flat bars ───────────────────────────────────────────
+    flat_threshold = float(_os.getenv("TRAIN_MAX_FLAT_BAR_RATE", str(MAX_PLAUSIBLE_FLAT_BAR_RATE)))
+    synth_report = detect_synthetic_bars(df)
+    if synth_report["flat_count"]:
+        detail = (
+            f"{synth_report['flat_count']} of {synth_report['total_bars']} bars "
+            f"({synth_report['flat_rate'] * 100:.1f}%) are flat (open=high=low=close); "
+            f"{synth_report['mean_matched_count']} of those "
+            f"({synth_report['mean_matched_rate'] * 100:.1f}% of all bars) also sit within "
+            f"{SYNTHETIC_MEAN_TOLERANCE * 100:.1f}% of their calendar month's mean close — a "
+            "pattern consistent with a manufactured gap-fill, not a real thin session."
+        )
+        if synth_report["flat_rate"] > flat_threshold:
+            window = f"{df.index[0]} → {df.index[-1]}" if len(df) else "(empty)"
+            raise CorruptTrainingDataError(
+                f"Refusing to train on {csv_path} (window {window}): {detail}\n"
+                f"That exceeds the {flat_threshold * 100:.0f}% flat-bar threshold for plausible "
+                "real market data.\n"
+                "  Clean source:  --cached-csv data/XAUUSD_40Y.csv --years 25\n"
+                "                 (2000→2026, flat-bar rate well under the threshold)\n"
+                "  Override:      TRAIN_MAX_FLAT_BAR_RATE=<rate> or TRAIN_ALLOW_CORRUPT_HISTORY=true"
+            )
+        logger.warning("Price history sanity: %s — %s", csv_path, detail)
 
 
 def fetch_gold_ohlcv(
@@ -169,13 +216,18 @@ def fetch_gold_ohlcv(
     """Load XAUUSD OHLCV from the bundled long-history CSV, Yahoo Finance fallback.
 
     No broker dependency: the training data source is the local multi-decade CSV
-    (50 years of daily gold) so a full retrain is reproducible offline and does
+    (40+ years of daily gold) so a full retrain is reproducible offline and does
     not require OANDA (or any) credentials. Yahoo Finance (``GC=F``) remains a
     last-resort fallback only when the cache is missing.
 
     Priority order
     --------------
-    1. Cached CSV on disk — default ``data/XAUUSD_50Y.csv`` (≈50y daily).
+    1. Cached CSV on disk — default ``data/XAUUSD_40Y.csv`` (≈26y clean daily;
+       ``data/XAUUSD_50Y.csv`` is deliberately **not** an automatic candidate —
+       37% of its bars from 2016 onward are manufactured flat prints (see
+       ``_assert_price_history_is_plausible``). Passing it explicitly via
+       ``cached_csv`` still reaches the same plausibility gate, which refuses
+       a contaminated window rather than silently training on it.
     2. Yahoo Finance daily (``GC=F``) — last-resort long-history fallback.
 
     Parameters
@@ -184,9 +236,12 @@ def fetch_gold_ohlcv(
     years       : Years of history to keep (date-filtered from the CSV).
     use_cached  : If True, load from ``cached_csv`` before any download (default path).
     cached_csv  : Path to cached CSV. When given it is the ONLY file tried: the
-                  operator named it, and walking on to ``XAUUSD_50Y.csv`` when it
+                  operator named it, and walking on to another file when it
                   yields nothing is how the corrupt file got trained on.
-                  When omitted: ``data/XAUUSD_50Y.csv`` then ``data/XAUUSD_40Y.csv``.
+                  When omitted: ``data/XAUUSD_40Y.csv`` only.
+                  ``data/XAUUSD_50Y.csv`` is never selected automatically; named
+                  explicitly it still passes through the plausibility gate,
+                  which refuses its contaminated windows.
     allow_download : When False, the Yahoo fallback is refused with
                   ``FileNotFoundError`` instead of reached. ``GC=F`` is COMEX
                   futures, not XAUUSD spot, so a retrain that must train on
@@ -194,14 +249,7 @@ def fetch_gold_ohlcv(
     """
     # ── 1. Cached CSV (the default, broker-free data source) ───────────────────
     if use_cached:
-        candidates = (
-            [cached_csv]
-            if cached_csv
-            else [
-                str(ROOT / "data" / "XAUUSD_50Y.csv"),
-                str(ROOT / "data" / "XAUUSD_40Y.csv"),
-            ]
-        )
+        candidates = [cached_csv] if cached_csv else [str(ROOT / "data" / "XAUUSD_40Y.csv")]
         for csv_candidate in candidates:
             if not csv_candidate:
                 continue
@@ -1355,7 +1403,8 @@ def main(argv: list[str] | None = None):
             "Reserve the last N years as a completely held-out OOS period. "
             "The model is trained on all data before this window and evaluated "
             "on it with a one-sided binomial p-value test (H0: accuracy <= 0.5). "
-            "Default: 8.0 (8-year held-out OOS on 50-year dataset = 16%% of data). "
+            "Default: 8.0 (8-year held-out OOS on the ~26-year default dataset, "
+            "data/XAUUSD_40Y.csv, is ~31%% of data). "
             "Set to 0 to disable OOS and use walk-forward CV only."
         ),
     )
@@ -1364,7 +1413,7 @@ def main(argv: list[str] | None = None):
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "Load OHLCV from the bundled long-history CSV (data/XAUUSD_50Y.csv) — the "
+            "Load OHLCV from the bundled long-history CSV (data/XAUUSD_40Y.csv) — the "
             "default, broker-free data source. Pass --no-use-cached to force a Yahoo download."
         ),
     )
@@ -1374,7 +1423,9 @@ def main(argv: list[str] | None = None):
         default=None,
         help=(
             "Path to cached OHLCV CSV (used with --use-cached). When given, it is the only file "
-            "tried. Default: data/XAUUSD_50Y.csv, then data/XAUUSD_40Y.csv"
+            "tried. Default: data/XAUUSD_40Y.csv. data/XAUUSD_50Y.csv is never selected "
+            "automatically; named explicitly it still passes through the plausibility gate, "
+            "which refuses its contaminated windows."
         ),
     )
     parser.add_argument(
@@ -1477,7 +1528,7 @@ def main(argv: list[str] | None = None):
     if args.oos_years > 0:
         oos_n = round(args.oos_years * 252)  # ~252 trading days/year
         # Cap at 40% of data so the training set always has at least 60%.
-        # 8yr OOS on 50yr data = ~16%, well within this limit.
+        # 8yr OOS on the ~26-year default dataset is ~31%, well within this limit.
         oos_n = min(oos_n, int(len(X) * 0.40))
         if oos_n < 100:
             # < 100 bars gives SE > ±0.5 on accuracy — not meaningful.
