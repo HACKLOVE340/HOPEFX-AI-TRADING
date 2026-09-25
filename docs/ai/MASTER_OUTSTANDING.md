@@ -128,6 +128,24 @@ These are not blocked on engineering. They are blocked on someone deciding.
 >   `build_extended_features`.
 > - `train_final_model`'s 80/20 split has no purge gap.
 
+> **Target research, 2026-09-25: `docs/audit/2026-09-25-a0-target-research.md`.**
+> It tested 52 variants on clean data: OOS 2018-03 to 2026-03, purged yearly
+> refits, a block bootstrap, 5bp costs, Bonferroni correction over all 52,
+> and a deflated Sharpe for strategies. Script:
+> `scripts/research/a0_target_research.py`.
+> - **No directional formulation has skill** at 5, 10, 20 or 60 bars. The best
+>   AUC is 0.530, with a CI that includes 0.5.
+> - **No trend, macro or repo strategy beats buy-and-hold** after costs. All 8
+>   repo strategies have Sharpe −0.16 to −0.62 relative to it.
+> - **The only signal is volatility.** An EWMA forecast gives OOS R² +0.24
+>   (5d) and +0.32 (20d), p < 1e-4, and replicates on 2010–2018. The large-move
+>   "wins" are that same volatility.
+>
+> **Recommendation:** stop building direction models. Use a calibrated EWMA
+> volatility forecast in risk sizing and stop distance, judged by a VaR
+> backtest (Kupiec and Christoffersen tests), not by Sharpe. **Owner decision
+> needed** on whether to repurpose the ML layer this way.
+
 > **Consequence:** the incumbent has no measured AUC bound, so it can return
 > only through `rollback()`, never through `promote()`. That is the intended
 > strictness.
