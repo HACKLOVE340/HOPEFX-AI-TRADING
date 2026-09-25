@@ -107,8 +107,11 @@ def _get_engine():
 
 
 def _create_or_update(email: str, username: str, password: str, reset: bool) -> dict:
+    from database.schema_state import create_all_for_local_use
+
     engine = _get_engine()
-    Base.metadata.create_all(engine)
+    # dev/test only: in production the schema comes from `alembic upgrade head`.
+    create_all_for_local_use(Base.metadata, engine, caller="create_superadmin")
     Session = sessionmaker(bind=engine)
     session = Session()
 

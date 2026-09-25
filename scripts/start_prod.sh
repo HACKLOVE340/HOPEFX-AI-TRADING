@@ -42,16 +42,15 @@ cd ..
 info "Frontend built to static/"
 
 # ── Run DB migrations ─────────────────────────────────────────────────────────
+# The schema comes from the migrations and nothing else. This step used to be
+# the superadmin seed with a create_all() fallback and no migration at all, so a
+# failed seed built a create_all() schema on the production database; app
+# startup then refuses it (it is not at head) — or, before 2026-09-25, stamped
+# it at head. A failed upgrade stops here: never stamp head or create_all() over
+# it. See docs/runbooks/database-restore.md §6a.
 info "Running database migrations..."
-python3 scripts/bootstrap_prod.py 2>/dev/null || \
-  python3 -c "
-import os; os.environ.setdefault('APP_ENV','production')
-from database.connection import get_or_create_db_manager
-from database.models import Base
-mgr = get_or_create_db_manager()
-if mgr: Base.metadata.create_all(mgr._engine)
-print('Schema created.')
-" || warn "Migration step skipped (run manually if needed)"
+python3 -m alembic upgrade head || error "alembic upgrade head failed — refusing to start. Do not stamp head or run create_all(); see docs/runbooks/database-restore.md §6a."
+python3 scripts/bootstrap_prod.py 2>/dev/null || warn "Superadmin seed skipped (run scripts/bootstrap_prod.py manually if needed)"
 
 # ── Determine worker count ────────────────────────────────────────────────────
 WORKERS="${WEB_CONCURRENCY:-$(python3 -c 'import os; print(min(4, (os.cpu_count() or 1) * 2 + 1))')}"

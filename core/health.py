@@ -42,6 +42,11 @@ class StatusResponse(BaseModel):
     api_configs: int
 
 
+def _schema_verified(app_state: Any) -> bool:
+    """True only when startup recorded a schema verified at head. Absent is not verified."""
+    return getattr(getattr(app_state, "schema_state", None), "verified", False) is True
+
+
 def _probe_components(app_state: Any, kill_switch: Any) -> dict:
     """Probe each component and return a status dict."""
     components: dict = {"api": "healthy"}
@@ -60,6 +65,16 @@ def _probe_components(app_state: Any, kill_switch: Any) -> dict:
             components["database"] = "degraded"
     else:
         components["database"] = "unavailable"
+
+    # The schema, as startup established it (core/startup_factories.py::
+    # _migrate_or_refuse). "unverified" means a development/test create_all()
+    # fallback or a startup that never checked: the version table is not at
+    # head, or head's objects were not proven to exist. Production refuses to
+    # start in that state, so a production pod never reaches here with it.
+    if app_state.db_engine:
+        components["schema"] = "healthy" if _schema_verified(app_state) else "unverified"
+    else:
+        components["schema"] = "unavailable"
 
     if app_state.cache:
         try:
@@ -143,7 +158,7 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
         """Health check — probes each component and reports real status."""
         components = _probe_components(app_state, kill_switch)
 
-        critical = ["api", "config", "database"]
+        critical = ["api", "config", "database", "schema"]
         overall_status = "healthy" if all(components.get(c) == "healthy" for c in critical) else "degraded"
         if kill_switch.is_active():
             overall_status = "degraded"
@@ -186,7 +201,8 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
 
         Checks (in order of cost):
           1. app_state.initialized flag set by startup_event()
-          2. Database reachable (SELECT 1)
+          2. Database reachable (SELECT 1), and its schema verified at head by
+             startup (app_state.schema_state) — absent counts as unverified
           3. HOPEFXBrain lockdown not active (pod should not receive traffic
              while a nuclear lockdown is in effect)
 
@@ -214,6 +230,22 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
                     status_code=503,
                     content={"ready": False, "reason": "database_unavailable"},
                 )
+
+        # 2b. Schema verified at head? A pod whose database the migrations did not
+        #     build must not take traffic. Production refuses to start in that
+        #     state; this covers the development/test create_all() fallback and a
+        #     startup path that never recorded a verdict (absent is not verified).
+        if app_state.db_engine and not _schema_verified(app_state):
+            _state = getattr(app_state, "schema_state", None)
+            return _JSONResponse(
+                status_code=503,
+                content={
+                    "ready": False,
+                    "reason": "schema_unverified",
+                    "current": getattr(_state, "current", None),
+                    "head": getattr(_state, "head", None),
+                },
+            )
 
         # 3. Lockdown active? Remove pod from LB during nuclear response.
         try:

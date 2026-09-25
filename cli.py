@@ -51,8 +51,11 @@ def cmd_init(args):
         # Create database
         connection_string = config.database.get_connection_string()
         engine = create_engine(connection_string)
-        Base.metadata.create_all(engine)
-        logger.info("✓ Database tables created: %s", config.database.db_type)
+        from database.schema_state import create_all_for_local_use
+
+        # dev/test only: in production the schema comes from `alembic upgrade head`.
+        if create_all_for_local_use(Base.metadata, engine, caller="cli init"):
+            logger.info("✓ Database tables created: %s", config.database.db_type)
 
         # Create required directories
         Path("logs").mkdir(exist_ok=True)
@@ -219,7 +222,14 @@ def cmd_db(args):
         engine = create_engine(connection_string)
 
         if args.action == "create":
-            Base.metadata.create_all(engine)
+            from database.schema_state import create_all_for_local_use
+
+            if not create_all_for_local_use(Base.metadata, engine, caller="cli db create"):
+                logger.error(
+                    "Refusing create_all() outside APP_ENV=development/test: run `alembic upgrade head`. "
+                    "See docs/runbooks/database-restore.md §6a."
+                )
+                return 1
             logger.info("✓ Database tables created")
 
         elif args.action == "drop":
