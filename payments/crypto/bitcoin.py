@@ -501,17 +501,32 @@ class BitcoinClient:
 
     def generate_deposit_address(self, user_id: str) -> dict:
         """
-        Generate (or return the next unused) BIP84 deposit address for a user.
+        Derive a fresh BIP84 deposit address for one payment.
 
-        Each call advances the address index so every deposit request gets a
-        fresh address, improving privacy and simplifying reconciliation.
+        The index comes from the platform-wide derivation counter shared with
+        ``payments/crypto/address_generator.py`` -- one counter per chain, locked
+        across threads and processes and persisted before use -- so no two
+        requests, from any user, in any worker, are given the same address.
+
+        It used to be ``len(self.user_addresses.get(user_id, []))``: per
+        instance and per user. ``POST /api/payments/crypto/address`` builds a
+        new client per request, so that was 0 for every request from every
+        user, and every BTC deposit on the platform was sent to
+        ``m/84'/0'/0'/0/0``, where no deposit could be told from another.
 
         Returns:
             Dict with address, qr_code URI, network, min_deposit,
-            confirmations_required
+            confirmations_required, derivation_index and derivation_path.
+
+        Raises:
+            RuntimeError: the counter cannot be read, locked or persisted, or the
+                derived address is malformed. No address is returned.
         """
-        index = len(self.user_addresses.get(user_id, []))
-        address, path = self._derive_address(index)
+        from payments.crypto.address_generator import address_generator
+
+        index = address_generator.reserve_index("BTC")
+        derived = address_generator.issue(user_id, "BTC", self._mnemonic, index)
+        address, path = derived.address, derived.path
 
         btc_address = BitcoinAddress(
             address=address,
@@ -534,6 +549,8 @@ class BitcoinClient:
             "network": "bitcoin",
             "min_deposit": float(self.MIN_DEPOSIT),
             "confirmations_required": self.REQUIRED_CONFIRMATIONS,
+            "derivation_index": index,
+            "derivation_path": path,
         }
 
     def process_deposit(

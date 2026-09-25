@@ -55,7 +55,8 @@ class USDTClient:
             from payments.crypto.address_generator import address_generator
 
             currency = "USDT_TRC20" if network == USDTNetwork.TRC20 else "USDT_ERC20"
-            address = address_generator.generate_address(user_id, currency)
+            derived = address_generator.reserve_address(user_id, currency)
+            address = derived.address
 
             self.addresses[address] = {
                 "user_id": user_id,
@@ -71,6 +72,8 @@ class USDTClient:
                 "qr_code": f"usdt:{address}?network={network.value}",
                 "min_deposit": float(self.MIN_DEPOSIT),
                 "confirmations_required": self.REQUIRED_CONFIRMATIONS[network],
+                "derivation_index": derived.index,
+                "derivation_path": derived.path,
             }
         except Exception as e:
             logger.error("Error generating USDT address: %s", e)

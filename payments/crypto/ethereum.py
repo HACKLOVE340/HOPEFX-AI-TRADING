@@ -49,7 +49,8 @@ class EthereumClient:
         try:
             from payments.crypto.address_generator import address_generator
 
-            address = address_generator.generate_address(user_id, "ETH")
+            derived = address_generator.reserve_address(user_id, "ETH")
+            address = derived.address
 
             self.addresses[address] = {
                 "user_id": user_id,
@@ -64,6 +65,8 @@ class EthereumClient:
                 "qr_code": f"ethereum:{address}",
                 "min_deposit": float(self.MIN_DEPOSIT),
                 "confirmations_required": self.REQUIRED_CONFIRMATIONS,
+                "derivation_index": derived.index,
+                "derivation_path": derived.path,
             }
         except Exception as e:
             logger.error("Error generating Ethereum address: %s", e)
