@@ -37,6 +37,7 @@ import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 from alembic.ddl.impl import DefaultImpl
+from alembic.operations.batch import ApplyBatchImpl
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateColumn
 
@@ -72,21 +73,67 @@ def migration_run(tmp_path_factory):
     url = f"sqlite:///{db}"
     cfg.set_main_option("sqlalchemy.url", url)
     created: dict[str, sa.Table] = {}
+    #: (table, column) -> the type each migration declared for it, last write
+    #: wins. Populated by `create_table` (initial shape), `add_column` (a
+    #: column that arrived later) and `alter_column` — both the direct form
+    #: and the one `batch_alter_table` uses, which never reaches
+    #: `DefaultImpl.alter_column` at all: `ApplyBatchImpl.alter_column`
+    #: mutates the column object in place instead. Missing that second hook
+    #: was tried first and is why it is called out here — it silently made
+    #: every `batch.alter_column(..., type_=...)` invisible to this capture,
+    #: including the NUMERIC conversion in t1u2v3w4x5y6.
+    column_types: dict[tuple[str, str], sa.types.TypeEngine] = {}
     real_create_table = DefaultImpl.create_table
+    real_add_column = DefaultImpl.add_column
+    real_alter_column = DefaultImpl.alter_column
+    real_batch_alter_column = ApplyBatchImpl.alter_column
+    real_drop_column = DefaultImpl.drop_column
 
     def recording_create_table(self, table, **kw):
         # First creation wins: batch_alter_table's SQLite rebuilds go through
-        # `_alembic_tmp_<name>` with the SQLite-only retyped columns.
+        # `_alembic_tmp_<name>` with the SQLite-only retyped columns — those
+        # are reflected off the live SQLite table, which loses type fidelity
+        # for every column the rebuild did NOT explicitly retype (a BigInteger
+        # PK reflects back as plain Integer, matching SQLite's rowid alias).
+        # Recording only the first, migration-declared shape avoids importing
+        # that reflection noise into `column_types` for untouched columns.
         if not table.name.startswith("_alembic_tmp_"):
             created.setdefault(table.name, table)
+            for column in table.columns:
+                column_types.setdefault((table.name, column.name), column.type)
         return real_create_table(self, table, **kw)
+
+    def recording_add_column(self, table_name, column, **kw):
+        column_types[(table_name, column.name)] = column.type
+        return real_add_column(self, table_name, column, **kw)
+
+    def recording_alter_column(self, table_name, column_name, *, type_=None, **kw):
+        if type_ is not None:
+            column_types[(table_name, column_name)] = type_
+        return real_alter_column(self, table_name, column_name, type_=type_, **kw)
+
+    def recording_batch_alter_column(self, table_name, column_name, *args, type_=None, **kw):
+        # The column object `self.table` refers to here is the real table
+        # name being batch-altered, not the `_alembic_tmp_...` copy it will
+        # briefly become — no canonicalisation needed, unlike create_table.
+        if type_ is not None:
+            column_types[(self.table.name, column_name)] = type_
+        return real_batch_alter_column(self, table_name, column_name, *args, type_=type_, **kw)
+
+    def recording_drop_column(self, table_name, column, **kw):
+        column_types.pop((table_name, column.name), None)
+        return real_drop_column(self, table_name, column, **kw)
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("DATABASE_URL", url)
         mp.setattr(DefaultImpl, "create_table", recording_create_table)
+        mp.setattr(DefaultImpl, "add_column", recording_add_column)
+        mp.setattr(DefaultImpl, "alter_column", recording_alter_column)
+        mp.setattr(ApplyBatchImpl, "alter_column", recording_batch_alter_column)
+        mp.setattr(DefaultImpl, "drop_column", recording_drop_column)
         command.upgrade(cfg, "head")
     con = sqlite3.connect(db)
-    yield con, created
+    yield con, created, column_types
     con.close()
 
 
@@ -189,7 +236,7 @@ def _pg_pk_spec(table: sa.Table) -> dict[str, str]:
 
 
 def test_primary_key_types_match_the_models_as_postgresql_renders_them(migration_run):
-    _, created = migration_run
+    _, created, _ = migration_run
     compared = sorted(set(created) & set(Base.metadata.tables))
     # Harness-is-live guard: the recording hook must actually have seen the
     # chain's CREATE TABLEs, or an empty loop below would pass.
@@ -205,4 +252,96 @@ def test_primary_key_types_match_the_models_as_postgresql_renders_them(migration
         "Primary-key types differ between the migrations and the models when "
         "rendered for PostgreSQL — a schema built by create_all() is not the "
         "migrated schema:\n" + "\n".join(drift)
+    )
+
+
+# ── Every other column, not just the primary key ────────────────────────────
+#
+# The PK check above exists because a SQLite-reflected comparison cannot tell
+# Integer from BigInteger. The same blind spot applies to every non-PK column,
+# and a full comparison — every column's PostgreSQL-rendered type against the
+# model's — found four real drifts (MASTER_OUTSTANDING §A11 context, measured
+# 2026-09-25 against both this offline capture and a real PostgreSQL 16
+# server): `accounts.user_id` VARCHAR(50) vs VARCHAR(36), `trades.side` a
+# native `orderside` ENUM vs VARCHAR(20), `users.kyc_rejection_reason` TEXT vs
+# a bare (unbounded) VARCHAR, and `tick_data.timestamp` TIMESTAMP WITHOUT TIME
+# ZONE vs WITH TIME ZONE. `trades.status` — reported elsewhere as a fifth
+# candidate — is NOT a drift: both sides render as the same `tradestatus`
+# native enum.
+#
+# The widen-only rule applies to the first three: the model is corrected to
+# the more permissive of the two, or (for `trades.side`) the database is
+# widened by a migration, since VARCHAR(20) accepts every value the enum did.
+# `tick_data.timestamp` is not simply "wider" — making it timezone-aware
+# reinterprets every already-stored naive timestamp under an assumed source
+# zone, a data-semantics decision this change does not make. It is listed
+# here as KNOWN, not fixed.
+KNOWN_COLUMN_TYPE_DRIFT: dict[tuple[str, str], str] = {
+    ("tick_data", "timestamp"): (
+        "genuine drift, deliberately unresolved: migrations declare TIMESTAMP "
+        "WITHOUT TIME ZONE, the model declares WITH TIME ZONE. Making it "
+        "timezone-aware needs an assumed source zone for every already-stored "
+        "row — an owner decision, not a widen."
+    ),
+    ("positions", "user_id"): (
+        "SQLite-only artifact of this offline capture, not a real drift: "
+        "p1q2r3s4t5u6 narrows positions.user_id from VARCHAR(50) to "
+        "VARCHAR(36) on PostgreSQL to match the model, but does it inside "
+        '`if dialect != "sqlite":` — a real guard against SQLite\'s lack of '
+        "ADD CONSTRAINT, not a mistake, but it means the narrowing ALTER never "
+        "runs while this fixture drives the chain over SQLite, so the capture "
+        "below still shows VARCHAR(50). Verified equal (both VARCHAR(36)) "
+        "against a real PostgreSQL 16 server on 2026-09-25 — do not widen the "
+        "model to 50 to silence this: that would create a real drift where "
+        "none exists today."
+    ),
+}
+
+
+def _pg_column_type(column: sa.Column | sa.types.TypeEngine) -> str:
+    """Just the PostgreSQL-rendered type, e.g. VARCHAR(20) — not NOT NULL/DEFAULT.
+
+    Those belong to the Column, not the type, and comparing full `CreateColumn`
+    text (as the PK check above does) mixes them in: a migration-side type
+    wrapped fresh in a throwaway Column is always nullable with no default,
+    while the model's real Column usually is not, so every row would show a
+    spurious NOT NULL/DEFAULT difference alongside — or instead of — any real
+    type difference. Compiling the type alone avoids that entirely.
+    """
+    dialect = postgresql.dialect()
+    the_type = column.type if isinstance(column, sa.Column) else column
+    return str(the_type.compile(dialect=dialect))
+
+
+def test_column_types_match_the_models_as_postgresql_renders_them(migration_run):
+    """Every column, not just the primary key — see the section banner above."""
+    _, created, column_types = migration_run
+    # Harness-is-live guard, mirroring the PK test: the capture must have
+    # actually recorded something, or an empty comparison below would pass
+    # vacuously.
+    assert len(column_types) > 500, f"recorded only {len(column_types)} migrated columns"
+
+    drift = []
+    for table, model_table in sorted(Base.metadata.tables.items()):
+        if table not in created:
+            continue  # reported by test_every_model_table_is_created_by_a_migration
+        pk_columns = {c.name for c in model_table.primary_key.columns}
+        for model_column in model_table.columns:
+            if model_column.name in pk_columns:
+                continue  # covered by test_primary_key_types_match_...
+            key = (table, model_column.name)
+            if key not in column_types:
+                continue  # reported by test_every_model_column_exists_in_the_migrated_schema
+            if key in KNOWN_COLUMN_TYPE_DRIFT:
+                continue
+            declared = _pg_column_type(column_types[key])
+            modelled = _pg_column_type(model_column)
+            if declared != modelled:
+                drift.append(f"  {table}.{model_column.name}: migrations={declared}  models={modelled}")
+    assert not drift, (
+        "Non-primary-key column types differ between the migrations and the "
+        "models when rendered for PostgreSQL — a schema built by create_all() "
+        "is not the migrated schema, and production runs PostgreSQL. Widen "
+        "the narrower side, or list the column in KNOWN_COLUMN_TYPE_DRIFT with "
+        "a reason if a plain widen is not the right call:\n" + "\n".join(drift)
     )

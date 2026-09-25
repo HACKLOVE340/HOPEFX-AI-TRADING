@@ -494,7 +494,12 @@ class Account(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     # FIX: cascade delete — when a User is deleted, their Accounts are deleted too.
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    # Length is String(50), not String(36): the migrated schema (1b0666c43575)
+    # declared accounts.user_id as VARCHAR(50) and no migration has ever
+    # narrowed it. A narrower model type here is a silent truncation risk on
+    # any value already wider than 36 chars — widen-only, per
+    # tests/unit/test_migrated_schema_matches_models.py.
+    user_id = Column(String(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     account_name = Column(String(100), nullable=True)
     broker = Column(String(50), nullable=True)
     account_id = Column(String(100), nullable=True)
