@@ -25,6 +25,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# A0 fix #1: promote() also requires skill over the base rate of the candidate's
+# own OOS window (ml/oos_skill.py). A fixture that must reach promotion records
+# a baseline below its accuracy and an AUC lower bound above 0.5.
+_BEATS_BASE_RATE = {"oos_majority_baseline_accuracy": 0.55, "oos_auc_ci_low": 0.56}
+
+
 # Promotion now requires a recent training-data end date (A0 Task 1).
 _FRESH_DATA_END = __import__("datetime").date.today().isoformat()
 
@@ -71,6 +77,7 @@ class TestModelRegistryRegister:
             oos_auc=0.71,
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
             n_trades=700,
             feature_count=176,
             data_end=_FRESH_DATA_END,
@@ -87,7 +94,13 @@ class TestModelRegistryRegister:
         pkl = _tmp_pkl(content)
         expected = hashlib.sha256(content).hexdigest()
         entry = reg.register(
-            "v_sha", pkl, oos_accuracy=0.61, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_sha",
+            pkl,
+            oos_accuracy=0.61,
+            oos_p_value=0.01,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         assert entry["sha256"] == expected
         pkl.unlink()
@@ -115,7 +128,13 @@ class TestModelRegistryRegister:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl()
         reg.register(
-            "v_persist", pkl, oos_accuracy=0.62, oos_p_value=0.02, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_persist",
+            pkl,
+            oos_accuracy=0.62,
+            oos_p_value=0.02,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         # Re-load from disk
         reg2 = _make_registry(tmp_path)
@@ -132,6 +151,7 @@ class TestModelRegistryRegister:
                 oos_accuracy=0.60 + i * 0.01,
                 oos_p_value=0.01,
                 sharpe_gate_passed=True,
+                **_BEATS_BASE_RATE,
                 data_end=_FRESH_DATA_END,
             )
             pkl.unlink()
@@ -148,7 +168,13 @@ class TestModelRegistryPromotionGate:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl()
         reg.register(
-            "v_gate", pkl, oos_accuracy=acc, oos_p_value=pval, sharpe_gate_passed=sharpe_ok, data_end=_FRESH_DATA_END
+            "v_gate",
+            pkl,
+            oos_accuracy=acc,
+            oos_p_value=pval,
+            sharpe_gate_passed=sharpe_ok,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         return reg, pkl
 
@@ -188,9 +214,23 @@ class TestModelRegistryPromotionGate:
         reg = _make_registry(tmp_path)
         pkl1 = _tmp_pkl(b"model-1")
         pkl2 = _tmp_pkl(b"model-2")
-        reg.register("v1", pkl1, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END)
         reg.register(
-            "v2", pkl2, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v1",
+            pkl1,
+            oos_accuracy=0.62,
+            oos_p_value=0.01,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
+        )
+        reg.register(
+            "v2",
+            pkl2,
+            oos_accuracy=0.65,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v1")
@@ -216,7 +256,13 @@ class TestModelRegistryVerify:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"correct-content")
         reg.register(
-            "v_ok", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_ok",
+            pkl,
+            oos_accuracy=0.62,
+            oos_p_value=0.01,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         ok, msg = reg.verify("v_ok")
         assert ok is True
@@ -227,7 +273,13 @@ class TestModelRegistryVerify:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"original-content")
         reg.register(
-            "v_tamper", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_tamper",
+            pkl,
+            oos_accuracy=0.62,
+            oos_p_value=0.01,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         # Tamper with the file after registration
         pkl.write_bytes(b"tampered-content")
@@ -240,7 +292,13 @@ class TestModelRegistryVerify:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"will-be-deleted")
         reg.register(
-            "v_del", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_del",
+            pkl,
+            oos_accuracy=0.62,
+            oos_p_value=0.01,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         pkl.unlink()
         ok, msg = reg.verify("v_del")
@@ -263,7 +321,13 @@ class TestModelRegistryVerify:
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"production-model")
         reg.register(
-            "v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_prod",
+            pkl,
+            oos_accuracy=0.65,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v_prod")
@@ -304,6 +368,7 @@ class TestModelRegistryBootstrap:
             "oos_p_value": 0.001,
             "feature_count": 176,
             "sharpe_gate": {"gate_passed": True, "n_trades": 700},
+            **_BEATS_BASE_RATE,
             "data_end": _FRESH_DATA_END,
         }
         meta_path = tmp_path / "meta.json"
@@ -393,7 +458,13 @@ class TestAdvancedPredictorIntegrity:
         pkl = _tmp_pkl(b"registered-model-content")
         reg = _make_registry(tmp_path)
         reg.register(
-            "v_match", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_match",
+            pkl,
+            oos_accuracy=0.65,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v_match")
@@ -415,7 +486,13 @@ class TestAdvancedPredictorIntegrity:
         pkl = _tmp_pkl(b"original-content")
         reg = _make_registry(tmp_path)
         reg.register(
-            "v_mismatch", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_mismatch",
+            pkl,
+            oos_accuracy=0.65,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v_mismatch")
@@ -451,7 +528,13 @@ class TestAdvancedPredictorIntegrity:
         pkl = _tmp_pkl(b"tampered-model")
         reg = _make_registry(tmp_path)
         reg.register(
-            "v_block", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True, data_end=_FRESH_DATA_END
+            "v_block",
+            pkl,
+            oos_accuracy=0.65,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
+            data_end=_FRESH_DATA_END,
         )
         with patch.object(reg, "_pnl_reconciliation_check", return_value=(True, "P&L gate passed")):
             reg.promote("v_block")

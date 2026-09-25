@@ -23,7 +23,14 @@ import pytest
 
 from ml.model_registry import ModelRegistry, StaleTrainingDataError
 
-_GOOD = {"oos_accuracy": 0.9, "oos_p_value": 0.001, "sharpe_gate_passed": True}
+_GOOD = {
+    "oos_accuracy": 0.9,
+    "oos_p_value": 0.001,
+    "sharpe_gate_passed": True,
+    # A0 fix #1: skill over the base rate of its own OOS window.
+    "oos_majority_baseline_accuracy": 0.55,
+    "oos_auc_ci_low": 0.56,
+}
 
 
 @pytest.fixture

@@ -14,7 +14,10 @@ Responsibilities
 - Maintain a JSON manifest (registry.json) that records every registered
   model version: file path, SHA-256 digest, OOS metrics, and promotion state.
 - Enforce a promotion gate: a model may only be promoted to ``"active"``
-  when its OOS accuracy and Sharpe gate both pass the configured thresholds.
+  when its training data is recent, its OOS accuracy and Sharpe gate pass the
+  configured thresholds, and its recorded OOS evaluation beats the
+  always-majority baseline of the same window with an AUC lower bound above
+  0.5 (``ml/oos_skill.py``).
 - Provide an atomic symlink ``ml/saved_models/current.pkl`` that always
   points to the active model, updated via a rename-swap so readers never see
   a broken link. The link is relative, so a committed one survives a clone.
@@ -142,6 +145,19 @@ class StaleTrainingDataError(RuntimeError, ValueError):
     """
 
 
+class NoSkillOverBaseRateError(RuntimeError, ValueError):
+    """Promotion refused: the candidate's recorded OOS evaluation does not show
+    skill over the base rate of its own window.
+
+    Raised when OOS accuracy is not strictly above the always-majority baseline
+    on the same window, when the lower 95% bound on OOS AUC is not above 0.5,
+    or when either measurement is missing (fail closed). The rule itself lives
+    in :func:`ml.oos_skill.skill_over_base_rate_check`. Subclasses
+    ``RuntimeError`` and ``ValueError`` for the same reason as
+    :class:`StaleTrainingDataError`.
+    """
+
+
 def _max_model_age_days() -> int:
     """The same limit the runtime staleness gate reads; read at call time."""
     return int(os.getenv("MODEL_MAX_AGE_DAYS", "30"))
@@ -231,6 +247,10 @@ class ModelRegistry:
         state: str = STATE_STAGING,
         data_end: str | None = None,
         sharpe: float | None = None,
+        oos_majority_baseline_accuracy: float | None = None,
+        oos_auc_ci_low: float | None = None,
+        oos_balanced_accuracy: float | None = None,
+        oos_base_rate: float | None = None,
     ) -> dict[str, Any]:
         """
         Register a model artifact in the manifest.
@@ -258,6 +278,13 @@ class ModelRegistry:
         sharpe        : OOS Sharpe ratio. ``ml/verify_model.py`` refuses an
                         active model without one >= 1.0, so an entry
                         registered without it can never pass that check.
+        oos_majority_baseline_accuracy : Accuracy of always predicting the
+                        majority class of the SAME OOS window
+                        (``ml.oos_skill.oos_skill_metrics``). Required for
+                        :meth:`promote`; ``oos_accuracy`` must be above it.
+        oos_auc_ci_low : Lower 95% bound on OOS AUC (moving-block bootstrap).
+                        Required for :meth:`promote`; must be above 0.5.
+        oos_balanced_accuracy, oos_base_rate : Recorded for the reader.
 
         Returns
         -------
@@ -298,6 +325,17 @@ class ModelRegistry:
         }
         if sharpe is not None:
             entry["sharpe"] = round(float(sharpe), 6)
+        # Absent stays absent: the promotion gate reads a missing value as
+        # "not measured" and refuses, where a 0.0 default would read as a
+        # measurement. Same 6-dp rounding as oos_accuracy, so a tie stays a tie.
+        for key, value in (
+            ("oos_majority_baseline_accuracy", oos_majority_baseline_accuracy),
+            ("oos_auc_ci_low", oos_auc_ci_low),
+            ("oos_balanced_accuracy", oos_balanced_accuracy),
+            ("oos_base_rate", oos_base_rate),
+        ):
+            if value is not None:
+                entry[key] = round(float(value), 6)
 
         manifest = self._load()
         manifest["versions"][name] = entry
@@ -338,6 +376,22 @@ class ModelRegistry:
         if _REQUIRE_SHARPE_GATE and not sharpe_ok:
             return False, ("Sharpe gate not passed. Run multi-symbol backtest with N >= 600 trades.")
         return True, (f"Gate passed: acc={acc:.4f}, p={pval:.6f}, sharpe_ok={sharpe_ok}")
+
+    @staticmethod
+    def _base_rate_skill_check(entry: dict[str, Any]) -> tuple[bool, str]:
+        """Refuse a candidate that does not beat the base rate of its own window.
+
+        ``_gate_check`` compares against absolute numbers (accuracy >= 0.60,
+        binomial p against 0.5). On a window that is 65% up, always-up scores
+        0.65 and clears both, so they cannot tell skill from a base-rate shift
+        (A0: the incumbent's 0.5734 was below always-up on clean data). This
+        compares the candidate with the always-majority predictor on the same
+        OOS window and requires an AUC confidence bound above 0.5. Missing
+        metrics refuse: fail closed.
+        """
+        from ml.oos_skill import skill_over_base_rate_check
+
+        return skill_over_base_rate_check(entry)
 
     @staticmethod
     def _data_recency_check(entry: dict[str, Any]) -> tuple[bool, str]:
@@ -392,12 +446,20 @@ class ModelRegistry:
         """
         Promote *name* to the active (serving) state.
 
-        Runs two mandatory promotion gates in order.  Both must pass:
+        Runs the mandatory promotion gates in order.  All must pass:
+
+        Gate 0 — Training-data recency (``_data_recency_check``):
+          ``data_end`` within MODEL_MAX_AGE_DAYS → else StaleTrainingDataError.
 
         Gate 1 — Statistical quality (``_gate_check``):
           - OOS accuracy >= REGISTRY_MIN_OOS_ACC (default 0.60)
           - OOS p-value  <  REGISTRY_MAX_OOS_PVAL (default 0.05)
           - sharpe_gate_passed == True (when REGISTRY_REQUIRE_SHARPE_GATE)
+
+        Gate 1b — Skill over the base rate (``_base_rate_skill_check``):
+          - oos_accuracy > oos_majority_baseline_accuracy (same OOS window)
+          - oos_auc_ci_low > 0.5 (95% moving-block bootstrap bound)
+          - either missing → NoSkillOverBaseRateError (fail closed)
 
         Gate 2 — P&L reconciliation (``_pnl_reconciliation_check``):
           - Reads the persisted snapshot from ``data/pnl_reconciliation.json``
@@ -425,7 +487,8 @@ class ModelRegistry:
         Raises
         ------
         KeyError    : If *name* is not in the registry.
-        RuntimeError: If either promotion gate fails.
+        RuntimeError: If a promotion gate fails (StaleTrainingDataError and
+                      NoSkillOverBaseRateError are both RuntimeErrors).
         FileNotFoundError: If the artifact the entry names does not exist.
         """
         manifest = self._load()
@@ -444,6 +507,13 @@ class ModelRegistry:
         passed, reason = self._gate_check(entry)
         if not passed:
             raise RuntimeError(f"Promotion gate BLOCKED for '{name}': {reason}")
+
+        # Gate 1b: skill over the base rate of the same OOS window. Gate 1's
+        # thresholds are absolute, so a constant predictor on a trending window
+        # can clear them; this one cannot be cleared that way.
+        skilled, skill_reason = self._base_rate_skill_check(entry)
+        if not skilled:
+            raise NoSkillOverBaseRateError(f"Promotion gate BLOCKED for '{name}': {skill_reason}")
 
         # Gate 2: P&L reconciliation — ledger vs broker must agree
         pnl_passed, pnl_reason = self._pnl_reconciliation_check()
@@ -925,6 +995,10 @@ class ModelRegistry:
             feature_count=int(meta.get("feature_count", 0)),
             notes="Bootstrapped from advanced_oos_meta.json",
             data_end=meta.get("data_end"),
+            oos_majority_baseline_accuracy=meta.get("oos_majority_baseline_accuracy"),
+            oos_auc_ci_low=meta.get("oos_auc_ci_low"),
+            oos_balanced_accuracy=meta.get("oos_balanced_accuracy"),
+            oos_base_rate=meta.get("oos_base_rate"),
         )
 
         if promote:

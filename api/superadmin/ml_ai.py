@@ -75,6 +75,39 @@ def _live_drift_score() -> float | None:
 # ── ML / AI ───────────────────────────────────────────────────────────────────
 
 
+def _base_rate_fields(entry: dict | None) -> dict:
+    """The accuracy's baseline, so a percentage is never shown as skill alone.
+
+    ``accuracy`` on its own reads as quality. The shipped model's 57.34% was
+    below always-predict-up on clean data (A0), and 2.2 points above it on the
+    leaky window it was measured on. So every surface that shows the accuracy
+    also carries:
+
+      baseline_accuracy — always-majority accuracy on the SAME OOS window, as a
+                          0–100 percent, or None when it was never recorded;
+      beats_base_rate   — the promotion gate's own verdict
+                          (``ml.oos_skill.skill_over_base_rate_check``): True
+                          only when accuracy beats that baseline AND the AUC
+                          lower bound is above 0.5; False when a baseline is
+                          recorded but the rule fails; None when nothing was
+                          measured — unknown is not "beats";
+      metrics_caveat    — the registry's note on how far to trust the figures.
+    """
+    entry = entry or {}
+    base = entry.get("oos_majority_baseline_accuracy")
+    fields: dict = {
+        "baseline_accuracy": None,
+        "beats_base_rate": None,
+        "metrics_caveat": entry.get("metrics_caveat"),
+    }
+    if isinstance(base, int | float) and not isinstance(base, bool):
+        from ml.oos_skill import skill_over_base_rate_check
+
+        fields["baseline_accuracy"] = round(float(base) * 100 if base <= 1.0 else float(base), 2)
+        fields["beats_base_rate"] = skill_over_base_rate_check(entry)[0]
+    return fields
+
+
 @router.get("/ml/status")
 async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> dict:
     """Return ML engine status in the shape the frontend MLStatus interface expects.
@@ -95,6 +128,10 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
       drift_state          — "measured" | "unmeasured". 0.0 is the best value
                              on the drift scale, so a number alone cannot carry
                              "the monitor is down"; this field does.
+      accuracy_baseline    — always-majority accuracy on the same OOS window
+                             (0–100), from the active registry entry; None when
+                             never recorded. See ``_base_rate_fields``.
+      beats_base_rate      — True / False / None (unmeasured).
     """
     result: dict = {
         "status": "unavailable",
@@ -104,7 +141,19 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
         "accuracy_7d": 0.0,
         "drift_score": None,
         "drift_state": "unmeasured",
+        "accuracy_baseline": None,
+        "beats_base_rate": None,
     }
+
+    # ── The accuracy's baseline, from the registry's active entry ─────────────
+    try:
+        from ml.model_registry import get_registry
+
+        _base = _base_rate_fields(get_registry().active_version())
+        result["accuracy_baseline"] = _base["baseline_accuracy"]
+        result["beats_base_rate"] = _base["beats_base_rate"]
+    except Exception as exc:
+        logger.warning("get_ml_status: registry unavailable for the accuracy baseline (%s)", exc)
 
     # ── Primary: InferenceEngine.health() ─────────────────────────────────────
     try:
@@ -218,6 +267,7 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
                         else "not_serving"
                     ),
                     "deployed_at": info.get("promoted_at"),
+                    **_base_rate_fields(info),
                 }
             )
     except Exception as exc:
@@ -244,6 +294,7 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
                         "drift_score": None,
                         "drift_state": "unmeasured",
                         "deployed_at": None,
+                        **_base_rate_fields(None),
                     }
                 )
         except Exception as exc:
