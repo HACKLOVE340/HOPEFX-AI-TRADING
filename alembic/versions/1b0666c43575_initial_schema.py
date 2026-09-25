@@ -730,3 +730,14 @@ def downgrade() -> None:
     _idx(op.f("ix_account_snapshots_timestamp"), "account_snapshots")
     _idx("idx_account_snapshots_timestamp", "account_snapshots")
     _tbl("account_snapshots")
+
+    # PostgreSQL named ENUM types outlive the tables that used them: DROP TABLE
+    # leaves them behind, and upgrade() recreates them unconditionally, so
+    # `downgrade base` followed by `upgrade head` failed with
+    # DuplicateObject: type "orderside" already exists. Drop the four this
+    # migration's upgrade creates, now that no table of its references them.
+    # Downgrade-only and PostgreSQL-only (2026-09-25): SQLite has no named
+    # types, and on PostgreSQL this downgrade never reached a re-upgrade before.
+    if bind.dialect.name == "postgresql":
+        for type_name in ("orderside", "ordertype", "tradestatus", "signalsource"):
+            sa.Enum(name=type_name).drop(bind, checkfirst=True)

@@ -54,7 +54,12 @@ def upgrade() -> None:
             sa.Column("status", sa.String(length=24), nullable=False, server_default="open"),
             sa.Column("category", sa.String(length=48), nullable=True),
             sa.Column("department", sa.String(length=48), nullable=True),
-            sa.Column("needs_human", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+            # sa.false(), not sa.text("0"): PostgreSQL refuses an integer default
+            # on a boolean (DatatypeMismatch), and env.py's single transaction
+            # then rolled back the ENTIRE chain — so no PostgreSQL database ever
+            # applied this DDL. SQLite still renders DEFAULT 0, byte-identical.
+            # tests/unit/test_migration_chain_runs_on_postgres.py (2026-09-25).
+            sa.Column("needs_human", sa.Boolean(), nullable=False, server_default=sa.false()),
             sa.Column("escalation_reason", sa.Text(), nullable=True),
             sa.Column("matched_on", sa.String(length=200), nullable=True),
             sa.Column("assigned_operator_id", sa.String(length=64), nullable=True),
