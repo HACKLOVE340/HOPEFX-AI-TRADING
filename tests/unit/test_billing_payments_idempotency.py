@@ -392,10 +392,14 @@ class TestFiatReferenceUniqueness:
             ids.append(p["payment_id"])
 
         mock_rates = {"BTC": 50000.0}
+        from api.payments import IssuedAddress
 
         with (
             patch("api.payments._save_payment", _save),
-            patch("api.payments._generate_address", return_value="bc1qtest"),
+            patch(
+                "api.payments._derive_deposit_address",
+                side_effect=lambda *a: IssuedAddress("bc1qtest", len(ids), f"m/84'/0'/0'/0/{len(ids)}"),
+            ),
             patch("payments.crypto.rate_feed.get_rates", AsyncMock(return_value=mock_rates)),
         ):
             from api.payments import AddressRequest, generate_deposit_address

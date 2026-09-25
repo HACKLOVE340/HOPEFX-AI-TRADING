@@ -32,14 +32,33 @@ Derivation index persistence:
   The counter file is written atomically after every index increment so
   that a process restart never reuses a derivation index and therefore
   never reuses a deposit address.
+
+  Every reservation takes an exclusive OS file lock (``<counter>.lock``),
+  re-reads the counter from disk, advances it, and fsyncs it before the index
+  is handed back. That is what makes the counter shared: across threads,
+  across ``AddressGenerator`` instances, and across worker processes on one
+  host. It is NOT shared across hosts unless the file sits on a volume whose
+  locks every host honours -- see ``AddressGenerator.reserve_address``.
 """
 
+import contextlib
 import json
 import logging
 import os
 import re
+import tempfile
 import threading
+from dataclasses import dataclass
 from pathlib import Path
+
+try:  # POSIX
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - Windows
+    _fcntl = None  # type: ignore[assignment]
+try:  # Windows
+    import msvcrt as _msvcrt
+except ImportError:  # POSIX
+    _msvcrt = None  # type: ignore[assignment]
 
 # hdwallet v3 API. This module was written against the v1/v2 API
 # (``HDWallet(symbol=...)``, ``from_path()``, ``p2wpkh_address()``), which does
@@ -152,6 +171,71 @@ _ADDRESS_SHAPE: dict[str, str] = {
     "USDT_TRC20": r"^T[1-9A-HJ-NP-Za-km-z]{33}$",
 }
 
+# Currencies that derive from the SAME mnemonic on the SAME path are one
+# derivation chain, and one chain must have one counter. ETH and USDT_ERC20 both
+# derive m/44'/60'/0'/0/{index} from ETHEREUM_MNEMONIC, so ETH index n and
+# USDT_ERC20 index n are the same address. They had separate counters, so the
+# first ETH deposit and the first USDT_ERC20 deposit were issued one address.
+_CHAIN: dict[str, str] = {
+    "BTC": "BTC",
+    "ETH": "ETH",
+    "USDT_ERC20": "ETH",
+    "USDT_TRC20": "USDT_TRC20",
+}
+
+
+def _chain_members(currency: str) -> list[str]:
+    """Every currency key that shares *currency*'s derivation chain."""
+    chain = _CHAIN[currency]
+    return sorted(c for c, ch in _CHAIN.items() if ch == chain)
+
+
+@dataclass(frozen=True)
+class DerivedAddress:
+    """A deposit address plus what is needed to reconcile and sweep it."""
+
+    address: str
+    currency: str
+    index: int
+    path: str
+
+
+@contextlib.contextmanager
+def _exclusive_file_lock(counter: Path):
+    """Hold an exclusive OS lock on ``<counter>.lock`` for the block.
+
+    The lock is on a sibling file, not the counter, because the counter is
+    replaced by rename on every write and a lock on a replaced inode protects
+    nothing. Blocks until the lock is free.
+    """
+    lock_path = counter.with_name(counter.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if _fcntl is not None:
+            _fcntl.flock(fd, _fcntl.LOCK_EX)
+        elif _msvcrt is not None:  # pragma: no cover - Windows
+            os.lseek(fd, 0, os.SEEK_SET)
+            while True:
+                try:
+                    _msvcrt.locking(fd, _msvcrt.LK_LOCK, 1)
+                    break
+                except OSError:
+                    continue
+        else:  # pragma: no cover - no OS lock primitive at all
+            raise RuntimeError("No OS file-lock primitive is available to serialise the derivation counter.")
+        yield
+    finally:
+        try:
+            if _fcntl is not None:
+                _fcntl.flock(fd, _fcntl.LOCK_UN)
+            elif _msvcrt is not None:  # pragma: no cover - Windows
+                os.lseek(fd, 0, os.SEEK_SET)
+                _msvcrt.locking(fd, _msvcrt.LK_UNLCK, 1)
+        finally:
+            os.close(fd)
+
+
 # Environment variable that holds each currency's mnemonic
 _MNEMONIC_ENV: dict[str, str] = {
     "BTC": "BITCOIN_MNEMONIC",
@@ -238,6 +322,11 @@ class AddressGenerator:
         # every increment so a restart never reuses an index.
         self._counters: dict[str, int] = self._load_counters()
         self._lock = threading.Lock()
+        # (counter file, chain) -> the next index this instance itself wrote
+        # there. If the file later reads LOWER than this, it was deleted,
+        # truncated or restored from an older copy, and continuing would
+        # re-issue addresses already handed out.
+        self._high_water: dict[tuple[str, str], int] = {}
 
     def _load_counters(self) -> dict[str, int]:
         """Read persisted counters from disk; return empty dict on first run."""
@@ -268,9 +357,48 @@ class AddressGenerator:
         """
         path = _counter_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self._counters, indent=2))
-        os.replace(tmp, path)
+        # A unique temp name, fsynced before the rename: a fixed ``.tmp`` name is
+        # shared by every writer, and an un-fsynced rename can survive a power
+        # loss as an empty file -- which reads as "start again at 0".
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f"{path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps(self._counters, indent=2))
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
+        if os.name == "posix":
+            dir_fd = os.open(str(path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+
+    @staticmethod
+    def _read_counters_strict(path: Path) -> dict[str, int]:
+        """Read the counter file as the source of truth, or refuse.
+
+        Absent means first use. Present but unreadable is NOT first use: treating
+        it as empty -- what ``_load_counters`` does, for construction -- would
+        restart every chain at index 0 and re-issue every address already given
+        out. So an unreadable file stops issuance until someone looks at it.
+        """
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError(f"expected a JSON object, found {type(data).__name__}")
+            return {str(k): int(v) for k, v in data.items()}
+        except (OSError, ValueError, TypeError) as exc:
+            raise RuntimeError(
+                f"The crypto derivation counter at {path} is unreadable ({exc}). Refusing to issue a "
+                "deposit address: restarting the count would re-issue addresses already handed out."
+            ) from exc
 
     def _get_mnemonic(self, currency: str) -> str:
         if currency not in self._mnemonics:
@@ -278,40 +406,81 @@ class AddressGenerator:
         return self._mnemonics[currency]
 
     def _next_index(self, currency: str) -> int:
-        """Reserve the next derivation index, durably.
+        """Reserve the next derivation index on *currency*'s chain, durably.
+
+        Race-free across threads, instances and processes on one host: the
+        read-increment-write happens under an exclusive OS lock on
+        ``<counter>.lock``, and the value is re-read from disk under that lock
+        every time. This used to read the file once, at construction, and count
+        in memory behind a ``threading.Lock`` -- which serialises the threads of
+        one instance and nothing else, so two worker processes each started
+        from the same on-disk value and issued the same indices.
 
         The index is only handed back once it is on disk. If the write fails the
-        in-memory counter is rolled back, so a caller that retries after fixing
-        the volume gets the same index rather than skipping one -- and a caller
-        that does not retry has been given nothing.
+        in-memory counter is rolled back and the file is unchanged, so nothing
+        was issued and nothing was consumed.
         """
+        if currency not in _CHAIN:
+            raise ValueError(f"Unsupported currency: {currency!r}. Supported: {sorted(_CHAIN)}")
+        path = _counter_path()
         with self._lock:
-            idx = self._counters.get(currency, 0)
-            self._counters[currency] = idx + 1
             try:
-                self._save_counters()
-            except Exception as exc:
-                self._counters[currency] = idx  # roll back; nothing was issued
+                with _exclusive_file_lock(path):
+                    return self._advance_locked(currency, path)
+            except OSError as exc:  # only the lock itself raises OSError here
                 raise RuntimeError(
-                    f"Cannot persist the {currency} derivation counter to {_counter_path()}: {exc}. "
-                    "Refusing to issue a deposit address that a restart could re-issue to "
-                    "another user."
+                    f"Cannot lock the {currency} derivation counter at {path}: {exc}. "
+                    "Refusing to issue a deposit address another worker could also issue."
                 ) from exc
+
+    def _advance_locked(self, currency: str, path: Path) -> int:
+        """Read, advance and persist the chain's counter. Caller holds both locks."""
+        members = _chain_members(currency)
+        chain_key = (str(path), _CHAIN[currency])
+        on_disk = self._read_counters_strict(path)
+        # Past every member of the chain: a file written before ETH and
+        # USDT_ERC20 shared a counter holds both keys, and the larger one is
+        # the one that has been issued.
+        idx = max(on_disk.get(member, 0) for member in members)
+        issued_to = self._high_water.get(chain_key)
+        if issued_to is not None and idx < issued_to:
+            raise RuntimeError(
+                f"The {currency} derivation counter at {path} reads {idx}, but this process has "
+                f"already issued indices up to {issued_to - 1} from it -- the file was deleted, "
+                "truncated or restored from an older copy. Refusing to issue a deposit address "
+                "that may already belong to another payment."
+            )
+        previous = self._counters
+        self._counters = {**on_disk, **dict.fromkeys(members, idx + 1)}
+        try:
+            self._save_counters()
+        except Exception as exc:
+            self._counters = previous  # roll back; nothing was issued
+            raise RuntimeError(
+                f"Cannot persist the {currency} derivation counter to {path}: {exc}. "
+                "Refusing to issue a deposit address that a restart could re-issue to "
+                "another user."
+            ) from exc
+        self._high_water[chain_key] = idx + 1
         return idx
 
-    def generate_address(self, user_id: str, currency: str) -> str:
+    def reserve_index(self, currency: str) -> int:
+        """Reserve the next derivation index for *currency* from the shared counter.
+
+        For a caller that derives with its own mnemonic (``BitcoinClient``) but
+        must never draw an index anyone else has drawn.
         """
-        Derive the next unique deposit address for *user_id* and *currency*.
+        return self._next_index(currency)
 
-        Args:
-            user_id:  User identifier (used only for logging)
-            currency: One of BTC, ETH, USDT_ERC20, USDT_TRC20
+    def reserve_address(self, user_id: str, currency: str) -> DerivedAddress:
+        """Derive the next unique deposit address, with its index and path.
 
-        Returns:
-            Blockchain address string
+        The index and path are what reconcile an incoming deposit to a payment
+        and what the sweep needs to spend it, so they travel with the address.
 
         Raises:
-            RuntimeError: if hdwallet is not installed
+            RuntimeError: hdwallet missing, counter unreadable/unwritable, or a
+                derived address that is not well formed.
             ValueError: if *currency* is not supported
         """
         if not _HDWALLET_AVAILABLE:
@@ -321,6 +490,10 @@ class AddressGenerator:
 
         mnemonic = self._get_mnemonic(currency)
         index = self._next_index(currency)
+        return self.issue(user_id, currency, mnemonic, index)
+
+    def issue(self, user_id: str, currency: str, mnemonic: str, index: int) -> DerivedAddress:
+        """Derive and verify the address at an ALREADY-RESERVED *index*."""
         path = _PATHS[currency].format(index=index)
         address = self._derive(currency, mnemonic, index)
 
@@ -342,7 +515,16 @@ class AddressGenerator:
             address,
             path,
         )
-        return address
+        return DerivedAddress(address=address, currency=currency, index=index, path=path)
+
+    def generate_address(self, user_id: str, currency: str) -> str:
+        """Derive the next unique deposit address for *user_id* and *currency*.
+
+        Kept for callers that need only the string (``payments/payment_gateway``).
+        A caller that persists a payment should use ``reserve_address`` and store
+        the index and path with it.
+        """
+        return self.reserve_address(user_id, currency).address
 
     @staticmethod
     def _derive(currency: str, mnemonic: str, index: int) -> str:

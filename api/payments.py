@@ -25,6 +25,7 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from typing import NamedTuple
 
 UTC = timezone.utc
 
@@ -189,6 +190,8 @@ def _save_payment(payment: dict) -> None:
             currency=payment["currency"],
             network=payment["network"],
             address=payment["address"],
+            derivation_index=payment.get("derivation_index"),
+            derivation_path=payment.get("derivation_path"),
             # `Decimal(str(x))`, never `Decimal(x)`: the latter inherits the
             # float's binary error verbatim, which would put the drift straight
             # back into a column that was made exact to remove it. These three
@@ -299,13 +302,28 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
     try:
         # Use the AUTHENTICATED user id, never the client-supplied req.user_id
         # (IDOR: a caller could mint deposit/credit records against any account).
-        address = _generate_address(currency, user.sub, network)
+        issued = _derive_deposit_address(currency, user.sub, network)
     except Exception as exc:
-        logger.warning("Address generation failed: %s", exc)
+        logger.error("Address generation failed for %s/%s: %s", currency, user.sub, exc)
         raise HTTPException(
             status_code=503,
             detail="Address generation unavailable — check server logs",
         ) from None
+    address = issued.address
+
+    # An address with no known derivation cannot be reconciled to this payment
+    # or swept, so it is not issued. Every client in payments/crypto reports it;
+    # this refuses a future one that forgets.
+    if issued.derivation_index is None or not issued.derivation_path:
+        logger.error(
+            "%s address for %s came back without its derivation index/path. Refusing to issue it.",
+            currency,
+            user.sub,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Address generation unavailable — check server logs",
+        )
 
     # UUID-based payment_id eliminates timestamp collision when two requests
     # arrive in the same second (e.g. client double-tap or network retry).
@@ -315,6 +333,8 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
         "currency": currency,
         "network": network,
         "address": address,
+        "derivation_index": issued.derivation_index,
+        "derivation_path": issued.derivation_path,
         "amount_crypto": amount_crypto,
         "amount_usd": amount_usd,
         "rate_usd": rate_usd,
@@ -332,9 +352,9 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
     # frame and the request is refused. `_save_payment` has already logged the
     # payment id and the reason at ERROR.
     #
-    # The derivation is NOT rolled back. For ETH/USDT it durably advanced the
-    # shared HD counter; putting it back could re-issue an index another request
-    # has since taken, whereas a skipped index costs one unused address.
+    # The derivation is NOT rolled back. For every currency it durably advanced
+    # the shared HD counter; putting it back could re-issue an index another
+    # request has since taken, whereas a skipped index costs one unused address.
     try:
         _save_payment(payment)
     except PaymentNotPersistedError:
@@ -577,31 +597,47 @@ async def payment_webhook(
 # ── Address generation helpers ────────────────────────────────────────────────
 
 
-def _generate_address(currency: str, user_id: str, network: str) -> str:
-    """Delegate to the appropriate crypto client."""
+class IssuedAddress(NamedTuple):
+    """A deposit address and the HD derivation that produced it.
+
+    ``derivation_index`` / ``derivation_path`` are what attribute an incoming
+    deposit to one payment and what the sweep needs to spend it. ``None`` means
+    the client did not say -- and an address that cannot be reconciled is not
+    issued (see ``generate_deposit_address``).
+    """
+
+    address: str
+    derivation_index: int | None
+    derivation_path: str | None
+
+
+def _derive_deposit_address(currency: str, user_id: str, network: str) -> IssuedAddress:
+    """Delegate to the appropriate crypto client, keeping the derivation."""
     if currency == "BTC":
         from payments.crypto.bitcoin import BitcoinClient
 
-        client = BitcoinClient()
-        result = client.generate_deposit_address(user_id)
-        return result["address"]
-
-    if currency == "ETH":
+        result = BitcoinClient().generate_deposit_address(user_id)
+    elif currency == "ETH":
         from payments.crypto.ethereum import EthereumClient
 
-        client = EthereumClient()
-        result = client.generate_deposit_address(user_id)
-        return result["address"]
-
-    if currency == "USDT":
+        result = EthereumClient().generate_deposit_address(user_id)
+    elif currency == "USDT":
         from payments.crypto.usdt import USDTClient, USDTNetwork
 
-        client = USDTClient()
         net_enum = USDTNetwork[network] if network in USDTNetwork.__members__ else USDTNetwork.TRC20
-        result = client.generate_deposit_address(user_id, net_enum)
-        return result["address"]
+        result = USDTClient().generate_deposit_address(user_id, net_enum)
+    else:
+        raise ValueError(f"Unsupported currency: {currency}")
+    return IssuedAddress(
+        address=result["address"],
+        derivation_index=result.get("derivation_index"),
+        derivation_path=result.get("derivation_path"),
+    )
 
-    raise ValueError(f"Unsupported currency: {currency}")
+
+def _generate_address(currency: str, user_id: str, network: str) -> str:
+    """The address alone, for callers that record no derivation (``api/billing.py``)."""
+    return _derive_deposit_address(currency, user_id, network).address
 
 
 # =============================================================================

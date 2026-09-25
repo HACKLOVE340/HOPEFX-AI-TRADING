@@ -1225,6 +1225,11 @@ if SQLALCHEMY_AVAILABLE:
         currency = Column(String(10), nullable=False)  # BTC | ETH | USDT
         network = Column(String(20), nullable=False)  # BTC | ERC20 | TRC20 | BEP20
         address = Column(String(200), nullable=False)
+        # The HD derivation that produced `address`: what attributes an incoming
+        # deposit to this payment and what the sweep needs to spend it. Nullable
+        # only because rows written before it existed have none.
+        derivation_index = Column(Integer, nullable=True)
+        derivation_path = Column(String(64), nullable=True)
         amount_usd = Column(Numeric(18, 2), nullable=False)
         amount_crypto = Column(Numeric(28, 8), nullable=False)
         rate_usd = Column(Numeric(28, 8), nullable=False)  # USD price per coin at creation
@@ -1249,6 +1254,8 @@ if SQLALCHEMY_AVAILABLE:
                 "currency": self.currency,
                 "network": self.network,
                 "address": self.address,
+                "derivation_index": self.derivation_index,
+                "derivation_path": self.derivation_path,
                 "amount_usd": self.amount_usd,
                 "amount_crypto": self.amount_crypto,
                 "rate_usd": self.rate_usd,

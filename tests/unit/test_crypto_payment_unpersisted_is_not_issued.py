@@ -69,7 +69,7 @@ def _request_address(client, session_source):
 
     with (
         patch("payments.crypto.rate_feed.get_rates", AsyncMock(return_value={"BTC": 50_000.0})),
-        patch.object(mod, "_generate_address", return_value=ADDRESS),
+        patch.object(mod, "_derive_deposit_address", return_value=mod.IssuedAddress(ADDRESS, 7, "m/84'/0'/0'/0/7")),
         patch.object(mod, "_get_db_session", session_source),
         patch.object(mod.uuid, "uuid4", return_value=FIXED_UUID),
     ):
