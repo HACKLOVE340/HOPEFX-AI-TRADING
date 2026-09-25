@@ -351,6 +351,7 @@ class AdvancedModelPredictor:
                 macro_df=macro_df,
                 horizon=1,
                 use_filtered_target=False,
+                drop_unlabelled=False,  # A0 D1: keep the newest bar, whose label is unknowable
                 min_move_atr=0.0,
             )
             if X.empty:
@@ -418,6 +419,14 @@ class AdvancedModelPredictor:
 
         if not self._load():
             return 0.5
+
+        # A0 fix #5: refuse a model trained on feature DEFINITIONS that have
+        # since changed, before any column is built, aligned or zero-filled.
+        # Raised, not turned into 0.5: a neutral probability is blended with the
+        # online learner downstream and can still become a trade.
+        from ml.feature_set import assert_feature_set_compatible
+
+        assert_feature_set_compatible(self._model)
 
         if len(ohlcv) < self.min_bars:
             logger.debug(

@@ -52,6 +52,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+from ml.feature_set import FeatureSetMismatchError
 from ml.model_paths import model_dir as _model_dir
 from ml.model_paths import packaged_model_dir as _packaged_model_dir
 
@@ -658,6 +659,7 @@ class InferenceEngine:
                     macro_df=macro_df,
                     horizon=1,
                     use_filtered_target=False,
+                    drop_unlabelled=False,  # A0 D1: keep the newest bar, whose label is unknowable
                     min_move_atr=0.0,
                 )
                 logger.debug(
@@ -687,6 +689,7 @@ class InferenceEngine:
                     macro_df=macro_df,
                     horizon=1,
                     use_filtered_target=False,
+                    drop_unlabelled=False,  # A0 D1: keep the newest bar, whose label is unknowable
                     min_move_atr=0.0,
                 )
 
@@ -1580,7 +1583,19 @@ class InferenceEngine:
                 # predict_proba is synchronous — call directly.
                 # Circuit breaker state is updated via the sync record_* helpers
                 # so this path is safe in both async and sync contexts.
-                raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
+                try:
+                    raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
+                except FeatureSetMismatchError as fs_exc:
+                    # A0 fix #5: the model was trained on feature definitions
+                    # that have changed. This is a refusal, not a transient
+                    # predictor failure: falling through would leave raw_prob at
+                    # 0.5 for the online learner and data-layer nudge to push
+                    # over a threshold. Independent of the staleness gate.
+                    logger.error("InferenceEngine: REFUSING %s — %s", sym_label, fs_exc)
+                    base_result["model_version"] = "feature_set_mismatch"
+                    base_result["feature_set_error"] = str(fs_exc)
+                    self._fallback_count += 1
+                    return _abstain(base_result, "feature_set_mismatch", str(fs_exc)[:160])
                 model_version = predictor.version
                 # Record success in ML circuit breaker (sync-safe)
                 try:

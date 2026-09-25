@@ -474,6 +474,7 @@ class AdvancedPredictor:
                 macro_df=macro_df,
                 horizon=1,
                 use_filtered_target=False,
+                drop_unlabelled=False,  # A0 D1: keep the newest bar, whose label is unknowable
                 min_move_atr=0.0,
             )
             if X is None or X.empty:

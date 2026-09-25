@@ -118,6 +118,52 @@ def block_bootstrap_auc_ci(
     return float(np.quantile(valid, alpha)), float(np.quantile(valid, 1.0 - alpha))
 
 
+#: A predicted-up rate this far from the window's label rate is flagged: the
+#: model's accuracy then mostly measures the prior shift, not skill (A0 #8).
+PRIOR_SHIFT_FLAG = 0.20
+
+
+def base_rate_baselines(y_true: Any, preds: Any) -> dict[str, Any]:
+    """Accuracy of ``preds`` next to what trivial predictors score on the SAME window.
+
+    One definition for every evaluated window in a training report (walk-forward
+    folds, final holdout, OOS), so an accuracy is never reported without the
+    base rate it has to beat. A0 fix #8: the dry run's 0.387 was read as a sign
+    inversion; it was a 65.5%-up window scored by a model that said "down" 84.5%
+    of the time — balanced accuracy ~0.5, and a prior-shift flag, say so.
+
+    ``balanced_accuracy`` is the mean recall of the two classes (0.5 for any
+    constant predictor) and ``None`` on a one-class window.
+    """
+    import numpy as np
+
+    y = np.asarray(y_true, dtype=int).ravel()
+    yhat = np.asarray(preds, dtype=int).ravel()
+    n = len(y)
+    if n == 0 or len(yhat) != n:
+        raise ValueError(f"base_rate_baselines: need equal, non-empty inputs (y={n}, preds={len(yhat)})")
+
+    n_up = int(y.sum())
+    base_rate = n_up / n
+    majority_class = 1 if n_up * 2 >= n else 0
+    recalls = [float(np.mean(yhat[y == c] == c)) for c in (0, 1) if np.any(y == c)]
+    balanced = sum(recalls) / 2.0 if len(recalls) == 2 else None
+    pred_up = float(np.mean(yhat == 1))
+    shift = pred_up - base_rate
+    return {
+        "accuracy": round(float(np.mean(yhat == y)), ROUND_DP),
+        "balanced_accuracy": None if balanced is None else round(balanced, ROUND_DP),
+        "base_rate": round(base_rate, ROUND_DP),
+        "majority_class": majority_class,
+        "majority_baseline_accuracy": round((n_up if majority_class == 1 else n - n_up) / n, ROUND_DP),
+        "always_up_accuracy": round(base_rate, ROUND_DP),
+        "always_down_accuracy": round((n - n_up) / n, ROUND_DP),
+        "predicted_up_rate": round(pred_up, ROUND_DP),
+        "prior_shift": round(shift, ROUND_DP),
+        "prior_shift_flagged": bool(abs(shift) > PRIOR_SHIFT_FLAG),
+    }
+
+
 def oos_skill_metrics(
     y_true: Any,
     proba: Any,
@@ -152,11 +198,9 @@ def oos_skill_metrics(
     majority_class = 1 if n_up * 2 >= n else 0
     majority_hits = n_up if majority_class == 1 else n - n_up
     hits = int(np.sum(yhat == y))
-
-    # Balanced accuracy: mean recall of the two classes (0.5 for any constant
-    # predictor). Undefined on a one-class window.
-    recalls = [float(np.mean(yhat[y == c] == c)) for c in (0, 1) if np.any(y == c)]
-    balanced = sum(recalls) / 2.0 if len(recalls) == 2 else None
+    # Accuracy, balanced accuracy and the trivial baselines: one definition
+    # shared with every other window in the training report (A0 fix #8).
+    baselines = base_rate_baselines(y, yhat)
 
     ci = block_bootstrap_auc_ci(y, p, block_len=block_len, n_boot=n_boot, seed=seed)
     try:
@@ -175,11 +219,7 @@ def oos_skill_metrics(
 
     return {
         "oos_n": n,
-        "oos_accuracy": round(hits / n, ROUND_DP),
-        "oos_base_rate": round(n_up / n, ROUND_DP),
-        "oos_majority_class": majority_class,
-        "oos_majority_baseline_accuracy": round(majority_hits / n, ROUND_DP),
-        "oos_balanced_accuracy": None if balanced is None else round(balanced, ROUND_DP),
+        **{f"oos_{k}": v for k, v in baselines.items()},
         "oos_p_value_vs_majority": round(p_vs_majority, 6),
         "oos_auc": None if auc is None else round(auc, ROUND_DP),
         "oos_auc_ci_low": None if ci is None else round(ci[0], ROUND_DP),

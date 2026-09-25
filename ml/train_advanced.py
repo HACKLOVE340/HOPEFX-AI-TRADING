@@ -83,6 +83,8 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 import os as _os
 from typing import Any, ClassVar
 
+from ml.oos_skill import base_rate_baselines
+
 # When HOPEFX_CI=1 (set by tests/conftest.py) use minimal model params so
 # every test that trains a model finishes well within the 20 s timeout.
 _CI = _os.environ.get("HOPEFX_CI", "0") == "1"
@@ -548,6 +550,10 @@ def walk_forward_eval(
                 "fold": fold + 1,
                 "train_size": len(train_idx),
                 "test_size": len(test_idx),
+                # Baselines on this fold's own window (A0 fix #8): fold base
+                # rates ranged 0.40-0.64 in the dry run, so bare accuracy
+                # across folds compared different bars.
+                **base_rate_baselines(y_test, preds),
                 "accuracy": round(acc, 4),
                 "f1": round(f1, 4),
                 "auc": round(auc, 4),
@@ -580,9 +586,15 @@ def walk_forward_eval(
     else:
         t_stat, p_value = 0.0, 1.0
 
+    balanced = [r["balanced_accuracy"] for r in fold_results if r["balanced_accuracy"] is not None]
+    majority = [r["majority_baseline_accuracy"] for r in fold_results]
     return {
         "folds": fold_results,
         "mean_accuracy": round(float(np.mean(accs)), 4),
+        "mean_balanced_accuracy": round(float(np.mean(balanced)), 4) if balanced else None,
+        "mean_majority_baseline_accuracy": round(float(np.mean(majority)), 4),
+        "folds_beating_majority": sum(r["accuracy"] > r["majority_baseline_accuracy"] for r in fold_results),
+        "folds_prior_shift_flagged": sum(bool(r["prior_shift_flagged"]) for r in fold_results),
         "std_accuracy": round(float(np.std(accs)), 4),
         "mean_f1": round(float(np.mean(f1s)), 4),
         "mean_auc": round(float(np.mean(aucs)), 4),
@@ -671,6 +683,9 @@ def train_final_model(
     # whether the full stacker or calibrated XGBoost was used, so downstream
     # loaders (ml/__init__.py) have a stable path.
     model_path = MODEL_DIR / "stacking_ensemble.pkl"
+    from ml.feature_set import stamp_feature_set_version
+
+    stamp_feature_set_version(model)
     joblib.dump(model, model_path)
     logger.info("Saved final model → %s", model_path)
 
@@ -687,6 +702,7 @@ def train_final_model(
     return model, {
         "train_size": len(X_train),
         "test_size": len(X_test),
+        **base_rate_baselines(y_test, preds),  # A0 fix #8
         "accuracy": round(acc, 4),
         "f1": round(f1, 4),
         "auc": round(auc, 4),
@@ -1274,6 +1290,11 @@ def oos_eval_advanced(
     out_path = MODEL_DIR / "advanced_oos.pkl"
     archive_artifact_before_overwrite(out_path, registry=_archival_registry())
 
+    # Bind the feature-definition version to the bytes, so the live scorer can
+    # refuse this artifact if the definitions later change (A0 fix #5).
+    from ml.feature_set import FEATURE_SET_VERSION, stamp_feature_set_version
+
+    stamp_feature_set_version(model)
     joblib.dump(model, out_path)
     logger.info("Saved OOS model → %s", out_path)
 
@@ -1301,6 +1322,7 @@ def oos_eval_advanced(
         **skill_fields,
         "train_size": len(X_train),
         "feature_count": X_train.shape[1],
+        "feature_set_version": FEATURE_SET_VERSION,
         "sharpe_gate": sharpe_gate,
         "sharpe_note": (
             f"N={n} OOS bars. Sharpe SE={sharpe_gate['se']:.3f}. "
@@ -1368,11 +1390,96 @@ def oos_eval_advanced(
         "significant": bool(p_value < 0.05),
         "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
+        "feature_set_version": FEATURE_SET_VERSION,
         # The keys the promotion gate reads, under the names it reads them.
         "oos_accuracy": round(acc, 4),
         **skill_fields,
         "sharpe_gate": sharpe_gate,
         "sharpe_note": sharpe_gate["message"],
+    }
+
+
+#: The OOS window may take at most this share of the labelled rows.
+OOS_MAX_FRACTION = 0.40
+#: Fewer OOS rows than this gives accuracy SE > ~0.05; no window is used.
+OOS_MIN_ROWS = 100
+
+
+def split_oos_by_date(
+    X: pd.DataFrame,
+    y: pd.Series,
+    oos_years: float,
+    horizon: int,
+    max_fraction: float = OOS_MAX_FRACTION,
+    min_rows: int = OOS_MIN_ROWS,
+) -> dict[str, Any]:
+    """Hold out every row dated after ``last_date - oos_years`` (A0 fix #7, D6).
+
+    ``--oos-years`` used to become ``oos_years * 252`` ROWS of the feature
+    frame. The filtered target drops ~9% of bars, so "8 years" covered 9.6.
+    The window is now defined by date, anchored on the last labelled row.
+
+    When the dated window holds more than ``max_fraction`` of the rows it is
+    shortened to that share — logged at WARNING and returned as
+    ``capped=True`` with the dates actually covered, never silently. Fewer than
+    ``min_rows`` OOS rows means no OOS window (``X_oos is None``).
+
+    The last ``horizon`` training rows are purged: their forward-return labels
+    reach into the OOS window.
+    """
+    empty = {
+        "X_cv": X,
+        "y_cv": y,
+        "X_oos": None,
+        "y_oos": None,
+        "oos_years_requested": float(oos_years),
+        "oos_start": None,
+        "oos_end": None,
+        "oos_calendar_years": 0.0,
+        "capped": False,
+    }
+    if oos_years <= 0 or len(X) == 0:
+        return empty
+    last = pd.Timestamp(X.index[-1])
+    cutoff = last - pd.Timedelta(days=round(float(oos_years) * 365.25))
+    n_oos = int((X.index > cutoff).sum())
+    capped = False
+    cap = int(len(X) * max_fraction)
+    if n_oos > cap:
+        logger.warning(
+            "--oos-years %.2f covers %d of %d rows (> %.0f%%); shortening the OOS window to the last %d rows. "
+            "The report records the dates actually held out.",
+            oos_years,
+            n_oos,
+            len(X),
+            max_fraction * 100,
+            cap,
+        )
+        n_oos, capped = cap, True
+    if n_oos < min_rows:
+        logger.warning(
+            "--oos-years %.2f gives only %d OOS rows (need >= %d) — no OOS window", oos_years, n_oos, min_rows
+        )
+        return empty
+
+    X_cv, y_cv = X.iloc[:-n_oos], y.iloc[:-n_oos]
+    X_oos, y_oos = X.iloc[-n_oos:], y.iloc[-n_oos:]
+    purge = max(int(horizon), 0)
+    if purge > 0 and len(X_cv) > purge:
+        X_cv, y_cv = X_cv.iloc[:-purge], y_cv.iloc[:-purge]
+    start, end = pd.Timestamp(X_oos.index[0]), pd.Timestamp(X_oos.index[-1])
+    # Calendar span the window covers: from the day after the last bar before it.
+    prev = pd.Timestamp(X.index[-n_oos - 1]) if len(X) > n_oos else start
+    return {
+        "X_cv": X_cv,
+        "y_cv": y_cv,
+        "X_oos": X_oos,
+        "y_oos": y_oos,
+        "oos_years_requested": float(oos_years),
+        "oos_start": str(start.date()),
+        "oos_end": str(end.date()),
+        "oos_calendar_years": round((end - prev).days / 365.25, 3),
+        "capped": capped,
     }
 
 
@@ -1436,9 +1543,10 @@ def main(argv: list[str] | None = None):
         type=float,
         default=8.0,
         help=(
-            "Reserve the last N years as a completely held-out OOS period. "
-            "The model is trained on all data before this window and evaluated "
-            "on it with a one-sided binomial p-value test (H0: accuracy <= 0.5). "
+            "Reserve the last N CALENDAR years (every row dated after last_date - N years) "
+            "as a completely held-out OOS period, capped at 40%% of rows (the cap is logged "
+            "and recorded). The model is trained on all data before this window and "
+            "evaluated on it against the window's own base rate. "
             "Default: 8.0 (8-year held-out OOS on the ~26-year default dataset, "
             "data/XAUUSD_40Y.csv, is ~31%% of data). "
             "Set to 0 to disable OOS and use walk-forward CV only."
@@ -1557,42 +1665,22 @@ def main(argv: list[str] | None = None):
     # Carve the OOS period off the END of the dataset before any model training.
     # This is the only valid way to estimate live performance — the OOS set is
     # never seen during training or hyperparameter selection.
-    oos_n = 0
-    X_cv, y_cv = X, y
-    X_oos, y_oos = None, None
-
-    if args.oos_years > 0:
-        oos_n = round(args.oos_years * 252)  # ~252 trading days/year
-        # Cap at 40% of data so the training set always has at least 60%.
-        # 8yr OOS on the ~26-year default dataset is ~31%, well within this limit.
-        oos_n = min(oos_n, int(len(X) * 0.40))
-        if oos_n < 100:
-            # < 100 bars gives SE > ±0.5 on accuracy — not meaningful.
-            logger.warning(
-                "--oos-years %.1f produces only %d bars (need >= 100 for SE <= ±0.5). Increase --oos-years or --years.",
-                args.oos_years,
-                oos_n,
-            )
-            oos_n = 0
-        else:
-            X_cv, y_cv = X.iloc[:-oos_n], y.iloc[:-oos_n]
-            X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
-            # Purge the last `horizon` train bars: their forward-return labels
-            # (close[t+horizon]) reach into the OOS window, so keeping them
-            # leaks OOS price data into training. Drop them so the train/OOS
-            # boundary is clean.
-            _purge = max(int(args.horizon), 0)
-            if _purge > 0 and len(X_cv) > _purge:
-                X_cv, y_cv = X_cv.iloc[:-_purge], y_cv.iloc[:-_purge]
-                logger.info("Purged %d boundary bars between train/CV and OOS (horizon=%d)", _purge, args.horizon)
-            logger.info(
-                "OOS split: train/CV=%d bars, OOS=%d bars (last %.1f years, %s → %s)",
-                len(X_cv),
-                oos_n,
-                args.oos_years,
-                X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0],
-                X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1],
-            )
+    # The window is defined by DATE (A0 fix #7): every row after
+    # last_date - oos_years, with the horizon purged from the end of training.
+    split = split_oos_by_date(X, y, args.oos_years, horizon=args.horizon)
+    X_cv, y_cv, X_oos, y_oos = split["X_cv"], split["y_cv"], split["X_oos"], split["y_oos"]
+    oos_n = 0 if X_oos is None else len(X_oos)
+    if X_oos is not None:
+        logger.info(
+            "OOS split: train/CV=%d rows, OOS=%d rows, %s → %s (%.2f calendar years; requested %.2f%s)",
+            len(X_cv),
+            oos_n,
+            split["oos_start"],
+            split["oos_end"],
+            split["oos_calendar_years"],
+            args.oos_years,
+            ", CAPPED at 40% of rows" if split["capped"] else "",
+        )
 
     # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
     logger.info(
@@ -1650,7 +1738,12 @@ def main(argv: list[str] | None = None):
         "sample_count": len(X),
         "cv_sample_count": len(X_cv),
         "oos_sample_count": oos_n,
+        "oos_start": split["oos_start"],
+        "oos_end": split["oos_end"],
+        "oos_calendar_years": split["oos_calendar_years"],
+        "oos_window_capped": split["capped"],
         "feature_count": X.shape[1],
+        "feature_set_version": X.attrs.get("feature_set_version"),
         "trained_at": datetime.now(UTC).isoformat(),
         "walkforward": wf,
         "final": final_metrics,
@@ -1670,12 +1763,26 @@ def main(argv: list[str] | None = None):
     logger.info("  Symbol          : %s  (%s years)", args.symbol, args.years)
     logger.info("  Samples (total) : %s  (after filtered-target)", len(X))
     logger.info("  CV samples      : %s", len(X_cv))
-    logger.info("  OOS samples     : %s  (%.1f years held out)", oos_n, args.oos_years)
+    logger.info(
+        "  OOS samples     : %s  (%s → %s, %.2f calendar years held out; requested %.2f)",
+        oos_n,
+        split["oos_start"],
+        split["oos_end"],
+        split["oos_calendar_years"],
+        args.oos_years,
+    )
     logger.info("  Features        : %s", X.shape[1])
     logger.info("  Macro features  : %s", macro_df is not None)
     logger.info("")
     logger.info(
         f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}",
+    )
+    logger.info(
+        "  Walk-forward baselines: balanced=%s  always-majority=%s  folds beating majority=%s/%s",
+        wf.get("mean_balanced_accuracy"),
+        wf.get("mean_majority_baseline_accuracy"),
+        wf.get("folds_beating_majority"),
+        len(wf.get("folds", [])),
     )
     logger.info("  Walk-forward F1       : %.3f", wf.get("mean_f1", 0))
     logger.info("  Walk-forward AUC      : %.3f", wf.get("mean_auc", 0))
@@ -1685,6 +1792,11 @@ def main(argv: list[str] | None = None):
     )
     logger.info("")
     logger.info("  Final holdout accuracy: %.3f", final_metrics["accuracy"])
+    logger.info(
+        "  Final holdout baselines: balanced=%s  always-majority=%s",
+        final_metrics.get("balanced_accuracy"),
+        final_metrics.get("majority_baseline_accuracy"),
+    )
     logger.info("  Final holdout F1      : %.3f", final_metrics["f1"])
     logger.info("  Final holdout AUC     : %.3f", final_metrics["auc"])
 
@@ -1697,6 +1809,20 @@ def main(argv: list[str] | None = None):
         logger.info(
             f"  OOS accuracy          : {oos_metrics['accuracy']:.3f} ± {acc_se:.3f}  (n={oos_metrics['oos_size']})",
         )
+        logger.info(
+            "  OOS baselines         : balanced=%s  always-majority=%s  always-up=%s  always-down=%s",
+            oos_metrics.get("oos_balanced_accuracy"),
+            oos_metrics.get("oos_majority_baseline_accuracy"),
+            oos_metrics.get("oos_always_up_accuracy"),
+            oos_metrics.get("oos_always_down_accuracy"),
+        )
+        if oos_metrics.get("oos_prior_shift_flagged"):
+            logger.warning(
+                "  OOS PRIOR SHIFT: model predicts up on %s of bars, the window is up on %s — accuracy mostly "
+                "measures that gap, not skill.",
+                oos_metrics.get("oos_predicted_up_rate"),
+                oos_metrics.get("oos_base_rate"),
+            )
         logger.info("  OOS F1                : %.3f", oos_metrics["f1"])
         logger.info("  OOS AUC               : %.3f", oos_metrics["auc"])
         logger.info("  OOS p-value (binomial): %.4f  %s", oos_metrics["p_value_binomial"], sig)
@@ -1827,8 +1953,7 @@ class AdvancedTrainer:
         X_all = feat_df.drop(columns=[target_col]).dropna()
         y_all = feat_df[target_col].loc[X_all.index]
 
-        # 2. Split in-sample / OOS by oos_years (trading days ≈ 252/year)
-        oos_n = round(self.config.oos_years * 252)
+        # 2. Split in-sample / OOS by DATE (A0 fix #7), same rule as the CLI.
         min_n = round(self.config.min_years * 252)
         if len(X_all) < min_n:
             raise ValueError(
@@ -1837,13 +1962,9 @@ class AdvancedTrainer:
             )
 
         _horizon = max(int(getattr(self.config, "horizon", 1)), 1)
-        if oos_n > 0 and len(X_all) > oos_n:
-            X_cv, X_oos = X_all.iloc[:-oos_n], X_all.iloc[-oos_n:]
-            y_cv, y_oos = y_all.iloc[:-oos_n], y_all.iloc[-oos_n:]
-            # Purge horizon boundary bars so forward-return labels don't leak
-            # OOS prices into training (matches the CLI OOS split).
-            if _horizon > 0 and len(X_cv) > _horizon:
-                X_cv, y_cv = X_cv.iloc[:-_horizon], y_cv.iloc[:-_horizon]
+        split = split_oos_by_date(X_all, y_all, float(self.config.oos_years), horizon=_horizon)
+        if split["X_oos"] is not None:
+            X_cv, y_cv, X_oos, y_oos = split["X_cv"], split["y_cv"], split["X_oos"], split["y_oos"]
         else:
             X_cv, X_oos = X_all, X_all.iloc[0:0]
             y_cv, y_oos = y_all, y_all.iloc[0:0]
