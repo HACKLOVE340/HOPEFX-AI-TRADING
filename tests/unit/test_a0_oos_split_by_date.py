@@ -124,3 +124,53 @@ def test_main_evaluates_oos_on_the_dated_window(tmp_path, monkeypatch):
     assert report["oos_end"] == str(LAST.date())
     assert report["oos_calendar_years"] == pytest.approx(2.0, abs=0.02)
     assert report["oos_sample_count"] == len(captured["X_oos"])
+
+
+def test_smoke_mode_does_not_force_oos_years_to_zero(monkeypatch, tmp_path):
+    """``--smoke`` used to force ``--oos-years`` to 0.0 unconditionally, inside
+    ``main()`` itself, discarding whatever the caller passed on the command
+    line. ``scripts/retrain_horizon5.py`` computes ``oos_years=1.0`` for its
+    own ``--smoke`` path specifically so the CI smoke run produces a real OOS
+    split (see its docstring) and passes it explicitly as ``--oos-years 1`` —
+    but this override silently rewrote it back to 0 every time.
+
+    With ``oos_years=0``, ``split_oos_by_date()`` always returns
+    ``X_oos=None``, so ``oos_eval_advanced()`` — the ONLY function that writes
+    ``advanced_oos.pkl``, ``advanced_oos_meta.json`` and
+    ``calibration_report.json`` — was never called. The smoke CI step could
+    then only ever "pass" by finding an artifact some earlier, unrelated run
+    had committed, never one the smoke run itself produced.
+    docs/ai/MASTER_OUTSTANDING.md §A0 · --id RETRAIN-SMOKE-NO-OOS.
+    """
+    import ml.features_extended as fe
+    import ml.train_advanced as ta
+
+    X, y = _filtered_frame()
+    ohlcv = pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}, index=X.index)
+    captured = {}
+
+    monkeypatch.setattr(ta, "fetch_gold_ohlcv", lambda *a, **k: ohlcv)
+    monkeypatch.setattr(fe, "build_extended_features", lambda *a, **k: (X, y))
+    monkeypatch.setattr(ta, "walk_forward_eval", lambda *a, **k: {"mean_accuracy": 0.5})
+    monkeypatch.setattr(ta, "train_final_model", lambda *a, **k: (None, {"accuracy": 0.5, "f1": 0.5, "auc": 0.5}))
+    monkeypatch.setattr(ta, "extract_feature_importance", lambda *a, **k: {})
+    monkeypatch.setattr(ta, "write_feature_importances", lambda *a, **k: None)
+    monkeypatch.setattr(ta, "write_feature_stats", lambda *a, **k: None)
+
+    def _oos(X_cv, y_cv, X_oos, y_oos, **k):
+        captured["X_oos_len"] = len(X_oos)
+        return {"accuracy": 0.5, "f1": 0.5, "auc": 0.5, "oos_size": len(X_oos), "p_value_binomial": 1.0}
+
+    monkeypatch.setattr(ta, "oos_eval_advanced", _oos)
+    original_dir = ta.MODEL_DIR
+    try:
+        report = ta.main(["--smoke", "--oos-years", "1", "--model-dir", str(tmp_path)])
+    finally:
+        ta.MODEL_DIR = original_dir
+
+    assert "X_oos_len" in captured, (
+        "oos_eval_advanced() was never called — --smoke forced --oos-years back to 0, "
+        "discarding the explicit --oos-years 1 the caller passed"
+    )
+    assert captured["X_oos_len"] > 0
+    assert report["oos_sample_count"] == captured["X_oos_len"]

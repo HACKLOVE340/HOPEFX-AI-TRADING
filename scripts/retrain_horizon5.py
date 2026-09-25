@@ -609,6 +609,79 @@ def verify_output_artifacts(args: argparse.Namespace) -> bool:
             logger.error("CI GATE FAILED: could not parse horizon5_training_report.json: %s", exc)
             all_ok = False
 
+    # Confirm THIS run's own OOS evaluation actually happened, and that the
+    # model it produced can score. advanced_oos.pkl existing at `out_dir` is
+    # not by itself evidence of anything: a caller that forgot --output-dir
+    # defaults to the committed ml/saved_models, where advanced_oos.pkl
+    # already exists from an earlier, unrelated run — every check above would
+    # pass against that file without this run ever having touched it.
+    # feature_set_version, oos_accuracy and oos_n are written only by
+    # oos_eval_advanced(), so their absence here means that function never ran
+    # for this run (see --id RETRAIN-SMOKE-NO-OOS). Loading the pickle and
+    # scoring a few rows additionally proves the bytes at this path are a
+    # working model, not merely non-empty.
+    if all_ok:
+        try:
+            oos_meta = json.loads((out_dir / "advanced_oos_meta.json").read_text())
+            missing = [k for k in ("feature_set_version", "oos_accuracy", "oos_n") if oos_meta.get(k) is None]
+            if missing:
+                logger.error(
+                    "CI GATE FAILED: advanced_oos_meta.json in %s is missing %s — the OOS evaluation that "
+                    "writes advanced_oos.pkl never ran for this run.",
+                    out_dir,
+                    missing,
+                )
+                all_ok = False
+            elif not oos_meta["oos_n"]:
+                logger.error(
+                    "CI GATE FAILED: advanced_oos_meta.json reports oos_n=%s — no OOS samples were scored",
+                    oos_meta["oos_n"],
+                )
+                all_ok = False
+            else:
+                logger.info(
+                    "CI GATE OK: advanced_oos_meta.json feature_set_version=%s oos_n=%s oos_accuracy=%s",
+                    oos_meta["feature_set_version"],
+                    oos_meta["oos_n"],
+                    oos_meta["oos_accuracy"],
+                )
+        except Exception as exc:
+            logger.error("CI GATE FAILED: could not parse advanced_oos_meta.json in %s: %s", out_dir, exc)
+            all_ok = False
+
+    if all_ok:
+        try:
+            import joblib
+            import pandas as pd
+
+            model = joblib.load(out_dir / "advanced_oos.pkl")
+            rpt = json.loads((out_dir / "horizon5_training_report.json").read_text())
+            features = rpt.get("final", {}).get("features") or []
+            if not features:
+                logger.error(
+                    "CI GATE FAILED: horizon5_training_report.json has no final.features list to score against"
+                )
+                all_ok = False
+            else:
+                sample = pd.DataFrame([[0.0] * len(features)] * 3, columns=features)
+                proba = model.predict_proba(sample)
+                if proba.shape != (3, 2):
+                    logger.error(
+                        "CI GATE FAILED: %s.predict_proba returned shape %s, expected (3, 2)",
+                        out_dir / "advanced_oos.pkl",
+                        proba.shape,
+                    )
+                    all_ok = False
+                else:
+                    logger.info(
+                        "CI GATE OK: %s scores 3 rows x %d features",
+                        out_dir / "advanced_oos.pkl",
+                        len(features),
+                    )
+        except Exception as exc:
+            logger.error("CI GATE FAILED: could not load/score %s: %s", out_dir / "advanced_oos.pkl", exc)
+            all_ok = False
+
     if all_ok:
         logger.info("CI GATE PASSED: all artifacts present and valid")
     else:

@@ -1608,9 +1608,23 @@ def main(argv: list[str] | None = None):
 
     # ── Smoke-test overrides ──────────────────────────────────────────────────
     if args.smoke:
-        logger.info("Smoke-test mode: overriding --years 2 --oos-years 0 --no-macro --splits 2")
+        # This used to force --oos-years to 0.0 unconditionally, discarding
+        # whatever the caller passed. scripts/retrain_horizon5.py computes
+        # oos_years=1.0 for its own --smoke path specifically so the CI smoke
+        # run produces a real OOS split (see its own docstring) and passes it
+        # explicitly on the command line — but this block silently overwrote
+        # it back to 0 every time. With oos_years=0, split_oos_by_date()
+        # always returns X_oos=None, so oos_eval_advanced() — the ONLY
+        # function that writes advanced_oos.pkl, advanced_oos_meta.json and
+        # calibration_report.json — was never called. The smoke CI step could
+        # then only ever "pass" by finding a committed artifact from an
+        # earlier, unrelated run, never one this run produced.
+        # docs/ai/MASTER_OUTSTANDING.md §A0 · --id RETRAIN-SMOKE-NO-OOS.
+        logger.info(
+            "Smoke-test mode: overriding --years 2 --no-macro --splits 2 (--oos-years left as given: %s)",
+            args.oos_years,
+        )
         args.years = 2
-        args.oos_years = 0.0
         args.no_macro = True
         args.splits = 2
         args.use_cached = True  # prefer cache in smoke mode

@@ -8,7 +8,10 @@
 #   1. Feature stability analysis  — drops unstable features before training
 #   2. Full 50-year walk-forward retrain (8-year OOS, 6 folds)
 #   3. Sharpe gate validation      — blocks promotion if N < 600 or gate fails
-#   4. Model integrity check       — ml/verify_model.py
+#   4. Model integrity check       — retrain_horizon5.py --verify-only (loads
+#                                    and scores the retrained artifact itself;
+#                                    ml/verify_model.py was removed here and
+#                                    from smoke-validate — see the NOTE below)
 #   5. Registry validation          — verifies metadata without serving it
 #   6. Review artifact              — uploads outputs for explicit promotion
 #   7. Failure notification        — opens a GitHub issue on any step failure
@@ -161,6 +164,14 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      # Everything --smoke writes lands here, never under ml/saved_models.
+      # Without this, --output-dir defaults to the committed directory, where
+      # advanced_oos.pkl already exists from an earlier real run — every
+      # artifact-presence check then "passes" against a file this job never
+      # touched. See docs/ai/MASTER_OUTSTANDING.md §A0 (RETRAIN-SMOKE-NO-OOS).
+      RETRAIN_SMOKE_DIR: ${{ runner.temp }}/retrain-smoke
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -187,15 +198,14 @@ jobs:
           pip install -r requirements-ci.txt
 
       - name: Smoke validate retrain pipeline
-        run: python scripts/retrain_horizon5.py --smoke
+        run: python scripts/retrain_horizon5.py --smoke --output-dir "$RETRAIN_SMOKE_DIR"
         env:
           PYTHONPATH: .
 
-      - name: Verify model integrity
-        run: python -m ml.verify_model
+      - name: Verify smoke artifact (this run's own output — never the committed model)
+        run: python scripts/retrain_horizon5.py --verify-only --output-dir "$RETRAIN_SMOKE_DIR"
         env:
           PYTHONPATH: .
-          ML_CI_MODE: "true"
 
   # ──────────────────────────────────────────────────────────────────────────
   # Full quarterly retrain — only on schedule or mode=full
@@ -267,9 +277,17 @@ jobs:
       # SHA-256 against the ALREADY-COMMITTED registry.json entry, but the
       # retrain step above unconditionally overwrites advanced_oos.pkl without
       # touching registry.json (promotion is separate/manual), so this was
-      # guaranteed to fail on every quarterly retrain — see issue #184. It
-      # still correctly runs in the smoke-test job above, where the model
-      # files are NOT retrained and should still match the committed registry.
+      # guaranteed to fail on every quarterly retrain — see issue #184.
+      #
+      # It no longer runs in the smoke-validate job above either, for the
+      # opposite reason: --smoke used to skip its own OOS evaluation entirely
+      # (ml/train_advanced.py forced --oos-years to 0), so ml/verify_model.py
+      # was checking the COMMITTED advanced_oos.pkl the smoke run never wrote
+      # — the gate could only ever pass against a file it did not produce.
+      # smoke-validate now passes --output-dir so it never touches
+      # ml/saved_models at all, and "Verify smoke artifact" above
+      # (retrain_horizon5.py --verify-only --output-dir) loads and scores
+      # THAT run's own artifact instead. docs/ai/MASTER_OUTSTANDING.md §A0.
 
       - name: Gate M — ML edge regression
         run: python scripts/ci/gate_m_ml_edge.py
