@@ -93,8 +93,13 @@ def add_swing_features(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
     swing_high = h[(h == h.rolling(window * 2 + 1, center=True).max())].reindex(d.index)
     swing_low = l[(l == l.rolling(window * 2 + 1, center=True).min())].reindex(d.index)
 
-    last_sh = swing_high.ffill()
-    last_sl = swing_low.ffill()
+    # A fractal swing at bar t is only CONFIRMED at bar t + window, when the
+    # `window` bars after it exist. Using it from bar t looked `window` bars
+    # ahead: in training every swing was visible where it formed, while live
+    # the newest `window` bars can never be one (A0 fix #6, found by the
+    # no-look-ahead test). Shift so each level becomes known when confirmed.
+    last_sh = swing_high.shift(window).ffill()
+    last_sl = swing_low.shift(window).ffill()
 
     d["dist_to_swing_high"] = ((last_sh - c) / atr.replace(0, np.nan)).fillna(0.0)
     d["dist_to_swing_low"] = ((c - last_sl) / atr.replace(0, np.nan)).fillna(0.0)
@@ -605,6 +610,7 @@ def build_advanced_features(
     use_filtered_target: bool = True,
     min_move_atr: float = 0.25,
     smoke: bool = False,
+    drop_unlabelled: bool = True,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
     Build the full advanced feature matrix and target.
@@ -617,11 +623,17 @@ def build_advanced_features(
     use_filtered_target: If True, drop low-conviction bars from training
     min_move_atr       : Minimum move (ATR units) to include a bar
     smoke              : Skip expensive computations (e.g. rolling Hurst) for CI speed
+    drop_unlabelled    : True (training/evaluation): drop rows whose label is
+                         unknowable or filtered out, so X and y share an index.
+                         False (inference): keep every feature-complete row in
+                         X — including the newest bar — and return y only for
+                         the labelled subset of X's index.
 
     Returns
     -------
     X : Feature DataFrame (no NaN, all stationary)
-    y : Binary target Series (0=down, 1=up)
+    y : Binary target Series (0=down, 1=up); never a label for a bar whose
+        forward return is unknowable
     """
     d = ohlcv.copy()
     d.columns = [c.lower() for c in d.columns]
@@ -670,8 +682,10 @@ def build_advanced_features(
         entry_price = d["open"].shift(-1)  # lookahead-ok: label construction
         exit_price = d["close"].shift(-horizon)  # lookahead-ok: label construction
         future_ret = (exit_price - entry_price) / entry_price.replace(0, np.nan)
-        y_raw = (future_ret > 0).astype(float)
-        y_raw[y_raw.isna()] = np.nan
+        # A0 D1: the last `horizon` bars have no knowable forward return. They
+        # used to become 0 ("down"), because `NaN > 0` is False before any
+        # cast, and were trained and evaluated on. They stay NaN.
+        y_raw = (future_ret > 0).astype(float).where(future_ret.notna())
 
     d["_target"] = y_raw
 
@@ -683,10 +697,21 @@ def build_advanced_features(
     feature_cols = [c for c in d.columns if c not in exclude]
 
     d = d[[*feature_cols, "_target"]]
-    d = d.replace([np.inf, -np.inf], np.nan).dropna()
+    d = d.replace([np.inf, -np.inf], np.nan)
+    # Rows with a missing feature are never usable. Rows with a missing label
+    # are dropped for training/evaluation (the default); inference asks to keep
+    # them, because the newest bar is exactly the one whose label is unknowable.
+    d = d.dropna(subset=feature_cols)
+    labelled = d["_target"].notna()
+    if drop_unlabelled:
+        d = d[labelled]
+        labelled = labelled[labelled]
 
     X = d[feature_cols]
-    y = d["_target"].astype(int)
+    y = d.loc[labelled[labelled].index, "_target"].astype(int)
+    from ml.feature_set import FEATURE_SET_VERSION
+
+    X.attrs["feature_set_version"] = FEATURE_SET_VERSION
 
     logger.info(
         "Advanced features: %d bars × %d features (filtered from %d, horizon=%d)",

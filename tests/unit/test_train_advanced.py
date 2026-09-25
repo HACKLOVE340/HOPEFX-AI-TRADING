@@ -380,37 +380,35 @@ class TestCLIDefaults:
 
 
 class TestOosCap:
-    """Verify the OOS cap and minimum-bar guard in main()."""
+    """The OOS cap and minimum-row guard, exercised on the real split.
 
-    def _compute_oos_n(self, total_samples: int, oos_years: float) -> int:
-        """Replicate the OOS-n calculation from main()."""
-        oos_n = round(oos_years * 252)
-        oos_n = min(oos_n, int(total_samples * 0.40))
-        if oos_n < 100:
-            return 0
-        return oos_n
+    These used to replicate ``oos_years * 252`` locally and test the copy, so
+    they passed whatever main() did — and pinned the row-count arithmetic A0
+    fix #7 removed. The date rule itself is in test_a0_oos_split_by_date.py.
+    """
 
-    def test_8yr_oos_on_50yr_data(self):
-        # 50yr * 252 * 0.727 (filtered) ≈ 9200 samples; 8yr = 2016 bars
-        total = 9200
-        oos_n = self._compute_oos_n(total, 8.0)
-        assert oos_n == 2016, f"Expected 2016, got {oos_n}"
-        assert oos_n <= int(total * 0.40), "OOS exceeds 40% cap"
+    @staticmethod
+    def _xy(years: int):
+        idx = pd.bdate_range(end="2026-03-25", periods=years * 252)
+        X = pd.DataFrame({"a": np.arange(len(idx), dtype=float)}, index=idx)
+        return X, pd.Series(np.arange(len(idx)) % 2, index=idx)
 
     def test_cap_at_40_pct(self):
-        # If oos_years would exceed 40%, cap kicks in
-        total = 1000
-        oos_n = self._compute_oos_n(total, 8.0)
-        assert oos_n <= int(total * 0.40)
+        from ml.train_advanced import split_oos_by_date
 
-    def test_minimum_100_bars_enforced(self):
-        # Very small dataset: oos_n < 100 → returns 0
-        total = 200
-        oos_n = self._compute_oos_n(total, 0.1)  # 0.1yr * 252 = 25 bars
-        assert oos_n == 0, "Should return 0 when oos_n < 100"
+        X, y = self._xy(5)
+        s = split_oos_by_date(X, y, 8.0, horizon=5)
+        assert len(s["X_oos"]) == int(len(X) * 0.40) and s["capped"] is True
 
-    def test_zero_oos_years_returns_zero(self):
-        total = 9200
-        oos_n = self._compute_oos_n(total, 0.0)
-        # 0 * 252 = 0 → min(0, cap) = 0 → 0 < 100 → returns 0
-        assert oos_n == 0
+    def test_minimum_100_rows_enforced(self):
+        from ml.train_advanced import split_oos_by_date
+
+        X, y = self._xy(5)
+        assert split_oos_by_date(X, y, 0.1, horizon=5)["X_oos"] is None
+
+    def test_zero_oos_years_returns_no_window(self):
+        from ml.train_advanced import split_oos_by_date
+
+        X, y = self._xy(5)
+        s = split_oos_by_date(X, y, 0.0, horizon=5)
+        assert s["X_oos"] is None and len(s["X_cv"]) == len(X)

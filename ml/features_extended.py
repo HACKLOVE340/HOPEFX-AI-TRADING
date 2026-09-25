@@ -441,13 +441,52 @@ def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+#: Columns the regime interactions read. All are pointwise inputs computed
+#: causally from OHLCV, so a value derived here from the same bars is identical
+#: to the base builder's. A0 D3: ``build_extended_features`` ran this layer on
+#: raw OHLCV, where none of them existed, and three ``ri_*`` features were
+#: constant 0.0 by construction (``ri_signal_alignment`` silently degraded).
+_INTERACTION_INPUTS = ("mom_20", "rvol_20", "regime_trend", "adx_14", "of_vol_surge")
+
+
+def _interaction_inputs(d: pd.DataFrame) -> dict[str, pd.Series]:
+    """Inputs of the ``ri_*`` interactions: taken from ``d`` when present,
+    otherwise derived from its OHLCV by the SAME functions that define them in
+    the base builder. Never a constant stand-in."""
+    missing = [c for c in _INTERACTION_INPUTS if c not in d.columns]
+    derived: dict[str, pd.Series] = {}
+    if missing:
+        from ml.advanced_features import add_mtf_momentum, add_trend_features, add_volatility_regime
+        from ml.macro_features import add_regime_features
+
+        raw = d[["open", "high", "low", "close", "volume"]].copy()
+        builders = {
+            "mom_20": lambda: add_mtf_momentum(raw)["mom_20"],
+            "rvol_20": lambda: add_volatility_regime(raw)["rvol_20"],
+            "regime_trend": lambda: add_regime_features(raw)["regime_trend"],
+            # smoke=True skips only the Hurst proxy; ADX is computed identically.
+            "adx_14": lambda: add_trend_features(raw, smoke=True)["adx_14"],
+            "of_vol_surge": lambda: add_orderflow_features(raw)["of_vol_surge"],
+        }
+        derived = {c: builders[c]() for c in missing}
+    return {c: (d[c] if c in d.columns else derived[c]) for c in _INTERACTION_INPUTS}
+
+
 def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     """
     Cross-feature interactions gated by market regime.
-    Requires prior layers to have run (uses regime_*, mom_*, vol_* columns).
+
+    Reads ``mom_20``, ``rvol_20``, ``regime_trend``, ``adx_14`` and
+    ``of_vol_surge``. Any the frame does not carry are derived from its OHLCV
+    (:func:`_interaction_inputs`), so the interactions are always computed and
+    never silently replaced by a constant. The inputs themselves are not added
+    to the returned frame.
     """
     d = df.copy()
+    if "volume" not in d.columns:
+        d["volume"] = 0.0
     c = d["close"]
+    inp = _interaction_inputs(d)
 
     # RSI (14)
     delta = c.diff()
@@ -495,24 +534,15 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     d["ri_tk_cross_bull"] = ((tenkan > kijun) & (tenkan.shift(1) <= kijun.shift(1))).astype(int)
     d["ri_tk_cross_bear"] = ((tenkan < kijun) & (tenkan.shift(1) >= kijun.shift(1))).astype(int)
 
-    # Regime-gated momentum: momentum × regime_trend (if available)
-    if "regime_trend" in d.columns and "mom_20" in d.columns:
-        d["ri_regime_mom"] = d["regime_trend"] * d["mom_20"]
-    else:
-        d["ri_regime_mom"] = 0.0
+    # Regime-gated momentum: momentum × regime_trend
+    d["ri_regime_mom"] = inp["regime_trend"] * inp["mom_20"]
 
     # Volatility-adjusted momentum
-    if "rvol_20" in d.columns and "mom_20" in d.columns:
-        vol_adj = d["rvol_20"].replace(0, np.nan)
-        d["ri_vol_adj_mom"] = (d["mom_20"] / vol_adj).fillna(0.0).clip(-5, 5)
-    else:
-        d["ri_vol_adj_mom"] = 0.0
+    vol_adj = inp["rvol_20"].replace(0, np.nan)
+    d["ri_vol_adj_mom"] = (inp["mom_20"] / vol_adj).fillna(0.0).clip(-5, 5)
 
     # Trend × volume confirmation
-    if "adx_14" in d.columns and "of_vol_surge" in d.columns:
-        d["ri_trend_vol_confirm"] = (d["adx_14"] / 100.0) * d["of_vol_surge"].clip(0, 3)
-    else:
-        d["ri_trend_vol_confirm"] = 0.0
+    d["ri_trend_vol_confirm"] = (inp["adx_14"] / 100.0) * inp["of_vol_surge"].clip(0, 3)
 
     # Mean-reversion signal: RSI + BB combined
     d["ri_mean_rev_score"] = (d["ri_rsi_oversold"].astype(float) + (d["ri_bb_pct"] < 0.1).astype(float)) / 2.0 - (
@@ -520,7 +550,7 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     ) / 2.0
 
     # Momentum quality: alignment of RSI, MACD, price momentum
-    mom_sign = np.sign(d.get("mom_20", pd.Series(0.0, index=d.index)))
+    mom_sign = np.sign(inp["mom_20"])
     rsi_sign = np.sign(d["ri_rsi_14"] - 50)
     macd_sign = np.sign(d["ri_macd_hist"])
     d["ri_signal_alignment"] = ((mom_sign == rsi_sign).astype(int) + (rsi_sign == macd_sign).astype(int)) / 2.0
@@ -662,9 +692,18 @@ def add_institutional_edge_features(df: pd.DataFrame) -> pd.DataFrame:
     # POC = price level with highest volume (Point of Control)
     # VAH/VAL = Value Area High/Low (70% of volume)
     poc, vah, val = _rolling_volume_profile(h, l, c, v.fillna(0), window=50)
-    d["inst_poc"] = poc
-    d["inst_vah"] = vah
-    d["inst_val"] = val
+    # The levels themselves are raw PRICES, not features. They were emitted as
+    # inst_poc/inst_vah/inst_val until A0 fix #5 (D4): |corr(close)| > 0.9, and
+    # out of sample 94-96% of their values lay outside the training range — the
+    # #1 driver of the dry run's "predict down" bias. They are expressed below
+    # as distances instead: in ATR14 units, the normalisation dist_ma_* uses,
+    # and as a percentage of the level (inst_dist_*).
+    from ml.advanced_features import _atr
+
+    atr14 = _atr(d, 14).replace(0, np.nan)
+    d["inst_poc_dist_atr"] = ((c - poc) / atr14).fillna(0.0)
+    d["inst_vah_dist_atr"] = ((c - vah) / atr14).fillna(0.0)
+    d["inst_val_dist_atr"] = ((c - val) / atr14).fillna(0.0)
 
     # Normalised distances from current price to profile levels
     d["inst_dist_poc"] = ((c - poc) / poc.replace(0, np.nan)).fillna(0.0)
@@ -869,6 +908,7 @@ def build_extended_features(
     use_filtered_target: bool = True,
     min_move_atr: float = 0.25,
     smoke: bool = False,
+    drop_unlabelled: bool = True,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
     Build 200+ feature matrix by combining base advanced_features (100)
@@ -882,10 +922,13 @@ def build_extended_features(
     use_filtered_target: Drop low-conviction bars from training
     min_move_atr       : Minimum move (ATR units) to include a bar
     smoke              : Skip expensive computations for CI speed
+    drop_unlabelled    : See :func:`ml.advanced_features.build_advanced_features`.
+                         Inference passes False to keep the newest bar.
 
     Returns
     -------
-    X : Feature DataFrame (200+ columns, no NaN, all stationary)
+    X : Feature DataFrame (200+ columns, no NaN, all stationary);
+        ``X.attrs["feature_set_version"]`` names the definitions (ml/feature_set.py)
     y : Binary target Series (0=down, 1=up)
     """
     from ml.advanced_features import build_advanced_features
@@ -898,6 +941,7 @@ def build_extended_features(
         use_filtered_target=use_filtered_target,
         min_move_atr=min_move_atr,
         smoke=smoke,
+        drop_unlabelled=drop_unlabelled,
     )
 
     # Re-run on full ohlcv to get extended features aligned to same index
@@ -925,6 +969,9 @@ def build_extended_features(
     X = pd.concat([X_base, d_ext], axis=1)
     # Drop any duplicate columns
     X = X.loc[:, ~X.columns.duplicated()]
+    from ml.feature_set import FEATURE_SET_VERSION
+
+    X.attrs["feature_set_version"] = FEATURE_SET_VERSION
 
     logger.info(
         "Extended features: %d bars × %d features (base=%d, extended=%d)",
@@ -1136,9 +1183,11 @@ def build_extended_features_with_data_layer(
     min_move_atr: float = 0.25,
     smoke: bool = False,
     as_of: pd.Timestamp | None = None,
+    drop_unlabelled: bool = True,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
     Full feature matrix: 200+ OHLCV features + 26 live data layer features.
+    ``drop_unlabelled=False`` keeps the newest (unlabelled) bar for inference.
 
     This is the production entry point for the ML pipeline.
     Calls build_extended_features() then appends add_data_layer_features().
@@ -1165,8 +1214,11 @@ def build_extended_features_with_data_layer(
         use_filtered_target=use_filtered_target,
         min_move_atr=min_move_atr,
         smoke=smoke,
+        drop_unlabelled=drop_unlabelled,
     )
+    version = X.attrs.get("feature_set_version")
     X = add_data_layer_features(X, as_of=as_of)
+    X.attrs["feature_set_version"] = version
     return X, y
 
 
