@@ -73,6 +73,32 @@ These are not blocked on engineering. They are blocked on someone deciding.
 >
 > Each fix names a test that fails today.
 >
+> **Fixes 1–3 landed 2026-09-25.**
+> - **Fix 1: promotion requires skill over the base rate.** `promote()` refuses
+>   with `NoSkillOverBaseRateError` unless OOS accuracy is strictly above the
+>   always-majority baseline on the same window and a 95% moving-block
+>   bootstrap AUC lower bound (blocks of 5 = the label horizon, 1,000
+>   resamples) is above 0.5. A missing metric is a refusal. The rule lives in
+>   `ml/oos_skill.py`, and `oos_eval_advanced` now computes and records the
+>   metrics. `tests/unit/test_promotion_requires_skill_over_base_rate.py`:
+>   32 of 36 red before the fix.
+> - **Fix 2: 0.5734 is retired as the bar.** `retrain_with_ticks.py` had been
+>   comparing against a key the report never contains, so its bar was always
+>   0.0. The superadmin model API now reports `baseline_accuracy` and
+>   `beats_base_rate`. The four registry entries for `dc7454d8` now record the
+>   0.5516 baseline, the leakage flag and the clean-data figures, and the three
+>   stale metric sets are kept under `superseded_metrics`. No sha256, file,
+>   state, trained_at, sharpe or n_trades value changed, and `verify_model`
+>   passes.
+> - **Fix 3: fake bars stay out.** `data_layer/validation.py::detect_synthetic_bars`
+>   is the new check. Training refuses a window with more than 20% flat bars:
+>   clean data measures 3–7%, and the 50Y file measures 36–52%. The default
+>   loader never selects `XAUUSD_50Y.csv`.
+>
+> **Consequence:** the incumbent has no measured AUC bound, so it can return
+> only through `rollback()`, never through `promote()`. That is the intended
+> strictness.
+>
 > **Plan Tasks 1–6 done, 2026-09-24.**
 > - **The guard.** `ml/model_registry.py::promote()` now refuses a model with
 >   `StaleTrainingDataError` when its training data ends more than
