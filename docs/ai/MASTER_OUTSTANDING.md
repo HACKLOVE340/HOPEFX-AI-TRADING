@@ -655,7 +655,33 @@ is skipped, so the behaviour is pinned while the decision is open.
 >     sequence or a shared counter.
 >   - (c) `bitcoin.py::_load_mnemonic` still accepts a throwaway wallet in
 >     staging, so funds sent there are lost on restart.
->   - (d) `create_crypto_order` does not yet record the index or path.
+> - (b)–(d) **Fixed 2026-09-25.** Production runs `replicas: 3` (HPA to 12)
+>   with `API_WORKERS=4`, and each pod kept its own counter file, so
+>   cross-pod address reuse was live.
+>   - On PostgreSQL, indices now come from per-chain sequences
+>     (`crypto_hd_index_btc`, `_eth` shared by ETH and USDT_ERC20, `_trc20`;
+>     migration `d9e0f1a2b3c4`), each seeded past every index already
+>     recorded. Any sequence error refuses to issue; it never falls back to
+>     the file. SQLite and dev keep the file lock.
+>   - The wallet loaders refuse a throwaway mnemonic unless `APP_ENV` is
+>     development or test. Unset `APP_ENV` counts as production.
+>   - Both crypto routes issue through one function, `issue_deposit_address`,
+>     and both persist index and path.
+>   - 46 new tests, including tests against a real PostgreSQL 16.
+>
+>   **Owner must configure before deploying:**
+>   - (1) `BITCOIN_MNEMONIC`, `ETHEREUM_MNEMONIC` and `TRON_MNEMONIC` in
+>     staging and anywhere `APP_ENV` is unset.
+>   - (2) Copy the highest counter file from every pod to the host that runs
+>     `alembic upgrade head`, or point `HOPEFX_CRYPTO_COUNTER_PATH` at it, so
+>     the sequences start past it. Pre-2026-09-25 billing orders recorded no
+>     index.
+>   - (3) Address issuing returns 503 until the migration has run.
+>
+>   **Found, still open: the full migration chain cannot run on a fresh
+>   PostgreSQL.** `x3y4z5a6b7c8` gives a boolean column the default
+>   `sa.text("0")` and fails with `DatatypeMismatch`, so a new Postgres
+>   deployment or a restore from scratch stops partway.
 > - (2) The ORM models declare these ids as `Integer`, while the migrations use
 >   `BigInteger`. So a Postgres schema built by the `create_all()` startup
 >   fallback in `core/startup_factories.py` gets 32-bit `SERIAL`.
