@@ -749,9 +749,32 @@ is skipped, so the behaviour is pinned while the decision is open.
 >   `HOPEFX_REQUIRE_POSTGRES=1` so that a skip becomes a failure. The
 >   runbook's §6a covers building from scratch.
 >
->   **Owner decision needed:** when the upgrade fails at startup,
->   `core/startup_factories.py` stamps the database at head and runs
->   `create_all()`. So any Postgres first booted since 2026-09-10 may report
+>   **Decided and fixed 2026-09-25 — owner chose "refuse to start".**
+>   - A failed or unverifiable upgrade now logs CRITICAL and raises
+>     `SchemaRefused`. It is a `SystemExit`, so it reaches the existing
+>     `os._exit(1)`, the pod crash-loops, and nothing serves on a broken
+>     schema. Head is never stamped, and `create_all()` runs only in
+>     dev/test.
+>   - A Postgres database that claims head but lacks the `crypto_hd_index_*`
+>     sequences is also refused (`database/schema_state.py`).
+>   - `scripts/start_prod.sh` now runs `alembic upgrade head` instead of
+>     `create_all()`.
+>   - `/ready` returns 503 `schema_unverified`, and `/health` reports a
+>     `schema` component.
+>   - Runbook §6a covers recovering a database the old behaviour already
+>     stamped.
+>   - `tests/unit/test_failed_migration_refuses_to_start.py` has 30 tests; 21
+>     failed before the fix.
+>
+>   **Found, still open:**
+>   - (a) `k8s/k8s-deployment.yaml`'s readiness probe hits `/health`, which
+>     always answers 200, so that probe can never fail. Point it at `/ready`.
+>   - (b) `scripts/create_admin.py` and `create_superadmin.py` treat an
+>     unset `APP_ENV` as development, unlike the rest of the platform.
+>
+>   The text below describes the state before the fix: when the upgrade
+>   failed at startup, `core/startup_factories.py` stamped the database at
+>   head and ran `create_all()`. So any Postgres first booted since 2026-09-10 may report
 >   head having run no migration: no `crypto_hd_index_*` sequences (address
 >   issuing then refuses with 503) and 32-bit ids. Runbook §6a has the SQL
 >   that detects this. The recommendation is to stop stamping head after a
