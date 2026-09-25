@@ -162,9 +162,15 @@ These are not blocked on engineering. They are blocked on someone deciding.
 >
 >   `tests/unit/test_registry_rollback_restores_pointer.py` runs an end-to-end
 >   register → promote → rollback → verify. The shipped artifacts' sha256 are
->   unchanged. **New, still open:** `retrain_horizon5.py --smoke` writes no
+>   unchanged. **New, still open:** ~~`retrain_horizon5.py --smoke` writes no
 >   `advanced_oos.pkl`, so the smoke step in `retrain.yml` has only ever passed
->   on the committed file.
+>   on the committed file.~~ **Fixed 2026-09-25.** `train_advanced.py --smoke`
+>   had been forcing `--oos-years` to 0, so the OOS evaluation that writes
+>   the artifact never ran. Both retrain workflows now smoke-train into
+>   `${{ runner.temp }}/retrain-smoke` and verify that directory with
+>   `--verify-only`, which loads the new artifact, scores rows, and checks
+>   that its feature-set version and metrics were recorded. 13 new tests,
+>   including an end-to-end smoke run; the committed artifacts are untouched.
 
 **Not a new defect — a fact the old gate was hiding, and it is now load-bearing.**
 
