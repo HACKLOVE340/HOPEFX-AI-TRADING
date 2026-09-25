@@ -72,6 +72,14 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      # Everything --smoke writes lands here, never under ml/saved_models.
+      # Without this, --output-dir defaults to the committed directory, where
+      # advanced_oos.pkl already exists from an earlier real run — every
+      # artifact-presence check then "passes" against a file this job never
+      # touched. See docs/ai/MASTER_OUTSTANDING.md §A0 (RETRAIN-SMOKE-NO-OOS).
+      RETRAIN_SMOKE_DIR: ${{ runner.temp }}/retrain-smoke
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -116,15 +124,14 @@ jobs:
             "textblob>=0.17"
 
       - name: Smoke — validate retrain pipeline (no data download)
-        run: python scripts/retrain_horizon5.py --smoke
+        run: python scripts/retrain_horizon5.py --smoke --output-dir "$RETRAIN_SMOKE_DIR"
         env:
           PYTHONPATH: .
 
-      - name: Verify model integrity (ml/verify_model.py)
+      - name: Verify smoke artifact (this run's own output — never the committed model)
+        run: python scripts/retrain_horizon5.py --verify-only --output-dir "$RETRAIN_SMOKE_DIR"
         env:
           PYTHONPATH: .
-          ML_CI_MODE: "true"
-        run: python -m ml.verify_model
 
       - name: Upload smoke artefacts
         if: always()
@@ -132,8 +139,9 @@ jobs:
         with:
           name: retrain-smoke-${{ github.run_id }}
           path: |
-            ml/saved_models/advanced_training_report.json
-            ml/saved_models/registry.json
+            ${{ env.RETRAIN_SMOKE_DIR }}/advanced_training_report.json
+            ${{ env.RETRAIN_SMOKE_DIR }}/horizon5_training_report.json
+            ${{ env.RETRAIN_SMOKE_DIR }}/advanced_oos_meta.json
           if-no-files-found: ignore
           retention-days: 7
 
