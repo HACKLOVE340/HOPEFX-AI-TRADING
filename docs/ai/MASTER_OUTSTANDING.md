@@ -595,11 +595,35 @@ is skipped, so the behaviour is pinned while the decision is open.
 >   raises `PaymentNotPersistedError`. `POST /api/payments/crypto/address` then
 >   returns **503** with no address or amount. The HD index for ETH/USDT
 >   is left skipped, never reused. `tests/unit/test_crypto_payment_unpersisted_is_not_issued.py`
->   was red before the fix. **Found alongside it, being fixed now:**
->   `api/billing.py::create_crypto_order` swallows the same failure, and
->   **every BTC deposit request gets the same address (HD index 0), for every
->   user**, because a new `BitcoinClient` is built per request. Any BTC deposit
->   already issued may need the owner to reconcile it by hand.
+>   was red before the fix. **Found alongside it, both fixed 2026-09-25:**
+>   - `api/billing.py::create_crypto_order` swallowed the same failure. It now
+>     checks `db_set` and returns 503 with no address or amount
+>     (`tests/unit/test_crypto_order_unpersisted_is_not_issued.py`).
+>   - **Every BTC deposit request got the same address (HD index 0), for every
+>     user.** A new `BitcoinClient` was built per request and picked its index
+>     from an always-empty list. **ETH/USDT were broken too:** their counter was
+>     read once and incremented in memory, so separate workers reused indices.
+>     ETH and USDT_ERC20 also derive the same path from one mnemonic but had
+>     separate counters, so ETH index *n* and USDT index *n* were the same
+>     address. `payments/crypto/address_generator.py` now reserves every index
+>     from one shared counter under an exclusive OS file lock: it re-reads,
+>     advances and fsyncs before handing the index out. ETH and USDT share
+>     it, and BTC draws from it. A corrupt or regressed counter refuses to issue
+>     rather than restarting at 0. The payment record now stores the derivation
+>     index and path (migration `c8d9e0f1a2b3`).
+>     `tests/unit/test_crypto_deposit_address_is_unique_per_payment.py` has 15
+>     tests, all red before the fix, and the multi-process ones go red again with
+>     the lock disabled.
+>
+>   **Owner action needed:**
+>   - (a) Every BTC payment already issued shares one address, and early
+>     ETH/USDT payments may share addresses. Reconcile deposits to those
+>     addresses by amount and time.
+>   - (b) The counter is per host. Running more than one host needs a database
+>     sequence or a shared counter.
+>   - (c) `bitcoin.py::_load_mnemonic` still accepts a throwaway wallet in
+>     staging, so funds sent there are lost on restart.
+>   - (d) `create_crypto_order` does not yet record the index or path.
 > - (2) The ORM models declare these ids as `Integer`, while the migrations use
 >   `BigInteger`. So a Postgres schema built by the `create_all()` startup
 >   fallback in `core/startup_factories.py` gets 32-bit `SERIAL`.
