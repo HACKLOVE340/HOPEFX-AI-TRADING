@@ -95,6 +95,39 @@ These are not blocked on engineering. They are blocked on someone deciding.
 >   clean data measures 3–7%, and the 50Y file measures 36–52%. The default
 >   loader never selects `XAUUSD_50Y.csv`.
 >
+> **Fixes 5–8 landed 2026-09-25.** 47 tests in `tests/unit/test_a0_*.py`,
+> 44 red before the fix.
+> - **#5 features.** The `ri_*` features are no longer constant 0.
+>   `inst_poc/vah/val` are replaced by `inst_*_dist_atr`, so no feature now
+>   correlates above 0.9 with close.
+> - **#6 labels.** The label drops its last `horizon` bars.
+> - **New look-ahead fixed:** swing levels were used 5 bars before they could
+>   be confirmed.
+> - **#7 OOS by date.** The OOS window is set by date (`split_oos_by_date`)
+>   and purged.
+> - **#8 reporting.** Every report carries balanced accuracy and base-rate
+>   baselines (`ml.oos_skill.base_rate_baselines`).
+>
+> **Two live-path defects fixed alongside:**
+> - (1) The active model was scored with 93 of its 193 features zero-filled.
+>   `ml/feature_set.py` (`FEATURE_SET_VERSION = 2`) now refuses a model built
+>   on another feature set before scoring, with `FeatureSetMismatchError`.
+>   `InferenceEngine` abstains with `feature_set_mismatch`.
+> - (2) A failing predictor left the probability at 0.5, and the online blend
+>   turned that into a **LONG** signal. It now abstains.
+>
+> **Retrain on clean 26-year data, after all fixes: still no edge.** OOS runs
+> 2018-03 to 2026-03 (1,791 rows). Accuracy is 0.5717, equal to always-up;
+> balanced accuracy is 0.50 and AUC 0.500, and the model predicts up on 100%
+> of bars. The promotion gate refuses it. **The pipeline needs a modelling
+> rethink (features/target), not more data.**
+>
+> **Still open:**
+> - The live scorer builds only base features, so a new model would still
+>   face zero-filled extended features unless it uses
+>   `build_extended_features`.
+> - `train_final_model`'s 80/20 split has no purge gap.
+
 > **Consequence:** the incumbent has no measured AUC bound, so it can return
 > only through `rollback()`, never through `promote()`. That is the intended
 > strictness.
@@ -678,10 +711,31 @@ is skipped, so the behaviour is pinned while the decision is open.
 >     index.
 >   - (3) Address issuing returns 503 until the migration has run.
 >
->   **Found, still open: the full migration chain cannot run on a fresh
->   PostgreSQL.** `x3y4z5a6b7c8` gives a boolean column the default
->   `sa.text("0")` and fails with `DatatypeMismatch`, so a new Postgres
->   deployment or a restore from scratch stops partway.
+>   ~~**The full migration chain cannot run on a fresh PostgreSQL.**~~
+>   **Fixed 2026-09-25.** Five migrations broke on Postgres. The upgrades in
+>   `x3y4z5a6b7c8` and `y4z5a6b7c8d9` used a boolean default of `text("0")`,
+>   now `sa.false()`. The downgrades in `v1w2x3y4z5a6`, `p1q2r3s4t5u6` and
+>   `1b0666c43575` dropped objects that were absent or left enums behind.
+>   `alembic/env.py` runs the upgrade in one transaction, so no Postgres
+>   database can have applied the broken DDL, and the SQLite schema is
+>   unchanged. `outbox_events.id` and `crypto_payments.id` are now
+>   BigInteger in the models too.
+>   `tests/unit/test_migration_chain_runs_on_postgres.py` needs
+>   `TEST_POSTGRES_URL`. It skips loudly without one, and CI sets
+>   `HOPEFX_REQUIRE_POSTGRES=1` so that a skip becomes a failure. The
+>   runbook's §6a covers building from scratch.
+>
+>   **Owner decision needed:** when the upgrade fails at startup,
+>   `core/startup_factories.py` stamps the database at head and runs
+>   `create_all()`. So any Postgres first booted since 2026-09-10 may report
+>   head having run no migration: no `crypto_hd_index_*` sequences (address
+>   issuing then refuses with 503) and 32-bit ids. Runbook §6a has the SQL
+>   that detects this. The recommendation is to stop stamping head after a
+>   failed upgrade and refuse to start instead.
+>
+>   Four non-PK column widths still differ between the migrations and the
+>   models: `accounts.user_id`, `trades.side`, `trades.status` and
+>   `users.kyc_rejection_reason`.
 > - (2) The ORM models declare these ids as `Integer`, while the migrations use
 >   `BigInteger`. So a Postgres schema built by the `create_all()` startup
 >   fallback in `core/startup_factories.py` gets 32-bit `SERIAL`.
