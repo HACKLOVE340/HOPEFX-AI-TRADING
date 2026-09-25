@@ -40,6 +40,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 
@@ -91,7 +92,12 @@ class User(Base):
     kyc_submitted_at = Column(DateTime, nullable=True)
     kyc_reviewed_at = Column(DateTime, nullable=True)
     kyc_reviewer_id = Column(String(100), nullable=True)
-    kyc_rejection_reason = Column(String, nullable=True)
+    # Migration k1l2m3n4o5p6 created this column as Text; a bare unlengthed
+    # String() here renders as VARCHAR (unbounded), which is functionally
+    # close but a different declared type than the migrated schema. Text
+    # matches the migration exactly and is strictly the wider of the two —
+    # widen-only, per tests/unit/test_migrated_schema_matches_models.py.
+    kyc_rejection_reason = Column(Text, nullable=True)
     kyc_document_type = Column(String(50), nullable=True)
 
     # Subscription plan — free/starter/professional/enterprise
