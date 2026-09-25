@@ -47,9 +47,9 @@ class EthereumClient:
         the difference between an address and a string of the right shape.
         """
         try:
-            from payments.crypto.address_generator import address_generator
+            from payments.crypto.address_generator import issue_deposit_address
 
-            derived = address_generator.reserve_address(user_id, "ETH")
+            derived = issue_deposit_address(user_id, "ETH")
             address = derived.address
 
             self.addresses[address] = {

@@ -48,6 +48,13 @@ FIXED_UUID = uuid.UUID("0123456789abcdef0123456789abcdef")
 ORDER_ID = str(FIXED_UUID)
 
 
+def _issued():
+    """What the one issuing path returns: the address with its derivation."""
+    from api.payments import IssuedAddress
+
+    return IssuedAddress(ADDRESS, 7, "m/84'/0'/0'/0/7")
+
+
 @pytest.fixture()
 def client(monkeypatch):
     from fastapi import FastAPI
@@ -70,7 +77,7 @@ def _create_order(client, *, db_set_result):
     from api import billing as mod
 
     with (
-        patch("api.payments._generate_address", return_value=ADDRESS),
+        patch("api.payments._derive_deposit_address", return_value=_issued()),
         patch("api.db_store.db_set", return_value=db_set_result),
         patch.object(mod._uuid, "uuid4", return_value=FIXED_UUID),
     ):
@@ -119,7 +126,7 @@ def test_a_persisted_order_is_still_issued_and_is_on_record(client):
     from api import billing as mod
 
     with (
-        patch("api.payments._generate_address", return_value=ADDRESS),
+        patch("api.payments._derive_deposit_address", return_value=_issued()),
         patch("api.db_store.db_set", side_effect=_fake_db_set),
         patch("api.db_store.db_get", side_effect=_fake_db_get),
         patch.object(mod._uuid, "uuid4", return_value=FIXED_UUID),

@@ -37,8 +37,22 @@ Derivation index persistence:
   re-reads the counter from disk, advances it, and fsyncs it before the index
   is handed back. That is what makes the counter shared: across threads,
   across ``AddressGenerator`` instances, and across worker processes on one
-  host. It is NOT shared across hosts unless the file sits on a volume whose
-  locks every host honours -- see ``AddressGenerator.reserve_address``.
+  host. It is NOT shared across hosts.
+
+Where the index comes from is decided by the database the payment records are
+written to -- its dialect, not a setting:
+
+  PostgreSQL   ``SELECT nextval(...)`` on one SEQUENCE per derivation chain
+               (migration ``d9e0f1a2b3c4``). Shared by every worker on every
+               host, so several API replicas never draw the same index.
+  anything     the file counter above -- SQLite is single-host by
+  else         construction (``database/connection.py`` refuses it with more
+               than one worker).
+
+A PostgreSQL deployment whose sequence cannot be read REFUSES to issue an
+address. It never falls back to the file: that counter is per host, and on the
+deployments PostgreSQL exists for (``k8s/k8s-deployment.yaml``: 3 replicas, HPA
+to 12, 4 workers each) it would hand the same index to two pods.
 """
 
 import contextlib
@@ -190,6 +204,43 @@ def _chain_members(currency: str) -> list[str]:
     return sorted(c for c, ch in _CHAIN.items() if ch == chain)
 
 
+# One PostgreSQL SEQUENCE per derivation chain -- the same grouping as the file
+# counter's keys, so ETH and USDT_ERC20 share one index space and BTC and
+# USDT_TRC20 each have their own. Created by migration d9e0f1a2b3c4, which
+# holds its own copy of this table; test_crypto_hd_index_comes_from_the_
+# database_on_postgres.py holds the two equal.
+_SEQUENCE: dict[str, str] = {
+    "BTC": "crypto_hd_index_btc",
+    "ETH": "crypto_hd_index_eth",
+    "USDT_TRC20": "crypto_hd_index_trc20",
+}
+
+# The largest non-hardened BIP32 child index. The sequences stop here (NO
+# CYCLE); anything outside [0, this] is refused rather than derived.
+_MAX_INDEX = 2**31 - 1
+
+
+def _payments_engine():
+    """The engine crypto payment records are written to.
+
+    The same resolution ``api/payments.py::_get_db_session`` uses: the engine
+    startup bound to ``app_state``, else ``database.connection``'s lazily
+    initialised one. Raises when neither can be had -- the caller cannot know
+    which index source is safe, so it must not guess.
+    """
+    try:
+        from core.app_state import app_state
+
+        engine = getattr(app_state, "db_engine", None)
+        if engine is not None:
+            return engine
+    except ImportError:  # pragma: no cover - core is part of every deployment
+        pass
+    from database.connection import engine as lazy_engine
+
+    return lazy_engine
+
+
 @dataclass(frozen=True)
 class DerivedAddress:
     """A deposit address plus what is needed to reconcile and sweep it."""
@@ -259,18 +310,29 @@ def _load_mnemonic(currency: str) -> str:
     """
     Load the HD wallet mnemonic for *currency* from the environment.
 
-    Raises RuntimeError outside a recognised development environment when the
-    variable is absent. Generates an ephemeral mnemonic in development, with a
-    warning.
+    Raises RuntimeError when the variable is absent, unless ``APP_ENV`` says
+    explicitly that this is local development or a test run; there it
+    generates an ephemeral mnemonic, with a warning.
+
+    ``APP_ENV`` is read through ``utils.production_guard.current_env``, which
+    treats an UNSET variable as production. This used to default it to
+    "development", so a deployment that forgot ``APP_ENV`` issued deposit
+    addresses from a wallet whose keys die with the process. It is also the one
+    loader for every chain: ``payments/crypto/bitcoin.py`` had its own, which
+    refused only ``production`` and so handed staging a throwaway BTC wallet.
     """
+    from utils.production_guard import current_env
+
     env_var = _MNEMONIC_ENV[currency]
     mnemonic = os.getenv(env_var, "").strip()
     if not mnemonic:
-        app_env = os.getenv("APP_ENV", "development").strip().lower()
+        app_env = current_env().strip()
         if app_env not in _EPHEMERAL_OK_ENVS:
+            shown = app_env if os.getenv("APP_ENV") is not None else f"{app_env} (unset)"
             raise RuntimeError(
-                f"{env_var} environment variable is required when APP_ENV={app_env!r}. "
-                "Store the BIP39 mnemonic in your secrets manager and inject it at runtime. "
+                f"{env_var} environment variable is required when APP_ENV={shown!r}. "
+                "Store the BIP39 mnemonic in your secrets manager and inject it at runtime; "
+                "only APP_ENV=development/dev/local/test/testing may use a throwaway wallet. "
                 "Refusing to derive deposit addresses from an ephemeral wallet: any funds "
                 "sent to them would be unrecoverable after a restart."
             )
@@ -422,6 +484,17 @@ class AddressGenerator:
         """
         if currency not in _CHAIN:
             raise ValueError(f"Unsupported currency: {currency!r}. Supported: {sorted(_CHAIN)}")
+        try:
+            engine = _payments_engine()
+            dialect = engine.dialect.name
+        except Exception as exc:
+            raise RuntimeError(
+                f"Cannot determine which database records crypto payments ({type(exc).__name__}: {exc}). "
+                f"Refusing to issue a {currency} deposit address: without it there is no way to know "
+                "whether the per-host file counter is safe to use."
+            ) from exc
+        if dialect == "postgresql":
+            return self._next_index_from_sequence(engine, currency)
         path = _counter_path()
         with self._lock:
             try:
@@ -432,6 +505,51 @@ class AddressGenerator:
                     f"Cannot lock the {currency} derivation counter at {path}: {exc}. "
                     "Refusing to issue a deposit address another worker could also issue."
                 ) from exc
+
+    def _next_index_from_sequence(self, engine, currency: str) -> int:
+        """Draw the next index on *currency*'s chain from its PostgreSQL sequence.
+
+        ``nextval`` is atomic across every session on every host and is never
+        rolled back, so no two callers anywhere receive the same value, and a
+        value handed to a request that later fails is skipped rather than
+        re-issued -- the same "skip, never reuse" rule as the file counter.
+
+        Any failure refuses. There is deliberately no fallback to the file
+        counter: on PostgreSQL that counter is per host, and a silent fallback
+        would reintroduce exactly the cross-host collision this path exists to
+        remove, on the deployments that have more than one host.
+        """
+        from sqlalchemy import Sequence, select
+
+        seq_name = _SEQUENCE[_CHAIN[currency]]
+        try:
+            with engine.connect() as conn:
+                value = conn.execute(select(Sequence(seq_name).next_value())).scalar_one()
+                conn.commit()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Cannot draw the {currency} derivation index from PostgreSQL sequence {seq_name} "
+                f"({type(exc).__name__}: {exc}). Refusing to issue a deposit address. If the sequence "
+                "does not exist, run `alembic upgrade head` (revision d9e0f1a2b3c4 creates it). The "
+                "file counter is NOT used as a fallback: it is per host."
+            ) from exc
+        idx = int(value)
+        if not 0 <= idx <= _MAX_INDEX:
+            raise RuntimeError(
+                f"PostgreSQL sequence {seq_name} returned {idx}, outside the non-hardened BIP32 range "
+                f"[0, {_MAX_INDEX}]. Refusing to issue a {currency} deposit address."
+            )
+        chain_key = (f"postgresql:{seq_name}", _CHAIN[currency])
+        with self._lock:
+            issued_to = self._high_water.get(chain_key)
+            if issued_to is not None and idx < issued_to:
+                raise RuntimeError(
+                    f"PostgreSQL sequence {seq_name} returned {idx}, but this process has already issued "
+                    f"indices up to {issued_to - 1} from it -- it was reset, recreated or restored from an "
+                    "older copy. Refusing to issue a deposit address that may already belong to another payment."
+                )
+            self._high_water[chain_key] = idx + 1
+        return idx
 
     def _advance_locked(self, currency: str, path: Path) -> int:
         """Read, advance and persist the chain's counter. Caller holds both locks."""
@@ -565,3 +683,44 @@ class AddressGenerator:
 # Module-level singleton — instantiation is safe even without hdwallet;
 # RuntimeError is raised only when generate_address() is actually called.
 address_generator = AddressGenerator()
+
+
+def deposit_chain_key(currency: str, network: str | None = None) -> str:
+    """Map a checkout currency (``BTC`` / ``ETH`` / ``USDT`` + network) to the key derived for it.
+
+    USDT is ERC-20 only when the network says ``ERC20``; anything else -- unset,
+    ``TRC20``, billing's ``"mainnet"``, an unknown value -- is TRC-20. That is
+    the mapping ``api/payments.py`` and ``payments/crypto/usdt.py`` applied
+    before this function existed; it is kept, not redesigned.
+    """
+    cur = (currency or "").strip().upper()
+    if cur in ("BTC", "ETH"):
+        return cur
+    if cur == "USDT":
+        return "USDT_ERC20" if (network or "").strip().upper() == "ERC20" else "USDT_TRC20"
+    if cur in _PATHS:  # already a chain key, e.g. "USDT_ERC20"
+        return cur
+    raise ValueError(f"Unsupported currency: {currency!r}")
+
+
+def issue_deposit_address(user_id: str, currency: str, network: str | None = None) -> DerivedAddress:
+    """THE way a deposit address is issued: reserve an index, derive, return all three.
+
+    Every route that hands a user a deposit address calls this --
+    ``POST /api/payments/crypto/address`` and ``POST /api/billing/crypto/order``
+    (through ``api/payments.py::_derive_deposit_address``) and the BTC / ETH /
+    USDT clients. There used to be two paths: the billing route received only
+    the address string and recorded no derivation, so its deposits could not be
+    attributed or swept without re-deriving every index until one matched.
+
+    The index is reserved from the shared space for the chain (a PostgreSQL
+    sequence, or the file counter on SQLite) before the address is derived,
+    and is never handed back: a caller that then fails to record the payment
+    leaves a skipped index, never a reusable one.
+
+    Raises:
+        ValueError: the currency is not supported.
+        RuntimeError: no mnemonic, no index source, or a malformed derivation.
+            No address is returned.
+    """
+    return address_generator.reserve_address(user_id, deposit_chain_key(currency, network))

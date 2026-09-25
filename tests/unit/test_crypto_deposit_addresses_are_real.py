@@ -92,6 +92,21 @@ def _base58check_ok(address: str) -> bool:
     return hashlib.sha256(hashlib.sha256(body).digest()).digest()[:4] == checksum
 
 
+@pytest.fixture(autouse=True)
+def _payments_database_is_sqlite(monkeypatch, tmp_path):
+    """Index reservation follows the payments database's dialect. These tests
+    exercise the file counter, so bind a SQLite database the way startup does,
+    instead of inheriting a PostgreSQL ``DATABASE_URL`` (as CI sets)."""
+    import sqlalchemy as sa
+
+    from core.app_state import app_state
+
+    engine = sa.create_engine(f"sqlite:///{tmp_path}/payments-dialect.db")
+    monkeypatch.setattr(app_state, "db_engine", engine, raising=False)
+    yield
+    engine.dispose()
+
+
 @pytest.fixture
 def generator(monkeypatch, tmp_path):
     """An AddressGenerator with the test mnemonic and an isolated counter file."""

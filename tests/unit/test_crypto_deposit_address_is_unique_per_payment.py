@@ -50,12 +50,38 @@ REPO = Path(__file__).resolve().parents[2]
 
 @pytest.fixture()
 def counter(monkeypatch, tmp_path) -> Path:
+    """The FILE counter, which is the index source on a non-PostgreSQL database.
+
+    The source is chosen by the payments database's dialect, so these tests bind
+    a SQLite one -- in-process through ``app_state`` (as startup does) and for
+    subprocesses through ``DATABASE_URL`` -- rather than inheriting whatever the
+    environment points at. On PostgreSQL the index comes from a sequence; see
+    ``test_crypto_hd_index_comes_from_the_database_on_postgres.py``.
+    """
+    import sqlalchemy as sa
+    from sqlalchemy.orm import sessionmaker
+
+    from core.app_state import app_state
+
     path = tmp_path / "crypto_counters.json"
     monkeypatch.setenv("HOPEFX_CRYPTO_COUNTER_PATH", str(path))
     monkeypatch.setenv("APP_ENV", "test")
     for var in ("BITCOIN_MNEMONIC", "ETHEREUM_MNEMONIC", "TRON_MNEMONIC"):
         monkeypatch.setenv(var, TEST_MNEMONIC)
-    return path
+    db_url = f"sqlite:///{tmp_path}/payments-dialect.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    engine = sa.create_engine(db_url)
+    monkeypatch.setattr(app_state, "db_engine", engine, raising=False)
+    monkeypatch.setattr(app_state, "db_session_factory", sessionmaker(bind=engine), raising=False)
+    yield path
+    engine.dispose()
+
+
+def _generate_address(currency: str, user_id: str, network: str) -> str:
+    """The address the one issuing path hands out (what both routes call)."""
+    from api.payments import _derive_deposit_address
+
+    return _derive_deposit_address(currency, user_id, network).address
 
 
 def _btc_at(index: int) -> str:
@@ -68,8 +94,6 @@ def _btc_at(index: int) -> str:
 
 
 def test_sequential_btc_requests_from_different_users_get_different_addresses(counter):
-    from api.payments import _generate_address
-
     addresses = [_generate_address("BTC", f"user-{i}", "BTC") for i in range(8)]
     assert len(set(addresses)) == len(addresses), f"BTC addresses reused across users: {addresses}"
 
@@ -77,8 +101,6 @@ def test_sequential_btc_requests_from_different_users_get_different_addresses(co
 def test_the_same_user_asking_twice_gets_two_addresses(counter):
     """One address per payment, not per user: two payments by one user must be
     distinguishable too."""
-    from api.payments import _generate_address
-
     first = _generate_address("BTC", "user-1", "BTC")
     second = _generate_address("BTC", "user-1", "BTC")
     assert first != second
@@ -133,8 +155,6 @@ def test_an_existing_split_counter_file_resumes_past_both(counter):
 
 
 def test_concurrent_btc_requests_get_distinct_addresses(counter):
-    from api.payments import _generate_address
-
     n = 16
     barrier = threading.Barrier(n)
     out: list[str] = []
@@ -347,8 +367,7 @@ def test_an_address_with_no_known_index_is_not_issued(counter, client, tmp_path)
     from api import payments as mod
 
     factory = _factory(tmp_path)
-    bare = type("Bare", (), {"generate_deposit_address": lambda self, uid: {"address": _btc_at(0)}})
-    with patch("payments.crypto.bitcoin.BitcoinClient", bare):
+    with patch.object(mod, "_derive_deposit_address", return_value=mod.IssuedAddress(_btc_at(0), None, None)):
         response = _post(client, lambda: factory(), uuid.UUID(int=9))
     assert response.status_code == 503, response.text
     assert _btc_at(0) not in response.text
