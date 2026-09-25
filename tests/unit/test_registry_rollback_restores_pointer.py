@@ -43,6 +43,9 @@ _GOOD = {
     "oos_p_value": 0.001,
     "sharpe_gate_passed": True,
     "n_trades": 700,
+    # A0 fix #1: skill over the base rate of its own OOS window.
+    "oos_majority_baseline_accuracy": 0.55,
+    "oos_auc_ci_low": 0.56,
 }
 
 

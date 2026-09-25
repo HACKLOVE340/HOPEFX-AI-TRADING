@@ -465,6 +465,12 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
         "oos_auc": report.get("oos", {}).get("auc"),
         "oos_p_value": report.get("oos", {}).get("p_value_binomial"),
         "oos_significant": report.get("oos", {}).get("significant"),
+        # Skill against the base rate of the same OOS window: what
+        # ModelRegistry.promote() gates on (A0 fix #1). None when not measured.
+        "oos_majority_baseline_accuracy": report.get("oos", {}).get("oos_majority_baseline_accuracy"),
+        "oos_auc_ci_low": report.get("oos", {}).get("oos_auc_ci_low"),
+        "oos_balanced_accuracy": report.get("oos", {}).get("oos_balanced_accuracy"),
+        "oos_base_rate": report.get("oos", {}).get("oos_base_rate"),
         "feature_count": report.get("feature_count"),
         "sample_count": report.get("sample_count"),
         "cv_accuracy": report.get("walkforward", {}).get("mean_accuracy"),

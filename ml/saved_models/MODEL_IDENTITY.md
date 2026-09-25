@@ -78,6 +78,16 @@ conflicts, no missing artifacts.
 
 ## Active Production Model (`advanced_oos.pkl` ← `current.pkl`)
 
+> **2026-09-25 — 57.34% is retired as the comparison bar.** Measured from these
+> bytes (`docs/audit/2026-09-24-a0-no-edge-investigation.md` Q4), it is base rate
+> plus leakage: always-up scores 55.16% on the same window, and on clean data the
+> model scores 53.4% against always-up 55.78%. `ModelRegistry.promote()` now judges
+> a candidate against the always-majority baseline of its **own** OOS window and
+> requires a 95% AUC lower bound above 0.5 (`ml/oos_skill.py`); it never compares
+> with this model's accuracy. The four registry entries for these bytes now carry
+> `oos_majority_baseline_accuracy`, `oos_leakage_contaminated` and `metrics_caveat`,
+> and one AUC (0.582); the superseded values are kept under `superseded_metrics`.
+
 Registry key: **`xgb_horizon5_v3`** (`active_version` in registry.json)
 
 | Property | Value |
@@ -87,7 +97,8 @@ Registry key: **`xgb_horizon5_v3`** (`active_version` in registry.json)
 | Features | 193 engineered |
 | Horizon | **5 bars** (aligned with execution hold period) |
 | OOS period | 2018-04-12 → 2026-03-18 (8 years, 2,016 bars) |
-| OOS accuracy | **57.34%** (p = 0.0000, SE 0.011) — per `advanced_oos_meta.json` |
+| OOS accuracy | **57.34%** (p = 0.0000 against 0.5, SE 0.011) — per `advanced_oos_meta.json`. **Not skill:** always-predict-up scores **55.16%** on the same window (p = 0.026 against that), and the window is 37% synthetic month-mean bars. On clean `XAUUSD_40Y.csv` features: 53.4% against always-up 55.78% |
+| Always-majority baseline (same window) | **55.16%** — the bar a candidate must beat, not 57.34% (`ml/oos_skill.py`) |
 | OOS F1 | 0.6767 |
 | OOS AUC | 0.582 |
 | Walk-forward accuracy | 56.26% ± 6.26% (6 folds) |

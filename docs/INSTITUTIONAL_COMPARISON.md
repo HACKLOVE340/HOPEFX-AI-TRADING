@@ -39,7 +39,7 @@ need most of it for XAUUSD swing/position trading.**
 | Safety / fail-safe | **4** | 5 | Staged enforcement live (order-auth + pre-trade), stale-model block on by default, kill switch, fail-open-on-checker-bug. |
 | Data integrity | **4** | 4 | 7 gold + 6 macro + 5 news feeds, circuit breakers, mandatory tick provenance, freshness gate. |
 | Execution algos | **3** | 5 | SOR + TWAP/VWAP/iceberg + slippage TCA + latency budget. **Missing Almgren–Chriss** optimal execution. |
-| **Predictive alpha** | **2** | 5 | Real but **small** edge: ~57.3% OOS, significant, **below the 0.68 bar**; tiny capital-history validation. The biggest real gap. |
+| **Predictive alpha** | **2** | 5 | **No demonstrated edge** (A0, 2026-09-24): the ~57.3% OOS was significant only against 0.5 — always-up scored 55.2% on the same window, and on clean data the model is below always-up (53.4% vs 55.8%). Tiny capital-history validation. The biggest real gap. |
 | Latency / HFT infra | **1** | 5 | Python/JSON/Redis; **no FPGA/DPDK/kdb+/binary wire**. Irrelevant for swing trading; disqualifying for HFT. |
 | Regulatory reporting | **2** | 5 | Compliance *invariants* exist; CFTC/MiFID **reporting pipelines disabled/not built**. |
 | HA / DR / scale | **2** | 5 | k8s manifests + self-healer + auto-rollback exist; **no proven autoscaling/multi-region/distributed-txn**. |

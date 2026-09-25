@@ -33,6 +33,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# A0 fix #1: promote() also requires skill over the base rate of the candidate's
+# own OOS window (ml/oos_skill.py). A fixture that must reach promotion records
+# a baseline below its accuracy and an AUC lower bound above 0.5.
+_BEATS_BASE_RATE = {"oos_majority_baseline_accuracy": 0.55, "oos_auc_ci_low": 0.56}
+
+
 # Promotion now requires a recent training-data end date (A0 Task 1).
 _FRESH_DATA_END = __import__("datetime").date.today().isoformat()
 
@@ -527,6 +533,7 @@ class TestModelRegistryPnLGate:
             oos_auc=0.72,
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
             data_end=_FRESH_DATA_END,
         )
 
@@ -566,6 +573,7 @@ class TestModelRegistryPnLGate:
             oos_accuracy=0.40,  # below threshold — stat gate fails first
             oos_p_value=0.001,
             sharpe_gate_passed=True,
+            **_BEATS_BASE_RATE,
             data_end=_FRESH_DATA_END,
         )
 

@@ -1101,6 +1101,7 @@ def oos_eval_advanced(
     y_train: pd.Series,
     X_oos: pd.DataFrame,
     y_oos: pd.Series,
+    block_len: int | None = None,
 ) -> dict:
     """
     Train the production model on X_train/y_train; evaluate on held-out X_oos/y_oos.
@@ -1111,6 +1112,16 @@ def oos_eval_advanced(
 
     Returns accuracy, F1, AUC, and a one-sided binomial p-value testing
     H0: accuracy <= 0.5.
+
+    That p-value is NOT evidence of skill: on a window that is 65% up,
+    always-up passes it (A0, D5). The skill measurements are the ``oos_*``
+    keys from :func:`ml.oos_skill.oos_skill_metrics` -- accuracy of the
+    always-majority predictor on this same window, balanced accuracy, and a
+    moving-block bootstrap 95% CI on AUC (``block_len`` rows per block,
+    default the 5-bar label horizon). They are written into
+    ``advanced_oos_meta.json`` and the returned dict, and
+    ``ModelRegistry.promote`` refuses a model whose accuracy is not above that
+    baseline or whose AUC lower bound is not above 0.5.
 
     Statistical significance
     ------------------------
@@ -1166,6 +1177,27 @@ def oos_eval_advanced(
     binom_result = binomtest(k, n, p=0.5, alternative="greater")
     p_value = float(binom_result.pvalue)
 
+    # Skill against the base rate of THIS window (A0 fix #1). Measured on the
+    # same predictions and labels as acc/auc above, so the baseline and the
+    # accuracy describe one window. Recorded at oos_accuracy's precision.
+    from ml.oos_skill import DEFAULT_BLOCK_LEN, oos_skill_metrics
+
+    skill = oos_skill_metrics(
+        np.asarray(y_oos, dtype=int),
+        np.asarray(proba, dtype=float),
+        preds=np.asarray(preds, dtype=int),
+        block_len=block_len or DEFAULT_BLOCK_LEN,
+    )
+    skill_fields = {k: v for k, v in skill.items() if k not in ("oos_n", "oos_accuracy", "oos_auc")}
+    logger.info(
+        "OOS vs base rate  acc=%.4f  always-majority=%.4f  balanced=%s  AUC 95%% CI=[%s, %s]",
+        skill["oos_accuracy"],
+        skill["oos_majority_baseline_accuracy"],
+        skill["oos_balanced_accuracy"],
+        skill["oos_auc_ci_low"],
+        skill["oos_auc_ci_high"],
+    )
+
     # Accuracy SE: sqrt(p*(1-p)/n) — 95% CI half-width
     acc_se = float(np.sqrt(max(float(np.nan_to_num(acc * (1 - acc), nan=0.0)) / max(n, 1), 0.0)))
 
@@ -1218,6 +1250,7 @@ def oos_eval_advanced(
         "oos_significant": bool(p_value < 0.05),
         "oos_n": n,
         "oos_period": f"{oos_start} → {oos_end}",
+        **skill_fields,
         "train_size": len(X_train),
         "feature_count": X_train.shape[1],
         "sharpe_gate": sharpe_gate,
@@ -1287,6 +1320,9 @@ def oos_eval_advanced(
         "significant": bool(p_value < 0.05),
         "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
+        # The keys the promotion gate reads, under the names it reads them.
+        "oos_accuracy": round(acc, 4),
+        **skill_fields,
         "sharpe_gate": sharpe_gate,
         "sharpe_note": sharpe_gate["message"],
     }

@@ -114,6 +114,17 @@ figures that appear in some tiny-window reports, and **below the project's own
 0.68 production bar**. This is **"validated research-grade ML with a small real
 edge,"** not **"institutional alpha."**
 
+> **Superseded 2026-09-24/25 — the conclusion above is wrong, and 57.3% is no
+> longer a bar.** The p≈0 was a test against 0.5. On the same 2,016-bar window
+> always-predict-up scores **55.16%**, so the model is +2.2 points (p = 0.026)
+> on a window that is 37% synthetic month-mean bars from `XAUUSD_50Y.csv`. On
+> clean data the same bytes score **53.4% against always-up 55.8%** — below the
+> base rate. There is no demonstrated edge
+> (`docs/audit/2026-09-24-a0-no-edge-investigation.md` Q4). Promotion now
+> requires beating the always-majority baseline of the candidate's own OOS
+> window with a 95% AUC lower bound above 0.5 (`ml/oos_skill.py`,
+> `ModelRegistry.promote()`).
+
 ### 3c. The "AI brain" / chatbot
 `brain/llm_agent.py` is a **real** wrapper around Anthropic (Claude) or OpenAI.
 But it **requires a paid API key** — it raises an error if none is set (line

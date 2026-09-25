@@ -79,7 +79,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--smoke", action="store_true", help="Quick test: 7 days tick data, fast model")
     p.add_argument("--tick-days", type=int, default=90, help="Days of H1 tick data to download (default: 90)")
     p.add_argument("--dry-run", action="store_true", help="Build features but don't overwrite model")
-    p.add_argument("--force", action="store_true", help="Overwrite model even if accuracy doesn't improve")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Log a warning instead of an error when the new model does not beat the base rate (promotion still refuses)",
+    )
     return p.parse_args()
 
 
@@ -203,16 +207,28 @@ def merge_tick_features_into_daily(
     return merged
 
 
-def load_existing_accuracy() -> float:
-    """Load OOS accuracy from the current production model report."""
+def load_training_report() -> dict:
+    """The report ``train_advanced.py`` wrote, or ``{}`` when it is unreadable."""
     report_path = MODEL_DIR / "advanced_training_report.json"
-    if report_path.exists():
-        try:
-            report = json.loads(report_path.read_text())
-            return float(report.get("oos_accuracy", 0.0))
-        except Exception as _exc:  # non-fatal: return 0.0 so retraining always proceeds
-            logger.debug("Could not read existing model accuracy: %s", _exc)
-    return 0.0
+    try:
+        return json.loads(report_path.read_text())
+    except (OSError, ValueError) as exc:
+        logger.error("Could not read %s: %s", report_path, exc)
+        return {}
+
+
+def new_model_verdict(report: dict) -> tuple[bool, str]:
+    """Does the new model beat the base rate of its own OOS window?
+
+    This used to be ``new_acc > existing_acc``: the previous model's accuracy
+    (0.5734 for the shipped artifact) as the bar. That bar was itself below
+    always-up on clean data (A0), and the lookup read a top-level
+    ``oos_accuracy`` key the report never has, so the bar was 0.0 every run.
+    The verdict is now the same rule ModelRegistry.promote() enforces.
+    """
+    from ml.oos_skill import skill_over_base_rate_check
+
+    return skill_over_base_rate_check(report.get("oos") or {})
 
 
 async def main() -> None:
@@ -270,9 +286,6 @@ async def main() -> None:
         return
 
     # ── 6. Save enriched H1 CSV for train_advanced.py to consume ─────────────
-    existing_acc = load_existing_accuracy()
-    logger.info("Existing model OOS accuracy: %.4f", existing_acc)
-
     # Persist enriched H1 data so train_advanced.py can load it
     h1_enriched_path = ROOT / "data" / "XAU_USD_H1_tick_enriched.csv"
     if not h1_ohlcv.empty:
@@ -304,28 +317,34 @@ async def main() -> None:
         logger.error("train_advanced.py exited with code %d", proc.returncode)
         sys.exit(proc.returncode)
 
-    # Read new accuracy from report
-    new_acc = load_existing_accuracy()
-    logger.info("New model OOS accuracy: %.4f", new_acc)
+    # Judge the new model against the base rate of its own OOS window, not
+    # against the previous model's accuracy (A0 fix #2).
+    train_report = load_training_report()
+    oos = train_report.get("oos") or {}
+    new_acc = oos.get("oos_accuracy", oos.get("accuracy"))
+    beats_base_rate, verdict = new_model_verdict(train_report)
+    logger.info("New model OOS accuracy: %s  —  %s", new_acc, verdict)
 
-    # ── 7. Save if improved (or forced) ──────────────────────────────────────
-    improved = new_acc > existing_acc
-    if improved or args.force:
-        action = "improved" if improved else "forced"
-        logger.info("Saving new model (%s: %.4f → %.4f)", action, existing_acc, new_acc)
-        logger.info("Saving new model (%s: %.4f → %.4f)", action, existing_acc, new_acc)
-    else:
+    # ── 7. Verdict ────────────────────────────────────────────────────────────
+    # train_advanced.py has already written the artifact; this script never
+    # promotes. ModelRegistry.promote() applies the same rule and refuses a
+    # model that fails it, whatever --force says here.
+    if beats_base_rate:
+        logger.info("New model beats the base rate of its OOS window: %s", verdict)
+    elif args.force:
         logger.warning(
-            "New accuracy (%.4f) did not improve over existing (%.4f) — model NOT replaced. Use --force to override.",
-            new_acc,
-            existing_acc,
+            "New model does NOT beat the base rate (%s); --force given, promotion will still refuse", verdict
         )
+    else:
+        logger.error("New model does NOT beat the base rate: %s — do not promote it.", verdict)
 
     # Save comparison report
     report = {
-        "previous_accuracy": existing_acc,
         "new_accuracy": new_acc,
-        "improved": improved,
+        "oos_majority_baseline_accuracy": oos.get("oos_majority_baseline_accuracy"),
+        "oos_auc_ci_low": oos.get("oos_auc_ci_low"),
+        "beats_base_rate": beats_base_rate,
+        "verdict": verdict,
         "tick_days": tick_days,
         "tick_features": [c for c in X.columns if c.startswith("dl_")],
         "total_features": len(X.columns),
@@ -337,9 +356,8 @@ async def main() -> None:
 
     logger.info("\n" + "=" * 60)
     logger.info("TICK RETRAIN COMPLETE")
-    logger.info("  Previous accuracy : %.4f", existing_acc)
-    logger.info("  New accuracy      : %.4f", new_acc)
-    logger.info("  Improved          : %s", "YES" if improved else "NO")
+    logger.info("  New accuracy      : %s", new_acc)
+    logger.info("  Beats base rate   : %s", "YES" if beats_base_rate else "NO")
     logger.info("  Tick features     : %s", len(report["tick_features"]))
     logger.info("  Total features    : %s", report["total_features"])
     logger.info("  Report saved      : %s", report_path)
