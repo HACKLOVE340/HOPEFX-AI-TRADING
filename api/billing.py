@@ -1955,10 +1955,18 @@ async def create_crypto_order(
     # There is no fallback value for a deposit address. Anything returned here
     # is somewhere a user sends money that cannot be retrieved, so the only
     # honest failure is to not return one.
+    #
+    # The address comes from the ONE issuing path both checkout routes share
+    # (``api/payments.py::_derive_deposit_address`` ->
+    # ``payments.crypto.address_generator.issue_deposit_address``), and the
+    # derivation index and path are recorded on the order below. This route
+    # used to receive the address string alone, so no order it issued could be
+    # attributed or swept without re-deriving every index (§A11 item (d)).
+    # "mainnet" keeps USDT on TRC-20, as it always was here.
     try:
-        from api.payments import _generate_address
+        from api.payments import _derive_deposit_address
 
-        address = _generate_address(currency, user.sub, "mainnet")
+        issued = _derive_deposit_address(currency, user.sub, "mainnet")
     except Exception as exc:
         logger.error("Deposit address generation failed for %s/%s: %s", currency, user.sub, exc)
         raise HTTPException(
@@ -1966,12 +1974,27 @@ async def create_crypto_order(
             detail=f"{currency} deposit addresses are temporarily unavailable. No funds should be sent.",
         ) from exc
 
+    # Same refusal as the payments route: an address whose derivation is not
+    # known cannot be reconciled to this order or swept, so it is not issued.
+    if issued.derivation_index is None or not issued.derivation_path:
+        logger.error(
+            "%s address for %s came back without its derivation index/path. Refusing to issue it.",
+            currency,
+            user.sub,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=f"{currency} deposit addresses are temporarily unavailable. No funds should be sent.",
+        )
+
     order = {
         "order_id": order_id,
         "user_id": user.sub,
         "currency": currency,
         "amount_usd": amount_usd,
-        "address": address,
+        "address": issued.address,
+        "derivation_index": issued.derivation_index,
+        "derivation_path": issued.derivation_path,
         "status": "pending",
         "created_at": datetime.now(UTC).isoformat(),
         "expires_at": None,
@@ -1991,9 +2014,9 @@ async def create_crypto_order(
     # (DB unavailable, insert error) still returned 200 with the address and
     # amount, for an order GET /crypto/order/{order_id} can never find.
     #
-    # The address was derived above via _generate_address (the same helper
-    # payments.py uses). For ETH/USDT it durably advances the shared HD
-    # derivation counter; that index is NOT rolled back here, for the same
+    # The address was issued above via _derive_deposit_address (the same helper
+    # payments.py uses). For every currency it durably advances the shared HD
+    # derivation index; that index is NOT rolled back here, for the same
     # reason it isn't there: rolling back could re-issue an index a concurrent
     # request has since taken. The address is simply never returned.
     from api.db_store import db_get, db_set
@@ -2030,7 +2053,16 @@ async def create_crypto_order(
             detail="Order could not be recorded, so no deposit address was issued. Do not send funds; please try again shortly.",
         )
 
-    return order
+    return _public_crypto_order(order)
+
+
+# Recorded for reconciliation and the sweep, not shown to the payer -- the same
+# split POST /api/payments/crypto/address makes (its AddressResponse omits them).
+_CRYPTO_ORDER_PRIVATE_FIELDS = frozenset({"derivation_index", "derivation_path"})
+
+
+def _public_crypto_order(order: dict) -> dict:
+    return {k: v for k, v in order.items() if k not in _CRYPTO_ORDER_PRIVATE_FIELDS}
 
 
 @router.get("/crypto/order/{order_id}", summary="Get crypto order status")
@@ -2042,7 +2074,7 @@ async def get_crypto_order(order_id: str, user: TokenPayload = Depends(get_curre
         order = db_get(f"crypto_order:{order_id}")
         if not order or order.get("user_id") != user.sub:
             raise HTTPException(status_code=404, detail="Order not found") from None
-        return order
+        return _public_crypto_order(order)
     except HTTPException:
         raise
     except Exception:

@@ -16,7 +16,6 @@ import hashlib
 import hmac
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -210,40 +209,52 @@ class TestTheWebhookGate:
 
 
 class TestTheAddressDispatch:
-    @pytest.mark.parametrize(
-        ("currency", "module", "client_name"),
-        [
-            ("BTC", "payments.crypto.bitcoin", "BitcoinClient"),
-            ("ETH", "payments.crypto.ethereum", "EthereumClient"),
-        ],
-    )
-    def test_each_currency_reaches_its_own_client(self, currency, module, client_name):
-        from api.payments import _generate_address
+    """``_derive_deposit_address`` hands every currency to the ONE issuing
+    function, ``payments.crypto.address_generator.issue_deposit_address``, with
+    the chain it has always used. It used to dispatch to a client per currency
+    and a second helper dropped the derivation (§A11 item (d))."""
 
-        fake = SimpleNamespace(generate_deposit_address=lambda *a, **k: {"address": f"{currency.lower()}-addr"})
-        with patch(f"{module}.{client_name}", lambda *a, **k: fake):
-            assert _generate_address(currency, "user-1", currency) == f"{currency.lower()}-addr"
+    @staticmethod
+    def _capture(monkeypatch):
+        import importlib
 
-    def test_usdt_defaults_to_trc20_for_an_unknown_network(self):
+        from payments.crypto.address_generator import DerivedAddress, deposit_chain_key
+
+        mod = importlib.import_module("payments.crypto.address_generator")
+        seen: list[str] = []
+
+        def fake(user_id, currency, network=None):
+            key = deposit_chain_key(currency, network)
+            seen.append(key)
+            return DerivedAddress(address=f"{key.lower()}-addr", currency=key, index=4, path=f"m/x/{key}/4")
+
+        monkeypatch.setattr(mod, "issue_deposit_address", fake)
+        return seen
+
+    @pytest.mark.parametrize("currency", ["BTC", "ETH"])
+    def test_each_currency_reaches_its_own_chain(self, monkeypatch, currency):
+        from api.payments import _derive_deposit_address
+
+        seen = self._capture(monkeypatch)
+        issued = _derive_deposit_address(currency, "user-1", currency)
+        assert seen == [currency]
+        assert (issued.address, issued.derivation_index, issued.derivation_path) == (
+            f"{currency.lower()}-addr",
+            4,
+            f"m/x/{currency}/4",
+        )
+
+    def test_usdt_defaults_to_trc20_for_an_unknown_network(self, monkeypatch):
         """An unrecognised network must not raise — it falls back, and the
         fallback is a named chain rather than whatever the caller sent."""
-        from api.payments import _generate_address
+        from api.payments import _derive_deposit_address
 
-        seen: dict = {}
-
-        def _gen(user_id, net):
-            seen["net"] = net
-            return {"address": "usdt-addr"}
-
-        fake = SimpleNamespace(generate_deposit_address=_gen)
-        with patch("payments.crypto.usdt.USDTClient", lambda *a, **k: fake):
-            from payments.crypto.usdt import USDTNetwork
-
-            assert _generate_address("USDT", "user-1", "NOT_A_CHAIN") == "usdt-addr"
-            assert seen["net"] is USDTNetwork.TRC20
+        seen = self._capture(monkeypatch)
+        assert _derive_deposit_address("USDT", "user-1", "NOT_A_CHAIN").address == "usdt_trc20-addr"
+        assert seen == ["USDT_TRC20"]
 
     def test_an_unsupported_currency_raises(self):
-        from api.payments import _generate_address
+        from api.payments import _derive_deposit_address
 
         with pytest.raises(ValueError, match="Unsupported currency"):
-            _generate_address("DOGE", "user-1", "DOGE")
+            _derive_deposit_address("DOGE", "user-1", "DOGE")

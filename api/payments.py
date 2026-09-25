@@ -611,33 +611,28 @@ class IssuedAddress(NamedTuple):
     derivation_path: str | None
 
 
-def _derive_deposit_address(currency: str, user_id: str, network: str) -> IssuedAddress:
-    """Delegate to the appropriate crypto client, keeping the derivation."""
-    if currency == "BTC":
-        from payments.crypto.bitcoin import BitcoinClient
+def _derive_deposit_address(currency: str, user_id: str, network: str | None) -> IssuedAddress:
+    """Issue a deposit address through the ONE issuing function, keeping its derivation.
 
-        result = BitcoinClient().generate_deposit_address(user_id)
-    elif currency == "ETH":
-        from payments.crypto.ethereum import EthereumClient
+    Both checkout routes -- ``POST /api/payments/crypto/address`` here and
+    ``POST /api/billing/crypto/order`` -- call this, and this calls
+    ``payments.crypto.address_generator.issue_deposit_address``, which reserves
+    the index from the chain's shared space, derives the address and returns
+    address, index and path together. There used to be a second entry,
+    ``_generate_address``, that returned the address alone; the billing route
+    used it and so recorded no derivation for any order it issued.
 
-        result = EthereumClient().generate_deposit_address(user_id)
-    elif currency == "USDT":
-        from payments.crypto.usdt import USDTClient, USDTNetwork
+    Raises ``ValueError`` for an unsupported currency and ``RuntimeError`` when
+    no address can be issued; nothing is returned in either case.
+    """
+    from payments.crypto.address_generator import issue_deposit_address
 
-        net_enum = USDTNetwork[network] if network in USDTNetwork.__members__ else USDTNetwork.TRC20
-        result = USDTClient().generate_deposit_address(user_id, net_enum)
-    else:
-        raise ValueError(f"Unsupported currency: {currency}")
+    derived = issue_deposit_address(user_id, currency, network)
     return IssuedAddress(
-        address=result["address"],
-        derivation_index=result.get("derivation_index"),
-        derivation_path=result.get("derivation_path"),
+        address=derived.address,
+        derivation_index=derived.index,
+        derivation_path=derived.path,
     )
-
-
-def _generate_address(currency: str, user_id: str, network: str) -> str:
-    """The address alone, for callers that record no derivation (``api/billing.py``)."""
-    return _derive_deposit_address(currency, user_id, network).address
 
 
 # =============================================================================

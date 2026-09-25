@@ -52,10 +52,10 @@ class USDTClient:
             # Ethereum address and no private key exists for it, so a wallet
             # sends happily and the funds are gone (F267). Both are now derived
             # from the platform's HD wallet on the documented BIP44 paths.
-            from payments.crypto.address_generator import address_generator
+            from payments.crypto.address_generator import issue_deposit_address
 
             currency = "USDT_TRC20" if network == USDTNetwork.TRC20 else "USDT_ERC20"
-            derived = address_generator.reserve_address(user_id, currency)
+            derived = issue_deposit_address(user_id, currency)
             address = derived.address
 
             self.addresses[address] = {

@@ -404,27 +404,27 @@ _BIP84_CHANGE = "0"  # external chain (receiving addresses)
 
 def _load_mnemonic() -> str:
     """
-    Load the HD wallet mnemonic from the environment.
+    Load the BTC HD wallet mnemonic (``BITCOIN_MNEMONIC``), or refuse.
 
-    Raises RuntimeError in production if the variable is absent so the
-    application fails fast rather than silently generating unrecoverable
-    addresses.
-    """
-    mnemonic = os.getenv("BITCOIN_MNEMONIC", "").strip()
-    if not mnemonic:
-        env = os.getenv("APP_ENV", "development").lower()
+    Delegates to the one loader every chain uses,
+    ``payments.crypto.address_generator._load_mnemonic``: a throwaway wallet
+    only when ``APP_ENV`` says explicitly that this is local development or a
+    test run, and a RuntimeError naming ``BITCOIN_MNEMONIC`` everywhere else.
+
+    This module used to carry its own copy::
+
         if env == "production":
-            raise RuntimeError(
-                "BITCOIN_MNEMONIC environment variable is required in production. "
-                "Set it to a BIP39 mnemonic stored in your secrets manager."
-            )
-        # Non-production: generate a fresh ephemeral mnemonic and warn loudly.
-        mnemonic = generate_mnemonic(language="english", strength=256)
-        logger.warning(
-            "BITCOIN_MNEMONIC not set — using ephemeral mnemonic. "
-            "Addresses will change on restart. Set BITCOIN_MNEMONIC for persistence."
-        )
-    return mnemonic
+            raise RuntimeError(...)
+        mnemonic = generate_mnemonic(...)   # every other APP_ENV
+
+    so a staging deployment with no ``BITCOIN_MNEMONIC`` issued BTC deposit
+    addresses from a wallet generated at start-up and never stored. Its keys
+    died with the process: a real deposit there was unrecoverable, and the only
+    signal was a WARNING (MASTER_OUTSTANDING §A11, owner item (c)).
+    """
+    from payments.crypto.address_generator import _load_mnemonic as _load_chain_mnemonic
+
+    return _load_chain_mnemonic("BTC")
 
 
 @dataclass
@@ -522,11 +522,10 @@ class BitcoinClient:
             RuntimeError: the counter cannot be read, locked or persisted, or the
                 derived address is malformed. No address is returned.
         """
-        from payments.crypto.address_generator import address_generator
+        from payments.crypto.address_generator import issue_deposit_address
 
-        index = address_generator.reserve_index("BTC")
-        derived = address_generator.issue(user_id, "BTC", self._mnemonic, index)
-        address, path = derived.address, derived.path
+        derived = issue_deposit_address(user_id, "BTC")
+        index, address, path = derived.index, derived.address, derived.path
 
         btc_address = BitcoinAddress(
             address=address,
