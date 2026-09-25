@@ -1976,15 +1976,59 @@ async def create_crypto_order(
         "created_at": datetime.now(UTC).isoformat(),
         "expires_at": None,
     }
-    try:
-        from api.db_store import db_set, db_get
 
+    # Fail closed, mirroring api/payments.py::generate_deposit_address (§A11
+    # item 1). This used to be::
+    #
+    #     try:
+    #         db_set(...)
+    #         db_set(...)
+    #     except Exception:
+    #         pass
+    #
+    # but db_set() never raises — it swallows every exception internally and
+    # returns False on failure. That False was discarded, so a save that failed
+    # (DB unavailable, insert error) still returned 200 with the address and
+    # amount, for an order GET /crypto/order/{order_id} can never find.
+    #
+    # The address was derived above via _generate_address (the same helper
+    # payments.py uses). For ETH/USDT it durably advances the shared HD
+    # derivation counter; that index is NOT rolled back here, for the same
+    # reason it isn't there: rolling back could re-issue an index a concurrent
+    # request has since taken. The address is simply never returned.
+    from api.db_store import db_get, db_set
+
+    try:
         orders = db_get(f"crypto_orders:{user.sub}") or []
         orders.append(order)
-        db_set(f"crypto_orders:{user.sub}", orders)
-        db_set(f"crypto_order:{order_id}", order)
-    except Exception:  # nosec B110  # noqa: S110
-        pass
+    except (TypeError, AttributeError) as exc:
+        # A corrupted stored value (not a list) — the only way this block can
+        # raise; db_get/db_set themselves catch and return None/False.
+        logger.error(
+            "Crypto order %s NOT persisted — crypto_orders:%s is not a list (%s). Refusing to issue it.",
+            order_id,
+            user.sub,
+            exc,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Order could not be recorded, so no deposit address was issued. Do not send funds; please try again shortly.",
+        ) from exc
+
+    list_saved = db_set(f"crypto_orders:{user.sub}", orders)
+    order_saved = db_set(f"crypto_order:{order_id}", order)
+
+    if not (list_saved and order_saved):
+        logger.error(
+            "Crypto order %s NOT persisted — db_set returned False (list_saved=%s, order_saved=%s). Refusing to issue it.",
+            order_id,
+            list_saved,
+            order_saved,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Order could not be recorded, so no deposit address was issued. Do not send funds; please try again shortly.",
+        )
 
     return order
 
