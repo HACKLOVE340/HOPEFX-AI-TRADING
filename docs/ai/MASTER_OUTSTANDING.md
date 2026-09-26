@@ -780,9 +780,28 @@ is skipped, so the behaviour is pinned while the decision is open.
 >   that detects this. The recommendation is to stop stamping head after a
 >   failed upgrade and refuse to start instead.
 >
->   Four non-PK column widths still differ between the migrations and the
->   models: `accounts.user_id`, `trades.side`, `trades.status` and
->   `users.kyc_rejection_reason`.
+>   Four non-PK column widths were checked against the migrations, measured
+>   on real PostgreSQL, not just three as first thought. **Fixed 2026-09-25:**
+>   `accounts.user_id` → `String(50)` and `users.kyc_rejection_reason` → `Text`
+>   in the models, matching the DB. `trades.status` was never actually
+>   drifted — both sides already render the same `tradestatus` enum.
+>   `trades.side` was deliberately **not** widened: the DB's
+>   `orderside` ENUM(BUY,SELL) is a real constraint, and executing real
+>   inserts proved it is already the only thing catching every current
+>   trade-persist path, all of which write the wrong shape (a raw enum
+>   member, or lowercase text) — see A9 below, which fixes those writers
+>   instead of loosening the column. Recorded in `KNOWN_COLUMN_TYPE_DRIFT`
+>   pending that fix.
+>   **Also fixed 2026-09-25:** `tick_data.timestamp` — TIMESTAMP WITHOUT TIME
+>   ZONE in the migrations vs `DateTime(timezone=True)` in the model. Verified
+>   by execution first: both real writers already construct aware UTC
+>   datetimes, so the column was widened to TIMESTAMPTZ
+>   (migration `f2a3b4c5d6e7`, explicit `AT TIME ZONE 'UTC'`, not dependent on
+>   the server's timezone setting). **Found on the way:** on the pre-fix naive
+>   column, the production driver (psycopg2) silently dropped the timezone and
+>   wrote wall-clock time, correct only because the server's `TimeZone` setting
+>   happens to be UTC — a latent bug the fix removes rather than merely
+>   works around.
 > - (2) The ORM models declare these ids as `Integer`, while the migrations use
 >   `BigInteger`. So a Postgres schema built by the `create_all()` startup
 >   fallback in `core/startup_factories.py` gets 32-bit `SERIAL`.
