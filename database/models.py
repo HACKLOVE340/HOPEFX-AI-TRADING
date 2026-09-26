@@ -40,6 +40,7 @@ try:
         Numeric,
         String,
         Text,
+        TypeDecorator,
         UniqueConstraint,
     )
     from sqlalchemy.sql import func
@@ -110,6 +111,40 @@ class OrderType(enum.Enum):
     STOP_LIMIT = "stop_limit"
 
 
+class TradeSide(TypeDecorator):
+    """``trades.side`` — the ``orderside`` ENUM('BUY', 'SELL'), normalised on bind.
+
+    The migrations (``1b0666c43575``) create this column as the PostgreSQL enum
+    ``orderside``; the model declared ``String(20)`` with a
+    ``server_default="unknown"`` that no migration ever created and the enum
+    could never hold. Every writer then failed against a migrated database in
+    its own way — a raw ``OrderSide`` member (``can't adapt type``), lowercase
+    ``'buy'`` (``invalid input value for enum orderside``), even literal
+    ``'BUY'`` in a batched insert (SQLAlchemy cast the parameter to VARCHAR,
+    and PostgreSQL will not assign VARCHAR to an enum column).
+
+    One vocabulary, enforced here for every ORM and Core write, and for every
+    comparison in a query: :func:`core.side.normalise_side` maps each accepted
+    spelling to ``'BUY'`` / ``'SELL'`` and raises on anything else — a trade is
+    never recorded with a guessed direction. Reads return the stored string.
+    ``create_all()`` on PostgreSQL emits the same ``orderside`` type the
+    migrations do (shared with ``orders.side``).
+    """
+
+    impl = Enum
+    cache_ok = True
+
+    def __init__(self) -> None:
+        super().__init__("BUY", "SELL", name="orderside")
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        from core.side import normalise_side
+
+        return normalise_side(value)
+
+
 class SignalSource(enum.Enum):
     TREND_FOLLOWING = "trend_following"
     MEAN_REVERSION = "mean_reversion"
@@ -145,7 +180,7 @@ class Trade(Base):
     # Populated on trade creation; used by _query_trades() for per-user history.
     user_id = Column(String(100), nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
-    side = Column(String(20), nullable=False, server_default="unknown")
+    side = Column(TradeSide(), nullable=False)  # 'BUY' | 'SELL' — see TradeSide
     trade_type = Column(String(20), nullable=True)
 
     # Entry
@@ -197,14 +232,14 @@ class Trade(Base):
     )
 
     def __repr__(self):
-        return f"<Trade({self.trade_id}, {self.symbol}, {self.side.value}, PnL={self.total_pnl})>"
+        return f"<Trade({self.trade_id}, {self.symbol}, {self.side}, PnL={self.total_pnl})>"
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "trade_id": self.trade_id,
             "symbol": self.symbol,
-            "side": self.side.value,
+            "side": self.side,
             "entry_price": self.entry_price,
             "entry_quantity": self.entry_quantity,
             "exit_price": self.exit_price,

@@ -289,28 +289,6 @@ KNOWN_COLUMN_TYPE_DRIFT: dict[tuple[str, str], str] = {
         "timezone-aware needs an assumed source zone for every already-stored "
         "row — an owner decision, not a widen."
     ),
-    ("trades", "side"): (
-        "genuine drift, deliberately NOT widened: the database enforces the "
-        "`orderside` ENUM(BUY, SELL) — a real integrity constraint on a "
-        "money-critical column. The model is the looser side "
-        "(String(20), server_default='unknown'); widening the database to "
-        "match it would remove that constraint and let 'unknown', 'LONG' or "
-        "any other spelling into the DB. Resolution belongs to "
-        "MASTER_OUTSTANDING §A9 (one side vocabulary — 'long' already has "
-        "three spellings in this codebase), not to a schema-consistency pass. "
-        "Measured 2026-09-25 against a real PostgreSQL 16 server: every "
-        "current production write path already fails against the ENUM as it "
-        "stands — brokers/__init__.py and brokers/paper_trading.py pass a raw "
-        "`OrderSide` enum member and get `can't adapt type 'OrderSide'`; "
-        "scripts/seed_demo_trades.py writes lowercase 'buy'/'sell' and gets "
-        "`invalid input value for enum orderside`; relying on the model's "
-        "declared server_default (omitting side) gets a NOT NULL violation, "
-        "because no migration ever added that default to the actual column. "
-        "Only literal uppercase 'BUY'/'SELL' succeeds. The ENUM is not an "
-        "inconvenience to widen away — it is already the thing keeping bad "
-        "values out, and every write path that reaches it is currently broken "
-        "in a different, unrelated way that widening would have papered over."
-    ),
     ("positions", "user_id"): (
         "SQLite-only artifact of this offline capture, not a real drift: "
         "p1q2r3s4t5u6 narrows positions.user_id from VARCHAR(50) to "

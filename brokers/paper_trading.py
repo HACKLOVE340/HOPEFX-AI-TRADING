@@ -1028,18 +1028,21 @@ class PaperTradingBroker(BrokerConnector):
         if not self._session_factory:
             return
         try:
-            from database.models import OrderSide, Trade, TradeStatus
+            from core.side import normalise_side
+            from database.models import Trade, TradeStatus
 
-            # Normalise side to OrderSide enum
-            raw_side = (
-                str(position.side).lower().replace("orderside.", "").replace("long", "buy").replace("short", "sell")
-            )
-            side_enum = OrderSide.BUY if "buy" in raw_side or "long" in raw_side else OrderSide.SELL
+            # 'BUY' / 'SELL' — the only values trades.side (the `orderside`
+            # ENUM) accepts. This used to hand the column a raw
+            # database.models.OrderSide member, which no driver can bind, so
+            # every paper trade failed to persist; and anything that was not
+            # recognisably a buy was recorded as a SELL. An unrecognised side
+            # now raises and is logged below — never guessed.
+            side = normalise_side(position.side)
 
             trade = Trade(
                 trade_id=str(uuid.uuid4()),
                 symbol=position.symbol,
-                side=side_enum,
+                side=side,
                 entry_price=float(position.entry_price),
                 entry_quantity=float(position.quantity),
                 exit_price=float(exit_price),
@@ -1063,7 +1066,16 @@ class PaperTradingBroker(BrokerConnector):
                 realized_pnl,
             )
         except Exception as exc:
-            logger.warning("Failed to persist trade to DB: %s", exc)
+            # ERROR, not WARNING: the trade happened and the record of it did
+            # not. At WARNING this was how every paper trade went unpersisted
+            # without anyone being told.
+            logger.error(
+                "TRADE NOT PERSISTED: %s %s pnl=%.2f — %s",
+                getattr(position, "symbol", "?"),
+                getattr(position, "side", "?"),
+                realized_pnl,
+                exc,
+            )
 
     def _get_account_info_sync(self) -> AccountInfo:
         """Sync helper — returns AccountInfo dataclass."""

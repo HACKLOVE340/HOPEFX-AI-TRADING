@@ -18,10 +18,26 @@ from typing import Any, Sequence
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.side import LONG_SPELLINGS
 from database.models import Position
 from .base import AsyncRepository
 
 logger = logging.getLogger(__name__)
+
+
+def _long_side_condition(side_column):
+    """SQL for "this position is long", from the one side vocabulary.
+
+    The net-exposure case used to match exactly ``'long'`` and ``'buy'``, so a
+    position stored as ``'LONG'`` or ``'BUY'`` was netted as a SHORT — a sign
+    inversion on exposure. It runs in the database, so it cannot call
+    ``core.side.normalise_side``; it is built from the same set instead of a
+    hand-written copy, and compares case-insensitively like the reconciler.
+    """
+    from sqlalchemy import func as sa_func
+
+    return sa_func.lower(sa_func.trim(side_column)).in_(sorted(LONG_SPELLINGS))
+
 
 UTC = timezone.utc
 
@@ -144,8 +160,7 @@ class PositionRepository(AsyncRepository[Position]):
         # Net quantity: long positions add, short positions subtract
         net_qty_expr = sa_func.sum(
             case(
-                (Position.side == "long", Position.quantity),
-                (Position.side == "buy", Position.quantity),
+                (_long_side_condition(Position.side), Position.quantity),
                 else_=-Position.quantity,
             )
         ).label("net_quantity")

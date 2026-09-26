@@ -674,11 +674,14 @@ class PaperTradingBroker(BaseBroker):
         if not self._session_factory:
             return
         try:
-            from database.models import OrderSide as DBOrderSide
+            from core.side import normalise_side
             from database.models import Trade, TradeStatus
 
-            raw_side = str(record.get("side", "buy")).lower()
-            side_enum = DBOrderSide.BUY if "buy" in raw_side else DBOrderSide.SELL
+            # 'BUY' / 'SELL' — the only values trades.side (the `orderside`
+            # ENUM) accepts. A missing side used to default to "buy", and any
+            # side without "buy" in it became a SELL; both are guesses on a
+            # money record. normalise_side raises instead.
+            side = normalise_side(record.get("side"))
 
             opened_at = record.get("opened_at")
             if isinstance(opened_at, int | float):
@@ -697,7 +700,7 @@ class PaperTradingBroker(BaseBroker):
                 # appears in /api/trading/history, /api/pnl, /api/journal, etc.
                 user_id=self._user_id if self._user_id != "paper" else None,
                 symbol=record.get("symbol", ""),
-                side=side_enum,
+                side=side,
                 entry_price=float(record.get("entry_price", 0)),
                 entry_quantity=qty,
                 size=qty,
@@ -722,7 +725,14 @@ class PaperTradingBroker(BaseBroker):
                 realized_pnl,
             )
         except Exception as exc:
-            logger.warning("Failed to persist paper trade to DB: %s", exc)
+            # ERROR, not WARNING: the trade happened and the record of it did not.
+            logger.error(
+                "TRADE NOT PERSISTED: %s side=%r pnl=%s — %s",
+                record.get("symbol"),
+                record.get("side"),
+                record.get("realized_pnl"),
+                exc,
+            )
 
     # ------------------------------------------------------------------
     # Sync-compatible properties and methods (used by unit tests)

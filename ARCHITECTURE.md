@@ -51,6 +51,7 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 | `api/server.py` | FastAPI router aggregator — mounts all sub-routers |
 | `api/support.py` | Customer support desk: the customer's own thread and the operator queue. Router-level auth on both; every customer read checks ownership (an opaque ticket id authorises nothing) |
 | `api/ws_live.py` | The **only** WebSocket surface. Holds the JWT auth gate. Never create a top-level `websocket/` package |
+| `core/side.py` | The one side vocabulary (MASTER_OUTSTANDING §A9). `normalise_side()` maps every accepted spelling — `buy`/`long`, `sell`/`short` in any case, any `OrderSide`/`Side` enum member — to exactly `'BUY'` / `'SELL'` and **raises** on anything else, never defaulting. `database.models.TradeSide` applies it on every bind to `trades.side` (the `orderside` ENUM); the position reconciler, `brokers.base.Position` and the position repository's SQL read its alias sets rather than keeping copies |
 | `database/backup.py` | Scheduled snapshots. SQLite uses the online backup API — a file copy loses WAL content |
 | `database/restore.py` | Verify-before-restore, and six fail-closed refusals. See [`docs/runbooks/database-restore.md`](docs/runbooks/database-restore.md) |
 | `ai/hub/capabilities.py` | The capability registry — 233 rows, each with an evidence locator `verify()` resolves |
