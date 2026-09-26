@@ -20,6 +20,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, TypeVar
 
+from core.side import LONG_SPELLINGS, SHORT_SPELLINGS
+
 logger = logging.getLogger(__name__)
 
 _F = TypeVar("_F", bound=Callable[..., Any])
@@ -203,9 +205,11 @@ class Order:
         return self.average_price
 
 
-# Canonical side values accepted by Position.from_side_str()
-_SIDE_BUY_ALIASES = frozenset({"BUY", "LONG", "buy", "long"})
-_SIDE_SELL_ALIASES = frozenset({"SELL", "SHORT", "sell", "short"})
+# Canonical side values accepted by Position.from_side_str(). One vocabulary for
+# the whole repository lives in core/side.py (MASTER_OUTSTANDING §A9); these are
+# the same objects, compared after strip().lower().
+_SIDE_BUY_ALIASES = LONG_SPELLINGS
+_SIDE_SELL_ALIASES = SHORT_SPELLINGS
 
 
 @dataclass
@@ -236,7 +240,7 @@ class Position:
     def __post_init__(self) -> None:
         """Normalise side to OrderSide enum regardless of what was passed."""
         if isinstance(self.side, str):
-            _s = self.side.upper()
+            _s = self.side.strip().lower()
             if _s in _SIDE_BUY_ALIASES:
                 object.__setattr__(self, "side", OrderSide.BUY)
             elif _s in _SIDE_SELL_ALIASES:

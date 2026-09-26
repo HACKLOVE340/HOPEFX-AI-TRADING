@@ -270,15 +270,16 @@ def test_primary_key_types_match_the_models_as_postgresql_renders_them(migration
 # native enum.
 #
 # The widen-only rule applies to the first and third: the model is corrected
-# to the more permissive of the two. It does NOT apply to `trades.side`: an
+# to the more permissive of the two. It never applied to `trades.side`: an
 # earlier version of this fix widened the database to VARCHAR(20), and that
 # was wrong. The `orderside` ENUM is a real integrity constraint on a
 # money-critical column, and the model's side (`String(20),
-# server_default="unknown"`) is the looser one — widening the DB would have
-# let 'unknown', 'LONG' or any other spelling in, which is exactly the vocabulary
-# drift MASTER_OUTSTANDING §A9 already tracks ("long" has three spellings in
-# this codebase). Resolving §A9 is what should decide this column's type, not
-# a schema-consistency pass — it stays KNOWN, not fixed.
+# server_default="unknown"`) was the looser one. `trades.side` is CLOSED
+# (2026-09-25, MASTER_OUTSTANDING §A9): resolved by fixing the writers, not
+# the column. `core/side.py::normalise_side()` is now the one place a side
+# value is produced, `database.models.TradeSide` runs it on every ORM write,
+# and the model's `orderside` ENUM matches the migrations exactly — no
+# `server_default`, no widening. See `tests/unit/test_trade_side_is_one_vocabulary.py`.
 #
 # `tick_data.timestamp` is CLOSED (2026-09-25, migration f2a3b4c5d6e7): the
 # owner approved storing it as UTC, timezone-aware, and both live writers were
@@ -287,28 +288,6 @@ def test_primary_key_types_match_the_models_as_postgresql_renders_them(migration
 # PostgreSQL 16 server actually did with an aware write against the old
 # naive column on each driver this codebase uses.
 KNOWN_COLUMN_TYPE_DRIFT: dict[tuple[str, str], str] = {
-    ("trades", "side"): (
-        "genuine drift, deliberately NOT widened: the database enforces the "
-        "`orderside` ENUM(BUY, SELL) — a real integrity constraint on a "
-        "money-critical column. The model is the looser side "
-        "(String(20), server_default='unknown'); widening the database to "
-        "match it would remove that constraint and let 'unknown', 'LONG' or "
-        "any other spelling into the DB. Resolution belongs to "
-        "MASTER_OUTSTANDING §A9 (one side vocabulary — 'long' already has "
-        "three spellings in this codebase), not to a schema-consistency pass. "
-        "Measured 2026-09-25 against a real PostgreSQL 16 server: every "
-        "current production write path already fails against the ENUM as it "
-        "stands — brokers/__init__.py and brokers/paper_trading.py pass a raw "
-        "`OrderSide` enum member and get `can't adapt type 'OrderSide'`; "
-        "scripts/seed_demo_trades.py writes lowercase 'buy'/'sell' and gets "
-        "`invalid input value for enum orderside`; relying on the model's "
-        "declared server_default (omitting side) gets a NOT NULL violation, "
-        "because no migration ever added that default to the actual column. "
-        "Only literal uppercase 'BUY'/'SELL' succeeds. The ENUM is not an "
-        "inconvenience to widen away — it is already the thing keeping bad "
-        "values out, and every write path that reaches it is currently broken "
-        "in a different, unrelated way that widening would have papered over."
-    ),
     ("positions", "user_id"): (
         "SQLite-only artifact of this offline capture, not a real drift: "
         "p1q2r3s4t5u6 narrows positions.user_id from VARCHAR(50) to "

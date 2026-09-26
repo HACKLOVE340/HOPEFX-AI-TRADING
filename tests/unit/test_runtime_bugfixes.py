@@ -68,8 +68,11 @@ def test_trade_repository_is_stateless_and_queries_work():
 
         repo = TradeRepository()  # stateless — no session in the constructor
         async with Session() as s:
-            await repo.create(s, trade_id="t1", symbol="XAUUSD", user_id="u1", status=TradeStatus.CLOSED)
-            await repo.create(s, trade_id="t2", symbol="XAUUSD", user_id="u2", status=TradeStatus.OPEN)
+            # side is required: trades.side is the `orderside` ENUM and has no
+            # default. This test once relied on the model's bogus
+            # server_default="unknown", which no migrated database has.
+            await repo.create(s, trade_id="t1", symbol="XAUUSD", side="BUY", user_id="u1", status=TradeStatus.CLOSED)
+            await repo.create(s, trade_id="t2", symbol="XAUUSD", side="SELL", user_id="u2", status=TradeStatus.OPEN)
             await s.commit()
 
             closed = await repo.get_recent(s, status="closed", limit=100)

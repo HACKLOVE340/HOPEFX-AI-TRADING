@@ -24,6 +24,8 @@ import logging
 import os
 from datetime import datetime, timezone
 
+from core.side import LONG_SPELLINGS, SHORT_SPELLINGS
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -32,10 +34,11 @@ _reconciler_task: asyncio.Task | None = None
 
 # Spellings of a position side that `database.models.Position.side` actually
 # holds. It is a free-text String(10); `database/repositories/position_repository.py`
-# nets quantity with a case for "long" and a case for "buy", which is the
-# evidence that both are written. Compared case-insensitively — see `_calc_pnl`.
-_LONG_SIDES = frozenset({"buy", "long"})
-_SHORT_SIDES = frozenset({"sell", "short"})
+# nets quantity for both "long" and "buy", which is the evidence that both are
+# written. Compared case-insensitively — see `_calc_pnl`. The sets are the ones
+# in core/side.py, the repository's single side vocabulary (MASTER_OUTSTANDING §A9).
+_LONG_SIDES = LONG_SPELLINGS
+_SHORT_SIDES = SHORT_SPELLINGS
 
 # How many consecutive mismatches for the same symbol before escalating to ERROR
 _MISMATCH_ALERT_THRESHOLD = 3
@@ -467,12 +470,11 @@ class PositionReconciler:
         That number is not only displayed. `_reconcile_once` writes it back with
         `db_pos.unrealized_pnl = pnl` and broadcasts it over the WebSocket.
 
-        The alias sets are stated here rather than imported. `brokers/base.py`
-        holds the same two sets as `_SIDE_BUY_ALIASES` / `_SIDE_SELL_ALIASES`,
-        and importing them would execute `brokers/__init__.py` — the whole
+        The alias sets come from `core/side.py`, which `brokers/base.py` and the
+        position repository also read. They are not imported from
+        `brokers/base.py`: that would execute `brokers/__init__.py` — the whole
         broker package, optional-SDK guards and all — for a string comparison,
-        and invert the core-to-brokers dependency. Three encodings of one fact
-        is one too many; see MASTER_OUTSTANDING A9.
+        and invert the core-to-brokers dependency (MASTER_OUTSTANDING A9).
         """
         qty = pos.quantity or 0.0
         entry = pos.entry_price or 0.0
