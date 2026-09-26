@@ -25,6 +25,8 @@ from __future__ import annotations
 import ast
 import pathlib
 
+from scripts.repo_scan import REPO_ROOT, iter_tracked_files
+
 #: The only package allowed to talk to a model vendor.
 _GATEWAY = "ai/gateway"
 
@@ -57,9 +59,23 @@ _VENDOR_SDKS = {"openai", "anthropic", "google.generativeai", "ollama", "cohere"
 
 
 def _python_files() -> list[pathlib.Path]:
-    root = pathlib.Path()
+    """Every git-tracked `.py` file outside the excluded areas.
+
+    Built on `git ls-files` rather than `Path.rglob()` -- a plain filesystem
+    walk from `pathlib.Path()` (cwd) also descends into whatever another
+    agent's worktree left checked out at `.claude/worktrees/agent-*/`, since
+    those are gitignored, not absent from disk. This test failed twice for
+    exactly that reason: it scanned a *copy* of `ai/gateway/adapters.py`
+    sitting inside one, and reported this repository as bypassing its own
+    gateway when nothing here does.
+    """
+    root = REPO_ROOT
     skip = ("tests/", ".venv/", "node_modules/", "scripts/", "frontend/")
-    return [path for path in root.rglob("*.py") if not any(str(path).startswith(prefix) for prefix in skip)]
+    return [
+        pathlib.Path(rel)
+        for path in iter_tracked_files(root, "*.py")
+        if not any((rel := path.relative_to(root).as_posix()).startswith(prefix) for prefix in skip)
+    ]
 
 
 def _imports(tree: ast.AST) -> set[str]:

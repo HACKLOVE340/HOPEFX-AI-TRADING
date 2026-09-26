@@ -33,6 +33,8 @@ from pathlib import Path
 
 import pytest
 
+from scripts.repo_scan import iter_tracked_files
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _K6 = _REPO_ROOT / "k6" / "load_tests.js"
 _LOCUST = _REPO_ROOT / "locust" / "load_tests.py"
@@ -47,7 +49,10 @@ _NOT_ROUTER_DECLARED = {"/metrics"}
 
 def _registered_paths() -> set[str]:
     paths: set[str] = set()
-    for source_file in _REPO_ROOT.rglob("*.py"):
+    # `iter_tracked_files`, not `_REPO_ROOT.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out.
+    for source_file in iter_tracked_files(_REPO_ROOT, "*.py"):
         text = str(source_file)
         if "/.venv/" in text or "node_modules" in text or "/tests/" in text:
             continue

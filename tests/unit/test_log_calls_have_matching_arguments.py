@@ -43,6 +43,8 @@ import re
 
 import pytest
 
+from scripts.repo_scan import iter_tracked_files
+
 pytestmark = pytest.mark.unit
 
 _ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -76,7 +78,11 @@ def _placeholder_count(fmt: str) -> int:
 
 def _mismatches() -> list[str]:
     out: list[str] = []
-    for path in sorted(_ROOT.rglob("*.py")):
+    # `iter_tracked_files`, not `_ROOT.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out, which
+    # `_SKIP_DIRS` predates and does not name.
+    for path in sorted(iter_tracked_files(_ROOT, "*.py")):
         if any(part in _SKIP_DIRS for part in path.relative_to(_ROOT).parts):
             continue
         try:

@@ -20,6 +20,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.repo_scan import iter_tracked_files
+
 # ── Modules with no production caller, each with the reason it stays ──────────
 #
 # Same idiom as gate-g's KNOWN_VIOLATIONS: a recorded debt, not an off-switch.
@@ -190,7 +194,12 @@ def _collect_all_imports(root: Path) -> tuple[set[str], set[str]]:
     """
     exact: set[str] = set()
     bare_packages: set[str] = set()
-    for py_file in root.rglob("*.py"):
+    # `iter_tracked_files` (`git ls-files`), not `root.rglob()`: a filesystem
+    # walk from `root` (== REPO_ROOT here) also descends into
+    # `.claude/worktrees/agent-*/`, an untracked copy of this repository
+    # another agent's worktree may have checked out, and no pattern in
+    # IMPORT_SCAN_EXCLUDED_PATTERNS names it.
+    for py_file in iter_tracked_files(root, "*.py"):
         if any(exc in str(py_file) for exc in IMPORT_SCAN_EXCLUDED_PATTERNS):
             continue
         try:

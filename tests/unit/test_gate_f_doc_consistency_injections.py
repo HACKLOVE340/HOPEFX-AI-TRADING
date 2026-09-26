@@ -61,6 +61,10 @@ def mirror(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / "scripts" / "ci").mkdir(parents=True)
     shutil.copy2(GATE, root / "scripts" / "ci" / GATE.name)
+    # The gate imports scripts.repo_scan for its file walk; the mirror needs a
+    # real copy, or the subprocess dies on ModuleNotFoundError before it scans
+    # anything.
+    shutil.copy2(REPO / "scripts" / "repo_scan.py", root / "scripts" / "repo_scan.py")
 
     (root / "mypkg").mkdir()
     (root / "mypkg" / "__init__.py").write_text("", encoding="utf-8")

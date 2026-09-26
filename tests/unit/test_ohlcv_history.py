@@ -89,11 +89,17 @@ def test_no_ticker_history_call_passes_progress_kwarg():
     import ast
     import pathlib
 
+    from scripts.repo_scan import iter_tracked_files
+
     repo_root = pathlib.Path(__file__).resolve().parents[2]
     skip_dirs = {".git", "node_modules", "venv", ".venv", "__pycache__", "frontend"}
     offenders = []
 
-    for path in repo_root.rglob("*.py"):
+    # `iter_tracked_files`, not `repo_root.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out, which
+    # `skip_dirs` predates and does not name.
+    for path in iter_tracked_files(repo_root, "*.py"):
         if skip_dirs & set(path.parts):
             continue
         try:

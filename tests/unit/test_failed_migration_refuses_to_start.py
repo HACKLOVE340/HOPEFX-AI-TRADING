@@ -486,9 +486,14 @@ class TestAdminToolsDoNotBuildAProductionSchema:
     named. On an empty production database that made create_all() the schema
     source, and a later upgrade over it could reach head with create_all() types.
 
-    Both scripts ``setdefault("APP_ENV", "development")`` at import, so they
-    treat an UNSET APP_ENV as development — unlike ``current_env()``. A
-    production pod sets APP_ENV=production, which is what these tests use.
+    ~~Both scripts ``setdefault("APP_ENV", "development")`` at import, so they
+    treat an UNSET APP_ENV as development — unlike ``current_env()``.~~ **Fixed**:
+    neither script touches ``APP_ENV`` any more, so an unset value falls through
+    to ``current_env()``'s own fail-safe default of production, exactly like
+    every other codepath here. ``test_an_unset_app_env_builds_no_tables_*``
+    below pins that directly; the other tests in this class always set
+    ``APP_ENV`` explicitly and would have passed under the old, broken default
+    too, which is why the gap needed a test that leaves it unset.
     """
 
     def test_create_superadmin_builds_no_tables_in_production(self, sqlite_url, monkeypatch) -> None:
@@ -510,6 +515,19 @@ class TestAdminToolsDoNotBuildAProductionSchema:
         module = _load_script("create_superadmin")
         module._create_or_update("ops@example.com", "ops", "Aa1!aaaaaaaaaaaa", reset=False)
         assert "users" in _tables(sqlite_url)
+
+    def test_create_superadmin_builds_no_tables_with_app_env_unset(self, production, sqlite_url) -> None:
+        """The gap the old default hid: nobody exported APP_ENV at all."""
+        module = _load_script("create_superadmin")
+        with pytest.raises(sa.exc.OperationalError):
+            module._create_or_update("ops@example.com", "ops", "Aa1!aaaaaaaaaaaa", reset=False)
+        assert _tables(sqlite_url) == set()
+
+    def test_create_admin_builds_no_tables_with_app_env_unset(self, production, sqlite_url) -> None:
+        module = _load_script("create_admin")
+        with pytest.raises(sa.exc.OperationalError):
+            module.create_or_update_admin("ops@example.com", "ops", "Aa1!aaaaaaaaaaaa", reset=False)
+        assert _tables(sqlite_url) == set()
 
 
 def test_the_local_create_all_helper_only_builds_in_dev_and_test(tmp_path, monkeypatch) -> None:

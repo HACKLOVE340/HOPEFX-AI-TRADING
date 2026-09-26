@@ -38,6 +38,8 @@ from pathlib import Path
 
 import pytest
 
+from scripts.repo_scan import iter_tracked_files
+
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -68,7 +70,10 @@ def _production_importers(package: str) -> int:
     """Non-test modules outside the package that import it."""
     pattern = re.compile(rf"^\s*(?:from|import)\s+{re.escape(package)}[\s.]")
     count = 0
-    for path in REPO_ROOT.rglob("*.py"):
+    # `iter_tracked_files`, not `REPO_ROOT.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out.
+    for path in iter_tracked_files(REPO_ROOT, "*.py"):
         rel = path.relative_to(REPO_ROOT).as_posix()
         if rel.startswith((".venv/", "tests/", f"{package}/")) or "/node_modules/" in rel:
             continue

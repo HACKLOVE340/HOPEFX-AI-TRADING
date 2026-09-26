@@ -46,6 +46,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.repo_scan import iter_tracked_files
+
 EXCLUDED_PARTS: frozenset[str] = frozenset(
     {".venv", "venv", "site-packages", "node_modules", "__pycache__", ".git", "dist", "build"}
 )
@@ -83,8 +87,14 @@ class Violation:
 
 
 def _scannable(root: Path, suffixes: tuple[str, ...] | None = None) -> list[Path]:
+    """Tracked files under `root`, filtered like the old `rglob("*")` walk.
+
+    `git ls-files` replaces the filesystem walk so an untracked worktree copy
+    under `.claude/worktrees/agent-*/` -- absent from `EXCLUDED_PARTS`, which
+    predates it -- is never scanned.
+    """
     out: list[Path] = []
-    for path in root.rglob("*"):
+    for path in iter_tracked_files(root, "*"):
         if not path.is_file():
             continue
         if EXCLUDED_PARTS & set(path.parts):

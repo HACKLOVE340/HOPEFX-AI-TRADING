@@ -68,9 +68,14 @@ class TestTheGateHasAProductionCaller:
         import ast
         import pathlib
 
+        from scripts.repo_scan import iter_tracked_files
+
         repo = pathlib.Path(__file__).resolve().parents[2]
         callers = []
-        for path in repo.rglob("*.py"):
+        # `iter_tracked_files`, not `repo.rglob()`: a filesystem walk also
+        # descends into `.claude/worktrees/agent-*/`, an untracked copy of
+        # this repository another agent's worktree may have checked out.
+        for path in iter_tracked_files(repo, "*.py"):
             rel = path.relative_to(repo).as_posix()
             if rel.startswith(("tests/", ".venv/")) or "__pycache__" in rel:
                 continue

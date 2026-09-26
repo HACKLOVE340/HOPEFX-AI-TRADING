@@ -52,6 +52,11 @@ logger = logging.getLogger(__name__)
 # ── constants ─────────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parent.parent
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from scripts.repo_scan import iter_tracked_files
+
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
 
@@ -335,7 +340,11 @@ def cmd_audit(_args: argparse.Namespace) -> int:
     compiled = [(re.compile(p, re.IGNORECASE), label) for p, label in AUDIT_PATTERNS]
     findings: list[tuple[str, int, str, str]] = []
 
-    for py_file in ROOT.rglob("*.py"):
+    # `iter_tracked_files`, not `ROOT.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out, which
+    # SKIP_DIRS predates and does not name.
+    for py_file in iter_tracked_files(ROOT, "*.py"):
         # Skip excluded dirs/files
         parts = set(py_file.parts)
         if parts & SKIP_DIRS:

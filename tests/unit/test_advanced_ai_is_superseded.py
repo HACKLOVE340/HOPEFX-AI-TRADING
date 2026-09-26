@@ -49,6 +49,8 @@ import pathlib
 
 import pytest
 
+from scripts.repo_scan import iter_tracked_files
+
 pytestmark = pytest.mark.unit
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -63,7 +65,16 @@ SUPERSEDED_BY = {
 
 
 def _production_files():
-    for path in REPO.rglob("*.py"):
+    """Every git-tracked production `.py` file.
+
+    Built on `git ls-files`, not `Path.rglob()` -- a plain walk from `REPO`
+    also descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    repository another agent's worktree may have checked out alongside this
+    one, which slowed this test past its 120s `pytest-timeout` under load: more
+    worktrees on disk is strictly more bytes for a scan that should never have
+    seen them.
+    """
+    for path in iter_tracked_files(REPO, "*.py"):
         rel = path.relative_to(REPO).as_posix()
         if rel.startswith(("tests/", ".venv/", "scripts/")) or "__pycache__" in rel:
             continue
