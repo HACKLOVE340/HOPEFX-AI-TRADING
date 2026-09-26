@@ -278,17 +278,15 @@ def test_primary_key_types_match_the_models_as_postgresql_renders_them(migration
 # let 'unknown', 'LONG' or any other spelling in, which is exactly the vocabulary
 # drift MASTER_OUTSTANDING §A9 already tracks ("long" has three spellings in
 # this codebase). Resolving §A9 is what should decide this column's type, not
-# a schema-consistency pass. `tick_data.timestamp` is not simply "wider"
-# either — making it timezone-aware reinterprets every already-stored naive
-# timestamp under an assumed source zone, a data-semantics decision this
-# change does not make. Both are listed here as KNOWN, not fixed.
+# a schema-consistency pass — it stays KNOWN, not fixed.
+#
+# `tick_data.timestamp` is CLOSED (2026-09-25, migration f2a3b4c5d6e7): the
+# owner approved storing it as UTC, timezone-aware, and both live writers were
+# verified to construct aware UTC datetimes before the fix, not assumed. See
+# that migration's docstring for the evidence, including what a real
+# PostgreSQL 16 server actually did with an aware write against the old
+# naive column on each driver this codebase uses.
 KNOWN_COLUMN_TYPE_DRIFT: dict[tuple[str, str], str] = {
-    ("tick_data", "timestamp"): (
-        "genuine drift, deliberately unresolved: migrations declare TIMESTAMP "
-        "WITHOUT TIME ZONE, the model declares WITH TIME ZONE. Making it "
-        "timezone-aware needs an assumed source zone for every already-stored "
-        "row — an owner decision, not a widen."
-    ),
     ("trades", "side"): (
         "genuine drift, deliberately NOT widened: the database enforces the "
         "`orderside` ENUM(BUY, SELL) — a real integrity constraint on a "
