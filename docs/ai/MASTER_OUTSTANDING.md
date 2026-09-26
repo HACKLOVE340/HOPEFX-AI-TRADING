@@ -818,11 +818,22 @@ is skipped, so the behaviour is pinned while the decision is open.
 >   - `tests/unit/test_failed_migration_refuses_to_start.py` has 30 tests; 21
 >     failed before the fix.
 >
->   **Found, still open:**
->   - (a) `k8s/k8s-deployment.yaml`'s readiness probe hits `/health`, which
->     always answers 200, so that probe can never fail. Point it at `/ready`.
->   - (b) `scripts/create_admin.py` and `create_superadmin.py` treat an
->     unset `APP_ENV` as development, unlike the rest of the platform.
+>   **Both fixed 2026-09-26.**
+>   - (a) `k8s/k8s-deployment.yaml` and `deployments/k8s/deployment.yaml`
+>     readiness probes now target `/ready`, not `/health`; liveness stays on
+>     `/health`. `test_readiness_probes_target_ready.py` parses every
+>     manifest and would fail if one regressed.
+>   - (b) `create_admin.py`/`create_superadmin.py` no longer force
+>     `APP_ENV=development`; they defer to `current_env()` like the rest of
+>     the platform, so an unset `APP_ENV` is production and refuses to build
+>     schema locally.
+>
+>   **Also found and fixed:** the repo-wide scanners (the gateway-bypass
+>   check, the superseded-component check, and 9 more tests plus 8 CI
+>   scripts) were walking the whole directory tree with `rglob`/`os.walk`,
+>   which reached the `.claude/worktrees/` copies other agents were working
+>   in during this session and produced false failures. They now read only
+>   `git ls-files` via `scripts/repo_scan.py::iter_tracked_files`.
 >
 >   The text below describes the state before the fix: when the upgrade
 >   failed at startup, `core/startup_factories.py` stamped the database at
