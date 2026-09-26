@@ -141,6 +141,30 @@ These are not blocked on engineering. They are blocked on someone deciding.
 >   (5d) and +0.32 (20d), p < 1e-4, and replicates on 2010–2018. The large-move
 >   "wins" are that same volatility.
 >
+> **Second spike, 2026-09-25: `docs/audit/2026-09-25-direction-research-2.md`.**
+> 64 more variants (regime-gated direction, meta-labelling the 8 repo
+> strategies, calendar effects, cross-asset lead-lag, tail asymmetry, an
+> all-signal ensemble) — 116 tested in total. **Nothing passes** the
+> combined bar (Bonferroni-corrected significance, beats always-majority
+> with an AUC lower bound above 0.5, and replicates on 2010-18).
+> - **One lead, not yet usable:** daily returns show a small negative
+>   autocorrelation (reversal). It drives the ensemble's only near-miss, but
+>   its AUC on the return a one-bar-lagged strategy can actually trade is
+>   0.500, and it fails the repo's own pass bar. Logged as a shadow member —
+>   weight 0, tested once on data after 2026-03-25 — not traded.
+> - **Found: the live combiner itself is broken.** `strategies/strategy_brain.py`
+>   weights members by raw win rate and floors every member at 0.1, which
+>   rewards nothing in a market that rose 54% of days. Being fixed now as
+>   part of the prediction-component audit below: weight = the lower bound of
+>   measured OOS skill over the base rate, 0 for everything tested so far.
+> - **Data that would most likely help, in order:** intraday XAUUSD with a
+>   known close time (settles whether the reversal is real or a sampling
+>   artefact), real yields, longer macro history, CFTC positioning, real
+>   gold-ETF flow data (`data/macro/gold_etf_flow.csv` is GLD's price, not a
+>   flow — `ml/macro_features.py` and `ml/signal_scorer.py` consume it as
+>   one), implied vol/skew, macro event history, COMEX volume/OI, and
+>   physical-market premiums.
+>
 > **Recommendation:** stop building direction models. Use a calibrated EWMA
 > volatility forecast in risk sizing and stop distance, judged by a VaR
 > backtest (Kupiec and Christoffersen tests), not by Sharpe. **Owner decision
