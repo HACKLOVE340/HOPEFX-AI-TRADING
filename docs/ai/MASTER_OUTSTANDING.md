@@ -569,6 +569,34 @@ Python `float` or an `np.float64` from `fit`.
 
 ### A9. Three encodings of "which spellings mean long"
 
+> **Decided and resolved 2026-09-25 — owner chose one vocabulary, enforced at
+> persistence.** Executing real inserts against SQLite and a real PostgreSQL
+> 16 server proved this was not a style inconsistency: every current
+> trade-persist path was failing against the DB's `orderside`
+> ENUM('BUY','SELL') — `brokers/__init__.py` and `brokers/paper_trading.py`
+> passed a raw `OrderSide` enum member, `scripts/seed_demo_trades.py` wrote
+> lowercase 'buy'/'sell', and relying on the model's declared
+> `server_default="unknown"` hit a NOT NULL violation because no migration
+> ever added that default to the real column. **Paper trades were not being
+> saved.**
+>
+> `core/side.py::normalise_side()` is now the one function that produces a
+> side value — it accepts every spelling found (buy/long/sell/short in any
+> case, enum members by value or name, `OrderSide.BUY`-style text) and
+> raises on anything else, never defaulting. `database.models.TradeSide` runs
+> it on every ORM write, so `Trade.side` cannot diverge from the DB's enum
+> again. `server_default="unknown"` is gone. Readers (`Trade.to_dict`,
+> `__repr__`, the position reconciler, `brokers.base.Position`, the position
+> repository's net-exposure query) were fixed to match.
+> `tests/unit/test_trade_side_is_one_vocabulary.py`: 29 failures on the
+> pre-fix tree.
+>
+> **Found on the way:** `brokers/__init__.py`'s `_persist_trade_record` sits
+> on a class that is replaced at import and garbage-collected, so that path
+> cannot run in production at all. Fixed anyway, and now pinned unreachable
+> by a test. `api/pnl_dashboard._trade_log_from_db` also cannot run — it
+> raises earlier on `TradeRepository(_db)` — left alone as out of scope.
+
 `database.models.Position.side` is a free-text `String(10)`. Three places in
 this repository independently answer the question "does this value mean long?",
 and they do not agree:
