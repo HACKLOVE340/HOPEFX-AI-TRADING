@@ -594,7 +594,7 @@ Python `float` or an `np.float64` from `fit`.
 > **Found on the way:** `brokers/__init__.py`'s `_persist_trade_record` sits
 > on a class that is replaced at import and garbage-collected, so that path
 > cannot run in production at all. Fixed anyway, and now pinned unreachable
-> by a test. `api/pnl_dashboard._trade_log_from_db` also cannot run — it
+> by a test. `_trade_log_from_db` in `api/pnl_dashboard.py` also cannot run — it
 > raises earlier on `TradeRepository(_db)` — left alone as out of scope.
 
 `database.models.Position.side` is a free-text `String(10)`. Three places in
