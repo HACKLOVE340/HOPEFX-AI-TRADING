@@ -70,8 +70,14 @@ spec:
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
+          # /health/ready (health_check_service.py) checks redis/db/data_feed
+          # but NOT schema verification or lockdown state. /ready
+          # (core/health.py::readiness_probe) is the endpoint the startup fix
+          # added the schema check to -- it 503s "schema_unverified" when the
+          # DB is not at the migrated head, which is exactly what a readiness
+          # probe must catch (MASTER_OUTSTANDING.md §A11).
           httpGet:
-            path: /health/ready
+            path: /ready
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5

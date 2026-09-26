@@ -30,6 +30,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.repo_scan import iter_tracked_files
+
 # Docs to scan for code examples
 DOCS_TO_SCAN: tuple[Path, ...] = (
     REPO_ROOT / "ARCHITECTURE.md",
@@ -176,7 +180,11 @@ def _repo_defines_name(name: str) -> bool:
     """Return True if any Python file in the repo defines `name` as a class/func."""
     pattern_class = re.compile(rf"^class {re.escape(name)}\b", re.MULTILINE)
     pattern_func = re.compile(rf"^def {re.escape(name)}\b", re.MULTILINE)
-    for py_file in REPO_ROOT.rglob("*.py"):
+    # `iter_tracked_files`, not `REPO_ROOT.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out alongside this
+    # one, which the venv/cache skip list below does not name.
+    for py_file in iter_tracked_files(REPO_ROOT, "*.py"):
         # Skip virtual environments and cache dirs
         if any(part in py_file.parts for part in (".venv", "venv", "__pycache__", "node_modules")):
             continue

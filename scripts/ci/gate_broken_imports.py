@@ -34,6 +34,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.repo_scan import iter_tracked_files
+
 # Directories we never want to scan (vendored / generated / non-source trees).
 EXCLUDED_DIR_PARTS: frozenset[str] = frozenset(
     {
@@ -83,7 +87,15 @@ def _is_excluded(path: Path) -> bool:
 
 
 def _iter_py_files(root: Path):
-    for p in root.rglob("*.py"):
+    """Tracked `.py` files under `root`, minus `EXCLUDED_DIR_PARTS`.
+
+    Built on `iter_tracked_files` (`git ls-files`), not a raw `rglob()` — a
+    filesystem walk from `REPO_ROOT` also descends into `.claude/worktrees/
+    agent-*/`, an untracked copy of this repository another agent's worktree
+    may have checked out alongside this one. `EXCLUDED_DIR_PARTS` predates
+    `.claude/worktrees/` and does not name it; git already knows better.
+    """
+    for p in iter_tracked_files(root, "*.py"):
         if _is_excluded(p.relative_to(root)):
             continue
         yield p

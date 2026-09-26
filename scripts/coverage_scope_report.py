@@ -45,6 +45,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.repo_scan import iter_tracked_files
+
 # Directories that are not application code.
 _SKIP_DIRS = {
     ".venv",
@@ -91,8 +95,12 @@ def _statement_count(path: Path) -> int:
 
 
 def _application_files() -> list[Path]:
+    # `iter_tracked_files`, not `REPO_ROOT.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out, which
+    # `_SKIP_DIRS` predates and does not name.
     out = []
-    for path in REPO_ROOT.rglob("*.py"):
+    for path in iter_tracked_files(REPO_ROOT, "*.py"):
         rel = path.relative_to(REPO_ROOT)
         if any(part in _SKIP_DIRS for part in rel.parts):
             continue

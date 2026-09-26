@@ -34,6 +34,8 @@ import sys
 
 import pytest
 
+from scripts.repo_scan import iter_tracked_files
+
 pytestmark = pytest.mark.unit
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -78,9 +80,12 @@ class TestTheListDescribesReality:
         next reader cannot tell which entries still describe something true.
         """
         wired = []
+        # `iter_tracked_files`, not `REPO.rglob()`: a filesystem walk also
+        # descends into `.claude/worktrees/agent-*/`, an untracked copy of
+        # this repository another agent's worktree may have checked out.
         for rel in sorted(gate.KNOWN_UNWIRED):
             dotted = rel.removesuffix(".py").replace("/", ".")
-            for path in REPO.rglob("*.py"):
+            for path in iter_tracked_files(REPO, "*.py"):
                 r = path.relative_to(REPO).as_posix()
                 if r == rel or r.startswith(("tests/", ".venv/", "scripts/")) or "__pycache__" in r:
                     continue
@@ -119,6 +124,10 @@ class TestTheGateStillBites:
 
         gate_src = (REPO / "scripts" / "ci" / "gate_e_dead_files.py").read_text()
         (mirror / "scripts" / "ci" / "gate_e_dead_files.py").write_text(gate_src)
+        # gate_e_dead_files.py imports scripts.repo_scan for its file walk; the
+        # mirror needs a real copy, not just the gate, or the subprocess dies
+        # on ModuleNotFoundError before it can scan anything.
+        (mirror / "scripts" / "repo_scan.py").write_text((REPO / "scripts" / "repo_scan.py").read_text())
 
         result = subprocess.run(
             [sys.executable, str(mirror / "scripts" / "ci" / "gate_e_dead_files.py")],

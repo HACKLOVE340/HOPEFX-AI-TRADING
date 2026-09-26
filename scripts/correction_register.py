@@ -87,6 +87,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.repo_scan import iter_tracked_files
+
 # The document this script reads and writes. `HOPEFX_CORRECTION_REGISTER` points
 # it somewhere else, and exists for one reason: the gate's own tests need a
 # register they are allowed to vandalise. They used to vandalise the committed
@@ -3257,7 +3259,11 @@ def _p_env_example_documents_dead_keys() -> tuple[str, str]:
     skip = {".venv", "node_modules", ".git", "static", "dashboard", "htmlcov"}
     guard = ROOT / "tests" / "unit" / "test_env_example_documents_real_variables.py"
     blob: list[str] = []
-    for path in ROOT.rglob("*"):
+    # `iter_tracked_files`, not `ROOT.rglob()`: a filesystem walk also descends
+    # into `.claude/worktrees/agent-*/`, an untracked copy of this repository
+    # another agent's worktree may have checked out, and `skip` below predates
+    # it and does not name it.
+    for path in iter_tracked_files(ROOT, "*"):
         if not path.is_file() or path.suffix not in exts:
             continue
         if any(s in path.parts for s in skip) or path.name.startswith(".env") or path == guard:

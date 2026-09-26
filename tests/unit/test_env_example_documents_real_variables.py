@@ -53,6 +53,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from scripts.repo_scan import iter_tracked_files
+
 REPO = Path(__file__).resolve().parents[2]
 
 #: Directories with no bearing on what the backend reads.
@@ -83,7 +85,11 @@ def _declared() -> dict[str, int]:
 
 def _source_text() -> str:
     parts: list[str] = []
-    for path in REPO.rglob("*"):
+    # `iter_tracked_files`, not `REPO.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out, which `_SKIP`
+    # predates and does not name.
+    for path in iter_tracked_files(REPO, "*"):
         if not path.is_file() or path.suffix not in _EXT:
             continue
         if any(s in path.parts for s in _SKIP):

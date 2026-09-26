@@ -70,6 +70,8 @@ from pathlib import Path
 
 import pytest
 
+from scripts.repo_scan import iter_tracked_files
+
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -93,7 +95,10 @@ def _deployed_paths() -> list[str]:
     import yaml
 
     paths: list[str] = []
-    for candidate in sorted(REPO_ROOT.rglob("*.yaml")):
+    # `iter_tracked_files`, not `REPO_ROOT.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out.
+    for candidate in sorted(iter_tracked_files(REPO_ROOT, "*.yaml")):
         rel = candidate.relative_to(REPO_ROOT).as_posix()
         if rel.startswith((".venv/", "node_modules/", "helm/hopefx/charts/")):
             continue

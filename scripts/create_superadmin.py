@@ -35,7 +35,16 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-os.environ.setdefault("APP_ENV", "development")
+# Do NOT `os.environ.setdefault("APP_ENV", "development")` here. That used to
+# default an UNSET APP_ENV to development, unlike the rest of the platform
+# (`utils.production_guard.current_env`, where unset means production) — and
+# it mutated the process environment, so `database.schema_state
+# .create_all_for_local_use` (called below) also read "development" and ran
+# `create_all()` against whatever DATABASE_URL an operator who forgot to set
+# APP_ENV happened to be pointed at. Leaving APP_ENV alone lets `current_env()`
+# apply its own fail-safe default, exactly like every other codepath here. A
+# contributor doing local dev work sets APP_ENV=development themselves (e.g.
+# via the `.env` `scripts/bootstrap_dev.py` writes).
 os.environ.setdefault("SECURITY_JWT_SECRET", "dev_secret_for_superadmin_seed_script_32c")
 os.environ.setdefault("DATABASE_URL", "sqlite:///hopefx.db")
 

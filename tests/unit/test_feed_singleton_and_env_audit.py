@@ -142,11 +142,16 @@ async def test_security_service_is_still_unimported():
     import pathlib
     import re
 
+    from scripts.repo_scan import iter_tracked_files
+
     root = pathlib.Path(__file__).resolve().parents[2]
     pattern = re.compile(r"^\s*(from security_service import|import security_service)", re.M)
+    # `iter_tracked_files`, not `root.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out.
     importers = [
         p
-        for p in root.rglob("*.py")
+        for p in iter_tracked_files(root, "*.py")
         if p.name != "security_service.py"
         and "test" not in p.parts
         and ".venv" not in p.parts

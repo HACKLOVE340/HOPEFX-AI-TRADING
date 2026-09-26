@@ -30,6 +30,7 @@ import pathlib
 
 import pytest
 
+from scripts.repo_scan import iter_tracked_files
 from utils.redaction import redact_url
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -105,8 +106,12 @@ def test_a_host_only_url_is_not_mangled():
 
 
 def _python_files() -> list[pathlib.Path]:
+    # `iter_tracked_files`, not `ROOT.rglob()`: a filesystem walk also
+    # descends into `.claude/worktrees/agent-*/`, an untracked copy of this
+    # repository another agent's worktree may have checked out, which
+    # `_SKIP_DIRS` predates and does not name.
     files = []
-    for path in ROOT.rglob("*.py"):
+    for path in iter_tracked_files(ROOT, "*.py"):
         if any(part in _SKIP_DIRS for part in path.relative_to(ROOT).parts):
             continue
         files.append(path)

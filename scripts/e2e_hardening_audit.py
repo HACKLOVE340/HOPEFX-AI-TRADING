@@ -45,6 +45,8 @@ _REPO_ROOT = str(pathlib.Path(__file__).resolve().parent.parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
+from scripts.repo_scan import iter_tracked_files
+
 # ── colour helpers ────────────────────────────────────────────────────────────
 GREEN = "\033[92m"
 RED = "\033[91m"
@@ -110,7 +112,11 @@ sub_modules = (
     "data_layer.replay.",
 )
 
-for path in sorted(pathlib.Path().rglob("*.py")):
+# `iter_tracked_files`, not `pathlib.Path().rglob()`: a plain filesystem walk
+# from cwd also descends into `.claude/worktrees/agent-*/`, an untracked copy
+# of this repository another agent's worktree may have checked out alongside
+# this one. Every `for path in sorted(...)` scan below shares this fix.
+for path in sorted(p.relative_to(_REPO_ROOT) for p in iter_tracked_files(_REPO_ROOT, "*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
@@ -503,7 +509,7 @@ else:
 section("12. Code quality: no bare except:pass")
 
 bare_excepts = []
-for path in sorted(pathlib.Path().rglob("*.py")):
+for path in sorted(p.relative_to(_REPO_ROOT) for p in iter_tracked_files(_REPO_ROOT, "*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
@@ -532,7 +538,7 @@ section("13. Code quality: no mock/stub/fake in production paths")
 mock_in_prod = []
 # Exclude test files, example files, and audit/validation scripts themselves
 _MOCK_EXCLUDE = ("test", "example", "e2e_hardening_audit", "e2e_production_validation")
-for path in sorted(pathlib.Path().rglob("*.py")):
+for path in sorted(p.relative_to(_REPO_ROOT) for p in iter_tracked_files(_REPO_ROOT, "*.py")):
     ps = str(path)
     if "__pycache__" in ps or ".git" in ps:
         continue
